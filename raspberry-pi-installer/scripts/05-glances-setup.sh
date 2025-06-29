@@ -155,6 +155,7 @@ critical=5.0
 
 [network]
 # Network interface to monitor (auto-detect if not specified)
+# Hide localhost and docker interfaces
 hide=lo,docker.*
 
 [diskio]
@@ -179,10 +180,6 @@ critical=80
 # Process list configuration
 max_processes=30
 sort=cpu_percent
-
-[network]
-# Hide localhost interface
-hide=lo
 
 [containers]
 # Docker containers monitoring (if Docker is installed)

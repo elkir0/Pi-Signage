@@ -91,6 +91,12 @@ install_chromium() {
         "jq"     # Pour manipuler JSON
     )
     
+    # Détection VM et ajout xvfb si nécessaire
+    if [[ -f /etc/pi-signage/vm-mode.conf ]] || ! [[ -f /proc/device-tree/model ]]; then
+        log_info "Mode VM détecté, ajout de Xvfb pour display virtuel"
+        packages+=("xvfb")
+    fi
+    
     # Installation avec retry
     local install_cmd="apt-get update && apt-get install -y ${packages[*]}"
     if safe_execute "$install_cmd" 3 10; then
@@ -139,6 +145,10 @@ log_kiosk() {
 cleanup() {
     log_kiosk "Arrêt de Chromium Kiosk"
     pkill -f chromium-browser || true
+    # Arrêter Xvfb si démarré
+    if [[ -n "${XVFB_PID:-}" ]]; then
+        kill $XVFB_PID 2>/dev/null || true
+    fi
     exit 0
 }
 
@@ -154,6 +164,18 @@ export XAUTHORITY=/home/$USER/.Xauthority
 
 # Créer le répertoire de logs
 mkdir -p "$(dirname "$LOG_FILE")"
+
+# Détecter si on est en mode VM et démarrer Xvfb si nécessaire
+if [[ -f /etc/pi-signage/vm-mode.conf ]] || ! [[ -f /proc/device-tree/model ]]; then
+    log_kiosk "Mode VM détecté, démarrage de Xvfb"
+    # Tuer tout Xvfb existant
+    pkill -f Xvfb || true
+    # Démarrer Xvfb en arrière-plan
+    Xvfb :0 -screen 0 1920x1080x24 &
+    XVFB_PID=$!
+    sleep 2
+    export DISPLAY=:0
+fi
 
 # Attendre que X11 soit prêt
 for i in {1..30}; do
@@ -247,6 +269,9 @@ EOF
     
     # Rendre exécutable
     chmod +x "$KIOSK_SCRIPT"
+    
+    # S'assurer que le répertoire /opt/scripts est accessible
+    chmod 755 /opt/scripts
     
     log_info "Script kiosk créé: $KIOSK_SCRIPT"
 }
