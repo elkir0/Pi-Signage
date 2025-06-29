@@ -129,6 +129,7 @@ sudo ./08-diagnostic-tools.sh
 
 ### Commandes Principales
 
+#### Communes aux deux modes
 ```bash
 # Contrôle général
 sudo pi-signage status           # État de tous les services
@@ -148,18 +149,47 @@ sudo /opt/scripts/sync-videos.sh    # Synchronisation manuelle
 sudo /opt/scripts/test-gdrive.sh    # Test connexion Google Drive
 ```
 
-### Interface Web de Monitoring
+#### Mode Chromium Kiosk (spécifique)
+```bash
+# Contrôle du player
+sudo /opt/scripts/player-control.sh play     # Lecture
+sudo /opt/scripts/player-control.sh pause    # Pause
+sudo /opt/scripts/player-control.sh next     # Vidéo suivante
+sudo /opt/scripts/player-control.sh reload   # Recharger le player
 
+# Mise à jour de la playlist
+sudo /opt/scripts/update-playlist.sh
+```
+
+### Interfaces Web
+
+#### Interface de Gestion (si installée)
+**Accès :** `http://[IP_DU_PI]/`
+- **Utilisateur :** défini lors de l'installation
+- **Mot de passe :** défini lors de l'installation
+- **Fonctionnalités :**
+  - Upload de vidéos
+  - Téléchargement YouTube
+  - Gestion de la playlist
+  - Contrôle des services
+  - Monitoring temps réel
+
+#### Interface de Monitoring Glances
 **Accès :** `http://[IP_DU_PI]:61208`
 - **Utilisateur :** admin
-- **Mot de passe :** (défini lors de l'installation)
+- **Mot de passe :** défini lors de l'installation
+- **Informations disponibles :**
+  - Utilisation CPU, mémoire, disque
+  - Température du processeur
+  - Services actifs
+  - Historique des performances
+  - Logs en temps réel
 
-**Informations disponibles :**
-- Utilisation CPU, mémoire, disque
-- Température du processeur
-- Services actifs
-- Historique des performances
-- Logs en temps réel
+#### Player HTML5 (Mode Chromium)
+**Accès :** `http://[IP_DU_PI]:8888/player.html`
+- Player HTML5 moderne
+- Contrôle WebSocket
+- Overlays et transitions
 
 ### Ajout de Vidéos
 
