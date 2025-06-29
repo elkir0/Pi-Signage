@@ -107,10 +107,36 @@ detect_pi_model() {
     
     local pi_generation=""
     local pi_variant=""
+    local model=""
+    local revision=""
     
+    # Vérifier si on est en mode VM
+    if [[ -f /etc/pi-signage/vm-mode.conf ]]; then
+        source /etc/pi-signage/vm-mode.conf
+        log_warn "Mode VM détecté - Émulation $EMULATED_PI_MODEL"
+        
+        # Utiliser les valeurs émulées
+        pi_generation="$EMULATED_PI_GENERATION"
+        pi_variant="$EMULATED_PI_VARIANT"
+        model="$EMULATED_PI_MODEL"
+        revision="$EMULATED_PI_REVISION"
+        
+        # Créer la config
+        cat > /tmp/pi-model.conf << EOF
+PI_MODEL="$model (VM)"
+PI_GENERATION="$pi_generation"
+PI_VARIANT="$pi_variant"
+PI_REVISION="$revision"
+EOF
+        
+        log_info "Configuration VM appliquée: Pi $pi_generation ($pi_variant)"
+        return 0
+    fi
+    
+    # Détection normale pour vrai Pi
     if [[ -f /proc/device-tree/model ]]; then
-        local model=$(tr -d '\0' < /proc/device-tree/model)
-        local revision=$(cat /proc/cpuinfo | grep Revision | awk '{print $3}')
+        model=$(tr -d '\0' < /proc/device-tree/model)
+        revision=$(cat /proc/cpuinfo | grep Revision | awk '{print $3}')
         
         echo "Modèle détecté: $model"
         echo "Révision: $revision"
@@ -152,7 +178,26 @@ PI_REVISION="$revision"
 EOF
         
     else
-        error_exit "Impossible de détecter le modèle de Raspberry Pi"
+        # Environnement non-Pi détecté (VM, conteneur, etc.)
+        log_warn "Environnement non-Raspberry Pi détecté"
+        log_warn "Activation du mode compatibilité VM"
+        
+        # Créer automatiquement la config VM
+        mkdir -p /etc/pi-signage
+        cat > /etc/pi-signage/vm-mode.conf << 'EOF'
+# Configuration auto-générée pour mode VM/Test
+VM_MODE=true
+VM_TYPE=auto-detected
+VM_ARCH=$(uname -m)
+VM_OS="$(uname -s)"
+EMULATED_PI_MODEL="Raspberry Pi 4 Model B Rev 1.4"
+EMULATED_PI_GENERATION="4"
+EMULATED_PI_VARIANT="4B-4GB"
+EMULATED_PI_REVISION="c03114"
+EOF
+        
+        # Réappeler la fonction pour charger la config VM
+        detect_pi_model
     fi
 }
 
