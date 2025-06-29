@@ -598,13 +598,10 @@ EOF
 download_scripts() {
     log_info "Préparation des scripts modulaires..."
     
-    mkdir -p "$SCRIPTS_DIR"
-    cd "$SCRIPTS_DIR"
+    # Les scripts sont déjà dans SCRIPT_DIR (pas SCRIPTS_DIR)
+    # Pas besoin de les télécharger, ils sont dans le repo
     
-    # Note: Dans un vrai déploiement, ces scripts seraient téléchargés depuis un repo
-    # Pour cette démonstration, nous créons les scripts localement
-    
-    echo "Scripts modulaires prêts dans $SCRIPTS_DIR"
+    log_info "Scripts modulaires disponibles dans $SCRIPT_DIR"
 }
 
 # =============================================================================
@@ -613,7 +610,7 @@ download_scripts() {
 
 execute_module() {
     local module_name="$1"
-    local script_path="$SCRIPTS_DIR/${module_name}.sh"
+    local script_path="$SCRIPT_DIR/${module_name}.sh"
     
     log_info "Exécution du module: $module_name"
     
