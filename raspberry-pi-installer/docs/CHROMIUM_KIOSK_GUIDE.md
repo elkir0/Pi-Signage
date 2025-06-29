@@ -30,10 +30,13 @@ Le mode Chromium Kiosk est une alternative moderne et légère au mode VLC Class
 - Carte SD 16GB minimum
 
 ### Formats vidéo supportés
-- **H.264 (MP4)** : Recommandé
-- **WebM** : Support natif
+- **H.264 (MP4)** : Recommandé ✅
+- **WebM (VP8)** : Support partiel
 - **MOV** : Si codec H.264
-- ⚠️ Pas de support : AVI, MKV, WMV, HEVC
+- ⚠️ Pas de support : AVI, MKV, WMV, HEVC, VP9
+
+### Compatibilité YouTube
+Le système télécharge automatiquement les vidéos YouTube en **H.264/MP4** compatible grâce au wrapper `yt-dlp-chromium`.
 
 ## 🚀 Installation
 
@@ -190,6 +193,40 @@ Commandes disponibles :
 - `previous` : Vidéo précédente
 - `reload` : Recharger la page
 - `update_playlist` : Recharger la playlist
+
+## 🎥 Compatibilité YouTube
+
+### Téléchargement automatique
+
+Les vidéos YouTube sont automatiquement téléchargées en format compatible :
+
+1. **Format forcé** : MP4 avec codec H.264
+2. **Qualité préservée** : 480p, 720p ou 1080p selon votre choix
+3. **Audio** : AAC pour compatibilité maximale
+
+### Conversion des vidéos existantes
+
+Si vous avez des vidéos incompatibles (WebM, VP9, etc.) :
+
+```bash
+# Convertir toutes les vidéos en H.264
+sudo /opt/scripts/convert-videos-chromium.sh
+```
+
+Le script :
+- Détecte automatiquement les vidéos non-H.264
+- Les convertit en MP4/H.264
+- Préserve la qualité originale
+- Met à jour la playlist
+
+### Vérifier la compatibilité d'une vidéo
+
+```bash
+# Vérifier le codec d'une vidéo
+ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 /opt/videos/mavideo.mp4
+```
+
+Si le résultat est `h264`, la vidéo est compatible ✅
 
 ## 🐛 Dépannage
 

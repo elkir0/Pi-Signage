@@ -960,6 +960,36 @@ EOF
 }
 
 # =============================================================================
+# COMPATIBILITÉ YOUTUBE
+# =============================================================================
+
+ensure_youtube_compatibility() {
+    log_info "Configuration de la compatibilité YouTube..."
+    
+    # Vérifier si le patch existe
+    local patch_script="$SCRIPT_DIR/patches/youtube-chromium-compatibility.sh"
+    
+    if [[ -f "$patch_script" ]]; then
+        log_info "Application du patch de compatibilité YouTube..."
+        if bash "$patch_script"; then
+            log_info "Patch YouTube appliqué avec succès"
+        else
+            log_warn "Échec du patch YouTube, les vidéos devront être converties manuellement"
+        fi
+    else
+        log_warn "Patch YouTube non trouvé, création d'un wrapper basique..."
+        
+        # Créer un wrapper basique
+        cat > /usr/local/bin/yt-dlp-chromium << 'EOF'
+#!/bin/bash
+# Wrapper basique pour forcer MP4/H.264
+exec yt-dlp -f "best[ext=mp4]/best" --merge-output-format mp4 "$@"
+EOF
+        chmod +x /usr/local/bin/yt-dlp-chromium
+    fi
+}
+
+# =============================================================================
 # VALIDATION DE L'INSTALLATION
 # =============================================================================
 
@@ -1032,6 +1062,7 @@ main() {
         "configure_x11_minimal"
         "optimize_chromium"
         "create_admin_scripts"
+        "ensure_youtube_compatibility"
     )
     
     local failed_steps=()
