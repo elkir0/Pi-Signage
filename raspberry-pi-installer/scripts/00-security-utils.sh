@@ -291,7 +291,13 @@ log_security_event() {
     local event_type="$1"
     local message="$2"
     local user="${3:-$(whoami)}"
-    local ip="${4:-${SSH_CLIENT%% *}}"
+    # Gérer le cas où SSH_CLIENT n'est pas défini (execution locale)
+    local ip="${4:-}"
+    if [[ -z "$ip" ]] && [[ -n "${SSH_CLIENT:-}" ]]; then
+        ip="${SSH_CLIENT%% *}"
+    elif [[ -z "$ip" ]]; then
+        ip="local"
+    fi
     
     local log_file="/var/log/pi-signage/security.log"
     local timestamp
