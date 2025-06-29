@@ -1,0 +1,28 @@
+# Fichiers de configuration générés
+includes/config.php
+
+# Fichiers temporaires
+temp/
+*.tmp
+*.log
+
+# Fichiers uploadés
+uploads/
+videos/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# PHP
+vendor/
+composer.lock
+
+# Fichiers de cache
+*.cache

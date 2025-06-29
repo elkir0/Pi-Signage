@@ -1,0 +1,310 @@
+/**
+ * Styles du dashboard Pi Signage
+ */
+
+/* Reset et base */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background: #f5f5f5;
+    color: #333;
+    line-height: 1.6;
+}
+
+/* Container principal */
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+/* Header de page */
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+}
+
+.page-header h1 {
+    font-size: 2rem;
+    font-weight: 300;
+}
+
+.header-actions {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
+/* Indicateur de statut */
+.status-indicator {
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.status-indicator.active {
+    background: #d4edda;
+    color: #155724;
+}
+
+.status-indicator.inactive {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+/* Grille du dashboard */
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 2rem;
+}
+
+/* Cartes */
+.card {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+}
+
+.card-header {
+    padding: 1.5rem;
+    border-bottom: 1px solid #e1e4e8;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.card-header h2 {
+    font-size: 1.25rem;
+    font-weight: 500;
+}
+
+.card-body {
+    padding: 1.5rem;
+}
+
+/* Statistiques */
+.stat-group {
+    display: flex;
+    justify-content: space-around;
+    margin-bottom: 1.5rem;
+}
+
+.stat {
+    text-align: center;
+}
+
+.stat-label {
+    display: block;
+    font-size: 0.875rem;
+    color: #666;
+    margin-bottom: 0.25rem;
+}
+
+.stat-value {
+    display: block;
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #333;
+}
+
+/* Barres de progression */
+.progress-bar {
+    height: 8px;
+    background: #e1e4e8;
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 1rem 0;
+}
+
+.progress-fill {
+    height: 100%;
+    background: #667eea;
+    transition: width 0.3s ease;
+}
+
+/* Graphique de stockage */
+.storage-chart {
+    height: 20px;
+    background: #e1e4e8;
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 1rem;
+}
+
+.storage-used {
+    height: 100%;
+    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    transition: width 0.3s ease;
+}
+
+.storage-info p {
+    margin: 0.5rem 0;
+}
+
+/* Statistiques vidéos */
+.video-stats {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.big-number {
+    font-size: 3rem;
+    font-weight: 700;
+    color: #667eea;
+}
+
+.recent-videos {
+    margin-top: 2rem;
+}
+
+.recent-videos h3 {
+    font-size: 1rem;
+    margin-bottom: 1rem;
+    color: #666;
+}
+
+.recent-videos ul {
+    list-style: none;
+}
+
+.recent-videos li {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid #e1e4e8;
+}
+
+.recent-videos li:last-child {
+    border-bottom: none;
+}
+
+.video-name {
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 70%;
+}
+
+.video-size {
+    color: #666;
+    font-size: 0.875rem;
+}
+
+/* Boutons de contrôle */
+.control-buttons {
+    display: grid;
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.btn {
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    transition: all 0.3s;
+    font-size: 0.875rem;
+}
+
+.btn-control {
+    background: #f8f9fa;
+    color: #333;
+    border: 1px solid #dee2e6;
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+}
+
+.btn-control:hover {
+    background: #e9ecef;
+}
+
+.btn-control:active {
+    transform: translateY(1px);
+}
+
+.btn-control:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.btn-sm {
+    padding: 0.25rem 0.75rem;
+    font-size: 0.875rem;
+}
+
+/* Liens rapides */
+.quick-links {
+    margin-top: 2rem;
+    padding-top: 2rem;
+    border-top: 1px solid #e1e4e8;
+}
+
+.quick-links h3 {
+    font-size: 1rem;
+    margin-bottom: 1rem;
+    color: #666;
+}
+
+.quick-link {
+    display: block;
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    background: #f8f9fa;
+    color: #333;
+    text-decoration: none;
+    border-radius: 4px;
+    transition: background 0.3s;
+}
+
+.quick-link:hover {
+    background: #e9ecef;
+}
+
+/* État vide */
+.empty-state {
+    text-align: center;
+    color: #666;
+    padding: 2rem 0;
+}
+
+/* Utilitaires */
+.text-muted {
+    color: #6c757d;
+    font-size: 0.875rem;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .container {
+        padding: 1rem;
+    }
+    
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+    
+    .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+    
+    .stat-group {
+        flex-direction: column;
+        gap: 1rem;
+    }
+}
