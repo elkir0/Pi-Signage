@@ -3,9 +3,12 @@
 **Solution tout-en-un de digital signage pour Raspberry Pi avec interface web de gestion**
 
 [![Compatible](https://img.shields.io/badge/Compatible-Pi%203B%2B%20%7C%204B%20%7C%205-green.svg)](https://www.raspberrypi.org/)
-[![Version](https://img.shields.io/badge/Version-2.3.0-blue.svg)]()
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)]()
+[![Version](https://img.shields.io/badge/Version-2.3.0--beta-orange.svg)]()
+[![Branch](https://img.shields.io/badge/Branch-kiosk-yellow.svg)]()
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)]()
 [![Security](https://img.shields.io/badge/Security-Enhanced-brightgreen.svg)]()
+
+> 🚧 **Branche de développement** : Vous êtes sur la branche `kiosk` qui contient les nouvelles fonctionnalités v2.3.0 incluant le mode Chromium Kiosk. Pour la version stable, utilisez la [branche main](https://github.com/elkir0/Pi-Signage/tree/main).
 
 ## 🎯 Présentation
 
@@ -63,15 +66,46 @@ Pi-Signage/
 - **OS** : Raspberry Pi OS Lite 64-bit (Bookworm)
 - **Réseau** : Connexion internet stable
 
-### Installation en une commande
+### Installation
+
+⚠️ **Note importante** : Vous lisez actuellement le README de la branche `kiosk` (v2.3.0-beta)
+
+#### Installation de la version 2.3.0 avec mode Chromium Kiosk
 
 ```bash
-# Cloner le repository et lancer l'installation
-git clone https://github.com/elkir0/Pi-Signage.git
+# Cloner spécifiquement la branche kiosk
+git clone -b kiosk https://github.com/elkir0/Pi-Signage.git
 cd Pi-Signage/raspberry-pi-installer/scripts
 
-# Nouvelle installation v2.3.0 avec choix du mode d'affichage
+# Rendre les scripts exécutables
+chmod +x *.sh
+
+# Lancer l'installation v2.3.0
 sudo ./main_orchestrator_v2.sh
+```
+
+#### Installation sur VM pour tests
+
+```bash
+# Cloner la branche kiosk
+git clone -b kiosk https://github.com/elkir0/Pi-Signage.git
+cd Pi-Signage/raspberry-pi-installer/scripts
+
+# Utiliser le script VM
+chmod +x install-vm.sh
+sudo ./install-vm.sh
+```
+
+#### Résolution de problèmes
+
+Si vous obtenez l'erreur "variable en lecture seule" :
+```bash
+# Option 1 : Nettoyer l'environnement
+unset LOG_FILE CONFIG_FILE
+sudo ./main_orchestrator_v2.sh
+
+# Option 2 : Utiliser un nouveau shell
+sudo bash ./main_orchestrator_v2.sh
 ```
 
 #### Modes d'affichage disponibles (nouveau!)
