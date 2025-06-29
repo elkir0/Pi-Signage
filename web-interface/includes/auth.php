@@ -21,9 +21,28 @@ function startSecureSession() {
 
 /**
  * Valider les identifiants de connexion
+ * Utilise SHA-512 avec salt (format: salt:hash)
  */
 function validateCredentials($username, $password) {
-    return $username === ADMIN_USERNAME && password_verify($password, ADMIN_PASSWORD_HASH);
+    // Vérifier le username
+    if ($username !== ADMIN_USERNAME) {
+        return false;
+    }
+    
+    // Extraire le salt et le hash stockés
+    $parts = explode(':', ADMIN_PASSWORD_HASH);
+    if (count($parts) !== 2) {
+        return false;
+    }
+    
+    $salt = $parts[0];
+    $stored_hash = $parts[1];
+    
+    // Calculer le hash du mot de passe fourni avec le même salt
+    $computed_hash = hash('sha512', $salt . $password);
+    
+    // Comparer les hashs
+    return hash_equals($stored_hash, $computed_hash);
 }
 
 /**
