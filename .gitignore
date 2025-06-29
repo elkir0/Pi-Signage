@@ -1,0 +1,52 @@
+# Logs
+*.log
+logs/
+
+# Fichiers temporaires
+temp/*
+!temp/.gitkeep
+*.tmp
+*.temp
+
+# Configuration locale
+config.local.php
+.env
+*.conf.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Backup
+*.backup
+*.bak
+*_backup_*
+
+# Sessions PHP
+sessions/
+
+# Vidéos (trop lourdes pour Git)
+*.mp4
+*.avi
+*.mkv
+*.mov
+*.wmv
+
+# Archives
+*.zip
+*.tar.gz
+*.rar
+
+# Node modules (si ajout futur)
+node_modules/
+
+# Python
+__pycache__/
+*.pyc
+venv/

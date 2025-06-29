@@ -1,0 +1,159 @@
+# =============================================================================
+# Pi Signage Digital - Fichier de Configuration Exemple
+# Version: 2.0.0
+# 
+# Copiez ce fichier vers /etc/pi-signage/config.conf et modifiez les valeurs
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# CONFIGURATION WEB INTERFACE
+# -----------------------------------------------------------------------------
+
+# Identifiants de l'interface web
+# IMPORTANT: Changez ces valeurs par défaut !
+WEB_ADMIN_USER="admin"
+WEB_ADMIN_PASSWORD="changeme"
+
+# Port de l'interface web (si différent de 80)
+# WEB_PORT="8080"
+
+# -----------------------------------------------------------------------------
+# CONFIGURATION GOOGLE DRIVE
+# -----------------------------------------------------------------------------
+
+# Nom du dossier Google Drive contenant les vidéos
+GDRIVE_FOLDER="Signage"
+
+# Nom du remote rclone (configuré avec rclone config)
+GDRIVE_REMOTE="gdrive"
+
+# Intervalle de synchronisation en heures (par défaut: 6)
+SYNC_INTERVAL="6"
+
+# -----------------------------------------------------------------------------
+# CHEMINS SYSTÈME
+# -----------------------------------------------------------------------------
+
+# Répertoire des vidéos locales
+VIDEO_DIR="/opt/videos"
+
+# Répertoire des scripts
+SCRIPTS_DIR="/opt/scripts"
+
+# Répertoire des logs
+LOG_DIR="/var/log/pi-signage"
+
+# -----------------------------------------------------------------------------
+# CONFIGURATION SYSTÈME
+# -----------------------------------------------------------------------------
+
+# Hostname du Raspberry Pi
+NEW_HOSTNAME="pi-signage"
+
+# Fuseau horaire
+TIMEZONE="Europe/Paris"
+
+# -----------------------------------------------------------------------------
+# CONFIGURATION VLC
+# -----------------------------------------------------------------------------
+
+# Mode de lecture (random ou sequential)
+VLC_PLAY_MODE="random"
+
+# Volume par défaut (0-256, où 256 = 100%)
+VLC_VOLUME="256"
+
+# Qualité vidéo pour les téléchargements YouTube
+# Options: 480p, 720p, 1080p, best
+DEFAULT_VIDEO_QUALITY="720p"
+
+# -----------------------------------------------------------------------------
+# CONFIGURATION MONITORING
+# -----------------------------------------------------------------------------
+
+# Mot de passe pour l'interface Glances
+GLANCES_PASSWORD="glances_password"
+
+# Port Glances (par défaut: 61208)
+GLANCES_PORT="61208"
+
+# Activer les alertes par email (yes/no)
+EMAIL_ALERTS="no"
+
+# Email pour les alertes (si activé)
+ALERT_EMAIL="admin@example.com"
+
+# -----------------------------------------------------------------------------
+# CONFIGURATION RÉSEAU
+# -----------------------------------------------------------------------------
+
+# Limiter l'accès au réseau local uniquement (yes/no)
+LOCAL_NETWORK_ONLY="yes"
+
+# Réseaux autorisés (si limitation activée)
+ALLOWED_NETWORKS="192.168.1.0/24 10.0.0.0/8"
+
+# -----------------------------------------------------------------------------
+# CONFIGURATION MAINTENANCE
+# -----------------------------------------------------------------------------
+
+# Activer le redémarrage hebdomadaire (yes/no)
+WEEKLY_REBOOT="yes"
+
+# Jour et heure du redémarrage (0=dimanche, 1=lundi, etc.)
+REBOOT_DAY="0"
+REBOOT_HOUR="3"
+
+# Rotation des logs - nombre de jours à conserver
+LOG_RETENTION_DAYS="30"
+
+# Espace disque minimum avant alerte (en %)
+DISK_ALERT_THRESHOLD="90"
+
+# -----------------------------------------------------------------------------
+# CONFIGURATION SÉCURITÉ
+# -----------------------------------------------------------------------------
+
+# Activer HTTPS (nécessite configuration manuelle des certificats)
+ENABLE_HTTPS="no"
+
+# Forcer HTTPS pour toutes les connexions
+FORCE_HTTPS="no"
+
+# Timeout de session en secondes (par défaut: 3600 = 1 heure)
+SESSION_TIMEOUT="3600"
+
+# Nombre maximum de tentatives de connexion avant blocage
+MAX_LOGIN_ATTEMPTS="5"
+
+# Durée du blocage en secondes (par défaut: 300 = 5 minutes)
+LOGIN_BLOCK_TIME="300"
+
+# -----------------------------------------------------------------------------
+# CONFIGURATION AVANCÉE
+# -----------------------------------------------------------------------------
+
+# Mode debug (affiche plus d'informations dans les logs)
+DEBUG_MODE="no"
+
+# GPU memory split en MB (128 pour Pi3, 256 pour Pi4)
+GPU_MEM="128"
+
+# Overclocking (use with caution!)
+# Options: none, modest, medium, high, turbo
+OVERCLOCK="none"
+
+# -----------------------------------------------------------------------------
+# MÉTADONNÉES D'INSTALLATION
+# -----------------------------------------------------------------------------
+
+# Ces valeurs sont définies automatiquement lors de l'installation
+# NE PAS MODIFIER MANUELLEMENT
+
+SCRIPT_VERSION="2.0.0"
+INSTALL_DATE="2024-01-15 10:30:45"
+INSTALLED_MODULES="01-system-config 02-display-manager 03-vlc-setup 04-rclone-setup 05-glances-setup 06-cron-setup 07-services-setup 08-diagnostic-tools 09-web-interface"
+
+# =============================================================================
+# FIN DE LA CONFIGURATION
+# =============================================================================
