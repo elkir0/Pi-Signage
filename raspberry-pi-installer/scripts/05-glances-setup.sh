@@ -209,8 +209,8 @@ configure_glances_auth() {
         glances_password=$(decrypt_password "$GLANCES_PASSWORD_ENCRYPTED")
         
         if [[ -z "$glances_password" ]]; then
-            log_error "Impossible de déchiffrer le mot de passe Glances"
-            return 1
+            log_warn "Impossible de déchiffrer le mot de passe Glances, authentification désactivée"
+            return 0  # Continuer sans authentification plutôt qu'échouer
         fi
         
         # Créer le répertoire pour le fichier de mots de passe

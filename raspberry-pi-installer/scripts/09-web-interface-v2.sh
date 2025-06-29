@@ -167,8 +167,8 @@ php_admin_value[post_max_size] = 100M
 php_admin_value[max_execution_time] = 300
 
 ; Sécurité
-; Note: shell_exec est nécessaire pour le contrôle des services via l'interface web
-php_admin_value[disable_functions] = exec,passthru,system,proc_open,popen,curl_multi_exec,parse_ini_file,show_source,eval,file_get_contents,file_put_contents,fpassthru
+; Note: shell_exec, file_get_contents et file_put_contents sont nécessaires pour l'interface web
+php_admin_value[disable_functions] = exec,passthru,system,proc_open,popen,curl_multi_exec,parse_ini_file,show_source,eval
 php_admin_flag[allow_url_fopen] = off
 php_admin_flag[allow_url_include] = off
 php_admin_flag[expose_php] = off
@@ -187,6 +187,10 @@ EOF
     # Créer le répertoire de sessions
     mkdir -p /var/lib/php/sessions/pi-signage
     secure_dir_permissions "/var/lib/php/sessions/pi-signage" "www-data" "www-data" "700"
+    
+    # Créer le répertoire de logs PHP
+    mkdir -p /var/log/pi-signage
+    secure_dir_permissions "/var/log/pi-signage" "www-data" "www-data" "755"
     
     # Redémarrer PHP-FPM
     systemctl restart php8.2-fpm
@@ -307,7 +311,11 @@ deploy_web_files() {
     cp -r "$temp_dir/$WEB_INTERFACE_DIR/public" "$WEB_ROOT/"
     cp -r "$temp_dir/$WEB_INTERFACE_DIR/includes" "$WEB_ROOT/"
     cp -r "$temp_dir/$WEB_INTERFACE_DIR/api" "$WEB_ROOT/"
-    cp -r "$temp_dir/$WEB_INTERFACE_DIR/assets" "$WEB_ROOT/"
+    if [[ -d "$temp_dir/$WEB_INTERFACE_DIR/assets" ]]; then
+        cp -r "$temp_dir/$WEB_INTERFACE_DIR/assets" "$WEB_ROOT/"
+    else
+        log_warn "Dossier assets non trouvé dans le dépôt"
+    fi
     cp -r "$temp_dir/$WEB_INTERFACE_DIR/templates" "$WEB_ROOT/"
     
     # Créer le fichier de configuration à partir du template
