@@ -373,3 +373,4 @@ export -f create_secure_temp_file
 export -f create_secure_temp_dir
 export -f log_security_event
 export -f check_secure_environment
+export -f get_encryption_key

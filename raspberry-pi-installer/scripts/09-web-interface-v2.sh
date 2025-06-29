@@ -88,7 +88,6 @@ install_web_server() {
         "php8.2-fpm"
         "php8.2-cli"
         "php8.2-common"
-        "php8.2-json"
         "php8.2-curl"
         "php8.2-xml"
         "php8.2-mbstring"
