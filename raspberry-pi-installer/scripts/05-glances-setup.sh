@@ -79,48 +79,22 @@ load_config() {
 install_glances() {
     log_info "Installation de Glances et dépendances..."
     
-    # Installer Python3 et pip si nécessaire
-    local base_packages=(
-        "python3"
-        "python3-pip"
-        "python3-dev"
-        "python3-setuptools"
-        "python3-wheel"
-        "apache2-utils"  # Pour htpasswd
+    # Installation directe via apt (compatible Debian 11/12 et Raspberry Pi OS)
+    local packages=(
+        "glances"         # Installation via apt pour éviter les problèmes Python PEP 668
+        "apache2-utils"   # Pour htpasswd
         "curl"
     )
     
-    # Installation des paquets de base avec retry
-    log_info "Installation des paquets de base..."
-    local install_cmd="apt-get install -y ${base_packages[*]}"
+    # Installation des paquets avec retry
+    log_info "Installation de Glances via apt..."
+    local install_cmd="apt-get install -y ${packages[*]}"
     if ! safe_execute "$install_cmd" 3 10; then
-        log_error "Échec de l'installation des paquets de base après plusieurs tentatives"
+        log_error "Échec de l'installation de Glances après plusieurs tentatives"
         return 1
     fi
     
-    log_info "Paquets de base installés"
-    
-    # Mise à jour de pip avec gestion d'erreur
-    log_info "Mise à jour de pip..."
-    if ! safe_execute "python3 -m pip install --upgrade pip" 2 10; then
-        log_warn "Échec de la mise à jour de pip, utilisation de la version existante"
-    fi
-    
-    # Installation de Glances via pip avec retry
-    log_info "Installation de Glances via pip..."
-    if ! safe_execute "python3 -m pip install glances[web]" 3 30; then
-        log_error "Échec de l'installation de Glances via pip"
-        # Essayer l'installation via apt comme fallback
-        log_info "Tentative d'installation via apt..."
-        if safe_execute "apt-get install -y glances" 2 10; then
-            log_info "Glances installé via apt"
-        else
-            log_error "Échec de l'installation de Glances"
-            return 1
-        fi
-    else
-        log_info "Glances installé avec succès via pip"
-    fi
+    log_info "Glances et dépendances installés avec succès"
     
     # Vérification de l'installation
     if command -v glances >/dev/null 2>&1; then
