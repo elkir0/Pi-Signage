@@ -2,7 +2,7 @@
 
 # =============================================================================
 # Module 02 - Installation du Gestionnaire d'Affichage
-# Version: 2.0.0
+# Version: 2.1.0
 # Description: Installation X11 + LightDM pour Digital Signage
 # =============================================================================
 
@@ -16,6 +16,15 @@ readonly CONFIG_FILE="/etc/pi-signage/config.conf"
 readonly LOG_FILE="/var/log/pi-signage-setup.log"
 readonly LIGHTDM_CONFIG="/etc/lightdm/lightdm.conf"
 readonly XORG_CONFIG="/etc/X11/xorg.conf.d/99-fbdev.conf"
+readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Charger les fonctions de sécurité
+if [[ -f "$SCRIPT_DIR/00-security-utils.sh" ]]; then
+    source "$SCRIPT_DIR/00-security-utils.sh"
+else
+    echo "ERREUR: Fichier de sécurité manquant: 00-security-utils.sh" >&2
+    exit 1
+fi
 
 # Colors
 readonly RED='\033[0;31m'
@@ -250,6 +259,11 @@ EOF
     cat > "$openbox_dir/autostart" << 'EOF'
 #!/bin/bash
 
+# Charger les fonctions de sécurité si disponibles
+if [[ -f "/opt/scripts/00-security-utils.sh" ]]; then
+    source "/opt/scripts/00-security-utils.sh"
+fi
+
 # Désactiver l'économiseur d'écran
 xset s off
 xset -dpms
@@ -258,11 +272,33 @@ xset s noblank
 # Masquer le curseur
 unclutter -idle 1 &
 
-# Attendre que le système soit prêt
-sleep 5
+# Attendre que le système soit complètement prêt
+echo "Attente de la stabilisation du système..."
 
-# Démarrer VLC en mode signage
-/opt/scripts/vlc-signage.sh &
+# Attendre que X11 soit complètement initialisé
+if command -v wait_for_process >/dev/null 2>&1; then
+    wait_for_process "Xorg" 30 2
+else
+    # Fallback si les fonctions de sécurité ne sont pas disponibles
+    sleep 10
+fi
+
+# Vérifier que le display est disponible
+for i in {1..10}; do
+    if xset q >/dev/null 2>&1; then
+        echo "Display X11 disponible après $i tentatives"
+        break
+    fi
+    sleep 2
+done
+
+# Démarrer VLC en mode signage seulement quand tout est prêt
+if [[ -f "/opt/scripts/vlc-signage.sh" ]]; then
+    echo "Démarrage de VLC..."
+    /opt/scripts/vlc-signage.sh &
+else
+    echo "ERREUR: Script VLC introuvable"
+fi
 EOF
     
     chmod +x "$openbox_dir/autostart"
@@ -398,7 +434,10 @@ enable_display_services() {
     # Définir LightDM comme gestionnaire d'affichage par défaut
     systemctl set-default graphical.target
     
-    log_info "Services d'affichage activés"
+    # NE PAS démarrer LightDM maintenant pour éviter les race conditions
+    # Il démarrera au prochain redémarrage
+    log_info "Services d'affichage activés (démarrage au prochain boot)"
+    log_info "Note: LightDM démarrera après le redémarrage pour éviter les conflits"
 }
 
 # =============================================================================

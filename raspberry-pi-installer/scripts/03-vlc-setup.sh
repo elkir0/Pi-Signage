@@ -2,7 +2,7 @@
 
 # =============================================================================
 # Module 03 - Installation et Configuration VLC
-# Version: 2.0.0
+# Version: 2.1.0
 # Description: Installation VLC avec configuration pour digital signage
 # =============================================================================
 
@@ -16,6 +16,15 @@ readonly CONFIG_FILE="/etc/pi-signage/config.conf"
 readonly LOG_FILE="/var/log/pi-signage-setup.log"
 readonly VLC_SCRIPT="/opt/scripts/vlc-signage.sh"
 readonly VLC_SERVICE="/etc/systemd/system/vlc-signage.service"
+readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Charger les fonctions de sécurité
+if [[ -f "$SCRIPT_DIR/00-security-utils.sh" ]]; then
+    source "$SCRIPT_DIR/00-security-utils.sh"
+else
+    echo "ERREUR: Fichier de sécurité manquant: 00-security-utils.sh" >&2
+    exit 1
+fi
 
 # Colors
 readonly RED='\033[0;31m'
@@ -362,7 +371,12 @@ create_waiting_message() {
     
     # Installer ImageMagick pour créer l'image d'attente
     if ! command -v convert >/dev/null 2>&1; then
-        apt-get install -y imagemagick
+        log_info "Installation d'ImageMagick..."
+        if ! safe_execute "apt-get install -y imagemagick" 3 10; then
+            log_error "Échec de l'installation d'ImageMagick"
+            log_warn "Le message d'attente ne sera pas créé"
+            return 0  # Ne pas bloquer l'installation
+        fi
     fi
     
     # Créer une image de message d'attente
@@ -440,16 +454,34 @@ EOF
 configure_permissions() {
     log_info "Configuration des permissions..."
     
+    # Vérifier que l'utilisateur signage existe
+    if ! id "signage" >/dev/null 2>&1; then
+        log_error "Utilisateur signage n'existe pas"
+        return 1
+    fi
+    
     # Ajouter l'utilisateur signage aux groupes nécessaires
-    usermod -a -G video,audio,input,render,gpio,dialout signage
+    local groups=(video audio input render gpio dialout)
+    for group in "${groups[@]}"; do
+        if getent group "$group" >/dev/null 2>&1; then
+            if usermod -a -G "$group" signage; then
+                log_info "Utilisateur signage ajouté au groupe $group"
+            else
+                log_warn "Impossible d'ajouter signage au groupe $group"
+            fi
+        fi
+    done
     
-    # Permissions sur les répertoires
-    chown -R signage:signage /home/signage
-    chown signage:signage "$VIDEO_DIR"
+    # Permissions sécurisées sur les répertoires
+    secure_dir_permissions "/home/signage" "signage" "signage" "750"
+    secure_dir_permissions "$VIDEO_DIR" "signage" "signage" "750"
     
-    # Permissions pour les logs
+    # Permissions pour les logs avec accès restreint
     mkdir -p /var/log/pi-signage
-    chown signage:signage /var/log/pi-signage
+    secure_dir_permissions "/var/log/pi-signage" "signage" "signage" "750"
+    
+    # Logger l'événement de sécurité
+    log_security_event "VLC_PERMISSIONS" "Permissions VLC configurées"
     
     log_info "Permissions configurées"
 }

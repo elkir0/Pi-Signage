@@ -2,7 +2,7 @@
 
 # =============================================================================
 # Module 09 - Installation Interface Web PHP
-# Version: 2.0.0
+# Version: 2.1.0
 # Description: Installation de l'interface web de gestion avec téléchargement YouTube
 # =============================================================================
 
@@ -16,6 +16,15 @@ readonly CONFIG_FILE="/etc/pi-signage/config.conf"
 readonly LOG_FILE="/var/log/pi-signage-setup.log"
 readonly WEB_ROOT="/var/www/pi-signage"
 readonly NGINX_CONFIG="/etc/nginx/sites-available/pi-signage"
+readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Charger les fonctions de sécurité
+if [[ -f "$SCRIPT_DIR/00-security-utils.sh" ]]; then
+    source "$SCRIPT_DIR/00-security-utils.sh"
+else
+    echo "ERREUR: Fichier de sécurité manquant: 00-security-utils.sh" >&2
+    exit 1
+fi
 
 # Colors
 readonly RED='\033[0;31m'
@@ -154,9 +163,11 @@ php_admin_value[post_max_size] = 100M
 php_admin_value[max_execution_time] = 300
 
 ; Sécurité
-php_admin_value[disable_functions] = exec,passthru,shell_exec,system,proc_open,popen,curl_exec,curl_multi_exec,parse_ini_file,show_source
+; Note: shell_exec est nécessaire pour le contrôle des services via l'interface web
+php_admin_value[disable_functions] = exec,passthru,system,proc_open,popen,curl_multi_exec,parse_ini_file,show_source,eval,file_get_contents,file_put_contents,fpassthru
 php_admin_flag[allow_url_fopen] = off
 php_admin_flag[allow_url_include] = off
+php_admin_flag[expose_php] = off
 
 ; Sessions
 php_admin_value[session.save_path] = /var/lib/php/sessions/pi-signage
@@ -269,25 +280,135 @@ deploy_web_files() {
     # Créer la structure de répertoires
     mkdir -p "$WEB_ROOT"/{includes,api,assets,temp}
     
-    # Créer les fichiers PHP
-    # Note: Dans un vrai déploiement, ces fichiers seraient copiés depuis un repo
-    # Pour cette démonstration, nous créons les fichiers de base
+    # Copier les fichiers de configuration PHP depuis les templates
+    if [[ -f "$SCRIPT_DIR/templates/web-config.php" ]]; then
+        cp "$SCRIPT_DIR/templates/web-config.php" "$WEB_ROOT/includes/config.php"
+        
+        # Remplacer le placeholder du mot de passe hashé
+        if [[ -n "${WEB_ADMIN_PASSWORD_HASH:-}" ]]; then
+            sed -i "s|{{WEB_ADMIN_PASSWORD_HASH}}|$WEB_ADMIN_PASSWORD_HASH|g" "$WEB_ROOT/includes/config.php"
+        else
+            log_error "Mot de passe admin non défini"
+            return 1
+        fi
+        
+        log_info "Configuration PHP déployée"
+    else
+        log_error "Template de configuration manquant"
+        return 1
+    fi
     
-    # index.php (déjà créé dans l'artifact précédent)
-    # dashboard.php (déjà créé)
-    # includes/* (déjà créés)
+    # Copier les fonctions PHP
+    if [[ -f "$SCRIPT_DIR/templates/web-functions.php" ]]; then
+        cp "$SCRIPT_DIR/templates/web-functions.php" "$WEB_ROOT/includes/functions.php"
+        log_info "Fonctions PHP déployées"
+    else
+        log_error "Template de fonctions manquant"
+        return 1
+    fi
     
-    # Créer un fichier API de statut
+    # Créer la page d'index de base
+    cat > "$WEB_ROOT/index.php" << 'PHP_EOF'
+<?php
+define('PI_SIGNAGE_WEB', true);
+require_once 'includes/config.php';
+
+// Si déjà authentifié, rediriger vers le dashboard
+if (checkAuth()) {
+    header('Location: dashboard.php');
+    exit;
+}
+
+// Traitement du formulaire de connexion
+$error = '';
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!validateCSRFToken($_POST['csrf_token'] ?? '')) {
+        $error = 'Erreur de sécurité. Veuillez réessayer.';
+    } else {
+        $username = $_POST['username'] ?? '';
+        $password = $_POST['password'] ?? '';
+        
+        if ($username === ADMIN_USERNAME && validatePassword($password)) {
+            session_start();
+            $_SESSION['authenticated'] = true;
+            $_SESSION['username'] = $username;
+            $_SESSION['last_activity'] = time();
+            
+            logActivity('LOGIN_SUCCESS');
+            header('Location: dashboard.php');
+            exit;
+        } else {
+            $error = 'Identifiants invalides';
+            logActivity('LOGIN_FAILED', $username);
+        }
+    }
+}
+
+session_start();
+$csrf_token = generateCSRFToken();
+setSecurityHeaders();
+?>
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pi Signage - Connexion</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f0f0f0; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .login-box { background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); width: 300px; }
+        h1 { text-align: center; color: #333; }
+        input { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        button { width: 100%; padding: 10px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .error { color: #dc3545; text-align: center; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <div class="login-box">
+        <h1>Pi Signage</h1>
+        <?php if ($error): ?>
+            <div class="error"><?= htmlspecialchars($error) ?></div>
+        <?php endif; ?>
+        <form method="post">
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
+            <input type="text" name="username" placeholder="Nom d'utilisateur" required autofocus>
+            <input type="password" name="password" placeholder="Mot de passe" required>
+            <button type="submit">Se connecter</button>
+        </form>
+    </div>
+</body>
+</html>
+PHP_EOF
+
+    # API de statut sécurisée
     cat > "$WEB_ROOT/api/status.php" << 'PHP_EOF'
 <?php
-header('Content-Type: application/json');
-
+define('PI_SIGNAGE_WEB', true);
 require_once '../includes/config.php';
 require_once '../includes/functions.php';
 
+// Vérifier l'authentification
+if (!checkAuth()) {
+    http_response_code(401);
+    exit(json_encode(['error' => 'Unauthorized']));
+}
+
+// Protection CSRF pour les requêtes POST
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $data = json_decode(file_get_contents('php://input'), true);
+    if (!validateCSRFToken($data['csrf_token'] ?? '')) {
+        http_response_code(403);
+        exit(json_encode(['error' => 'CSRF token validation failed']));
+    }
+}
+
+setSecurityHeaders();
+header('Content-Type: application/json');
+
 $status = [
-    'vlc_status' => checkServiceStatus('vlc-signage'),
-    'disk_usage' => disk_free_space('/opt/videos'),
+    'vlc_status' => checkServiceStatus('vlc-signage.service'),
+    'disk_usage' => checkDiskSpace(),
     'system_info' => getSystemInfo()
 ];
 
@@ -300,17 +421,30 @@ PHP_EOF
          -o "$WEB_ROOT/filemanager.php"; then
         log_info "TinyFileManager téléchargé"
         
-        # Configuration de TinyFileManager
-        sed -i "s|^\$root_path = .*|$root_path = '/opt/videos';|" "$WEB_ROOT/filemanager.php"
-        sed -i "s|^\$use_auth = .*|$use_auth = false;|" "$WEB_ROOT/filemanager.php"
+        # Configuration sécurisée de TinyFileManager
+        sed -i "s|^\$root_path = .*|\$root_path = '/opt/videos';|" "$WEB_ROOT/filemanager.php"
+        sed -i "s|^\$use_auth = .*|\$use_auth = true;|" "$WEB_ROOT/filemanager.php"
+        
+        # Restreindre les permissions de TinyFileManager
+        sed -i "s|^\$edit_files = .*|\$edit_files = false;|" "$WEB_ROOT/filemanager.php"
+        sed -i "s|^\$delete_files = .*|\$delete_files = true;|" "$WEB_ROOT/filemanager.php"
+        sed -i "s|^\$upload_files = .*|\$upload_files = true;|" "$WEB_ROOT/filemanager.php"
+        sed -i "s|^\$create_folders = .*|\$create_folders = false;|" "$WEB_ROOT/filemanager.php"
     else
         log_warn "Échec du téléchargement de TinyFileManager"
     fi
     
-    # Permissions
-    chown -R www-data:www-data "$WEB_ROOT"
-    chmod -R 755 "$WEB_ROOT"
-    chmod -R 775 "$WEB_ROOT/temp"
+    # Permissions sécurisées
+    if command -v secure_dir_permissions >/dev/null 2>&1; then
+        secure_dir_permissions "$WEB_ROOT" "www-data" "www-data" "750"
+        secure_dir_permissions "$WEB_ROOT/temp" "www-data" "www-data" "770"
+        secure_dir_permissions "$WEB_ROOT/includes" "www-data" "www-data" "750"
+        secure_dir_permissions "$WEB_ROOT/api" "www-data" "www-data" "750"
+    else
+        chown -R www-data:www-data "$WEB_ROOT"
+        chmod -R 750 "$WEB_ROOT"
+        chmod -R 770 "$WEB_ROOT/temp"
+    fi
     
     log_info "Fichiers web déployés"
 }
@@ -331,7 +465,19 @@ www-data ALL=(ALL) NOPASSWD: /usr/bin/systemctl start vlc-signage.service
 www-data ALL=(ALL) NOPASSWD: /usr/bin/systemctl status vlc-signage.service
 EOF
     
-    chmod 440 /etc/sudoers.d/pi-signage-web
+    # Permissions sécurisées pour sudoers
+    if command -v secure_file_permissions >/dev/null 2>&1; then
+        secure_file_permissions "/etc/sudoers.d/pi-signage-web" "root" "root" "440"
+    else
+        chmod 440 /etc/sudoers.d/pi-signage-web
+    fi
+    
+    # Valider la configuration sudoers
+    if ! visudo -c -f /etc/sudoers.d/pi-signage-web >/dev/null 2>&1; then
+        log_error "Configuration sudoers invalide!"
+        rm -f /etc/sudoers.d/pi-signage-web
+        return 1
+    fi
     
     log_info "Permissions sudo configurées"
 }
@@ -380,7 +526,18 @@ EOF
     chmod +x /opt/scripts/update-ytdlp.sh
     
     # Ajouter une tâche cron pour mise à jour hebdomadaire
-    echo "0 4 * * 1 root /opt/scripts/update-ytdlp.sh" > /etc/cron.d/pi-signage-ytdlp-update
+    cat > /etc/cron.d/pi-signage-ytdlp-update << 'EOF'
+# Mise à jour hebdomadaire de yt-dlp
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+0 4 * * 1 root /opt/scripts/update-ytdlp.sh
+EOF
+    
+    # Permissions sécurisées pour cron
+    if command -v secure_file_permissions >/dev/null 2>&1; then
+        secure_file_permissions "/etc/cron.d/pi-signage-ytdlp-update" "root" "root" "644"
+    else
+        chmod 644 /etc/cron.d/pi-signage-ytdlp-update
+    fi
     
     log_info "Script de mise à jour créé"
 }
@@ -484,7 +641,7 @@ main() {
         log_info "Interface web disponible sur:"
         log_info "  URL: http://${ip_addr}/"
         log_info "  Utilisateur: admin"
-        log_info "  Mot de passe: admin (à changer!)"
+        log_info "  Mot de passe: (configuré lors de l'installation)"
         log_info ""
         log_info "Fonctionnalités disponibles:"
         log_info "  - Téléchargement YouTube (vos propres vidéos)"

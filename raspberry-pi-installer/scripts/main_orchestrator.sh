@@ -18,6 +18,15 @@ readonly SCRIPT_VERSION="2.1.0"
 readonly LOG_FILE="/var/log/pi-signage-setup.log"
 readonly CONFIG_FILE="/etc/pi-signage/config.conf"
 readonly SCRIPTS_DIR="/tmp/pi-signage-scripts"
+readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Charger les fonctions de sécurité
+if [[ -f "$SCRIPT_DIR/00-security-utils.sh" ]]; then
+    source "$SCRIPT_DIR/00-security-utils.sh"
+else
+    echo "ERREUR: Fichier de sécurité manquant: 00-security-utils.sh" >&2
+    exit 1
+fi
 
 # Colors for output
 readonly RED='\033[0;31m'
@@ -351,8 +360,12 @@ collect_configuration() {
             read -rsp "Mot de passe Glances: " GLANCES_PASSWORD
             echo
         done
-    else
+        # Chiffrer le mot de passe immédiatement
+        GLANCES_PASSWORD_ENCRYPTED=$(encrypt_password "$GLANCES_PASSWORD")
+        # Ne plus garder le mot de passe en clair en mémoire
         GLANCES_PASSWORD=""
+    else
+        GLANCES_PASSWORD_ENCRYPTED=""
     fi
     
     # Configuration Interface Web (si le module est sélectionné)
@@ -361,16 +374,26 @@ collect_configuration() {
         read -rp "Nom d'utilisateur administrateur web [admin]: " WEB_ADMIN_USER
         WEB_ADMIN_USER=${WEB_ADMIN_USER:-admin}
         
+        # Valider le nom d'utilisateur
+        if ! validate_username "$WEB_ADMIN_USER"; then
+            echo -e "${RED}Nom d'utilisateur invalide (3-32 caractères, alphanumériques uniquement)${NC}"
+            WEB_ADMIN_USER="admin"
+        fi
+        
         read -rsp "Mot de passe administrateur web: " WEB_ADMIN_PASSWORD
         echo
-        while [[ ${#WEB_ADMIN_PASSWORD} -lt 6 ]]; do
-            echo -e "${RED}Le mot de passe doit contenir au moins 6 caractères${NC}"
+        while [[ ${#WEB_ADMIN_PASSWORD} -lt 8 ]]; do
+            echo -e "${RED}Le mot de passe doit contenir au moins 8 caractères${NC}"
             read -rsp "Mot de passe administrateur web: " WEB_ADMIN_PASSWORD
             echo
         done
+        # Hacher le mot de passe immédiatement
+        WEB_ADMIN_PASSWORD_HASH=$(hash_password "$WEB_ADMIN_PASSWORD")
+        # Ne plus garder le mot de passe en clair
+        WEB_ADMIN_PASSWORD=""
     else
         WEB_ADMIN_USER=""
-        WEB_ADMIN_PASSWORD=""
+        WEB_ADMIN_PASSWORD_HASH=""
     fi
     
     # Hostname (toujours demandé)
@@ -381,17 +404,26 @@ collect_configuration() {
     mkdir -p "$(dirname "$CONFIG_FILE")"
     cat > "$CONFIG_FILE" << EOF
 # Configuration Pi Signage
+# Version: $SCRIPT_VERSION
+# Date: $(date '+%Y-%m-%d %H:%M:%S')
+# ATTENTION: Ce fichier contient des données sensibles chiffrées
+
 GDRIVE_FOLDER="$GDRIVE_FOLDER"
-GLANCES_PASSWORD="$GLANCES_PASSWORD"
+GLANCES_PASSWORD_ENCRYPTED="$GLANCES_PASSWORD_ENCRYPTED"
 WEB_ADMIN_USER="$WEB_ADMIN_USER"
-WEB_ADMIN_PASSWORD="$WEB_ADMIN_PASSWORD"
+WEB_ADMIN_PASSWORD_HASH="$WEB_ADMIN_PASSWORD_HASH"
 VIDEO_DIR="/opt/videos"
 NEW_HOSTNAME="$NEW_HOSTNAME"
 SCRIPT_VERSION="$SCRIPT_VERSION"
 INSTALL_DATE="$(date '+%Y-%m-%d %H:%M:%S')"
 INSTALLED_MODULES="${selected_modules[*]}"
 EOF
-    chmod 600 "$CONFIG_FILE"
+    
+    # Appliquer des permissions strictes
+    secure_file_permissions "$CONFIG_FILE" "root" "root" "600"
+    
+    # Logger l'événement de sécurité
+    log_security_event "CONFIG_CREATED" "Configuration Pi Signage créée"
     
     log_info "Configuration sauvegardée dans $CONFIG_FILE"
 }

@@ -2,7 +2,7 @@
 
 # =============================================================================
 # Module 01 - Configuration Système de Base (STABLE)
-# Version: 2.0.0
+# Version: 2.1.0
 # Description: Configuration système sans optimisations agressives
 # =============================================================================
 
@@ -14,6 +14,15 @@ set -euo pipefail
 
 readonly CONFIG_FILE="/etc/pi-signage/config.conf"
 readonly LOG_FILE="/var/log/pi-signage-setup.log"
+readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Charger les fonctions de sécurité
+if [[ -f "$SCRIPT_DIR/00-security-utils.sh" ]]; then
+    source "$SCRIPT_DIR/00-security-utils.sh"
+else
+    echo "ERREUR: Fichier de sécurité manquant: 00-security-utils.sh" >&2
+    exit 1
+fi
 
 # Colors
 readonly RED='\033[0;31m'
@@ -77,22 +86,26 @@ load_config() {
 update_system() {
     log_info "Mise à jour des paquets système..."
     
-    # Mise à jour de la liste des paquets
-    if apt-get update; then
-        log_info "Liste des paquets mise à jour"
-    else
-        log_error "Échec de la mise à jour des paquets"
+    # Mise à jour de la liste des paquets avec retry
+    local apt_update_cmd="apt-get update"
+    if ! safe_execute "$apt_update_cmd" 3 10; then
+        log_error "Échec de la mise à jour des paquets après plusieurs tentatives"
         return 1
     fi
     
+    log_info "Liste des paquets mise à jour"
+    
     # Mise à jour des paquets installés (sélective)
     log_info "Mise à jour des paquets critiques..."
-    if apt-get upgrade -y --with-new-pkgs \
-        -o Dpkg::Options::="--force-confdef" \
-        -o Dpkg::Options::="--force-confold"; then
+    local apt_upgrade_cmd="apt-get upgrade -y --with-new-pkgs -o Dpkg::Options::='--force-confdef' -o Dpkg::Options::='--force-confold'"
+    
+    if safe_execute "$apt_upgrade_cmd" 2 30; then
         log_info "Paquets mis à jour avec succès"
     else
-        log_warn "Problème lors de la mise à jour des paquets"
+        log_error "Échec de la mise à jour des paquets"
+        # Ne pas bloquer l'installation pour une mise à jour échouée
+        log_warn "L'installation continue malgré l'échec de mise à jour"
+        return 0
     fi
 }
 
@@ -253,37 +266,42 @@ configure_cmdline() {
 create_directories() {
     log_info "Création des répertoires système..."
     
-    # Répertoires principaux
-    local directories=(
-        "/opt/videos"
-        "/opt/scripts"
-        "/var/log/pi-signage"
-        "/etc/pi-signage"
+    # Répertoires principaux avec permissions sécurisées
+    local -A directories=(
+        ["/opt/videos"]="signage:signage:750"
+        ["/opt/scripts"]="root:root:750"
+        ["/var/log/pi-signage"]="root:root:755"
+        ["/etc/pi-signage"]="root:root:700"
     )
     
-    for dir in "${directories[@]}"; do
+    # Créer l'utilisateur signage si nécessaire
+    if ! id "signage" >/dev/null 2>&1; then
+        log_info "Création de l'utilisateur signage"
+        useradd -r -s /bin/false -d /nonexistent -c "Pi Signage System User" signage || {
+            log_error "Échec de la création de l'utilisateur signage"
+            return 1
+        }
+    fi
+    
+    for dir in "${!directories[@]}"; do
+        IFS=':' read -r owner group perms <<< "${directories[$dir]}"
+        
         if mkdir -p "$dir"; then
             log_info "Répertoire créé: $dir"
-            # Permissions appropriées
-            case "$dir" in
-                "/opt/videos")
-                    chmod 755 "$dir"
-                    ;;
-                "/opt/scripts")
-                    chmod 755 "$dir"
-                    ;;
-                "/var/log/pi-signage")
-                    chmod 755 "$dir"
-                    ;;
-                "/etc/pi-signage")
-                    chmod 700 "$dir"
-                    ;;
-            esac
+            
+            # Appliquer les permissions sécurisées
+            if ! secure_dir_permissions "$dir" "$owner" "$group" "$perms"; then
+                log_error "Échec de l'application des permissions pour: $dir"
+                return 1
+            fi
         else
             log_error "Échec de la création du répertoire: $dir"
             return 1
         fi
     done
+    
+    # Logger l'événement de sécurité
+    log_security_event "DIRECTORIES_CREATED" "Répertoires système créés avec permissions sécurisées"
 }
 
 # =============================================================================

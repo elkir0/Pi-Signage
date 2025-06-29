@@ -2,7 +2,7 @@
 
 # =============================================================================
 # Module 05 - Installation et Configuration Glances
-# Version: 2.0.0
+# Version: 2.1.0
 # Description: Installation Glances pour monitoring système
 # =============================================================================
 
@@ -17,6 +17,15 @@ readonly LOG_FILE="/var/log/pi-signage-setup.log"
 readonly GLANCES_CONFIG="/etc/glances/glances.conf"
 readonly GLANCES_SERVICE="/etc/systemd/system/glances.service"
 readonly GLANCES_PASSWORD_FILE="/etc/glances/.htpasswd"
+readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Charger les fonctions de sécurité
+if [[ -f "$SCRIPT_DIR/00-security-utils.sh" ]]; then
+    source "$SCRIPT_DIR/00-security-utils.sh"
+else
+    echo "ERREUR: Fichier de sécurité manquant: 00-security-utils.sh" >&2
+    exit 1
+fi
 
 # Colors
 readonly RED='\033[0;31m'
@@ -81,24 +90,36 @@ install_glances() {
         "curl"
     )
     
-    # Installation des paquets de base
-    if apt-get install -y "${base_packages[@]}"; then
-        log_info "Paquets de base installés"
-    else
-        log_error "Échec de l'installation des paquets de base"
+    # Installation des paquets de base avec retry
+    log_info "Installation des paquets de base..."
+    local install_cmd="apt-get install -y ${base_packages[*]}"
+    if ! safe_execute "$install_cmd" 3 10; then
+        log_error "Échec de l'installation des paquets de base après plusieurs tentatives"
         return 1
     fi
     
-    # Mise à jour de pip
-    python3 -m pip install --upgrade pip
+    log_info "Paquets de base installés"
     
-    # Installation de Glances via pip
+    # Mise à jour de pip avec gestion d'erreur
+    log_info "Mise à jour de pip..."
+    if ! safe_execute "python3 -m pip install --upgrade pip" 2 10; then
+        log_warn "Échec de la mise à jour de pip, utilisation de la version existante"
+    fi
+    
+    # Installation de Glances via pip avec retry
     log_info "Installation de Glances via pip..."
-    if python3 -m pip install glances[web]; then
-        log_info "Glances installé avec succès"
+    if ! safe_execute "python3 -m pip install glances[web]" 3 30; then
+        log_error "Échec de l'installation de Glances via pip"
+        # Essayer l'installation via apt comme fallback
+        log_info "Tentative d'installation via apt..."
+        if safe_execute "apt-get install -y glances" 2 10; then
+            log_info "Glances installé via apt"
+        else
+            log_error "Échec de l'installation de Glances"
+            return 1
+        fi
     else
-        log_error "Échec de l'installation de Glances"
-        return 1
+        log_info "Glances installé avec succès via pip"
     fi
     
     # Vérification de l'installation
@@ -210,16 +231,32 @@ EOF
 configure_glances_auth() {
     log_info "Configuration de l'authentification Glances..."
     
-    # Créer le fichier de mots de passe avec htpasswd
-    if [[ -n "${GLANCES_PASSWORD:-}" ]]; then
+    # Charger le mot de passe chiffré depuis la configuration
+    if [[ -n "${GLANCES_PASSWORD_ENCRYPTED:-}" ]]; then
+        # Déchiffrer le mot de passe
+        local glances_password
+        glances_password=$(decrypt_password "$GLANCES_PASSWORD_ENCRYPTED")
+        
+        if [[ -z "$glances_password" ]]; then
+            log_error "Impossible de déchiffrer le mot de passe Glances"
+            return 1
+        fi
+        
         # Créer le répertoire pour le fichier de mots de passe
         mkdir -p "$(dirname "$GLANCES_PASSWORD_FILE")"
         
         # Utiliser htpasswd pour créer le fichier de mots de passe
         # Username: admin, Password: depuis la configuration
-        if echo "$GLANCES_PASSWORD" | htpasswd -i -c "$GLANCES_PASSWORD_FILE" admin; then
+        if echo "$glances_password" | htpasswd -i -c "$GLANCES_PASSWORD_FILE" admin; then
             log_info "Fichier de mots de passe créé"
-            chmod 600 "$GLANCES_PASSWORD_FILE"
+            # Permissions sécurisées
+            secure_file_permissions "$GLANCES_PASSWORD_FILE" "root" "root" "600"
+            
+            # Effacer le mot de passe de la mémoire
+            glances_password=""
+            
+            # Logger l'événement de sécurité
+            log_security_event "GLANCES_AUTH_CONFIGURED" "Authentification Glances configurée"
         else
             log_error "Échec de la création du fichier de mots de passe"
             return 1
