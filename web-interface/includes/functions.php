@@ -210,6 +210,11 @@ function handleVideoUpload(array $file) {
  * Télécharger une vidéo YouTube (limité aux vidéos de l'utilisateur)
  */
 function downloadYouTubeVideo($url, $title = null, $progressFile = null) {
+    // Vérifier que yt-dlp existe
+    if (!file_exists(YTDLP_BIN) || !is_executable(YTDLP_BIN)) {
+        return ['success' => false, 'error' => 'yt-dlp not found or not executable'];
+    }
+    
     // Validation de l'URL
     if (!filter_var($url, FILTER_VALIDATE_URL)) {
         return ['success' => false, 'error' => 'Invalid URL'];
@@ -241,8 +246,6 @@ function downloadYouTubeVideo($url, $title = null, $progressFile = null) {
     if (DISPLAY_MODE === 'chromium') {
         // Format simple : meilleur MP4 disponible jusqu'à 1080p
         $cmd .= ' -f "best[ext=mp4][height<=1080]/best[ext=mp4]/best" --merge-output-format mp4';
-        // Si conversion nécessaire, utiliser x264
-        $cmd .= ' --postprocessor-args "Merger:-c:v copy -c:a copy" --postprocessor-args "VideoConvertor:-c:v libx264 -preset fast -crf 23 -c:a aac -b:a 128k"';
     } else {
         // Mode VLC : accepter plus de formats
         $cmd .= ' -f "best[height<=1080]/best"';
