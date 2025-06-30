@@ -210,4 +210,4 @@ les fichiers de configuration et définir un nouveau mot de passe.
 ### Upload ne fonctionne pas
 - Vérifier l'espace disque : `df -h /opt/videos`
 - Permissions : `ls -la /opt/videos`
-- Taille max upload : 100MB (configurable dans PHP-FPM)
+- Taille max upload : 150MB (configurable dans PHP-FPM)
