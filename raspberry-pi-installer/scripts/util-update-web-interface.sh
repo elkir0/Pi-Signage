@@ -108,13 +108,32 @@ update_simple() {
         return 1
     fi
 
-    cp -r "$src/public"/* "$WEB_ROOT/public/"
-    cp -r "$src/api"/* "$WEB_ROOT/api/"
+    # Copier tous les fichiers en préservant la structure
+    echo "Copie de public/..."
+    cp -r "$src/public"/* "$WEB_ROOT/public/" 2>/dev/null || true
+    
+    echo "Copie de api/..."
+    if [[ -d "$src/api" ]]; then
+        mkdir -p "$WEB_ROOT/api"
+        cp -r "$src/api"/* "$WEB_ROOT/api/" 2>/dev/null || true
+    fi
+    
+    echo "Copie de assets/..."
     if [[ -d "$src/assets" ]]; then
+        mkdir -p "$WEB_ROOT/assets/js" "$WEB_ROOT/assets/css"
         cp -r "$src/assets"/* "$WEB_ROOT/assets/" 2>/dev/null || true
     fi
-    cp -r "$src/templates"/* "$WEB_ROOT/templates/"
-    find "$src/includes" -name '*.php' ! -name 'config.php' -exec cp {} "$WEB_ROOT/includes/" \;
+    
+    echo "Copie de templates/..."
+    if [[ -d "$src/templates" ]]; then
+        mkdir -p "$WEB_ROOT/templates"
+        cp -r "$src/templates"/* "$WEB_ROOT/templates/" 2>/dev/null || true
+    fi
+    
+    echo "Copie de includes/..."
+    if [[ -d "$src/includes" ]]; then
+        find "$src/includes" -name '*.php' ! -name 'config.php' -exec cp {} "$WEB_ROOT/includes/" \;
+    fi
 
     chown -R www-data:www-data "$WEB_ROOT"
     rm -rf "$temp_dir"
