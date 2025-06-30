@@ -341,21 +341,45 @@ deploy_web_files() {
     mkdir -p "$WEB_ROOT/temp"
     mkdir -p "/opt/videos"
     
+    # Créer la structure assets si elle n'existe pas dans public
+    if [[ ! -d "$WEB_ROOT/public/assets" ]]; then
+        if [[ -d "$WEB_ROOT/assets" ]]; then
+            # Si assets existe à la racine, créer un lien symbolique
+            ln -s "$WEB_ROOT/assets" "$WEB_ROOT/public/assets"
+            log_info "Lien symbolique créé pour assets"
+        else
+            # Sinon créer la structure minimale
+            mkdir -p "$WEB_ROOT/public/assets/"{css,js,images}
+            # Créer un fichier CSS minimal si nécessaire
+            if [[ ! -f "$WEB_ROOT/public/assets/css/style.css" ]]; then
+                echo "/* Pi Signage Web Interface */" > "$WEB_ROOT/public/assets/css/style.css"
+            fi
+            log_info "Structure assets créée"
+        fi
+    fi
+    
     # Nettoyer le répertoire temporaire
     rm -rf "$temp_dir"
     
     # Permissions sécurisées
     if command -v secure_dir_permissions >/dev/null 2>&1; then
-        secure_dir_permissions "$WEB_ROOT" "www-data" "www-data" "750"
+        secure_dir_permissions "$WEB_ROOT" "www-data" "www-data" "755"
         secure_dir_permissions "$WEB_ROOT/temp" "www-data" "www-data" "770"
-        secure_dir_permissions "$WEB_ROOT/includes" "www-data" "www-data" "750"
-        secure_dir_permissions "$WEB_ROOT/api" "www-data" "www-data" "750"
+        secure_dir_permissions "$WEB_ROOT/includes" "www-data" "www-data" "755"
+        secure_dir_permissions "$WEB_ROOT/api" "www-data" "www-data" "755"
+        secure_dir_permissions "$WEB_ROOT/public" "www-data" "www-data" "755"
         secure_file_permissions "$WEB_ROOT/includes/config.php" "www-data" "www-data" "640"
     else
         chown -R www-data:www-data "$WEB_ROOT"
-        chmod -R 750 "$WEB_ROOT"
+        chmod -R 755 "$WEB_ROOT"
         chmod -R 770 "$WEB_ROOT/temp"
         chmod 640 "$WEB_ROOT/includes/config.php"
+    fi
+    
+    # S'assurer que /opt/videos est accessible par www-data
+    if [[ -d "/opt/videos" ]]; then
+        chown -R www-data:www-data "/opt/videos"
+        chmod 755 "/opt/videos"
     fi
     
     log_info "Fichiers web déployés depuis GitHub"

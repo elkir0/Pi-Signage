@@ -268,7 +268,7 @@ create_directories() {
     
     # Répertoires principaux avec permissions sécurisées
     local -A directories=(
-        ["/opt/videos"]="signage:signage:750"
+        ["/opt/videos"]="www-data:www-data:755"
         ["/opt/scripts"]="root:root:750"
         ["/var/log/pi-signage"]="root:root:755"
         ["/etc/pi-signage"]="root:root:700"
