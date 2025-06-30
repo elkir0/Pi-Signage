@@ -224,7 +224,7 @@ function downloadYouTube() {
     progressDiv.style.display = 'block';
     progressDiv.innerHTML = '<div class="spinner"></div><p>Téléchargement en cours...</p>';
     
-    fetch('/api/youtube.php', {
+    fetch('/api/youtube-simple.php', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -234,24 +234,27 @@ function downloadYouTube() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            pollYouTubeProgress(data.token, progressDiv, () => {
-                showNotification('Téléchargement terminé!', 'success');
-                urlInput.value = '';
-                if (data.output) {
-                    progressDiv.innerHTML += '<pre>' + data.output + '</pre>';
-                }
-                if (typeof refreshVideoList === 'function') {
-                    refreshVideoList();
-                }
-                downloadBtn.disabled = false;
-            });
-        } else {
-            showNotification('Erreur: ' + data.message, 'error');
+            showNotification('Téléchargement terminé!', 'success');
+            urlInput.value = '';
             if (data.output) {
                 progressDiv.innerHTML = '<pre>' + data.output + '</pre>';
             }
-            downloadBtn.disabled = false;
+            if (data.playlist_updated) {
+                progressDiv.innerHTML += '<p>✓ Playlist mise à jour</p>';
+            }
+            if (typeof refreshVideoList === 'function') {
+                setTimeout(refreshVideoList, 1000);
+            }
+        } else {
+            showNotification('Erreur de téléchargement', 'error');
+            if (data.output) {
+                progressDiv.innerHTML = '<pre>' + data.output + '</pre>';
+            }
+            if (data.error) {
+                progressDiv.innerHTML += '<p>Erreur: ' + data.error + '</p>';
+            }
         }
+        downloadBtn.disabled = false;
     })
     .catch(() => {
         showNotification('Erreur de téléchargement', 'error');

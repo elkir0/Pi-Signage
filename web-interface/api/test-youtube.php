@@ -55,12 +55,17 @@ try {
             if (is_executable($ytdlp)) {
                 echo "   ✓ yt-dlp est exécutable\n";
                 
-                // Tester l'exécution
-                exec($ytdlp . ' --version 2>&1', $output, $status);
-                if ($status === 0) {
+                // Tester l'exécution avec timeout
+                $cmd = 'timeout 5 ' . $ytdlp . ' --version 2>&1';
+                $output = [];
+                $status = -1;
+                exec($cmd, $output, $status);
+                if ($status === 0 && !empty($output)) {
                     echo "   ✓ Version: " . $output[0] . "\n";
+                } else if ($status === 124) {
+                    echo "   ✗ Timeout lors de l'exécution de yt-dlp\n";
                 } else {
-                    echo "   ✗ Erreur d'exécution: " . implode("\n", $output) . "\n";
+                    echo "   ✗ Erreur d'exécution (code: $status): " . implode("\n", $output) . "\n";
                 }
             } else {
                 echo "   ✗ yt-dlp n'est PAS exécutable!\n";
