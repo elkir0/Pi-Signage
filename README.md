@@ -163,6 +163,7 @@ L'installation est **modulaire** - vous pouvez choisir :
 - ✅ **Dashboard moderne** : Vue d'ensemble en temps réel
 - ✅ **Gestion des vidéos** : Upload, suppression, organisation
 - ✅ **Téléchargement YouTube** : Via yt-dlp (vos propres vidéos)
+- ✅ **Compatibilité Chromium** : le patch `yt-dlp-chromium` est appliqué automatiquement après le déploiement de l'interface web
 - ✅ **Monitoring système** : CPU, RAM, température, stockage
 - ✅ **Contrôle à distance** : Démarrer/arrêter les services
 - ✅ **Page paramètres** : Gestion des services et configuration système

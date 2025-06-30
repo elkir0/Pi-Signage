@@ -1087,7 +1087,6 @@ main() {
         "configure_x11_minimal"
         "optimize_chromium"
         "create_admin_scripts"
-        "ensure_youtube_compatibility"
     )
     
     local failed_steps=()

@@ -663,7 +663,12 @@ main() {
     # Validation
     if validate_web_installation; then
         log_info "Interface web installée avec succès"
-        
+
+        local youtube_patch="$SCRIPT_DIR/patches/youtube-chromium-compatibility.sh"
+        if [[ $DISPLAY_MODE == "chromium" && -f "$youtube_patch" ]]; then
+            bash "$youtube_patch"
+        fi
+
         # Afficher les informations d'accès
         local ip_addr
         ip_addr=$(hostname -I | awk '{print $1}' 2>/dev/null || echo "IP_ADDRESS")

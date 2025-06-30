@@ -37,6 +37,7 @@ Le mode Chromium Kiosk est une alternative moderne et légère au mode VLC Class
 
 ### Compatibilité YouTube
 Le système télécharge automatiquement les vidéos YouTube en **H.264/MP4** compatible grâce au wrapper `yt-dlp-chromium`.
+Ce patch est appliqué automatiquement dès que l'interface web est installée.
 
 ## 🚀 Installation
 
