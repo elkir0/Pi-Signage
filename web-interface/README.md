@@ -142,8 +142,9 @@ define('GLANCES_URL', 'http://localhost:61208');
 - Services : vlc-signage, chromium-kiosk, nginx, glances
 
 ### `/api/youtube.php`
-- Télécharge des vidéos YouTube
-- Retourne la progression en temps réel
+- Télécharge une vidéo YouTube pour l'utilisateur connecté
+- Envoyer `csrf_token` et `url` via POST JSON
+- Retourne `{success: bool, message?: string}`
 
 ## 💻 Développement
 

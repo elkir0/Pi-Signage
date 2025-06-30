@@ -32,10 +32,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['url'])) {
             
             // Commande yt-dlp
             $cmd = sprintf(
-                'yt-dlp -f "best[ext=mp4]/best" -o %s --no-playlist "%s" 2>&1',
+                '%s -f "best[ext=mp4]/best" -o %s --no-playlist %s',
+                escapeshellcmd(YTDLP_BIN),
                 escapeshellarg($output_path),
-                $url
+                escapeshellarg($url)
             );
+
+            if (DISPLAY_MODE === 'chromium') {
+                $cmd .= ' --recode-video mp4 --postprocessor-args "-c:v libx264 -preset fast -crf 23 -c:a aac -b:a 128k -movflags +faststart"';
+            }
+
+            $cmd .= ' 2>&1';
             
             // Exécuter (avec timeout de 5 minutes)
             set_time_limit(300);

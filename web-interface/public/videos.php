@@ -100,10 +100,7 @@ $diskSpace = checkDiskSpace();
                     <hr style="margin: 2rem 0;">
                     
                     <h3>Télécharger depuis YouTube</h3>
-                    <p>Téléchargez des vidéos directement depuis YouTube.</p>
-                    <a href="youtube-simple.php" class="btn btn-primary">
-                        📥 Télécharger depuis YouTube
-                    </a>
+                    <p>Utilisez le formulaire en bas de page pour importer une vidéo.</p>
                 </div>
             </div>
         </div>
