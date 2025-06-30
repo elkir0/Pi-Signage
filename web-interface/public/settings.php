@@ -89,19 +89,19 @@ if ($displayMode === 'chromium') {
                     <table class="table">
                         <tr>
                             <td><strong>Hostname</strong></td>
-                            <td><?= htmlspecialchars($systemInfo['hostname']) ?></td>
+                            <td><?= htmlspecialchars($systemInfo['hostname'] ?? 'N/A') ?></td>
                         </tr>
                         <tr>
                             <td><strong>Modèle Pi</strong></td>
-                            <td><?= htmlspecialchars($systemInfo['model']) ?></td>
+                            <td><?= htmlspecialchars($systemInfo['model'] ?? 'N/A') ?></td>
                         </tr>
                         <tr>
                             <td><strong>Uptime</strong></td>
-                            <td><?= htmlspecialchars($systemInfo['uptime']) ?></td>
+                            <td><?= htmlspecialchars($systemInfo['uptime'] ?? 'N/A') ?></td>
                         </tr>
                         <tr>
                             <td><strong>Charge système</strong></td>
-                            <td><?= htmlspecialchars($systemInfo['load']) ?></td>
+                            <td><?= htmlspecialchars($systemInfo['load'] ?? 'N/A') ?></td>
                         </tr>
                         <tr>
                             <td><strong>Mode d'affichage</strong></td>

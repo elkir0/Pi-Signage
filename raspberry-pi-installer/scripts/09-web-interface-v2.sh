@@ -167,8 +167,8 @@ php_admin_value[post_max_size] = 100M
 php_admin_value[max_execution_time] = 300
 
 ; Sécurité
-; Note: shell_exec, file_get_contents et file_put_contents sont nécessaires pour l'interface web
-php_admin_value[disable_functions] = exec,passthru,system,proc_open,popen,curl_multi_exec,parse_ini_file,show_source,eval
+; Note: shell_exec, file_get_contents, file_put_contents et proc_open sont nécessaires pour l'interface web
+php_admin_value[disable_functions] = exec,passthru,system,popen,curl_multi_exec,parse_ini_file,show_source,eval
 php_admin_flag[allow_url_fopen] = off
 php_admin_flag[allow_url_include] = off
 php_admin_flag[expose_php] = off
@@ -191,6 +191,10 @@ EOF
     # Créer le répertoire de logs PHP
     mkdir -p /var/log/pi-signage
     secure_dir_permissions "/var/log/pi-signage" "www-data" "www-data" "755"
+    
+    # Créer le répertoire cache pour www-data (nécessaire pour yt-dlp)
+    mkdir -p /var/www/.cache
+    secure_dir_permissions "/var/www/.cache" "www-data" "www-data" "755"
     
     # Redémarrer PHP-FPM
     systemctl restart php8.2-fpm
