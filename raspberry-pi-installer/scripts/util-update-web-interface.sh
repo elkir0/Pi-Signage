@@ -170,6 +170,23 @@ update_full() {
     log_info "Mise à jour complète terminée"
 }
 
+fix_config_php_constant() {
+    log_info "Vérification et correction de config.php..."
+    
+    local config_file="/var/www/pi-signage/includes/config.php"
+    if [[ ! -f "$config_file" ]]; then
+        log_warn "config.php non trouvé, skip"
+        return 0
+    fi
+    
+    # Corriger la redéfinition de PI_SIGNAGE_WEB
+    if grep -q "define('PI_SIGNAGE_WEB', true);" "$config_file"; then
+        log_info "Correction de la constante PI_SIGNAGE_WEB..."
+        sed -i "s/define('PI_SIGNAGE_WEB', true);/exit('Direct access not permitted');/" "$config_file"
+        log_info "Constante corrigée"
+    fi
+}
+
 update_sudoers_permissions() {
     log_info "Mise à jour des permissions sudoers..."
     
@@ -256,6 +273,7 @@ fi
 
 # Toujours appliquer les corrections après la mise à jour
 fix_nginx_api_routing
+fix_config_php_constant
 update_sudoers_permissions
 
 exit 0

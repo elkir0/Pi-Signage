@@ -6,7 +6,7 @@
 
 // Protection contre l'accès direct
 if (!defined('PI_SIGNAGE_WEB')) {
-    define('PI_SIGNAGE_WEB', true);
+    exit('Direct access not permitted');
 }
 
 // Configuration de session sécurisée
