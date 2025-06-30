@@ -258,9 +258,19 @@ server {
         add_header Cache-Control "public, immutable";
     }
     
-    # API endpoint
+    # API endpoint - Route vers le répertoire API parent
     location /api/ {
-        try_files $uri $uri/ /api/index.php?$query_string;
+        alias /var/www/pi-signage/api/;
+        try_files $uri $uri/ =404;
+        
+        location ~ \.php$ {
+            include snippets/fastcgi-php.conf;
+            fastcgi_pass unix:/run/php/php8.2-fpm-pi-signage.sock;
+            fastcgi_param SCRIPT_FILENAME $request_filename;
+            
+            # Timeout pour les téléchargements longs
+            fastcgi_read_timeout 300;
+        }
     }
 }
 EOF
@@ -344,6 +354,8 @@ deploy_web_files() {
     # Créer les répertoires nécessaires
     mkdir -p "$WEB_ROOT/temp"
     mkdir -p "/opt/videos"
+    mkdir -p "/tmp/pi-signage-progress"
+    chmod 777 "/tmp/pi-signage-progress"
     
     # Gérer les assets - créer la structure dans public et les liens vers les fichiers
     if [[ -d "$WEB_ROOT/assets" ]]; then

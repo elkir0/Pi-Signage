@@ -170,11 +170,75 @@ update_full() {
     log_info "Mise à jour complète terminée"
 }
 
+fix_nginx_api_routing() {
+    log_info "Vérification et correction du routage API nginx..."
+    
+    local nginx_config="/etc/nginx/sites-available/pi-signage"
+    if [[ ! -f "$nginx_config" ]]; then
+        log_warn "Configuration nginx non trouvée, skip"
+        return 0
+    fi
+    
+    # Vérifier si la correction est déjà appliquée
+    if grep -q "alias /var/www/pi-signage/api/" "$nginx_config"; then
+        log_info "Routage API déjà configuré correctement"
+        return 0
+    fi
+    
+    # Créer une sauvegarde
+    cp "$nginx_config" "$nginx_config.bak.$(date +%Y%m%d_%H%M%S)"
+    
+    # Remplacer la configuration API
+    local temp_file="/tmp/nginx-config-$(date +%s)"
+    awk '
+    /# API endpoint/ {
+        print "    # API endpoint - Route vers le répertoire API parent"
+        print "    location /api/ {"
+        print "        alias /var/www/pi-signage/api/;"
+        print "        try_files $uri $uri/ =404;"
+        print "        "
+        print "        location ~ \\.php$ {"
+        print "            include snippets/fastcgi-php.conf;"
+        print "            fastcgi_pass unix:/run/php/php8.2-fpm-pi-signage.sock;"
+        print "            fastcgi_param SCRIPT_FILENAME $request_filename;"
+        print "            "
+        print "            # Timeout pour les téléchargements longs"
+        print "            fastcgi_read_timeout 300;"
+        print "        }"
+        print "    }"
+        # Skip jusqu'à la prochaine fermeture de bloc
+        while (getline > 0 && $0 !~ /^[[:space:]]*}[[:space:]]*$/) {}
+        next
+    }
+    { print }
+    ' "$nginx_config" > "$temp_file"
+    
+    mv "$temp_file" "$nginx_config"
+    
+    # Créer le répertoire de progression si nécessaire
+    mkdir -p /tmp/pi-signage-progress
+    chmod 777 /tmp/pi-signage-progress
+    
+    # Tester et recharger nginx
+    if nginx -t >> "$LOG_FILE" 2>&1; then
+        log_info "Configuration nginx valide, rechargement..."
+        systemctl reload nginx
+        log_info "Routage API corrigé avec succès"
+    else
+        log_error "Configuration nginx invalide, restauration..."
+        mv "$nginx_config.bak.$(date +%Y%m%d_%H%M%S)" "$nginx_config"
+        return 1
+    fi
+}
+
 if [[ "$FULL_UPDATE" == true ]]; then
     update_full
 else
     update_simple
 fi
+
+# Toujours appliquer la correction nginx après la mise à jour
+fix_nginx_api_routing
 
 exit 0
 
