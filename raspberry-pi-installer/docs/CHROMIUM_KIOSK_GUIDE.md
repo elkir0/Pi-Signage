@@ -48,7 +48,7 @@ git clone https://github.com/elkir0/Pi-Signage.git
 cd Pi-Signage/raspberry-pi-installer/scripts
 
 # Lancer l'installation v2.3
-sudo ./main_orchestrator_v2.sh
+sudo ./install.sh
 
 # Choisir "2) Chromium Kiosk" quand demandé
 ```

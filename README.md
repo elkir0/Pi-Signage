@@ -49,8 +49,7 @@ Pi-Signage/
 │   │   ├── 08-backup-manager.sh # Gestion des sauvegardes
 │   │   ├── 09-web-interface-v2.sh # Interface web (nouvelle version)
 │   │   ├── 10-final-check.sh    # Vérification finale
-│   │   ├── main_orchestrator.sh  # Script principal v2.2
-│   │   └── main_orchestrator_v2.sh # Script principal v2.3 (nouveau!)
+│   │   └── install.sh           # Script principal d'installation
 │   ├── docs/                    # Documentation technique
 │   └── examples/                # Fichiers de configuration exemple
 │
@@ -83,7 +82,7 @@ cd Pi-Signage/raspberry-pi-installer/scripts
 chmod +x *.sh
 
 # Lancer l'installation v2.3.0
-sudo ./main_orchestrator_v2.sh
+sudo ./install.sh
 ```
 
 #### Installation sur VM/Headless pour tests
@@ -95,7 +94,7 @@ cd Pi-Signage/raspberry-pi-installer/scripts
 
 # Installation avec support Xvfb automatique
 chmod +x *.sh
-sudo ./main_orchestrator_v2.sh
+sudo ./install.sh
 
 # Le script détecte automatiquement l'environnement VM et installe Xvfb
 ```
@@ -106,10 +105,10 @@ Si vous obtenez l'erreur "variable en lecture seule" :
 ```bash
 # Option 1 : Nettoyer l'environnement
 unset LOG_FILE CONFIG_FILE
-sudo ./main_orchestrator_v2.sh
+sudo ./install.sh
 
 # Option 2 : Utiliser un nouveau shell
-sudo bash ./main_orchestrator_v2.sh
+sudo bash ./install.sh
 ```
 
 #### Modes d'affichage disponibles (nouveau!)
