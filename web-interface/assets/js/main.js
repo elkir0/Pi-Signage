@@ -234,27 +234,54 @@ function downloadYouTube() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            showNotification('Téléchargement terminé!', 'success');
-            urlInput.value = '';
-            if (data.output) {
-                progressDiv.innerHTML = '<pre>' + data.output + '</pre>';
-            }
-            if (typeof refreshVideoList === 'function') {
-                refreshVideoList();
-            }
+            pollYouTubeProgress(data.token, progressDiv, () => {
+                showNotification('Téléchargement terminé!', 'success');
+                urlInput.value = '';
+                if (data.output) {
+                    progressDiv.innerHTML += '<pre>' + data.output + '</pre>';
+                }
+                if (typeof refreshVideoList === 'function') {
+                    refreshVideoList();
+                }
+                downloadBtn.disabled = false;
+            });
         } else {
             showNotification('Erreur: ' + data.message, 'error');
             if (data.output) {
                 progressDiv.innerHTML = '<pre>' + data.output + '</pre>';
             }
+            downloadBtn.disabled = false;
         }
     })
-    .catch(error => {
+    .catch(() => {
         showNotification('Erreur de téléchargement', 'error');
-    })
-    .finally(() => {
         downloadBtn.disabled = false;
     });
+}
+
+function pollYouTubeProgress(token, container, callback) {
+    const interval = setInterval(() => {
+        fetch(`/api/youtube_progress.php?token=${token}`)
+            .then(resp => resp.json())
+            .then(data => {
+                if (data.success) {
+                    container.innerHTML = `<p>Progression: ${data.progress}%</p>`;
+                    if (data.progress >= 100) {
+                        clearInterval(interval);
+                        callback();
+                    }
+                } else {
+                    clearInterval(interval);
+                    showNotification('Erreur de suivi', 'error');
+                    callback();
+                }
+            })
+            .catch(() => {
+                clearInterval(interval);
+                showNotification('Erreur de suivi', 'error');
+                callback();
+            });
+    }, 1000);
 }
 
 // Service control

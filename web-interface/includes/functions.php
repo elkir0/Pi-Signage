@@ -209,7 +209,7 @@ function handleVideoUpload(array $file) {
 /**
  * Télécharger une vidéo YouTube (limité aux vidéos de l'utilisateur)
  */
-function downloadYouTubeVideo($url, $title = null) {
+function downloadYouTubeVideo($url, $title = null, $progressFile = null) {
     // Validation de l'URL
     if (!filter_var($url, FILTER_VALIDATE_URL)) {
         return ['success' => false, 'error' => 'Invalid URL'];
@@ -242,16 +242,47 @@ function downloadYouTubeVideo($url, $title = null) {
     }
 
     $cmd .= ' 2>&1';
-    
-    // Exécuter la commande
-    $output = shell_exec($cmd);
-    
-    logActivity("VIDEO_DOWNLOAD", $url);
-    
-    if (strpos($output, 'ERROR') !== false) {
-        return ['success' => false, 'error' => 'Download failed', 'output' => $output];
+
+    $descriptorspec = [
+        1 => ['pipe', 'w'],
+        2 => ['pipe', 'w']
+    ];
+
+    if ($progressFile) {
+        if (!is_dir(PROGRESS_DIR)) {
+            mkdir(PROGRESS_DIR, 0777, true);
+        }
+        file_put_contents($progressFile, '0');
     }
-    
+
+    $process = proc_open($cmd, $descriptorspec, $pipes);
+    if (!is_resource($process)) {
+        return ['success' => false, 'error' => 'Process failed'];
+    }
+
+    $output = '';
+    while (($line = fgets($pipes[1])) !== false) {
+        $output .= $line;
+        if ($progressFile && preg_match('/\[download\]\s+(\d+(?:\.\d+)?)%/', $line, $m)) {
+            file_put_contents($progressFile, $m[1]);
+        }
+    }
+    $stderr = stream_get_contents($pipes[2]);
+
+    fclose($pipes[1]);
+    fclose($pipes[2]);
+    $status = proc_close($process);
+
+    if ($progressFile) {
+        file_put_contents($progressFile, '100');
+    }
+
+    logActivity("VIDEO_DOWNLOAD", $url);
+
+    if ($status !== 0) {
+        return ['success' => false, 'error' => 'Download failed', 'output' => $output . $stderr];
+    }
+
     return ['success' => true, 'output' => $output];
 }
 
