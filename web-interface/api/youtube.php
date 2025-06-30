@@ -32,6 +32,10 @@ if (!validateCSRFToken($input['csrf_token'] ?? '')) {
 $url = $input['url'] ?? '';
 $title = $input['title'] ?? null;
 
-$result = downloadYouTubeVideo($url, $title);
+$token = bin2hex(random_bytes(8));
+$progressFile = PROGRESS_DIR . '/' . $token . '.txt';
+
+$result = downloadYouTubeVideo($url, $title, $progressFile);
+$result['token'] = $token;
 
 echo json_encode($result);

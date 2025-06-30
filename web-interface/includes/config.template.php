@@ -19,6 +19,7 @@ ini_set('session.cookie_samesite', 'Strict');
 define('VIDEO_DIR', '/opt/videos');
 define('SCRIPTS_DIR', '/opt/scripts');
 define('LOG_DIR', '/var/log/pi-signage');
+define('PROGRESS_DIR', '/tmp/pi-signage-progress');
 define('WEB_ROOT', dirname(__DIR__));
 // binaire yt-dlp
 define('YTDLP_BIN', '/usr/local/bin/yt-dlp');
