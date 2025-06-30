@@ -3,29 +3,33 @@
 **Solution tout-en-un de digital signage pour Raspberry Pi avec interface web de gestion**
 
 [![Compatible](https://img.shields.io/badge/Compatible-Pi%203B%2B%20%7C%204B%20%7C%205-green.svg)](https://www.raspberrypi.org/)
-[![Version](https://img.shields.io/badge/Version-2.3.0--beta-orange.svg)]()
-[![Branch](https://img.shields.io/badge/Branch-kiosk-yellow.svg)]()
+[![Version](https://img.shields.io/badge/Version-2.3.0-green.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)]()
 [![Security](https://img.shields.io/badge/Security-Enhanced-brightgreen.svg)]()
 
-> 🚧 **Branche de développement** : Vous êtes sur la branche `kiosk` qui contient les nouvelles fonctionnalités v2.3.0 incluant le mode Chromium Kiosk. Pour la version stable, utilisez la [branche main](https://github.com/elkir0/Pi-Signage/tree/main).
+> ✅ **Version stable 2.3.0** : Solution complète avec deux modes d'affichage (VLC Classic et Chromium Kiosk), interface web de gestion et sécurité renforcée.
 
 ## 🎯 Présentation
 
 Pi Signage Digital est une solution professionnelle complète pour transformer vos Raspberry Pi en système d'affichage dynamique. Ce projet offre une installation automatisée avec une sécurité renforcée et une interface web moderne.
 
-### 🎬 Nouveautés v2.3.0 - Deux modes d'affichage
+### 🎬 Nouveautés v2.3.0 - Version stable
 - **Mode VLC Classic** : Stabilité éprouvée, support de tous les formats vidéo
 - **Mode Chromium Kiosk** : Léger et moderne, support HTML5 et overlays
 - **Installation adaptative** : Choix du mode selon vos besoins
 - **Player HTML5** : Interface moderne avec WebSocket pour Chromium
+- **Support VM/Headless** : Installation avec Xvfb pour tests et développement
+- **Interface web améliorée** : Nouvelles pages de gestion vidéos et paramètres
+- **Authentification harmonisée** : SHA-512 unifié entre bash et PHP
+- **Corrections de bugs** : Permissions, chemins, et stabilité améliorés
 
-### 🔐 Fonctionnalités de sécurité (v2.2.0)
+### 🔐 Fonctionnalités de sécurité
 - **Chiffrement des mots de passe** avec AES-256-CBC
 - **Gestion d'erreurs robuste** avec retry logic
 - **Permissions restrictives** sur tous les fichiers sensibles
 - **Protection CSRF** dans l'interface web
 - **Module de sécurité centralisé** pour tous les scripts
+- **Authentification SHA-512** avec salt pour l'interface web
 
 ## 📁 Structure du Projet
 
@@ -68,13 +72,11 @@ Pi-Signage/
 
 ### Installation
 
-⚠️ **Note importante** : Vous lisez actuellement le README de la branche `kiosk` (v2.3.0-beta)
-
-#### Installation de la version 2.3.0 avec mode Chromium Kiosk
+#### Installation de la version 2.3.0
 
 ```bash
-# Cloner spécifiquement la branche kiosk
-git clone -b kiosk https://github.com/elkir0/Pi-Signage.git
+# Cloner le dépôt
+git clone https://github.com/elkir0/Pi-Signage.git
 cd Pi-Signage/raspberry-pi-installer/scripts
 
 # Rendre les scripts exécutables
@@ -84,16 +86,18 @@ chmod +x *.sh
 sudo ./main_orchestrator_v2.sh
 ```
 
-#### Installation sur VM pour tests
+#### Installation sur VM/Headless pour tests
 
 ```bash
-# Cloner la branche kiosk
-git clone -b kiosk https://github.com/elkir0/Pi-Signage.git
+# Cloner le dépôt
+git clone https://github.com/elkir0/Pi-Signage.git
 cd Pi-Signage/raspberry-pi-installer/scripts
 
-# Utiliser le script VM
-chmod +x install-vm.sh
-sudo ./install-vm.sh
+# Installation avec support Xvfb automatique
+chmod +x *.sh
+sudo ./main_orchestrator_v2.sh
+
+# Le script détecte automatiquement l'environnement VM et installe Xvfb
 ```
 
 #### Résolution de problèmes
@@ -161,8 +165,9 @@ L'installation est **modulaire** - vous pouvez choisir :
 - ✅ **Téléchargement YouTube** : Via yt-dlp (vos propres vidéos)
 - ✅ **Monitoring système** : CPU, RAM, température, stockage
 - ✅ **Contrôle à distance** : Démarrer/arrêter les services
+- ✅ **Page paramètres** : Gestion des services et configuration système
 - ✅ **Détection du mode** : Interface adaptée selon VLC ou Chromium
-- ✅ **Sécurité** : Authentification, CSRF, headers de sécurité
+- ✅ **Sécurité** : Authentification SHA-512, CSRF, headers de sécurité
 
 ### 🔐 Sécurité
 - ✅ **Module de sécurité centralisé** : Fonctions réutilisables
@@ -256,6 +261,25 @@ cd /path/to/Pi-Signage
 git pull
 sudo /opt/scripts/update-web-interface.sh
 ```
+
+## 📋 Changelog v2.3.0
+
+### Corrections majeures
+- ✅ Suppression du package php8.2-json (intégré dans PHP 8.2)
+- ✅ Support VM/Headless avec Xvfb pour tests
+- ✅ Correction des sections dupliquées dans Glances
+- ✅ Création du répertoire home pour l'utilisateur signage
+- ✅ Harmonisation de l'authentification (SHA-512 unifié)
+- ✅ Correction des permissions fichiers et répertoires
+- ✅ Utilisation des chemins absolus dans tous les fichiers PHP
+- ✅ Correction de l'ownership /opt/videos pour www-data
+
+### Nouvelles fonctionnalités
+- ✅ Page de gestion des vidéos (videos.php)
+- ✅ Page des paramètres système (settings.php)
+- ✅ Détection automatique de l'environnement VM
+- ✅ Support Xvfb pour environnements sans écran
+- ✅ Création automatique du dossier assets
 
 ## 🤝 Contribution
 

@@ -5,7 +5,7 @@ Toutes les modifications notables du projet Pi Signage Digital sont documentées
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/),
 et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.3.0] - 2024-01-20
+## [2.3.0] - 2024-01-30
 
 ### 🆕 Ajouté
 - **Mode Chromium Kiosk** : Alternative moderne et légère à VLC
@@ -15,24 +15,49 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   - Player HTML5 avec interface moderne
   - WebSocket pour contrôle temps réel
   - API REST pour gestion de playlist
+- **Support VM/Headless** : Installation avec Xvfb pour tests sur VM (QEMU, UTM, VirtualBox)
+  - Détection automatique de l'environnement VM
+  - Installation et configuration Xvfb automatique
+  - Mode headless pour développement et tests
+- **Pages web manquantes** :
+  - `videos.php` : Interface complète de gestion vidéos avec upload et YouTube
+  - `settings.php` : Page de paramètres système avec contrôle services
 - **Script `main_orchestrator_v2.sh`** : Nouveau script principal avec sélection du mode d'affichage
 - **Comparaison interactive** : Aide au choix entre VLC et Chromium lors de l'installation
 - **Scripts d'administration Chromium** :
   - `player-control.sh` : Contrôle du player (play, pause, next, etc.)
   - `update-playlist.sh` : Mise à jour automatique de la playlist
-- **Documentation Chromium** : Guide complet dans `CHROMIUM_KIOSK_PROPOSAL.md`
+- **Documentation** : 
+  - Guide de dépannage complet (`troubleshooting.md`)
+  - Documentation Chromium dans `CHROMIUM_KIOSK_PROPOSAL.md`
 
 ### 🔄 Modifié
 - **Installation modulaire** : Adaptation automatique selon le mode choisi
-- **Interface web** : Détection du mode d'affichage pour adapter les contrôles
-- **Documentation** : Mise à jour complète pour refléter les deux modes
-- **README** : Ajout des sections Chromium et comparaison des modes
+- **Interface web** : 
+  - Détection du mode d'affichage pour adapter les contrôles
+  - Utilisation de chemins absolus avec `dirname(__DIR__)` 
+  - Harmonisation authentification SHA-512 entre bash et PHP
+- **Documentation** : Mise à jour complète pour refléter les deux modes et corrections
+- **README** : Ajout changelog v2.3.0, sections VM/Headless, état stable
+
+### 🐛 Corrigé
+- **PHP 8.2** : Suppression du package `php8.2-json` inexistant (JSON intégré)
+- **Permissions** :
+  - Changement 750→755 pour meilleure compatibilité
+  - Ownership `/opt/videos` : signage→www-data
+  - Ajout chmod 755 sur `/opt/scripts` dans l'installation
+- **Authentification** : Harmonisation SHA-512 format `salt:hash` entre bash et PHP
+- **Utilisateur signage** : Ajout flag `-m` pour création du home directory
+- **Glances** : Suppression section `[network]` dupliquée
+- **Chemins PHP** : Migration vers chemins absolus pour éviter erreurs relatives
+- **Assets** : Création automatique de la structure si manquante
 
 ### 🛠️ Technique
 - Support X11 minimal pour Chromium (sans gestionnaire de fenêtres)
 - Optimisations spécifiques par modèle de Pi
 - Cache Chromium en RAM pour performances
 - Nginx pour servir le player HTML5 local
+- Xvfb pour support headless/VM
 
 ## [2.2.0] - 2024-01-19
 
