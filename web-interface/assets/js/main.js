@@ -224,7 +224,7 @@ function downloadYouTube() {
     progressDiv.style.display = 'block';
     progressDiv.innerHTML = '<div class="spinner"></div><p>Téléchargement en cours...</p>';
     
-    fetch('/api/youtube-simple.php', {
+    fetch('/api/youtube-test.php', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
