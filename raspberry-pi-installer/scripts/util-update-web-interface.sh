@@ -213,6 +213,26 @@ fix_config_php_constant() {
     fi
 }
 
+fix_php_exec_function() {
+    log_info "Vérification de la fonction exec() PHP..."
+    
+    local php_pool_config="/etc/php/8.2/fpm/pool.d/pi-signage.conf"
+    if [[ ! -f "$php_pool_config" ]]; then
+        log_warn "Configuration PHP-FPM non trouvée, skip"
+        return 0
+    fi
+    
+    # Vérifier si exec est désactivé
+    if grep -q "disable_functions = exec," "$php_pool_config"; then
+        log_info "Correction de la fonction exec()..."
+        sed -i 's/disable_functions = exec,passthru/disable_functions = passthru/' "$php_pool_config"
+        systemctl restart php8.2-fpm
+        log_info "PHP-FPM redémarré avec exec() activé"
+    else
+        log_info "exec() déjà activé"
+    fi
+}
+
 update_sudoers_permissions() {
     log_info "Mise à jour des permissions sudoers..."
     
@@ -334,6 +354,7 @@ EOF
 # Toujours appliquer les corrections après la mise à jour
 fix_nginx_api_routing
 fix_config_php_constant
+fix_php_exec_function
 setup_ytdlp_wrapper
 update_sudoers_permissions
 
