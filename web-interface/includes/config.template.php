@@ -21,8 +21,8 @@ define('SCRIPTS_DIR', '/opt/scripts');
 define('LOG_DIR', '/var/log/pi-signage');
 define('PROGRESS_DIR', '/tmp/pi-signage-progress');
 define('WEB_ROOT', dirname(__DIR__));
-// binaire yt-dlp
-define('YTDLP_BIN', '/usr/local/bin/yt-dlp');
+// binaire yt-dlp - utilise le wrapper pour éviter les problèmes de permissions
+define('YTDLP_BIN', 'sudo /opt/scripts/yt-dlp-wrapper.sh');
 
 // Mode d'affichage
 if (file_exists('/etc/pi-signage/display-mode.conf')) {

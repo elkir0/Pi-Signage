@@ -185,6 +185,13 @@ fix_config_php_constant() {
         sed -i "s/define('PI_SIGNAGE_WEB', true);/exit('Direct access not permitted');/" "$config_file"
         log_info "Constante corrigée"
     fi
+    
+    # Mettre à jour le chemin yt-dlp pour utiliser le wrapper
+    if grep -q "define('YTDLP_BIN', '/usr/local/bin/yt-dlp');" "$config_file"; then
+        log_info "Mise à jour du chemin yt-dlp vers le wrapper..."
+        sed -i "s|define('YTDLP_BIN', '/usr/local/bin/yt-dlp');|define('YTDLP_BIN', 'sudo /opt/scripts/yt-dlp-wrapper.sh');|" "$config_file"
+        log_info "Chemin yt-dlp mis à jour"
+    fi
 }
 
 update_sudoers_permissions() {
@@ -271,9 +278,43 @@ else
     update_simple
 fi
 
+setup_ytdlp_wrapper() {
+    log_info "Configuration du wrapper yt-dlp..."
+    
+    # Exécuter le script de correction si disponible
+    local fix_script="$SCRIPT_DIR/patches/fix-ytdlp-permissions.sh"
+    if [[ -f "$fix_script" ]]; then
+        log_info "Exécution du script de correction des permissions..."
+        if bash "$fix_script" >> "$LOG_FILE" 2>&1; then
+            log_info "Wrapper yt-dlp configuré avec succès"
+        else
+            log_warn "Problème lors de la configuration du wrapper"
+        fi
+    else
+        log_warn "Script de correction non trouvé, création manuelle du wrapper..."
+        # Créer le wrapper manuellement si le script n'existe pas
+        cat > /opt/scripts/yt-dlp-wrapper.sh << 'EOF'
+#!/bin/bash
+export HOME=/var/www
+export PATH=/usr/local/bin:/usr/bin:/bin
+export PYTHONIOENCODING=utf-8
+export LC_ALL=C.UTF-8
+export LANG=C.UTF-8
+mkdir -p /var/www/.cache/yt-dlp
+chmod 755 /var/www/.cache
+chown -R www-data:www-data /var/www/.cache
+exec /usr/local/bin/yt-dlp "$@"
+EOF
+        chmod 755 /opt/scripts/yt-dlp-wrapper.sh
+        echo "www-data ALL=(ALL) NOPASSWD: /opt/scripts/yt-dlp-wrapper.sh" >> /etc/sudoers.d/pi-signage-web
+        chmod 440 /etc/sudoers.d/pi-signage-web
+    fi
+}
+
 # Toujours appliquer les corrections après la mise à jour
 fix_nginx_api_routing
 fix_config_php_constant
+setup_ytdlp_wrapper
 update_sudoers_permissions
 
 exit 0
