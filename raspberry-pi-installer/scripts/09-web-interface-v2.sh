@@ -453,8 +453,8 @@ mkdir -p /var/www/.cache/yt-dlp 2>/dev/null
 chmod 755 /var/www/.cache 2>/dev/null
 chown -R www-data:www-data /var/www/.cache 2>/dev/null
 
-# Exécuter yt-dlp avec les arguments
-exec /usr/local/bin/yt-dlp "$@"
+# Exécuter yt-dlp avec les arguments - Forcer MP4 pour Chromium
+exec /usr/local/bin/yt-dlp -f "best[ext=mp4]/best" --merge-output-format mp4 "$@"
 EOF
     
     # Permissions sur le wrapper
@@ -494,6 +494,7 @@ www-data ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart nginx.service
 www-data ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart php8.2-fpm.service
 www-data ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart glances.service
 www-data ALL=(ALL) NOPASSWD: /opt/scripts/update-playlist.sh
+www-data ALL=(ALL) NOPASSWD: /opt/scripts/util-refresh-playlist.sh
 www-data ALL=(ALL) NOPASSWD: /opt/scripts/yt-dlp-wrapper.sh
 EOF
     
@@ -605,6 +606,131 @@ rm -rf "$temp_dir"
 EOF
     
     chmod +x /opt/scripts/update-web-interface.sh
+    
+    # Script de rafraîchissement de playlist
+    cat > /opt/scripts/util-refresh-playlist.sh << 'EOF'
+#!/usr/bin/env bash
+
+# =============================================================================
+# Utilitaire de rafraîchissement de la playlist Chromium
+# Version: 1.0.0
+# =============================================================================
+
+set -euo pipefail
+
+# Couleurs
+readonly GREEN='\033[0;32m'
+readonly YELLOW='\033[1;33m'
+readonly RED='\033[0;31m'
+readonly NC='\033[0m'
+
+# Chemins
+readonly VIDEOS_DIR="/opt/videos"
+readonly PLAYLIST_FILE="/var/www/pi-signage-player/api/playlist.json"
+readonly LOG_FILE="/var/log/pi-signage/playlist-update.log"
+
+# Fonctions de log
+log_info() {
+    local ts
+    ts=$(date '+%Y-%m-%d %H:%M:%S')
+    echo -e "${GREEN}[INFO]${NC} $*"
+    echo "$ts [INFO] $*" >> "$LOG_FILE" 2>/dev/null || true
+}
+
+log_warn() {
+    local ts
+    ts=$(date '+%Y-%m-%d %H:%M:%S')
+    echo -e "${YELLOW}[WARN]${NC} $*"
+    echo "$ts [WARN] $*" >> "$LOG_FILE" 2>/dev/null || true
+}
+
+log_error() {
+    local ts
+    ts=$(date '+%Y-%m-%d %H:%M:%S')
+    echo -e "${RED}[ERROR]${NC} $*" >&2
+    echo "$ts [ERROR] $*" >> "$LOG_FILE" 2>/dev/null || true
+}
+
+# Créer le répertoire de logs
+mkdir -p "$(dirname "$LOG_FILE")"
+
+log_info "=== Mise à jour de la playlist Chromium ==="
+
+# Vérifier que le répertoire vidéos existe
+if [[ ! -d "$VIDEOS_DIR" ]]; then
+    log_error "Répertoire vidéos introuvable: $VIDEOS_DIR"
+    exit 1
+fi
+
+# Vérifier que jq est installé
+if ! command -v jq >/dev/null 2>&1; then
+    log_error "jq n'est pas installé"
+    exit 1
+fi
+
+# Trouver toutes les vidéos (y compris .mkv)
+videos=()
+video_count=0
+
+while IFS= read -r -d '' file; do
+    basename=$(basename "$file")
+    # Créer l'objet JSON pour chaque vidéo
+    videos+=("{\"path\":\"/videos/$basename\",\"name\":\"$basename\"}")
+    ((video_count++))
+done < <(find "$VIDEOS_DIR" -maxdepth 1 -type f \( -name "*.mp4" -o -name "*.webm" -o -name "*.mov" -o -name "*.mkv" \) -print0 | sort -z)
+
+log_info "Trouvé $video_count vidéo(s)"
+
+# Créer le JSON de la playlist
+json="{\"version\":\"1.0\",\"updated\":\"$(date -Iseconds)\",\"videos\":["
+
+# Joindre les vidéos avec des virgules
+if [[ ${#videos[@]} -gt 0 ]]; then
+    json+=$(IFS=,; echo "${videos[*]}")
+fi
+
+json+="]}"
+
+# Créer le répertoire de destination si nécessaire
+playlist_dir=$(dirname "$PLAYLIST_FILE")
+if [[ ! -d "$playlist_dir" ]]; then
+    log_info "Création du répertoire: $playlist_dir"
+    mkdir -p "$playlist_dir"
+    chown -R www-data:www-data "$playlist_dir"
+fi
+
+# Écrire la playlist avec jq pour formater correctement
+echo "$json" | jq '.' > "$PLAYLIST_FILE"
+
+# Définir les permissions
+chown www-data:www-data "$PLAYLIST_FILE"
+chmod 644 "$PLAYLIST_FILE"
+
+log_info "Playlist mise à jour avec succès: $video_count vidéo(s)"
+
+# Afficher le contenu de la playlist
+if [[ "$video_count" -gt 0 ]]; then
+    log_info "Contenu de la playlist:"
+    jq -r '.videos[].name' "$PLAYLIST_FILE" | while read -r video; do
+        echo "  - $video"
+    done
+fi
+
+# Notifier le player Chromium si en cours d'exécution
+if systemctl is-active --quiet chromium-kiosk.service; then
+    log_info "Notification du player Chromium..."
+    # Envoyer une commande de mise à jour via WebSocket si disponible
+    if command -v nc >/dev/null 2>&1; then
+        echo '{"command":"update_playlist"}' | nc -w 1 localhost 8889 2>/dev/null || log_warn "WebSocket non disponible"
+    fi
+fi
+
+log_info "=== Mise à jour terminée ==="
+
+exit 0
+EOF
+
+    chmod +x /opt/scripts/util-refresh-playlist.sh
     
     # Ajouter une tâche cron pour mise à jour hebdomadaire
     cat > /etc/cron.d/pi-signage-updates << 'EOF'

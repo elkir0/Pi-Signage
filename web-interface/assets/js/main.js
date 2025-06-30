@@ -242,9 +242,15 @@ function downloadYouTube() {
             if (data.playlist_updated) {
                 progressDiv.innerHTML += '<p>✓ Playlist mise à jour</p>';
             }
-            if (typeof refreshVideoList === 'function') {
-                setTimeout(refreshVideoList, 1000);
-            }
+            // Rafraîchir la liste des vidéos après 2 secondes
+            setTimeout(() => {
+                if (typeof refreshVideoList === 'function') {
+                    refreshVideoList();
+                } else {
+                    // Recharger la page si la fonction n'existe pas
+                    window.location.reload();
+                }
+            }, 2000);
         } else {
             showNotification('Erreur de téléchargement', 'error');
             if (data.output) {
@@ -256,13 +262,22 @@ function downloadYouTube() {
         }
         downloadBtn.disabled = false;
     })
-    .catch(() => {
+    .catch((error) => {
         showNotification('Erreur de téléchargement', 'error');
+        progressDiv.innerHTML = '<p>Erreur: ' + error.message + '</p>';
         downloadBtn.disabled = false;
     });
 }
 
+// Fonction de suivi de progression (non utilisée actuellement)
+// Conservée pour une future implémentation
 function pollYouTubeProgress(token, container, callback) {
+    if (!token) {
+        console.warn('Token manquant pour le suivi de progression');
+        if (callback) callback();
+        return;
+    }
+    
     const interval = setInterval(() => {
         fetch(`/api/youtube_progress.php?token=${token}`)
             .then(resp => resp.json())
@@ -271,18 +286,16 @@ function pollYouTubeProgress(token, container, callback) {
                     container.innerHTML = `<p>Progression: ${data.progress}%</p>`;
                     if (data.progress >= 100) {
                         clearInterval(interval);
-                        callback();
+                        if (callback) callback();
                     }
                 } else {
                     clearInterval(interval);
-                    showNotification('Erreur de suivi', 'error');
-                    callback();
+                    if (callback) callback();
                 }
             })
             .catch(() => {
                 clearInterval(interval);
-                showNotification('Erreur de suivi', 'error');
-                callback();
+                if (callback) callback();
             });
     }, 1000);
 }

@@ -86,9 +86,9 @@ try {
         throw new Exception("Video directory is not writable: " . VIDEO_DIR);
     }
     
-    // Construire la commande
+    // Construire la commande - Forcer MP4 pour Chromium
     $cmd = sprintf(
-        'timeout 300 %s -o %s %s 2>&1',
+        'timeout 300 %s -f "best[ext=mp4]/best" --merge-output-format mp4 -o %s %s 2>&1',
         YTDLP_BIN,
         escapeshellarg($outputPath),
         escapeshellarg($url)
@@ -111,11 +111,21 @@ try {
     
     // Si succès et mode Chromium, mettre à jour la playlist
     if ($returnCode === 0 && DISPLAY_MODE === 'chromium') {
-        if (file_exists('/opt/scripts/update-playlist.sh')) {
+        // Essayer d'abord le script utilitaire
+        if (file_exists('/opt/scripts/util-refresh-playlist.sh')) {
+            exec('sudo /opt/scripts/util-refresh-playlist.sh 2>&1', $updateOutput, $updateStatus);
+            if ($updateStatus === 0) {
+                $response['playlist_updated'] = true;
+                $response['playlist_output'] = implode("\n", $updateOutput);
+            }
+        } elseif (file_exists('/opt/scripts/update-playlist.sh')) {
+            // Fallback sur l'ancien script
             exec('sudo /opt/scripts/update-playlist.sh 2>&1', $updateOutput, $updateStatus);
             if ($updateStatus === 0) {
                 $response['playlist_updated'] = true;
             }
+        } else {
+            error_log("Aucun script de mise à jour de playlist trouvé");
         }
     }
     

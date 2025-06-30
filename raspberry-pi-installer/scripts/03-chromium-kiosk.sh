@@ -953,27 +953,76 @@ EOF
 
 # Mise à jour de la playlist depuis le dossier vidéos
 
+set -euo pipefail
+
 VIDEOS_DIR="/opt/videos"
 PLAYLIST_FILE="/var/www/pi-signage-player/api/playlist.json"
+LOG_FILE="/var/log/pi-signage/playlist-update.log"
 
-# Trouver toutes les vidéos
+# Créer le répertoire de logs
+mkdir -p "$(dirname "$LOG_FILE")"
+
+# Logger
+log_info() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [INFO] $*" >> "$LOG_FILE"
+}
+
+log_info "Début de la mise à jour de la playlist"
+
+# Vérifier que le répertoire vidéos existe
+if [[ ! -d "$VIDEOS_DIR" ]]; then
+    log_info "Répertoire vidéos introuvable: $VIDEOS_DIR"
+    exit 1
+fi
+
+# Vérifier que jq est installé
+if ! command -v jq >/dev/null 2>&1; then
+    log_info "jq n'est pas installé"
+    exit 1
+fi
+
+# Trouver toutes les vidéos (y compris .mkv)
 videos=()
+video_count=0
+
 while IFS= read -r -d '' file; do
     basename=$(basename "$file")
     videos+=("{\"path\":\"/videos/$basename\",\"name\":\"$basename\"}")
-done < <(find "$VIDEOS_DIR" -type f \( -name "*.mp4" -o -name "*.webm" -o -name "*.mov" \) -print0 | sort -z)
+    ((video_count++))
+done < <(find "$VIDEOS_DIR" -maxdepth 1 -type f \( -name "*.mp4" -o -name "*.webm" -o -name "*.mov" -o -name "*.mkv" \) -print0 | sort -z)
+
+log_info "Trouvé $video_count vidéo(s)"
 
 # Créer le JSON
 json="{\"version\":\"1.0\",\"updated\":\"$(date -Iseconds)\",\"videos\":["
-json+=$(IFS=,; echo "${videos[*]}")
+
+# Joindre les vidéos avec des virgules
+if [[ ${#videos[@]} -gt 0 ]]; then
+    json+=$(IFS=,; echo "${videos[*]}")
+fi
+
 json+="]}"
+
+# Créer le répertoire de destination si nécessaire
+playlist_dir=$(dirname "$PLAYLIST_FILE")
+if [[ ! -d "$playlist_dir" ]]; then
+    mkdir -p "$playlist_dir"
+    chown -R www-data:www-data "$playlist_dir"
+fi
 
 # Écrire la playlist
 echo "$json" | jq '.' > "$PLAYLIST_FILE"
-echo "Playlist mise à jour: ${#videos[@]} vidéos"
+chown www-data:www-data "$PLAYLIST_FILE"
+chmod 644 "$PLAYLIST_FILE"
+
+log_info "Playlist mise à jour: $video_count vidéos"
 
 # Notifier le player via WebSocket
-echo '{"command":"update_playlist"}' | nc -w 1 localhost 8889 2>/dev/null || true
+if systemctl is-active --quiet chromium-kiosk.service; then
+    echo '{"command":"update_playlist"}' | nc -w 1 localhost 8889 2>/dev/null || true
+fi
+
+exit 0
 EOF
 
     chmod +x /opt/scripts/update-playlist.sh
