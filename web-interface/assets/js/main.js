@@ -236,12 +236,17 @@ function downloadYouTube() {
         if (data.success) {
             showNotification('Téléchargement terminé!', 'success');
             urlInput.value = '';
-            // Refresh video list
+            if (data.output) {
+                progressDiv.innerHTML = '<pre>' + data.output + '</pre>';
+            }
             if (typeof refreshVideoList === 'function') {
                 refreshVideoList();
             }
         } else {
             showNotification('Erreur: ' + data.message, 'error');
+            if (data.output) {
+                progressDiv.innerHTML = '<pre>' + data.output + '</pre>';
+            }
         }
     })
     .catch(error => {
@@ -249,7 +254,6 @@ function downloadYouTube() {
     })
     .finally(() => {
         downloadBtn.disabled = false;
-        progressDiv.style.display = 'none';
     });
 }
 

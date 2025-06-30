@@ -43,7 +43,7 @@ define('VLC_HTTP_PORT', '8080');
 define('GLANCES_URL', 'http://localhost:61208');
 
 // Limite de taille d'upload (en MB)
-define('MAX_UPLOAD_SIZE', 100);
+define('MAX_UPLOAD_SIZE', 150);
 
 // Extensions autorisées pour l'upload
 define('ALLOWED_EXTENSIONS', ['mp4', 'avi', 'mkv', 'mov', 'wmv', 'flv', 'webm', 'm4v']);

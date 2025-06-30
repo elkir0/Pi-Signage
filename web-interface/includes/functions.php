@@ -173,6 +173,40 @@ function deleteVideo($filename) {
 }
 
 /**
+ * Gérer l'upload d'une vidéo
+ */
+function handleVideoUpload(array $file) {
+    if ($file['error'] !== UPLOAD_ERR_OK) {
+        return ['success' => false, 'message' => 'Erreur lors de l\'upload'];
+    }
+
+    // Taille maximale
+    if ($file['size'] > (MAX_UPLOAD_SIZE * 1024 * 1024)) {
+        return ['success' => false, 'message' => 'Fichier trop volumineux'];
+    }
+
+    $originalName = basename($file['name']);
+    $ext = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+
+    if (!in_array($ext, ALLOWED_EXTENSIONS)) {
+        return ['success' => false, 'message' => 'Extension non autorisée'];
+    }
+
+    $base = preg_replace('/[^a-zA-Z0-9._-]/', '_', pathinfo($originalName, PATHINFO_FILENAME));
+    $filename = $base . '.' . $ext;
+    $destination = rtrim(VIDEO_DIR, '/') . '/' . $filename;
+
+    if (!move_uploaded_file($file['tmp_name'], $destination)) {
+        return ['success' => false, 'message' => 'Impossible de déplacer le fichier'];
+    }
+
+    chmod($destination, 0640);
+    logActivity('VIDEO_UPLOAD', $filename);
+
+    return ['success' => true, 'message' => 'Vidéo uploadée'];
+}
+
+/**
  * Télécharger une vidéo YouTube (limité aux vidéos de l'utilisateur)
  */
 function downloadYouTubeVideo($url, $title = null) {
@@ -196,7 +230,7 @@ function downloadYouTubeVideo($url, $title = null) {
     // Construire la commande yt-dlp
     $output_path = VIDEO_DIR . '/' . $filename . '.%(ext)s';
     $cmd = sprintf(
-        '%s -f "best[ext=mp4]/best" -o %s --no-playlist --restrict-filenames %s',
+        '%s -f "best[ext=mp4]/best" -o %s --no-playlist --restrict-filenames --newline %s',
         escapeshellcmd(YTDLP_BIN),
         escapeshellarg($output_path),
         escapeshellarg($url)

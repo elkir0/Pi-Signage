@@ -165,7 +165,7 @@ sudo chmod 755 /opt/videos
 
 3. **Vérifier la limite de taille**
 ```bash
-# Limite définie dans PHP-FPM (100MB par défaut)
+# Limite définie dans PHP-FPM (150MB par défaut)
 grep upload_max_filesize /etc/php/8.2/fpm/pool.d/pi-signage.conf
 grep post_max_size /etc/php/8.2/fpm/pool.d/pi-signage.conf
 ```
