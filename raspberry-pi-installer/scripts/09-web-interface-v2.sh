@@ -192,6 +192,11 @@ EOF
     mkdir -p /var/log/pi-signage
     secure_dir_permissions "/var/log/pi-signage" "www-data" "www-data" "755"
     
+    # Créer le fichier de log PHP s'il n'existe pas
+    touch /var/log/pi-signage/php-error.log
+    chown www-data:www-data /var/log/pi-signage/php-error.log
+    chmod 644 /var/log/pi-signage/php-error.log
+    
     # Créer le répertoire cache pour www-data (nécessaire pour yt-dlp)
     mkdir -p /var/www/.cache
     secure_dir_permissions "/var/www/.cache" "www-data" "www-data" "755"
