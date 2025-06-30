@@ -1,21 +1,24 @@
-# 📺 Pi Signage Digital - Version 2.0
+# 📺 Pi Signage Digital - Version 2.3.0
 
-**Solution complète de digital signage pour Raspberry Pi avec synchronisation Google Drive**
+**Solution complète de digital signage pour Raspberry Pi avec interface web de gestion**
 
 [![Compatible](https://img.shields.io/badge/Compatible-Pi%203B%2B%20%7C%204B%20%7C%205-green.svg)](https://www.raspberrypi.org/)
-[![Version](https://img.shields.io/badge/Version-2.0.0-blue.svg)]()
+[![Version](https://img.shields.io/badge/Version-2.3.0-blue.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)]()
+[![Security](https://img.shields.io/badge/Security-Enhanced-brightgreen.svg)]()
 
 ## 🎯 Présentation
 
 Pi Signage Digital est une solution clé en main pour transformer vos Raspberry Pi en système d'affichage dynamique professionnel. Conçu pour remplacer des solutions commerciales comme Yodeck, ce système offre :
 
-- ✅ **Lecture vidéos en boucle** avec rotation aléatoire
+- ✅ **Deux modes d'affichage** : VLC Classic ou Chromium Kiosk
+- ✅ **Interface web complète** : Upload, gestion vidéos, paramètres système
 - ✅ **Synchronisation automatique** depuis Google Drive
-- ✅ **Monitoring web** avec interface sécurisée
+- ✅ **Support VM/Headless** : Tests avec Xvfb
+- ✅ **Monitoring web** avec interface Glances sécurisée
 - ✅ **Installation automatisée** en modules indépendants
 - ✅ **Maintenance automatique** et récupération d'urgence
-- ✅ **Architecture stable** sans optimisations risquées
+- ✅ **Sécurité renforcée** : SHA-512, CSRF, permissions strictes
 
 ## 🏗️ Architecture Modulaire
 
@@ -23,26 +26,31 @@ Pi Signage Digital est une solution clé en main pour transformer vos Raspberry 
 
 | Module | Fonction | Durée |
 |--------|----------|-------|
-| **00-Orchestrateur** | Coordination générale | 2 min |
+| **00-Security** | Module de sécurité centralisé | 1 min |
 | **01-System** | Configuration système stable | 5 min |
-| **02-Display** | X11 + LightDM + Openbox | 10 min |
-| **03-VLC** | Lecteur vidéo + service | 8 min |
+| **02-Display** | X11 + LightDM + Openbox (VLC uniquement) | 10 min |
+| **03-VLC/Chromium** | Lecteur vidéo ou navigateur kiosk | 8 min |
 | **04-rclone** | Synchronisation Google Drive | 5 min |
 | **05-Glances** | Monitoring web sécurisé | 7 min |
-| **06-Cron** | Tâches automatisées | 3 min |
-| **07-Services** | Services + watchdog | 5 min |
-| **08-Diagnostic** | Outils de maintenance | 5 min |
+| **06-Watchdog** | Surveillance et récupération | 3 min |
+| **07-Services** | Services systemd | 5 min |
+| **08-Backup** | Système de sauvegarde | 5 min |
+| **09-Web Interface** | Interface de gestion PHP/nginx | 10 min |
+| **10-Final Check** | Vérification finale | 3 min |
 
-**Durée totale d'installation : ~50 minutes**
+**Durée totale d'installation : ~60 minutes**
 
 ### Services Créés
 
 ```
-pi-signage.target          # Target principal groupant tous les services
-├── lightdm.service        # Gestionnaire d'affichage avec auto-login
-├── vlc-signage.service    # Lecteur VLC en mode kiosque
-├── glances.service        # Interface web de monitoring
-└── pi-signage-watchdog    # Surveillance et récupération automatique
+pi-signage.target                # Target principal groupant tous les services
+├── lightdm.service             # Gestionnaire d'affichage (mode VLC)
+├── vlc-signage.service         # Lecteur VLC en mode kiosque
+├── chromium-kiosk.service      # Navigateur Chromium (mode kiosk)
+├── nginx.service               # Serveur web pour interface
+├── php8.2-fpm.service          # PHP pour interface web
+├── glances.service             # Interface web de monitoring
+└── pi-signage-watchdog.service # Surveillance et récupération automatique
 ```
 
 ## 🔧 Installation
@@ -82,19 +90,23 @@ pi-signage.target          # Target principal groupant tous les services
 
 1. **Télécharger et lancer l'installation :**
    ```bash
-   # Télécharger le script principal
-   wget https://raw.githubusercontent.com/votre-repo/pi-signage/main/install.sh
+   # Cloner le dépôt
+   git clone https://github.com/elkir0/Pi-Signage.git
+   cd Pi-Signage/raspberry-pi-installer/scripts
    
    # Rendre exécutable
-   chmod +x install.sh
+   chmod +x *.sh
    
-   # Lancer l'installation
-   sudo ./install.sh
+   # Lancer l'installation v2.3.0
+   sudo ./main_orchestrator_v2.sh
    ```
 
 2. **Suivre l'assistant d'installation :**
+   - Choisir le mode d'affichage (VLC Classic ou Chromium Kiosk)
+   - Sélectionner les modules à installer
    - Renseigner le nom du dossier Google Drive (défaut: "Signage")
-   - Définir un mot de passe pour l'interface Glances
+   - Définir un mot de passe pour l'interface web
+   - Définir un mot de passe pour Glances
    - Choisir un hostname pour le Pi
 
 3. **Configuration Google Drive :**
@@ -112,23 +124,39 @@ pi-signage.target          # Target principal groupant tous les services
 
 ```bash
 # 1. Script principal
-sudo ./main-setup.sh
+sudo ./main_orchestrator_v2.sh
 
 # 2. Modules individuels (si besoin)
+sudo ./00-security-utils.sh
 sudo ./01-system-config.sh
-sudo ./02-display-manager.sh
-sudo ./03-vlc-setup.sh
-sudo ./04-rclone-setup.sh
+sudo ./02-display-manager.sh         # Mode VLC uniquement
+sudo ./03-vlc-setup.sh              # OU
+sudo ./03-chromium-kiosk.sh         # Selon le mode choisi
+sudo ./04-rclone-gdrive.sh
 sudo ./05-glances-setup.sh
-sudo ./06-cron-setup.sh
+sudo ./06-watchdog-setup.sh
 sudo ./07-services-setup.sh
-sudo ./08-diagnostic-tools.sh
+sudo ./08-backup-manager.sh
+sudo ./09-web-interface-v2.sh
+sudo ./10-final-check.sh
+```
+
+### Installation pour VM/Headless
+
+```bash
+# Le script détecte automatiquement l'environnement VM
+# et installe Xvfb si nécessaire
+sudo ./main_orchestrator_v2.sh
+
+# Pour forcer le mode VM manuellement
+touch /etc/pi-signage/vm-mode.conf
 ```
 
 ## 🎛️ Utilisation
 
 ### Commandes Principales
 
+#### Communes aux deux modes
 ```bash
 # Contrôle général
 sudo pi-signage status           # État de tous les services
@@ -148,18 +176,49 @@ sudo /opt/scripts/sync-videos.sh    # Synchronisation manuelle
 sudo /opt/scripts/test-gdrive.sh    # Test connexion Google Drive
 ```
 
-### Interface Web de Monitoring
+#### Mode Chromium Kiosk (spécifique)
+```bash
+# Contrôle du player
+sudo /opt/scripts/player-control.sh play     # Lecture
+sudo /opt/scripts/player-control.sh pause    # Pause
+sudo /opt/scripts/player-control.sh next     # Vidéo suivante
+sudo /opt/scripts/player-control.sh reload   # Recharger le player
 
+# Mise à jour de la playlist
+sudo /opt/scripts/update-playlist.sh
+```
+
+### Interfaces Web
+
+#### Interface de Gestion Web
+**Accès :** `http://[IP_DU_PI]/`
+- **Utilisateur :** admin
+- **Mot de passe :** défini lors de l'installation
+- **Fonctionnalités :**
+  - Dashboard avec état système en temps réel
+  - Upload et gestion de vidéos
+  - Téléchargement YouTube (yt-dlp)
+  - Page de paramètres système
+  - Contrôle des services
+  - Monitoring CPU, RAM, température
+  - Gestion de l'espace disque
+
+#### Interface de Monitoring Glances
 **Accès :** `http://[IP_DU_PI]:61208`
 - **Utilisateur :** admin
-- **Mot de passe :** (défini lors de l'installation)
+- **Mot de passe :** défini lors de l'installation
+- **Informations disponibles :**
+  - Utilisation CPU, mémoire, disque
+  - Température du processeur
+  - Services actifs
+  - Historique des performances
+  - Logs en temps réel
 
-**Informations disponibles :**
-- Utilisation CPU, mémoire, disque
-- Température du processeur
-- Services actifs
-- Historique des performances
-- Logs en temps réel
+#### Player HTML5 (Mode Chromium)
+**Accès :** `http://[IP_DU_PI]:8888/player.html`
+- Player HTML5 moderne
+- Contrôle WebSocket
+- Overlays et transitions
 
 ### Ajout de Vidéos
 
@@ -544,15 +603,29 @@ sudo chown -R signage:signage /home/signage/.config/
 
 ## 📝 Notes de Version
 
-### Version 2.0.0 (Actuelle)
+### Version 2.3.0 (Actuelle)
+- ✨ **Deux modes d'affichage** : VLC Classic et Chromium Kiosk
+- ✨ **Interface web complète** : Dashboard, vidéos, paramètres
+- ✨ **Support VM/Headless** : Installation avec Xvfb
+- ✨ **Authentification harmonisée** : SHA-512 unifié
+- ✨ **Corrections majeures** : Permissions, chemins, stabilité
+- ✨ **Module de sécurité** : Fonctions centralisées
+- ✨ **Pages web manquantes** : videos.php et settings.php ajoutées
+
+### Version 2.2.0
 - ✨ Architecture modulaire complète
+- ✨ Système de sécurité renforcé
+- ✨ Chiffrement AES-256-CBC
+- ✨ Installation modulaire
+
+### Version 2.0.0
 - ✨ Compatibilité Raspberry Pi 4 et 5
 - ✨ Système de watchdog et récupération automatique
 - ✨ Interface de diagnostic et maintenance
 - ✨ Configuration stable sans optimisations risquées
 - ✨ Documentation complète
 
-### Version 1.2.0 (Précédente)
+### Version 1.2.0
 - Script monolithique avec optimisations
 - Support Pi 3B+ uniquement
 - Configuration basique

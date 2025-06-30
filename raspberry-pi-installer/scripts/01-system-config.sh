@@ -268,7 +268,7 @@ create_directories() {
     
     # Répertoires principaux avec permissions sécurisées
     local -A directories=(
-        ["/opt/videos"]="signage:signage:750"
+        ["/opt/videos"]="www-data:www-data:755"
         ["/opt/scripts"]="root:root:750"
         ["/var/log/pi-signage"]="root:root:755"
         ["/etc/pi-signage"]="root:root:700"
@@ -277,10 +277,13 @@ create_directories() {
     # Créer l'utilisateur signage si nécessaire
     if ! id "signage" >/dev/null 2>&1; then
         log_info "Création de l'utilisateur signage"
-        useradd -r -s /bin/false -d /nonexistent -c "Pi Signage System User" signage || {
+        useradd -r -s /bin/false -m -d /home/signage -c "Pi Signage System User" signage || {
             log_error "Échec de la création de l'utilisateur signage"
             return 1
         }
+        # S'assurer que le home directory a les bonnes permissions
+        chmod 750 /home/signage
+        chown signage:signage /home/signage
     fi
     
     for dir in "${!directories[@]}"; do
