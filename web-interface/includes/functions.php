@@ -254,6 +254,27 @@ function formatFileSize($bytes) {
 }
 
 /**
+ * Logger une activité
+ */
+function logActivity($action, $details = '') {
+    $logFile = LOG_DIR . '/activity.log';
+    $timestamp = date('Y-m-d H:i:s');
+    $user = $_SESSION['username'] ?? 'system';
+    $ip = $_SERVER['REMOTE_ADDR'] ?? 'CLI';
+    
+    $logEntry = sprintf(
+        "[%s] %s | %s | %s | %s\n",
+        $timestamp,
+        $ip,
+        $user,
+        $action,
+        $details
+    );
+    
+    @file_put_contents($logFile, $logEntry, FILE_APPEND | LOCK_EX);
+}
+
+/**
  * Vérifier l'espace disque disponible
  */
 function checkDiskSpace() {
