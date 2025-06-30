@@ -109,11 +109,11 @@ $diskSpace = checkDiskSpace();
                         <p>
                             <strong>Espace disque :</strong> 
                             <?= formatFileSize($diskSpace['used']) ?> / <?= formatFileSize($diskSpace['total']) ?>
-                            (<?= $diskSpace['percentage'] ?>% utilisé)
+                            (<?= $diskSpace['percent'] ?>% utilisé)
                         </p>
                         <div class="progress">
-                            <div class="progress-bar" style="width: <?= $diskSpace['percentage'] ?>%">
-                                <?= $diskSpace['percentage'] ?>%
+                            <div class="progress-bar" style="width: <?= $diskSpace['percent'] ?>%">
+                                <?= $diskSpace['percent'] ?>%
                             </div>
                         </div>
                     </div>

@@ -419,6 +419,11 @@ select_display_mode() {
             echo -e "${GREEN}Mode VLC Classic sélectionné${NC}"
             ;;
     esac
+    
+    # Créer le fichier display-mode.conf
+    mkdir -p /etc/pi-signage
+    echo "$DISPLAY_MODE" > /etc/pi-signage/display-mode.conf
+    log_info "Mode d'affichage sauvegardé dans /etc/pi-signage/display-mode.conf"
 }
 
 # =============================================================================

@@ -1,0 +1,380 @@
+#!/usr/bin/env bash
+
+# =============================================================================
+# Pi Signage - Script de collecte de logs pour support
+# Version: 2.3.0
+# Description: Collecte tous les logs pertinents dans une archive
+# =============================================================================
+
+set -euo pipefail
+
+# Couleurs
+readonly RED='\033[0;31m'
+readonly GREEN='\033[0;32m'
+readonly YELLOW='\033[1;33m'
+readonly BLUE='\033[0;34m'
+readonly PURPLE='\033[0;35m'
+readonly NC='\033[0m'
+
+# Configuration
+readonly CONFIG_FILE="/etc/pi-signage/config.conf"
+readonly DISPLAY_MODE_FILE="/etc/pi-signage/display-mode.conf"
+readonly TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+readonly TEMP_DIR="/tmp/pi-signage-logs-$TIMESTAMP"
+readonly OUTPUT_FILE="/tmp/pi-signage-logs-$TIMESTAMP.tar.gz"
+
+# Charger la configuration si elle existe
+if [[ -f "$CONFIG_FILE" ]]; then
+    source "$CONFIG_FILE"
+fi
+
+# Déterminer le mode d'affichage
+DISPLAY_MODE="vlc"
+if [[ -f "$DISPLAY_MODE_FILE" ]]; then
+    DISPLAY_MODE=$(cat "$DISPLAY_MODE_FILE" 2>/dev/null || echo "vlc")
+fi
+
+# Logging
+log_info() {
+    echo -e "${BLUE}ℹ${NC} $1"
+}
+
+log_success() {
+    echo -e "${GREEN}✓${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}✗${NC} $1"
+}
+
+# Bannière
+show_banner() {
+    clear
+    echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${BLUE}║${NC}          Pi Signage - Collecte de Logs Support               ${BLUE}║${NC}"
+    echo -e "${BLUE}║${NC}                    Version 2.3.0                             ${BLUE}║${NC}"
+    echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
+    echo
+    echo "Cette commande va collecter tous les logs système pour le support."
+    echo "Aucune information sensible (mots de passe) ne sera incluse."
+    echo
+}
+
+# Créer la structure de répertoires
+create_structure() {
+    log_info "Création de la structure temporaire..."
+    
+    mkdir -p "$TEMP_DIR"/{system,services,pi-signage,config,web}
+    
+    log_success "Structure créée"
+}
+
+# 1. Collecter les informations système
+collect_system_info() {
+    log_info "Collecte des informations système..."
+    
+    # Informations de base
+    {
+        echo "=== INFORMATIONS SYSTÈME ==="
+        echo "Date de collecte: $(date)"
+        echo "Hostname: $(hostname)"
+        echo "IP: $(hostname -I)"
+        echo
+        
+        # Modèle de Pi
+        if [[ -f /proc/device-tree/model ]]; then
+            echo "Modèle: $(tr -d '\0' < /proc/device-tree/model)"
+        else
+            echo "Modèle: Non détecté (VM/Conteneur?)"
+        fi
+        
+        # OS
+        if [[ -f /etc/os-release ]]; then
+            cat /etc/os-release
+        fi
+        
+        echo
+        echo "Kernel: $(uname -a)"
+        echo
+        echo "Uptime: $(uptime)"
+        echo
+        echo "Mode d'affichage: $DISPLAY_MODE"
+        
+    } > "$TEMP_DIR/system/system-info.txt"
+    
+    # Utilisation des ressources
+    {
+        echo "=== RESSOURCES ==="
+        echo
+        echo "--- Mémoire ---"
+        free -h
+        echo
+        echo "--- Disque ---"
+        df -h
+        echo
+        echo "--- Processus ---"
+        ps aux --sort=-%cpu | head -20
+        
+    } > "$TEMP_DIR/system/resources.txt"
+    
+    # Température (si disponible)
+    if command -v vcgencmd &> /dev/null; then
+        {
+            echo "=== TEMPÉRATURE ET VOLTAGES ==="
+            vcgencmd measure_temp
+            vcgencmd measure_volts
+            vcgencmd get_throttled
+        } > "$TEMP_DIR/system/temperature.txt" 2>&1
+    fi
+    
+    # Réseau
+    {
+        echo "=== CONFIGURATION RÉSEAU ==="
+        ip addr
+        echo
+        echo "--- Routes ---"
+        ip route
+        echo
+        echo "--- Ports en écoute ---"
+        ss -tuln
+        echo
+        echo "--- Test connectivité ---"
+        ping -c 3 8.8.8.8 2>&1 || echo "Pas de connectivité internet"
+        
+    } > "$TEMP_DIR/system/network.txt"
+    
+    log_success "Informations système collectées"
+}
+
+# 2. Collecter les logs des services
+collect_service_logs() {
+    log_info "Collecte des logs des services..."
+    
+    # Services selon le mode
+    local services=()
+    if [[ "$DISPLAY_MODE" == "chromium" ]]; then
+        services+=("chromium-kiosk")
+    else
+        services+=("vlc-signage" "lightdm")
+    fi
+    
+    # Services communs
+    services+=("nginx" "php8.2-fpm" "glances" "pi-signage-watchdog")
+    
+    # Collecter les logs de chaque service
+    for service in "${services[@]}"; do
+        if systemctl list-unit-files | grep -q "^${service}.service"; then
+            {
+                echo "=== STATUS $service ==="
+                systemctl status "$service" --no-pager -l
+                echo
+                echo "=== LOGS $service (dernières 500 lignes) ==="
+                journalctl -u "$service" -n 500 --no-pager
+            } > "$TEMP_DIR/services/${service}.log" 2>&1
+        fi
+    done
+    
+    # Logs système généraux
+    journalctl -p err --since "7 days ago" --no-pager > "$TEMP_DIR/services/system-errors.log" 2>&1
+    
+    log_success "Logs des services collectés"
+}
+
+# 3. Collecter les logs Pi Signage
+collect_pi_signage_logs() {
+    log_info "Collecte des logs Pi Signage..."
+    
+    # Logs du répertoire Pi Signage
+    if [[ -d "/var/log/pi-signage" ]]; then
+        # Copier tous les logs récents (moins de 7 jours)
+        find /var/log/pi-signage -type f -mtime -7 -exec cp {} "$TEMP_DIR/pi-signage/" \; 2>/dev/null || true
+    fi
+    
+    # Logs d'installation
+    if [[ -f "/var/log/pi-signage-setup.log" ]]; then
+        cp "/var/log/pi-signage-setup.log" "$TEMP_DIR/pi-signage/" 2>/dev/null || true
+    fi
+    
+    # Historique des commandes Pi Signage
+    if [[ -f "/var/log/pi-signage/control.log" ]]; then
+        cp "/var/log/pi-signage/control.log" "$TEMP_DIR/pi-signage/" 2>/dev/null || true
+    fi
+    
+    log_success "Logs Pi Signage collectés"
+}
+
+# 4. Collecter la configuration (sans infos sensibles)
+collect_config() {
+    log_info "Collecte de la configuration..."
+    
+    # Configuration Pi Signage (sans mots de passe)
+    if [[ -f "$CONFIG_FILE" ]]; then
+        grep -v -E "(PASSWORD|TOKEN|SECRET|KEY)" "$CONFIG_FILE" > "$TEMP_DIR/config/pi-signage.conf" 2>/dev/null || true
+    fi
+    
+    # Mode d'affichage
+    if [[ -f "$DISPLAY_MODE_FILE" ]]; then
+        cp "$DISPLAY_MODE_FILE" "$TEMP_DIR/config/" 2>/dev/null || true
+    fi
+    
+    # Configuration nginx
+    if [[ -f "/etc/nginx/sites-enabled/pi-signage" ]]; then
+        cp "/etc/nginx/sites-enabled/pi-signage" "$TEMP_DIR/config/nginx-site.conf" 2>/dev/null || true
+    fi
+    
+    # Liste des vidéos (noms seulement)
+    if [[ -d "/opt/videos" ]]; then
+        ls -la /opt/videos > "$TEMP_DIR/config/video-list.txt" 2>/dev/null || true
+    fi
+    
+    # Services systemd
+    for service in vlc-signage chromium-kiosk pi-signage-watchdog; do
+        if [[ -f "/etc/systemd/system/${service}.service" ]]; then
+            cp "/etc/systemd/system/${service}.service" "$TEMP_DIR/config/" 2>/dev/null || true
+        fi
+    done
+    
+    # Crontab
+    crontab -l > "$TEMP_DIR/config/crontab.txt" 2>&1 || true
+    
+    log_success "Configuration collectée"
+}
+
+# 5. Collecter les logs web
+collect_web_logs() {
+    log_info "Collecte des logs web..."
+    
+    # Logs nginx
+    if [[ -d "/var/log/nginx" ]]; then
+        tail -n 1000 /var/log/nginx/pi-signage-access.log > "$TEMP_DIR/web/nginx-access.log" 2>/dev/null || true
+        tail -n 1000 /var/log/nginx/pi-signage-error.log > "$TEMP_DIR/web/nginx-error.log" 2>/dev/null || true
+    fi
+    
+    # Logs PHP
+    if [[ -f "/var/log/pi-signage/php-error.log" ]]; then
+        tail -n 1000 /var/log/pi-signage/php-error.log > "$TEMP_DIR/web/php-error.log" 2>/dev/null || true
+    fi
+    
+    # Test de l'interface web
+    {
+        echo "=== TEST INTERFACE WEB ==="
+        curl -s -o /dev/null -w "HTTP Code: %{http_code}\n" "http://localhost/" || echo "Interface web inaccessible"
+    } > "$TEMP_DIR/web/web-test.txt" 2>&1
+    
+    log_success "Logs web collectés"
+}
+
+# 6. Exécuter un diagnostic rapide
+run_diagnostics() {
+    log_info "Exécution du diagnostic..."
+    
+    # Si le script de diagnostic existe, l'exécuter
+    if command -v pi-signage-diag &> /dev/null; then
+        pi-signage-diag > "$TEMP_DIR/diagnostic-report.txt" 2>&1 || true
+    else
+        echo "Script de diagnostic non disponible" > "$TEMP_DIR/diagnostic-report.txt"
+    fi
+    
+    log_success "Diagnostic terminé"
+}
+
+# 7. Créer un fichier README
+create_readme() {
+    cat > "$TEMP_DIR/README.txt" << EOF
+Pi Signage - Logs de Support
+============================
+
+Date de création: $(date)
+Version: 2.3.0
+Mode: $DISPLAY_MODE
+Hostname: $(hostname)
+
+Contenu de l'archive:
+--------------------
+- system/       : Informations système et ressources
+- services/     : Logs des services systemd
+- pi-signage/   : Logs spécifiques Pi Signage
+- config/       : Fichiers de configuration (sans mots de passe)
+- web/          : Logs de l'interface web
+- diagnostic-report.txt : Rapport de diagnostic complet
+
+Instructions pour le support:
+----------------------------
+1. Extraire l'archive: tar -xzf pi-signage-logs-*.tar.gz
+2. Consulter diagnostic-report.txt en premier
+3. Vérifier les erreurs dans services/system-errors.log
+4. Examiner les logs du service principal ($DISPLAY_MODE)
+
+Note: Aucun mot de passe ou information sensible n'est inclus dans cette archive.
+
+EOF
+}
+
+# 8. Créer l'archive
+create_archive() {
+    log_info "Création de l'archive..."
+    
+    cd /tmp
+    tar -czf "$OUTPUT_FILE" -C "$TEMP_DIR" . 2>/dev/null
+    
+    # Nettoyer le répertoire temporaire
+    rm -rf "$TEMP_DIR"
+    
+    # Calculer la taille
+    local size=$(du -h "$OUTPUT_FILE" | cut -f1)
+    
+    log_success "Archive créée: $OUTPUT_FILE ($size)"
+}
+
+# Fonction principale
+main() {
+    show_banner
+    
+    # Demander confirmation
+    read -p "Voulez-vous collecter les logs? (O/n) " -n 1 -r
+    echo
+    
+    if [[ ! $REPLY =~ ^[Oo]$ ]] && [[ ! -z $REPLY ]]; then
+        echo "Annulé."
+        exit 0
+    fi
+    
+    echo
+    log_info "Début de la collecte des logs..."
+    echo
+    
+    # Créer la structure
+    create_structure
+    
+    # Collecter les informations
+    collect_system_info
+    collect_service_logs
+    collect_pi_signage_logs
+    collect_config
+    collect_web_logs
+    run_diagnostics
+    create_readme
+    
+    # Créer l'archive
+    create_archive
+    
+    echo
+    echo -e "${GREEN}╔══════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}║                    Collecte terminée !                       ║${NC}"
+    echo -e "${GREEN}╚══════════════════════════════════════════════════════════════╝${NC}"
+    echo
+    echo "Archive créée: ${YELLOW}$OUTPUT_FILE${NC}"
+    echo
+    echo "Pour envoyer au support:"
+    echo "1. Transférer le fichier sur votre ordinateur:"
+    echo "   ${BLUE}scp pi@$(hostname -I | awk '{print $1}'):$OUTPUT_FILE .${NC}"
+    echo
+    echo "2. Ou utiliser une clé USB:"
+    echo "   ${BLUE}cp $OUTPUT_FILE /media/usb/${NC}"
+    echo
+    echo "3. Joindre le fichier à votre demande de support"
+    echo
+}
+
+# Exécution
+main "$@"

@@ -361,6 +361,9 @@ deploy_web_files() {
     # Nettoyer le répertoire temporaire
     rm -rf "$temp_dir"
     
+    # Nettoyer les fichiers de test
+    rm -f "$WEB_ROOT/test.php" 2>/dev/null || true
+    
     # Permissions sécurisées
     if command -v secure_dir_permissions >/dev/null 2>&1; then
         secure_dir_permissions "$WEB_ROOT" "www-data" "www-data" "755"
@@ -392,13 +395,24 @@ deploy_web_files() {
 configure_sudoers() {
     log_info "Configuration des permissions sudo pour l'interface web..."
     
-    # Permettre à www-data de redémarrer VLC
+    # Permettre à www-data de redémarrer les services
     cat > /etc/sudoers.d/pi-signage-web << 'EOF'
 # Permettre à l'interface web de contrôler les services
 www-data ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart vlc-signage.service
 www-data ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop vlc-signage.service
 www-data ALL=(ALL) NOPASSWD: /usr/bin/systemctl start vlc-signage.service
 www-data ALL=(ALL) NOPASSWD: /usr/bin/systemctl status vlc-signage.service
+www-data ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart chromium-kiosk.service
+www-data ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop chromium-kiosk.service
+www-data ALL=(ALL) NOPASSWD: /usr/bin/systemctl start chromium-kiosk.service
+www-data ALL=(ALL) NOPASSWD: /usr/bin/systemctl status chromium-kiosk.service
+www-data ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart pi-signage-watchdog.service
+www-data ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop pi-signage-watchdog.service
+www-data ALL=(ALL) NOPASSWD: /usr/bin/systemctl start pi-signage-watchdog.service
+www-data ALL=(ALL) NOPASSWD: /usr/bin/systemctl status pi-signage-watchdog.service
+www-data ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart nginx.service
+www-data ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart php8.2-fpm.service
+www-data ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart glances.service
 EOF
     
     # Permissions sécurisées pour sudoers

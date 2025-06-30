@@ -1,0 +1,420 @@
+#!/usr/bin/env bash
+
+# =============================================================================
+# Pi Signage - Script de réparation automatique
+# Version: 2.3.0
+# Description: Tente de réparer automatiquement les problèmes courants
+# =============================================================================
+
+set -euo pipefail
+
+# Couleurs
+readonly RED='\033[0;31m'
+readonly GREEN='\033[0;32m'
+readonly YELLOW='\033[1;33m'
+readonly BLUE='\033[0;34m'
+readonly PURPLE='\033[0;35m'
+readonly NC='\033[0m'
+
+# Configuration
+readonly CONFIG_FILE="/etc/pi-signage/config.conf"
+readonly DISPLAY_MODE_FILE="/etc/pi-signage/display-mode.conf"
+readonly REPAIR_LOG="/var/log/pi-signage/repair-$(date +%Y%m%d-%H%M%S).log"
+
+# Charger la configuration si elle existe
+if [[ -f "$CONFIG_FILE" ]]; then
+    source "$CONFIG_FILE"
+fi
+
+# Déterminer le mode d'affichage
+DISPLAY_MODE="vlc"
+if [[ -f "$DISPLAY_MODE_FILE" ]]; then
+    DISPLAY_MODE=$(cat "$DISPLAY_MODE_FILE" 2>/dev/null || echo "vlc")
+fi
+
+# Compteurs
+FIXES_APPLIED=0
+ERRORS_FOUND=0
+
+# Logging
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$REPAIR_LOG"
+}
+
+log_section() {
+    echo | tee -a "$REPAIR_LOG"
+    echo -e "${BLUE}=== $1 ===${NC}" | tee -a "$REPAIR_LOG"
+    echo | tee -a "$REPAIR_LOG"
+}
+
+log_fix() {
+    echo -e "${GREEN}✓ FIX:${NC} $1" | tee -a "$REPAIR_LOG"
+    ((FIXES_APPLIED++))
+}
+
+log_error() {
+    echo -e "${RED}✗ ERREUR:${NC} $1" | tee -a "$REPAIR_LOG"
+    ((ERRORS_FOUND++))
+}
+
+log_info() {
+    echo -e "${BLUE}ℹ INFO:${NC} $1" | tee -a "$REPAIR_LOG"
+}
+
+log_warning() {
+    echo -e "${YELLOW}⚠ ATTENTION:${NC} $1" | tee -a "$REPAIR_LOG"
+}
+
+# Vérifier les privilèges root
+check_root() {
+    if [[ $EUID -ne 0 ]]; then
+        log_error "Ce script doit être exécuté avec sudo"
+        exit 1
+    fi
+}
+
+# Bannière
+show_banner() {
+    clear
+    log "╔══════════════════════════════════════════════════════════════╗"
+    log "║          Pi Signage - Réparation Automatique                 ║"
+    log "║                    Version 2.3.0                             ║"
+    log "╚══════════════════════════════════════════════════════════════╝"
+    log ""
+    log "Mode: $DISPLAY_MODE"
+    log "Date: $(date '+%Y-%m-%d %H:%M:%S')"
+    log ""
+}
+
+# 1. Réparer les permissions
+fix_permissions() {
+    log_section "RÉPARATION DES PERMISSIONS"
+    
+    # /opt/videos
+    if [[ -d "/opt/videos" ]]; then
+        local current_owner=$(stat -c "%U:%G" /opt/videos)
+        if [[ "$current_owner" != "www-data:www-data" ]]; then
+            chown -R www-data:www-data /opt/videos
+            chmod 755 /opt/videos
+            log_fix "Permissions corrigées pour /opt/videos"
+        else
+            log_info "/opt/videos a déjà les bonnes permissions"
+        fi
+    else
+        mkdir -p /opt/videos
+        chown -R www-data:www-data /opt/videos
+        chmod 755 /opt/videos
+        log_fix "Répertoire /opt/videos créé avec les bonnes permissions"
+    fi
+    
+    # /opt/scripts
+    if [[ -d "/opt/scripts" ]]; then
+        chmod 755 /opt/scripts
+        chmod +x /opt/scripts/*.sh 2>/dev/null || true
+        log_fix "Scripts rendus exécutables dans /opt/scripts"
+    fi
+    
+    # /var/www/pi-signage
+    if [[ -d "/var/www/pi-signage" ]]; then
+        chown -R www-data:www-data /var/www/pi-signage
+        chmod -R 755 /var/www/pi-signage
+        if [[ -f "/var/www/pi-signage/includes/config.php" ]]; then
+            chmod 640 /var/www/pi-signage/includes/config.php
+        fi
+        log_fix "Permissions corrigées pour l'interface web"
+    fi
+    
+    # Sessions PHP
+    if [[ -d "/var/lib/php/sessions/pi-signage" ]]; then
+        chown -R www-data:www-data /var/lib/php/sessions/pi-signage
+        chmod 700 /var/lib/php/sessions/pi-signage
+        log_fix "Permissions corrigées pour les sessions PHP"
+    else
+        mkdir -p /var/lib/php/sessions/pi-signage
+        chown -R www-data:www-data /var/lib/php/sessions/pi-signage
+        chmod 700 /var/lib/php/sessions/pi-signage
+        log_fix "Répertoire de sessions PHP créé"
+    fi
+    
+    # Logs
+    if [[ ! -d "/var/log/pi-signage" ]]; then
+        mkdir -p /var/log/pi-signage
+        chmod 755 /var/log/pi-signage
+        log_fix "Répertoire de logs créé"
+    fi
+}
+
+# 2. Réparer les services
+fix_services() {
+    log_section "RÉPARATION DES SERVICES"
+    
+    # Recharger systemd si nécessaire
+    if systemctl daemon-reload 2>&1 | grep -q "changed on disk"; then
+        log_fix "Configuration systemd rechargée"
+    fi
+    
+    # Services à vérifier
+    local services=("nginx" "php8.2-fpm" "glances")
+    
+    # Ajouter le service principal selon le mode
+    if [[ "$DISPLAY_MODE" == "chromium" ]]; then
+        services+=("chromium-kiosk")
+    else
+        services+=("vlc-signage")
+    fi
+    
+    for service in "${services[@]}"; do
+        if systemctl is-enabled "$service" &>/dev/null; then
+            if ! systemctl is-active "$service" &>/dev/null; then
+                log_warning "Service $service inactif, tentative de redémarrage..."
+                if systemctl restart "$service" 2>/dev/null; then
+                    log_fix "Service $service redémarré avec succès"
+                else
+                    log_error "Impossible de redémarrer $service"
+                fi
+            else
+                log_info "Service $service déjà actif"
+            fi
+        else
+            log_warning "Service $service non activé"
+            if systemctl enable "$service" 2>/dev/null; then
+                log_fix "Service $service activé"
+                systemctl start "$service" 2>/dev/null || true
+            fi
+        fi
+    done
+}
+
+# 3. Nettoyer les fichiers temporaires et locks
+fix_temp_files() {
+    log_section "NETTOYAGE DES FICHIERS TEMPORAIRES"
+    
+    # Fichiers de lock X11
+    if [[ -f "/tmp/.X0-lock" ]] && [[ "$DISPLAY_MODE" == "vlc" ]]; then
+        if ! pgrep -x "Xorg" > /dev/null; then
+            rm -f /tmp/.X0-lock
+            rm -f /tmp/.X11-unix/X0 2>/dev/null || true
+            log_fix "Fichiers de lock X11 supprimés"
+        fi
+    fi
+    
+    # PID files obsolètes
+    if [[ -f "/var/run/vlc-signage.pid" ]]; then
+        if ! pgrep -F "/var/run/vlc-signage.pid" > /dev/null 2>&1; then
+            rm -f /var/run/vlc-signage.pid
+            log_fix "Fichier PID VLC obsolète supprimé"
+        fi
+    fi
+    
+    # Sessions PHP expirées
+    if [[ -d "/var/lib/php/sessions/pi-signage" ]]; then
+        find /var/lib/php/sessions/pi-signage -type f -mtime +7 -delete 2>/dev/null || true
+        log_fix "Sessions PHP expirées nettoyées"
+    fi
+    
+    # Logs anciens
+    if [[ -d "/var/log/pi-signage" ]]; then
+        find /var/log/pi-signage -type f -mtime +30 -delete 2>/dev/null || true
+        log_fix "Logs de plus de 30 jours supprimés"
+    fi
+}
+
+# 4. Vérifier et réparer la configuration
+fix_configuration() {
+    log_section "VÉRIFICATION DE LA CONFIGURATION"
+    
+    # Créer les répertoires manquants
+    local required_dirs=(
+        "/etc/pi-signage"
+        "/opt/videos"
+        "/opt/scripts"
+        "/var/log/pi-signage"
+    )
+    
+    for dir in "${required_dirs[@]}"; do
+        if [[ ! -d "$dir" ]]; then
+            mkdir -p "$dir"
+            log_fix "Répertoire $dir créé"
+        fi
+    done
+    
+    # Vérifier le fichier de configuration principal
+    if [[ ! -f "$CONFIG_FILE" ]]; then
+        log_warning "Fichier de configuration principal manquant"
+        # Créer une configuration minimale
+        cat > "$CONFIG_FILE" << 'EOF'
+# Configuration Pi Signage
+GDRIVE_FOLDER_NAME="Signage"
+VIDEO_DIR="/opt/videos"
+LOG_DIR="/var/log/pi-signage"
+DISPLAY_MODE="vlc"
+EOF
+        log_fix "Configuration minimale créée"
+    fi
+    
+    # Vérifier nginx
+    if [[ -f "/etc/nginx/sites-enabled/default" ]] && [[ -f "/etc/nginx/sites-enabled/pi-signage" ]]; then
+        rm -f /etc/nginx/sites-enabled/default
+        log_fix "Site nginx par défaut désactivé"
+        nginx -t && systemctl reload nginx
+    fi
+}
+
+# 5. Réparer les problèmes spécifiques au mode
+fix_display_mode_issues() {
+    log_section "RÉPARATION SPÉCIFIQUE MODE $DISPLAY_MODE"
+    
+    if [[ "$DISPLAY_MODE" == "vlc" ]]; then
+        # Vérifier l'utilisateur signage
+        if ! id signage &>/dev/null; then
+            log_error "Utilisateur signage manquant"
+            useradd -m -s /bin/bash -G video,audio signage
+            log_fix "Utilisateur signage créé"
+        fi
+        
+        # Vérifier lightdm
+        if [[ -f "/etc/lightdm/lightdm.conf" ]]; then
+            if ! grep -q "autologin-user=signage" /etc/lightdm/lightdm.conf; then
+                log_warning "Auto-login non configuré"
+            fi
+        fi
+        
+    elif [[ "$DISPLAY_MODE" == "chromium" ]]; then
+        # Vérifier le player HTML
+        if [[ ! -f "/var/www/player/player.html" ]]; then
+            log_warning "Player HTML manquant"
+        fi
+        
+        # Vérifier Xvfb si en mode VM
+        if [[ -f "/etc/pi-signage/vm-mode.conf" ]] || ! [[ -f /proc/device-tree/model ]]; then
+            if ! command -v Xvfb &>/dev/null; then
+                log_warning "Xvfb non installé pour le mode VM"
+                apt-get update && apt-get install -y xvfb
+                log_fix "Xvfb installé"
+            fi
+        fi
+    fi
+}
+
+# 6. Vérifier l'espace disque
+fix_disk_space() {
+    log_section "VÉRIFICATION DE L'ESPACE DISQUE"
+    
+    local disk_usage=$(df / | tail -1 | awk '{print $5}' | tr -d '%')
+    
+    if [[ $disk_usage -gt 90 ]]; then
+        log_warning "Espace disque critique: ${disk_usage}%"
+        
+        # Nettoyer apt
+        apt-get clean
+        apt-get autoclean
+        log_fix "Cache APT nettoyé"
+        
+        # Nettoyer les journaux systemd
+        journalctl --vacuum-time=7d
+        log_fix "Journaux systemd nettoyés (gardé 7 jours)"
+        
+        # Nouvelle vérification
+        disk_usage=$(df / | tail -1 | awk '{print $5}' | tr -d '%')
+        log_info "Espace disque après nettoyage: ${disk_usage}%"
+    else
+        log_info "Espace disque suffisant: ${disk_usage}%"
+    fi
+}
+
+# 7. Test final
+final_test() {
+    log_section "TEST FINAL"
+    
+    # Tester les services
+    log_info "Test des services..."
+    
+    local all_ok=true
+    
+    # nginx
+    if curl -s -o /dev/null -w "%{http_code}" "http://localhost/" | grep -q "200\|302"; then
+        log_info "Interface web accessible"
+    else
+        log_error "Interface web inaccessible"
+        all_ok=false
+    fi
+    
+    # Service principal
+    if [[ "$DISPLAY_MODE" == "chromium" ]]; then
+        if pgrep -f "chromium-browser" > /dev/null; then
+            log_info "Chromium en cours d'exécution"
+        else
+            log_error "Chromium non détecté"
+            all_ok=false
+        fi
+    else
+        if pgrep -x "vlc" > /dev/null; then
+            log_info "VLC en cours d'exécution"
+        else
+            log_error "VLC non détecté"
+            all_ok=false
+        fi
+    fi
+    
+    if $all_ok; then
+        log_info "Tous les tests réussis"
+    else
+        log_warning "Certains tests ont échoué"
+    fi
+}
+
+# Résumé
+show_summary() {
+    log_section "RÉSUMÉ DE LA RÉPARATION"
+    
+    log "Corrections appliquées: ${GREEN}$FIXES_APPLIED${NC}"
+    log "Erreurs trouvées: ${RED}$ERRORS_FOUND${NC}"
+    log ""
+    log "Rapport complet dans: $REPAIR_LOG"
+    
+    if [[ $ERRORS_FOUND -gt 0 ]]; then
+        log ""
+        log_warning "Des erreurs persistent. Exécutez 'sudo pi-signage-diag' pour plus de détails."
+    else
+        log ""
+        log "✅ Réparation terminée avec succès!"
+    fi
+}
+
+# Fonction principale
+main() {
+    check_root
+    
+    # Créer le répertoire de logs
+    mkdir -p "$(dirname "$REPAIR_LOG")"
+    
+    show_banner
+    
+    log_info "Début de la réparation automatique..."
+    log_warning "N'interrompez pas le processus!"
+    
+    # Exécuter les réparations
+    fix_permissions
+    fix_services
+    fix_temp_files
+    fix_configuration
+    fix_display_mode_issues
+    fix_disk_space
+    final_test
+    
+    show_summary
+    
+    # Proposer un redémarrage si nécessaire
+    if [[ $FIXES_APPLIED -gt 5 ]]; then
+        echo
+        read -p "De nombreuses corrections ont été appliquées. Redémarrer maintenant? (o/N) " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Oo]$ ]]; then
+            log_info "Redémarrage du système..."
+            reboot
+        fi
+    fi
+}
+
+# Exécution
+main "$@"

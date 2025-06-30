@@ -21,6 +21,13 @@ define('SCRIPTS_DIR', '/opt/scripts');
 define('LOG_DIR', '/var/log/pi-signage');
 define('WEB_ROOT', dirname(__DIR__));
 
+// Mode d'affichage
+if (file_exists('/etc/pi-signage/display-mode.conf')) {
+    define('DISPLAY_MODE', trim(file_get_contents('/etc/pi-signage/display-mode.conf')));
+} else {
+    define('DISPLAY_MODE', 'chromium');
+}
+
 // Configuration d'authentification
 define('ADMIN_USERNAME', 'admin');
 define('ADMIN_PASSWORD_HASH', '{{WEB_ADMIN_PASSWORD_HASH}}');

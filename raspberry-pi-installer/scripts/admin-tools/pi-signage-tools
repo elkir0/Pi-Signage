@@ -1,0 +1,455 @@
+#!/usr/bin/env bash
+
+# =============================================================================
+# Pi Signage - Menu interactif d'outils d'administration
+# Version: 2.3.0
+# Description: Interface menu pour accéder facilement aux outils Pi Signage
+# =============================================================================
+
+set -euo pipefail
+
+# Couleurs
+readonly RED='\033[0;31m'
+readonly GREEN='\033[0;32m'
+readonly YELLOW='\033[1;33m'
+readonly BLUE='\033[0;34m'
+readonly PURPLE='\033[0;35m'
+readonly CYAN='\033[0;36m'
+readonly NC='\033[0m'
+
+# Configuration
+readonly CONFIG_FILE="/etc/pi-signage/config.conf"
+readonly DISPLAY_MODE_FILE="/etc/pi-signage/display-mode.conf"
+
+# Charger la configuration si elle existe
+if [[ -f "$CONFIG_FILE" ]]; then
+    source "$CONFIG_FILE"
+fi
+
+# Déterminer le mode d'affichage
+DISPLAY_MODE="vlc"
+if [[ -f "$DISPLAY_MODE_FILE" ]]; then
+    DISPLAY_MODE=$(cat "$DISPLAY_MODE_FILE" 2>/dev/null || echo "vlc")
+fi
+
+# Effacer l'écran et afficher l'en-tête
+show_header() {
+    clear
+    echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${BLUE}║${NC}          ${CYAN}Pi Signage - Centre d'Administration${NC}               ${BLUE}║${NC}"
+    echo -e "${BLUE}║${NC}                    Version 2.3.0                             ${BLUE}║${NC}"
+    echo -e "${BLUE}║${NC}                Mode: ${YELLOW}$DISPLAY_MODE${NC}                              ${BLUE}║${NC}"
+    echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
+    echo
+}
+
+# Afficher le menu principal
+show_main_menu() {
+    echo -e "${GREEN}=== MENU PRINCIPAL ===${NC}"
+    echo
+    echo "1) 📊 État des services"
+    echo "2) 🔧 Contrôle des services"
+    echo "3) 🔍 Diagnostic système"
+    echo "4) 📹 Gestion des vidéos"
+    echo "5) 🔐 Sécurité et mots de passe"
+    echo "6) 📈 Monitoring et logs"
+    echo "7) 🛠️  Maintenance"
+    echo "8) ℹ️  Informations système"
+    echo "9) 🆘 Aide et documentation"
+    echo "0) 🚪 Quitter"
+    echo
+}
+
+# Sous-menu contrôle des services
+service_control_menu() {
+    while true; do
+        show_header
+        echo -e "${GREEN}=== CONTRÔLE DES SERVICES ===${NC}"
+        echo
+        echo "1) ▶️  Démarrer tous les services"
+        echo "2) ⏹️  Arrêter tous les services"
+        echo "3) 🔄 Redémarrer tous les services"
+        echo "4) 🚨 Mode de récupération d'urgence"
+        echo "5) 🔄 Redémarrer le service principal uniquement"
+        echo "6) 🌐 Redémarrer nginx"
+        echo "7) 🐘 Redémarrer PHP-FPM"
+        echo "0) ↩️  Retour au menu principal"
+        echo
+        read -p "Choix: " choice
+        
+        case $choice in
+            1) sudo pi-signage start; read -p "Appuyez sur Entrée pour continuer..." ;;
+            2) sudo pi-signage stop; read -p "Appuyez sur Entrée pour continuer..." ;;
+            3) sudo pi-signage restart; read -p "Appuyez sur Entrée pour continuer..." ;;
+            4) sudo pi-signage emergency; read -p "Appuyez sur Entrée pour continuer..." ;;
+            5) 
+                if [[ "$DISPLAY_MODE" == "chromium" ]]; then
+                    sudo systemctl restart chromium-kiosk
+                else
+                    sudo systemctl restart vlc-signage
+                fi
+                echo -e "${GREEN}Service principal redémarré${NC}"
+                read -p "Appuyez sur Entrée pour continuer..."
+                ;;
+            6) sudo systemctl restart nginx; echo -e "${GREEN}Nginx redémarré${NC}"; read -p "Appuyez sur Entrée pour continuer..." ;;
+            7) sudo systemctl restart php8.2-fpm; echo -e "${GREEN}PHP-FPM redémarré${NC}"; read -p "Appuyez sur Entrée pour continuer..." ;;
+            0) return ;;
+            *) echo -e "${RED}Option invalide${NC}"; sleep 1 ;;
+        esac
+    done
+}
+
+# Sous-menu gestion des vidéos
+video_management_menu() {
+    while true; do
+        show_header
+        echo -e "${GREEN}=== GESTION DES VIDÉOS ===${NC}"
+        echo
+        
+        # Compter les vidéos
+        local video_count=0
+        if [[ -d "/opt/videos" ]]; then
+            video_count=$(find /opt/videos -type f \( -name "*.mp4" -o -name "*.avi" -o -name "*.mkv" -o -name "*.mov" \) 2>/dev/null | wc -l)
+        fi
+        
+        echo "Vidéos actuelles: ${CYAN}$video_count${NC}"
+        echo
+        echo "1) 📂 Lister les vidéos"
+        echo "2) 🔄 Synchroniser depuis Google Drive"
+        echo "3) 🧪 Tester la connexion Google Drive"
+        echo "4) 📊 Statistiques d'utilisation disque"
+        echo "5) 🗑️  Nettoyer les vidéos orphelines"
+        echo "6) 📋 Mettre à jour la playlist (Chromium)"
+        echo "0) ↩️  Retour au menu principal"
+        echo
+        read -p "Choix: " choice
+        
+        case $choice in
+            1) 
+                echo
+                echo -e "${BLUE}Vidéos dans /opt/videos:${NC}"
+                if [[ -d "/opt/videos" ]]; then
+                    find /opt/videos -type f \( -name "*.mp4" -o -name "*.avi" -o -name "*.mkv" -o -name "*.mov" \) -exec ls -lh {} \; 2>/dev/null | awk '{print $9 " (" $5 ")"}'
+                else
+                    echo "Répertoire /opt/videos introuvable"
+                fi
+                read -p "Appuyez sur Entrée pour continuer..."
+                ;;
+            2) 
+                if [[ -f "/opt/scripts/sync-videos.sh" ]]; then
+                    sudo /opt/scripts/sync-videos.sh
+                else
+                    echo -e "${RED}Script de synchronisation non trouvé${NC}"
+                fi
+                read -p "Appuyez sur Entrée pour continuer..."
+                ;;
+            3) 
+                if [[ -f "/opt/scripts/test-gdrive.sh" ]]; then
+                    sudo /opt/scripts/test-gdrive.sh
+                else
+                    echo -e "${RED}Script de test non trouvé${NC}"
+                fi
+                read -p "Appuyez sur Entrée pour continuer..."
+                ;;
+            4) 
+                echo
+                df -h /opt/videos 2>/dev/null || df -h /
+                echo
+                if [[ -d "/opt/videos" ]]; then
+                    echo "Taille totale des vidéos: $(du -sh /opt/videos 2>/dev/null | cut -f1)"
+                fi
+                read -p "Appuyez sur Entrée pour continuer..."
+                ;;
+            5) 
+                echo "Fonction à implémenter..."
+                read -p "Appuyez sur Entrée pour continuer..."
+                ;;
+            6) 
+                if [[ "$DISPLAY_MODE" == "chromium" ]] && [[ -f "/opt/scripts/update-playlist.sh" ]]; then
+                    sudo /opt/scripts/update-playlist.sh
+                    echo -e "${GREEN}Playlist mise à jour${NC}"
+                else
+                    echo -e "${YELLOW}Disponible uniquement en mode Chromium${NC}"
+                fi
+                read -p "Appuyez sur Entrée pour continuer..."
+                ;;
+            0) return ;;
+            *) echo -e "${RED}Option invalide${NC}"; sleep 1 ;;
+        esac
+    done
+}
+
+# Sous-menu sécurité
+security_menu() {
+    while true; do
+        show_header
+        echo -e "${GREEN}=== SÉCURITÉ ET MOTS DE PASSE ===${NC}"
+        echo
+        echo "1) 🔑 Changer le mot de passe de l'interface web"
+        echo "2) 🔑 Changer le mot de passe Glances"
+        echo "3) 🔒 Vérifier les permissions des fichiers"
+        echo "4) 📜 Afficher les dernières connexions"
+        echo "0) ↩️  Retour au menu principal"
+        echo
+        read -p "Choix: " choice
+        
+        case $choice in
+            1) 
+                if [[ -f "/opt/scripts/web-password.sh" ]]; then
+                    sudo /opt/scripts/web-password.sh
+                elif [[ -f "/opt/scripts/util-change-web-password.sh" ]]; then
+                    sudo /opt/scripts/util-change-web-password.sh
+                else
+                    echo -e "${RED}Script de changement de mot de passe web non trouvé${NC}"
+                fi
+                read -p "Appuyez sur Entrée pour continuer..."
+                ;;
+            2) 
+                if [[ -f "/opt/scripts/glances-password.sh" ]]; then
+                    sudo /opt/scripts/glances-password.sh
+                else
+                    echo -e "${RED}Script de changement de mot de passe Glances non trouvé${NC}"
+                fi
+                read -p "Appuyez sur Entrée pour continuer..."
+                ;;
+            3) 
+                echo
+                echo "Vérification des permissions..."
+                ls -la /opt/videos 2>/dev/null || echo "/opt/videos non trouvé"
+                ls -la /var/www/pi-signage/includes/config.php 2>/dev/null || echo "config.php non trouvé"
+                read -p "Appuyez sur Entrée pour continuer..."
+                ;;
+            4) 
+                echo
+                echo -e "${BLUE}Dernières connexions SSH:${NC}"
+                last -n 10
+                read -p "Appuyez sur Entrée pour continuer..."
+                ;;
+            0) return ;;
+            *) echo -e "${RED}Option invalide${NC}"; sleep 1 ;;
+        esac
+    done
+}
+
+# Sous-menu monitoring
+monitoring_menu() {
+    while true; do
+        show_header
+        echo -e "${GREEN}=== MONITORING ET LOGS ===${NC}"
+        echo
+        echo "1) 📊 Afficher les logs en temps réel"
+        echo "2) 📈 Statistiques système (htop)"
+        echo "3) 🌡️  Température et performances"
+        echo "4) 📁 Collecter tous les logs (support)"
+        echo "5) 🧹 Nettoyer les anciens logs"
+        echo "0) ↩️  Retour au menu principal"
+        echo
+        read -p "Choix: " choice
+        
+        case $choice in
+            1) 
+                echo -e "${YELLOW}Logs en temps réel (Ctrl+C pour quitter)${NC}"
+                if [[ "$DISPLAY_MODE" == "chromium" ]]; then
+                    sudo journalctl -u chromium-kiosk -f
+                else
+                    sudo journalctl -u vlc-signage -f
+                fi
+                ;;
+            2) 
+                if command -v htop &> /dev/null; then
+                    htop
+                else
+                    top
+                fi
+                ;;
+            3) 
+                echo
+                if command -v vcgencmd &> /dev/null; then
+                    echo "Température CPU: $(vcgencmd measure_temp)"
+                    echo "Fréquence CPU: $(vcgencmd measure_clock arm)"
+                    echo "Tension: $(vcgencmd measure_volts)"
+                fi
+                echo
+                echo "Charge système: $(uptime)"
+                read -p "Appuyez sur Entrée pour continuer..."
+                ;;
+            4) 
+                if [[ -f "/opt/scripts/pi-signage-logs" ]] || command -v pi-signage-logs &> /dev/null; then
+                    sudo pi-signage-logs
+                else
+                    echo -e "${RED}Script de collecte de logs non trouvé${NC}"
+                fi
+                read -p "Appuyez sur Entrée pour continuer..."
+                ;;
+            5) 
+                echo "Nettoyage des logs de plus de 30 jours..."
+                sudo find /var/log/pi-signage -type f -mtime +30 -delete 2>/dev/null || true
+                sudo journalctl --vacuum-time=30d
+                echo -e "${GREEN}Logs nettoyés${NC}"
+                read -p "Appuyez sur Entrée pour continuer..."
+                ;;
+            0) return ;;
+            *) echo -e "${RED}Option invalide${NC}"; sleep 1 ;;
+        esac
+    done
+}
+
+# Sous-menu maintenance
+maintenance_menu() {
+    while true; do
+        show_header
+        echo -e "${GREEN}=== MAINTENANCE ===${NC}"
+        echo
+        echo "1) 🔧 Réparation automatique"
+        echo "2) 🔄 Mise à jour yt-dlp"
+        echo "3) 🔄 Mise à jour de l'interface web"
+        echo "4) 🧹 Nettoyer le cache système"
+        echo "5) 🔄 Redémarrer le Raspberry Pi"
+        echo "0) ↩️  Retour au menu principal"
+        echo
+        read -p "Choix: " choice
+        
+        case $choice in
+            1) 
+                if command -v pi-signage-repair &> /dev/null; then
+                    sudo pi-signage-repair
+                else
+                    echo -e "${RED}Script de réparation non trouvé${NC}"
+                fi
+                read -p "Appuyez sur Entrée pour continuer..."
+                ;;
+            2) 
+                if [[ -f "/opt/scripts/update-ytdlp.sh" ]]; then
+                    sudo /opt/scripts/update-ytdlp.sh
+                else
+                    echo "Mise à jour de yt-dlp..."
+                    sudo yt-dlp -U
+                fi
+                read -p "Appuyez sur Entrée pour continuer..."
+                ;;
+            3) 
+                if [[ -f "/opt/scripts/update-web-interface.sh" ]]; then
+                    sudo /opt/scripts/update-web-interface.sh
+                else
+                    echo -e "${RED}Script de mise à jour web non trouvé${NC}"
+                fi
+                read -p "Appuyez sur Entrée pour continuer..."
+                ;;
+            4) 
+                echo "Nettoyage du cache..."
+                sudo apt-get clean
+                sudo apt-get autoclean
+                if [[ "$DISPLAY_MODE" == "chromium" ]]; then
+                    sudo rm -rf /home/signage/.cache/chromium/* 2>/dev/null || true
+                fi
+                echo -e "${GREEN}Cache nettoyé${NC}"
+                read -p "Appuyez sur Entrée pour continuer..."
+                ;;
+            5) 
+                echo -e "${YELLOW}Le système va redémarrer...${NC}"
+                read -p "Êtes-vous sûr? (o/N) " confirm
+                if [[ "$confirm" == "o" ]] || [[ "$confirm" == "O" ]]; then
+                    sudo reboot
+                fi
+                ;;
+            0) return ;;
+            *) echo -e "${RED}Option invalide${NC}"; sleep 1 ;;
+        esac
+    done
+}
+
+# Afficher les informations système
+show_system_info() {
+    show_header
+    echo -e "${GREEN}=== INFORMATIONS SYSTÈME ===${NC}"
+    echo
+    
+    # Modèle de Pi
+    if [[ -f /proc/device-tree/model ]]; then
+        echo "Modèle: $(tr -d '\0' < /proc/device-tree/model)"
+    fi
+    
+    # OS
+    if [[ -f /etc/os-release ]]; then
+        . /etc/os-release
+        echo "OS: $PRETTY_NAME"
+    fi
+    
+    # Kernel
+    echo "Kernel: $(uname -r)"
+    
+    # IP
+    echo "IP: $(hostname -I | awk '{print $1}')"
+    
+    # Uptime
+    echo "Uptime: $(uptime -p)"
+    
+    # Mode d'affichage
+    echo "Mode d'affichage: $DISPLAY_MODE"
+    
+    echo
+    echo -e "${BLUE}URLs d'accès:${NC}"
+    local ip=$(hostname -I | awk '{print $1}')
+    echo "• Interface web: http://$ip/"
+    echo "• Monitoring Glances: http://$ip:61208"
+    if [[ "$DISPLAY_MODE" == "chromium" ]]; then
+        echo "• Player HTML5: http://$ip:8888/player.html"
+    fi
+    
+    read -p "Appuyez sur Entrée pour continuer..."
+}
+
+# Afficher l'aide
+show_help() {
+    show_header
+    echo -e "${GREEN}=== AIDE ET DOCUMENTATION ===${NC}"
+    echo
+    echo "Commandes utiles:"
+    echo "  pi-signage [status|start|stop|restart|emergency]"
+    echo "  pi-signage-diag    - Diagnostic complet"
+    echo "  pi-signage-repair  - Réparation automatique"
+    echo "  pi-signage-logs    - Collecte des logs"
+    echo
+    echo "Chemins importants:"
+    echo "  /opt/videos        - Vidéos"
+    echo "  /opt/scripts       - Scripts"
+    echo "  /var/log/pi-signage - Logs"
+    echo
+    echo "Documentation complète:"
+    echo "  https://github.com/elkir0/Pi-Signage"
+    echo
+    read -p "Appuyez sur Entrée pour continuer..."
+}
+
+# Menu principal
+main_menu() {
+    while true; do
+        show_header
+        show_main_menu
+        read -p "Choix: " choice
+        
+        case $choice in
+            1) sudo pi-signage status; read -p "Appuyez sur Entrée pour continuer..." ;;
+            2) service_control_menu ;;
+            3) sudo pi-signage-diag; read -p "Appuyez sur Entrée pour continuer..." ;;
+            4) video_management_menu ;;
+            5) security_menu ;;
+            6) monitoring_menu ;;
+            7) maintenance_menu ;;
+            8) show_system_info ;;
+            9) show_help ;;
+            0) 
+                echo
+                echo -e "${GREEN}Au revoir!${NC}"
+                exit 0
+                ;;
+            *) 
+                echo -e "${RED}Option invalide${NC}"
+                sleep 1
+                ;;
+        esac
+    done
+}
+
+# Point d'entrée
+main_menu

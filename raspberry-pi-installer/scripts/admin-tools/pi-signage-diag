@@ -1,0 +1,408 @@
+#!/usr/bin/env bash
+
+# =============================================================================
+# Pi Signage - Script de diagnostic complet
+# Version: 2.3.0
+# Description: Diagnostic approfondi du système Pi Signage
+# =============================================================================
+
+set -euo pipefail
+
+# Couleurs
+readonly RED='\033[0;31m'
+readonly GREEN='\033[0;32m'
+readonly YELLOW='\033[1;33m'
+readonly BLUE='\033[0;34m'
+readonly PURPLE='\033[0;35m'
+readonly NC='\033[0m'
+
+# Configuration
+readonly CONFIG_FILE="/etc/pi-signage/config.conf"
+readonly DISPLAY_MODE_FILE="/etc/pi-signage/display-mode.conf"
+readonly DIAG_LOG="/tmp/pi-signage-diagnostic-$(date +%Y%m%d-%H%M%S).log"
+
+# Charger la configuration si elle existe
+if [[ -f "$CONFIG_FILE" ]]; then
+    source "$CONFIG_FILE"
+fi
+
+# Déterminer le mode d'affichage
+DISPLAY_MODE="vlc"
+if [[ -f "$DISPLAY_MODE_FILE" ]]; then
+    DISPLAY_MODE=$(cat "$DISPLAY_MODE_FILE" 2>/dev/null || echo "vlc")
+fi
+
+# Variables pour le rapport
+ERRORS=0
+WARNINGS=0
+SUCCESS=0
+
+# Logging
+log_to_file() {
+    echo "$@" | tee -a "$DIAG_LOG"
+}
+
+log_section() {
+    echo | tee -a "$DIAG_LOG"
+    echo -e "${BLUE}=== $1 ===${NC}" | tee -a "$DIAG_LOG"
+    echo | tee -a "$DIAG_LOG"
+}
+
+log_success() {
+    echo -e "${GREEN}✓${NC} $1" | tee -a "$DIAG_LOG"
+    ((SUCCESS++))
+}
+
+log_warning() {
+    echo -e "${YELLOW}⚠${NC} $1" | tee -a "$DIAG_LOG"
+    ((WARNINGS++))
+}
+
+log_error() {
+    echo -e "${RED}✗${NC} $1" | tee -a "$DIAG_LOG"
+    ((ERRORS++))
+}
+
+# Bannière
+show_banner() {
+    clear
+    log_to_file "╔══════════════════════════════════════════════════════════════╗"
+    log_to_file "║           Pi Signage - Diagnostic Système Complet            ║"
+    log_to_file "║                      Version 2.3.0                           ║"
+    log_to_file "╚══════════════════════════════════════════════════════════════╝"
+    log_to_file ""
+    log_to_file "Date: $(date '+%Y-%m-%d %H:%M:%S')"
+    log_to_file "Mode: $DISPLAY_MODE"
+    log_to_file "Hostname: $(hostname)"
+    log_to_file ""
+}
+
+# 1. Vérification des informations système
+check_system_info() {
+    log_section "INFORMATIONS SYSTÈME"
+    
+    # Modèle de Pi
+    if [[ -f /proc/device-tree/model ]]; then
+        model=$(tr -d '\0' < /proc/device-tree/model)
+        log_to_file "Modèle: $model"
+    else
+        log_warning "Modèle de Pi non détecté (VM/conteneur?)"
+    fi
+    
+    # OS
+    if [[ -f /etc/os-release ]]; then
+        . /etc/os-release
+        log_to_file "OS: $PRETTY_NAME"
+    fi
+    
+    # Kernel
+    log_to_file "Kernel: $(uname -r)"
+    
+    # Architecture
+    log_to_file "Architecture: $(uname -m)"
+    
+    # Uptime
+    log_to_file "Uptime: $(uptime -p)"
+}
+
+# 2. Vérification des ressources
+check_resources() {
+    log_section "RESSOURCES SYSTÈME"
+    
+    # CPU
+    load=$(uptime | awk -F'load average:' '{print $2}')
+    log_to_file "Charge CPU: $load"
+    
+    # Analyse de la charge
+    load1=$(echo "$load" | cut -d',' -f1 | tr -d ' ')
+    if (( $(echo "$load1 > 4.0" | bc -l) )); then
+        log_error "Charge CPU très élevée!"
+    elif (( $(echo "$load1 > 2.0" | bc -l) )); then
+        log_warning "Charge CPU élevée"
+    else
+        log_success "Charge CPU normale"
+    fi
+    
+    # Mémoire
+    mem_info=$(free -h | grep "^Mem:")
+    mem_total=$(echo "$mem_info" | awk '{print $2}')
+    mem_used=$(echo "$mem_info" | awk '{print $3}')
+    mem_percent=$(free | grep "^Mem:" | awk '{printf "%.1f", $3/$2 * 100}')
+    
+    log_to_file "Mémoire: $mem_used / $mem_total utilisés ($mem_percent%)"
+    
+    if (( $(echo "$mem_percent > 90" | bc -l) )); then
+        log_error "Mémoire presque pleine!"
+    elif (( $(echo "$mem_percent > 80" | bc -l) )); then
+        log_warning "Utilisation mémoire élevée"
+    else
+        log_success "Utilisation mémoire normale"
+    fi
+    
+    # Espace disque
+    disk_info=$(df -h / | tail -1)
+    disk_used=$(echo "$disk_info" | awk '{print $3}')
+    disk_total=$(echo "$disk_info" | awk '{print $2}')
+    disk_percent=$(echo "$disk_info" | awk '{print $5}' | tr -d '%')
+    
+    log_to_file "Disque: $disk_used / $disk_total utilisés ($disk_percent%)"
+    
+    if [[ $disk_percent -gt 90 ]]; then
+        log_error "Espace disque critique!"
+    elif [[ $disk_percent -gt 80 ]]; then
+        log_warning "Espace disque faible"
+    else
+        log_success "Espace disque suffisant"
+    fi
+    
+    # Température (si disponible)
+    if command -v vcgencmd &> /dev/null; then
+        temp=$(vcgencmd measure_temp | cut -d= -f2 | cut -d\' -f1)
+        log_to_file "Température: ${temp}°C"
+        
+        if (( $(echo "$temp > 80" | bc -l) )); then
+            log_error "Température très élevée!"
+        elif (( $(echo "$temp > 70" | bc -l) )); then
+            log_warning "Température élevée"
+        else
+            log_success "Température normale"
+        fi
+    fi
+}
+
+# 3. Vérification des services
+check_services() {
+    log_section "ÉTAT DES SERVICES"
+    
+    # Services principaux selon le mode
+    local services=()
+    if [[ "$DISPLAY_MODE" == "chromium" ]]; then
+        services+=("chromium-kiosk.service")
+    else
+        services+=("vlc-signage.service" "lightdm.service")
+    fi
+    
+    # Services communs
+    services+=(
+        "nginx.service"
+        "php8.2-fpm.service"
+        "glances.service"
+        "pi-signage-watchdog.service"
+    )
+    
+    for service in "${services[@]}"; do
+        if systemctl is-active --quiet "$service"; then
+            log_success "$service est actif"
+        else
+            # Vérifier si le service existe
+            if systemctl list-unit-files | grep -q "^$service"; then
+                log_error "$service est inactif"
+                # Afficher les dernières lignes du journal
+                log_to_file "  Dernières erreurs:"
+                journalctl -u "$service" -n 5 --no-pager | sed 's/^/    /' | tee -a "$DIAG_LOG"
+            else
+                log_warning "$service n'est pas installé"
+            fi
+        fi
+    done
+}
+
+# 4. Vérification des fichiers et permissions
+check_files_permissions() {
+    log_section "FICHIERS ET PERMISSIONS"
+    
+    # Répertoires importants
+    local dirs=(
+        "/opt/videos:www-data:www-data:755"
+        "/opt/scripts:root:root:755"
+        "/var/www/pi-signage:www-data:www-data:755"
+        "/etc/pi-signage:root:root:755"
+        "/var/log/pi-signage:root:root:755"
+    )
+    
+    for dir_info in "${dirs[@]}"; do
+        IFS=':' read -r dir expected_user expected_group expected_perms <<< "$dir_info"
+        
+        if [[ -d "$dir" ]]; then
+            # Vérifier propriétaire
+            actual_user=$(stat -c "%U" "$dir")
+            actual_group=$(stat -c "%G" "$dir")
+            actual_perms=$(stat -c "%a" "$dir")
+            
+            if [[ "$actual_user" == "$expected_user" && "$actual_group" == "$expected_group" ]]; then
+                log_success "$dir: propriétaire correct ($actual_user:$actual_group)"
+            else
+                log_error "$dir: propriétaire incorrect (attendu: $expected_user:$expected_group, actuel: $actual_user:$actual_group)"
+            fi
+            
+            if [[ "$actual_perms" == "$expected_perms" ]]; then
+                log_success "$dir: permissions correctes ($actual_perms)"
+            else
+                log_warning "$dir: permissions différentes (attendu: $expected_perms, actuel: $actual_perms)"
+            fi
+        else
+            log_error "$dir n'existe pas"
+        fi
+    done
+    
+    # Vérifier les vidéos
+    if [[ -d "/opt/videos" ]]; then
+        video_count=$(find /opt/videos -type f \( -name "*.mp4" -o -name "*.avi" -o -name "*.mkv" -o -name "*.mov" \) 2>/dev/null | wc -l)
+        if [[ $video_count -gt 0 ]]; then
+            log_success "Vidéos trouvées: $video_count"
+        else
+            log_warning "Aucune vidéo trouvée dans /opt/videos"
+        fi
+    fi
+}
+
+# 5. Vérification réseau
+check_network() {
+    log_section "CONNECTIVITÉ RÉSEAU"
+    
+    # Interfaces réseau
+    log_to_file "Interfaces réseau actives:"
+    ip -br addr | grep UP | sed 's/^/  /' | tee -a "$DIAG_LOG"
+    
+    # Connectivité internet
+    if ping -c 1 -W 2 8.8.8.8 &> /dev/null; then
+        log_success "Connectivité internet OK"
+    else
+        log_error "Pas de connectivité internet"
+    fi
+    
+    # DNS
+    if nslookup google.com &> /dev/null; then
+        log_success "Résolution DNS OK"
+    else
+        log_error "Problème de résolution DNS"
+    fi
+    
+    # Ports d'écoute
+    log_to_file ""
+    log_to_file "Ports en écoute:"
+    ss -tuln | grep LISTEN | grep -E "(80|443|61208|8080|8888)" | sed 's/^/  /' | tee -a "$DIAG_LOG" || true
+}
+
+# 6. Vérification des logs
+check_logs() {
+    log_section "ANALYSE DES LOGS"
+    
+    # Erreurs système récentes
+    log_to_file "Erreurs système des dernières 24h:"
+    error_count=$(journalctl -p err --since "24 hours ago" 2>/dev/null | wc -l || echo "0")
+    
+    if [[ $error_count -gt 50 ]]; then
+        log_error "Nombreuses erreurs système: $error_count"
+        log_to_file "  Dernières erreurs:"
+        journalctl -p err --since "24 hours ago" -n 10 --no-pager | sed 's/^/    /' | tee -a "$DIAG_LOG"
+    elif [[ $error_count -gt 10 ]]; then
+        log_warning "Quelques erreurs système: $error_count"
+    else
+        log_success "Peu d'erreurs système: $error_count"
+    fi
+    
+    # Logs Pi Signage
+    if [[ -d "/var/log/pi-signage" ]]; then
+        log_to_file ""
+        log_to_file "Fichiers de log Pi Signage:"
+        ls -lh /var/log/pi-signage/ | tail -n +2 | sed 's/^/  /' | tee -a "$DIAG_LOG"
+    fi
+}
+
+# 7. Tests spécifiques selon le mode
+check_display_mode() {
+    log_section "TESTS SPÉCIFIQUES MODE $DISPLAY_MODE"
+    
+    if [[ "$DISPLAY_MODE" == "vlc" ]]; then
+        # Test VLC
+        if pgrep -x "vlc" > /dev/null; then
+            log_success "Processus VLC en cours d'exécution"
+        else
+            log_error "Processus VLC introuvable"
+        fi
+        
+        # Vérifier X11
+        if [[ -n "${DISPLAY:-}" ]] || [[ -f /tmp/.X0-lock ]]; then
+            log_success "Serveur X détecté"
+        else
+            log_warning "Serveur X non détecté"
+        fi
+        
+    elif [[ "$DISPLAY_MODE" == "chromium" ]]; then
+        # Test Chromium
+        if pgrep -f "chromium-browser" > /dev/null; then
+            log_success "Processus Chromium en cours d'exécution"
+        else
+            log_error "Processus Chromium introuvable"
+        fi
+        
+        # Vérifier le player web
+        if curl -s -o /dev/null -w "%{http_code}" "http://localhost:8888/player.html" | grep -q "200"; then
+            log_success "Player HTML5 accessible"
+        else
+            log_error "Player HTML5 inaccessible"
+        fi
+    fi
+}
+
+# 8. Recommandations
+show_recommendations() {
+    log_section "RECOMMANDATIONS"
+    
+    if [[ $ERRORS -gt 0 ]]; then
+        log_to_file "⚠️ Problèmes détectés nécessitant une intervention:"
+        
+        # Recommandations basées sur les erreurs
+        if journalctl -u "${DISPLAY_MODE}-signage" -n 10 2>/dev/null | grep -q "error"; then
+            log_to_file "  • Redémarrer le service principal: sudo systemctl restart ${DISPLAY_MODE}-signage"
+        fi
+        
+        if [[ $disk_percent -gt 90 ]]; then
+            log_to_file "  • Libérer de l'espace disque ou nettoyer les logs"
+        fi
+        
+        log_to_file ""
+        log_to_file "Pour une réparation automatique, exécutez:"
+        log_to_file "  sudo pi-signage-repair"
+    elif [[ $WARNINGS -gt 0 ]]; then
+        log_to_file "⚠️ Quelques avertissements à surveiller"
+    else
+        log_to_file "✅ Système en bon état de fonctionnement"
+    fi
+}
+
+# Résumé final
+show_summary() {
+    log_section "RÉSUMÉ DU DIAGNOSTIC"
+    
+    log_to_file "Tests réussis:  ${GREEN}$SUCCESS${NC}"
+    log_to_file "Avertissements: ${YELLOW}$WARNINGS${NC}"
+    log_to_file "Erreurs:        ${RED}$ERRORS${NC}"
+    log_to_file ""
+    log_to_file "Rapport complet sauvegardé dans: $DIAG_LOG"
+    
+    # Code de sortie basé sur les erreurs
+    if [[ $ERRORS -gt 0 ]]; then
+        exit 1
+    else
+        exit 0
+    fi
+}
+
+# Fonction principale
+main() {
+    show_banner
+    check_system_info
+    check_resources
+    check_services
+    check_files_permissions
+    check_network
+    check_logs
+    check_display_mode
+    show_recommendations
+    show_summary
+}
+
+# Exécution
+main "$@"
