@@ -210,7 +210,7 @@ display_errors = Off
    sudo apt update && sudo apt upgrade
    
    # Pi Signage
-   sudo /opt/scripts/update-web-interface.sh
+   sudo /opt/scripts/update-web-interface.sh        # --full pour reinitialiser
    ```
 
 2. **Monitoring des logs**

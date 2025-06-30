@@ -193,8 +193,8 @@ Un script de mise à jour automatique est disponible :
 ```bash
 sudo /opt/scripts/update-web-interface.sh
 ```
-
-Il préserve la configuration et met à jour uniquement les fichiers de l'interface.
+Par défaut la configuration est préservée. Utiliser `--full` pour réinitialiser
+les fichiers de configuration et définir un nouveau mot de passe.
 
 ## 🐛 Dépannage
 

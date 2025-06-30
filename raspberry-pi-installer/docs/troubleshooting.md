@@ -130,6 +130,7 @@ sudo /opt/scripts/web-password.sh  # Si ce script existe
 ```bash
 # Mettre à jour l'interface web
 sudo /opt/scripts/update-web-interface.sh
+# Ajouter --full pour réinitialiser la configuration
 
 # Ou réinstaller manuellement
 cd /path/to/Pi-Signage

@@ -230,6 +230,7 @@ sudo pi-signage-diag                 # Diagnostic complet
 # Mise à jour
 sudo /opt/scripts/update-ytdlp.sh              # Mettre à jour yt-dlp
 sudo /opt/scripts/update-web-interface.sh      # Mettre à jour l'interface web
+#   (ajouter --full pour réinitialiser la configuration)
 
 # Sécurité
 sudo /opt/scripts/glances-password.sh          # Changer le mot de passe Glances
@@ -259,7 +260,7 @@ Pour une mise à jour manuelle :
 ```bash
 cd /path/to/Pi-Signage
 git pull
-sudo /opt/scripts/update-web-interface.sh
+sudo /opt/scripts/update-web-interface.sh       # --full pour reinitialiser
 ```
 
 ## 📋 Changelog v2.3.0
