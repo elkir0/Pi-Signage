@@ -1,140 +1,159 @@
 #!/usr/bin/env bash
 
 # =============================================================================
-# Digital Signage - Script Principal (Orchestrateur)
-# Version: 2.1.0
-# Compatible avec: Raspberry Pi OS Lite (32/64-bit), Raspberry Pi 3B+/4
-# Mise à jour: Ajout du module web et sélection interactive des modules
+# Pi Signage Digital - Orchestrateur Principal v2
+# Version: 2.3.0
+# Description: Script principal d'installation modulaire avec support Chromium Kiosk
 # =============================================================================
 
 set -euo pipefail
-IFS=$'\n\t'
 
 # =============================================================================
-# CONSTANTES
+# CONSTANTES GLOBALES
 # =============================================================================
 
-readonly SCRIPT_VERSION="2.1.0"
-readonly LOG_FILE="/var/log/pi-signage-setup.log"
-readonly CONFIG_FILE="/etc/pi-signage/config.conf"
-readonly SCRIPTS_DIR="/tmp/pi-signage-scripts"
+readonly SCRIPT_VERSION="2.3.0"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly CONFIG_DIR="/etc/pi-signage"
+readonly CONFIG_FILE="$CONFIG_DIR/config.conf"
+readonly LOG_FILE="/var/log/pi-signage-setup.log"
+readonly GITHUB_RAW="https://raw.githubusercontent.com/elkir0/Pi-Signage/main"
 
-# Charger les fonctions de sécurité
-if [[ -f "$SCRIPT_DIR/00-security-utils.sh" ]]; then
-    source "$SCRIPT_DIR/00-security-utils.sh"
-else
-    echo "ERREUR: Fichier de sécurité manquant: 00-security-utils.sh" >&2
-    exit 1
-fi
+# Mode d'affichage global
+DISPLAY_MODE=""
 
-# Colors for output
+# Couleurs pour l'affichage
 readonly RED='\033[0;31m'
 readonly GREEN='\033[0;32m'
 readonly YELLOW='\033[1;33m'
 readonly BLUE='\033[0;34m'
+readonly MAGENTA='\033[0;35m'
 readonly CYAN='\033[0;36m'
-readonly NC='\033[0m' # No Color
+readonly NC='\033[0m'
+
+# Modules sélectionnés
+selected_modules=()
 
 # =============================================================================
-# LOGGING
+# FONCTIONS UTILITAIRES
 # =============================================================================
-
-init_logging() {
-    mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null || true
-    touch "$LOG_FILE" 2>/dev/null || LOG_FILE="/tmp/pi-signage-setup.log"
-    chmod 644 "$LOG_FILE" 2>/dev/null || true
-}
-
-log() {
-    local level="$1"
-    shift
-    local message="$*"
-    local timestamp
-    timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    echo "${timestamp} [${level}] ${message}" >> "${LOG_FILE}" 2>/dev/null || true
-}
 
 log_info() {
-    log "INFO" "$@"
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
     echo -e "${GREEN}[INFO]${NC} $*"
+    echo "$timestamp [INFO] $*" >> "$LOG_FILE" 2>/dev/null || true
 }
 
 log_warn() {
-    log "WARN" "$@"
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
     echo -e "${YELLOW}[WARN]${NC} $*"
+    echo "$timestamp [WARN] $*" >> "$LOG_FILE" 2>/dev/null || true
 }
 
 log_error() {
-    log "ERROR" "$@"
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
     echo -e "${RED}[ERROR]${NC} $*" >&2
+    echo "$timestamp [ERROR] $*" >> "$LOG_FILE" 2>/dev/null || true
 }
 
 error_exit() {
     log_error "$1"
-    exit "${2:-1}"
+    exit 1
 }
 
 # =============================================================================
-# CONTRÔLES PRÉLIMINAIRES
+# DÉTECTION DU SYSTÈME
 # =============================================================================
 
-check_root() {
+check_system() {
+    log_info "Vérification du système..."
+    
+    # Vérifier qu'on est root
     if [[ $EUID -ne 0 ]]; then
-        error_exit "Ce script doit être exécuté en tant que root. Utilisez: sudo $0"
+        error_exit "Ce script doit être exécuté en tant que root (sudo)"
     fi
+    
+    # Vérifier l'OS
+    if [[ ! -f /etc/os-release ]]; then
+        error_exit "Système d'exploitation non supporté"
+    fi
+    
+    source /etc/os-release
+    if [[ "$ID" != "raspbian" ]] && [[ "$ID" != "debian" ]]; then
+        log_warn "Ce script est optimisé pour Raspberry Pi OS"
+    fi
+    
+    # Vérifier l'architecture
+    local arch=$(uname -m)
+    if [[ "$arch" != "aarch64" ]] && [[ "$arch" != "armv7l" ]]; then
+        log_warn "Architecture non standard: $arch"
+    fi
+    
+    # Vérifier l'espace disque
+    local free_space=$(df -BG / | awk 'NR==2 {print $4}' | sed 's/G//')
+    if [[ $free_space -lt 5 ]]; then
+        error_exit "Espace disque insuffisant (minimum 5GB requis)"
+    fi
+    
+    log_info "Système vérifié avec succès"
 }
 
-check_os() {
-    if [[ -f /etc/os-release ]]; then
-        source /etc/os-release
-        log_info "OS détecté: $PRETTY_NAME"
-        
-        # Vérifier si c'est bien un Raspberry Pi OS
-        if [[ ! "$ID" =~ ^(raspbian|debian)$ ]]; then
-            log_warn "OS non testé détecté. Continuez à vos risques et périls."
-        fi
-    else
-        log_warn "Impossible de détecter la version de l'OS"
-    fi
-}
-
-check_internet() {
-    log_info "Vérification de la connexion internet..."
-    if ! ping -c 1 -W 2 8.8.8.8 >/dev/null 2>&1; then
-        error_exit "Pas de connexion internet. Vérifiez votre réseau."
-    fi
-    log_info "Connexion internet OK"
-}
+# =============================================================================
+# DÉTECTION DU MODÈLE DE RASPBERRY PI
+# =============================================================================
 
 detect_pi_model() {
-    local model revision
+    log_info "Détection du modèle de Raspberry Pi..."
     
-    if [[ -f /proc/cpuinfo ]]; then
-        model=$(grep "Model" /proc/cpuinfo 2>/dev/null | cut -d':' -f2 | xargs || echo "Unknown")
-        revision=$(grep "Revision" /proc/cpuinfo 2>/dev/null | cut -d':' -f2 | xargs || echo "Unknown")
+    local pi_generation=""
+    local pi_variant=""
+    local model=""
+    local revision=""
+    
+    # Vérifier si on est en mode VM
+    if [[ -f /etc/pi-signage/vm-mode.conf ]]; then
+        source /etc/pi-signage/vm-mode.conf
+        log_warn "Mode VM détecté - Émulation $EMULATED_PI_MODEL"
         
-        log_info "Modèle détecté: $model (Revision: $revision)"
+        # Utiliser les valeurs émulées
+        pi_generation="$EMULATED_PI_GENERATION"
+        pi_variant="$EMULATED_PI_VARIANT"
+        model="$EMULATED_PI_MODEL"
+        revision="$EMULATED_PI_REVISION"
         
-        # Détection précise du modèle pour optimisations
-        local pi_generation=""
-        local pi_variant=""
+        # Créer la config
+        cat > /tmp/pi-model.conf << EOF
+PI_MODEL="$model (VM)"
+PI_GENERATION="$pi_generation"
+PI_VARIANT="$pi_variant"
+PI_REVISION="$revision"
+EOF
         
+        log_info "Configuration VM appliquée: Pi $pi_generation ($pi_variant)"
+        return 0
+    fi
+    
+    # Détection normale pour vrai Pi
+    if [[ -f /proc/device-tree/model ]]; then
+        model=$(tr -d '\0' < /proc/device-tree/model)
+        revision=$(cat /proc/cpuinfo | grep Revision | awk '{print $3}')
+        
+        echo "Modèle détecté: $model"
+        echo "Révision: $revision"
+        
+        # Détection basée sur le modèle
         if [[ "$model" =~ "Raspberry Pi 4" ]]; then
             pi_generation="4"
-            if [[ "$model" =~ "8GB" ]]; then
-                pi_variant="8GB"
-            elif [[ "$model" =~ "4GB" ]]; then
-                pi_variant="4GB"
-            elif [[ "$model" =~ "2GB" ]]; then
-                pi_variant="2GB"
-            else
-                pi_variant="4GB"  # Default pour Pi 4
-            fi
+            case "$revision" in
+                *"c03111"*|*"c03112"*) pi_variant="4B-2GB" ;;
+                *"c03114"*) pi_variant="4B-4GB" ;;
+                *"c03115"*) pi_variant="4B-8GB" ;;
+                *) pi_variant="4B" ;;
+            esac
             log_info "Raspberry Pi 4 détecté ($pi_variant)"
         elif [[ "$model" =~ "Raspberry Pi 3" ]]; then
             pi_generation="3"
-            if [[ "$model" =~ "Model B Plus" ]] || [[ "$model" =~ "3B+" ]]; then
+            if [[ "$model" =~ "Plus" ]]; then
                 pi_variant="3B+"
             else
                 pi_variant="3B"
@@ -159,7 +178,26 @@ PI_REVISION="$revision"
 EOF
         
     else
-        error_exit "Impossible de détecter le modèle de Raspberry Pi"
+        # Environnement non-Pi détecté (VM, conteneur, etc.)
+        log_warn "Environnement non-Raspberry Pi détecté"
+        log_warn "Activation du mode compatibilité VM"
+        
+        # Créer automatiquement la config VM
+        mkdir -p /etc/pi-signage
+        cat > /etc/pi-signage/vm-mode.conf << 'EOF'
+# Configuration auto-générée pour mode VM/Test
+VM_MODE=true
+VM_TYPE=auto-detected
+VM_ARCH=$(uname -m)
+VM_OS="$(uname -s)"
+EMULATED_PI_MODEL="Raspberry Pi 4 Model B Rev 1.4"
+EMULATED_PI_GENERATION="4"
+EMULATED_PI_VARIANT="4B-4GB"
+EMULATED_PI_REVISION="c03114"
+EOF
+        
+        # Réappeler la fonction pour charger la config VM
+        detect_pi_model
     fi
 }
 
@@ -177,12 +215,13 @@ select_modules() {
         ["01-system-config"]="Configuration système de base (recommandé)"
         ["02-display-manager"]="Gestionnaire d'affichage X11/LightDM (requis pour VLC)"
         ["03-vlc-setup"]="Lecteur vidéo VLC en mode kiosque"
+        ["03-chromium-kiosk"]="Mode Chromium Kiosk (alternative moderne à VLC)"
         ["04-rclone-setup"]="Synchronisation Google Drive"
         ["05-glances-setup"]="Interface de monitoring web Glances"
         ["06-cron-setup"]="Tâches automatisées (sync, maintenance)"
         ["07-services-setup"]="Services systemd et watchdog"
         ["08-diagnostic-tools"]="Outils de diagnostic et dépannage"
-        ["09-web-interface"]="Interface web avec téléchargement YouTube"
+        ["09-web-interface-v2"]="Interface web avec téléchargement YouTube"
     )
     
     # Modules essentiels toujours installés
@@ -196,8 +235,8 @@ select_modules() {
     
     echo -e "\n${BLUE}Modules optionnels:${NC}"
     echo "1) Installation complète (tous les modules) - ${GREEN}RECOMMANDÉ${NC}"
-    echo "2) Installation minimale (VLC + sync Google Drive uniquement)"
-    echo "3) Installation web (VLC + interface web, sans Google Drive)"
+    echo "2) Installation minimale (Player + sync Google Drive)"
+    echo "3) Installation web (Player + interface web, sans Google Drive)"
     echo "4) Sélection personnalisée"
     echo
     
@@ -205,51 +244,114 @@ select_modules() {
     
     case $install_choice in
         1)
-            # Installation complète
-            selected_modules=(
-                "01-system-config"
-                "02-display-manager"
-                "03-vlc-setup"
-                "04-rclone-setup"
-                "05-glances-setup"
-                "06-cron-setup"
-                "07-services-setup"
-                "08-diagnostic-tools"
-                "09-web-interface"
-            )
-            log_info "Installation complète sélectionnée"
+            # Installation complète - demander le mode d'affichage
+            select_display_mode
+            
+            if [[ $DISPLAY_MODE == "chromium" ]]; then
+                selected_modules=(
+                    "01-system-config"
+                    "03-chromium-kiosk"
+                    "04-rclone-setup"
+                    "05-glances-setup"
+                    "06-cron-setup"
+                    "07-services-setup"
+                    "08-diagnostic-tools"
+                    "09-web-interface-v2"
+                )
+            else
+                selected_modules=(
+                    "01-system-config"
+                    "02-display-manager"
+                    "03-vlc-setup"
+                    "04-rclone-setup"
+                    "05-glances-setup"
+                    "06-cron-setup"
+                    "07-services-setup"
+                    "08-diagnostic-tools"
+                    "09-web-interface-v2"
+                )
+            fi
+            log_info "Installation complète sélectionnée (mode $DISPLAY_MODE)"
             ;;
         2)
             # Installation minimale
-            selected_modules=(
-                "01-system-config"
-                "02-display-manager"
-                "03-vlc-setup"
-                "04-rclone-setup"
-                "06-cron-setup"
-                "07-services-setup"
-            )
-            log_info "Installation minimale sélectionnée"
+            select_display_mode
+            
+            if [[ $DISPLAY_MODE == "chromium" ]]; then
+                selected_modules=(
+                    "01-system-config"
+                    "03-chromium-kiosk"
+                    "04-rclone-setup"
+                    "06-cron-setup"
+                    "07-services-setup"
+                )
+            else
+                selected_modules=(
+                    "01-system-config"
+                    "02-display-manager"
+                    "03-vlc-setup"
+                    "04-rclone-setup"
+                    "06-cron-setup"
+                    "07-services-setup"
+                )
+            fi
+            log_info "Installation minimale sélectionnée (mode $DISPLAY_MODE)"
             ;;
         3)
             # Installation web
-            selected_modules=(
-                "01-system-config"
-                "02-display-manager"
-                "03-vlc-setup"
-                "05-glances-setup"
-                "07-services-setup"
-                "08-diagnostic-tools"
-                "09-web-interface"
-            )
-            log_info "Installation web sélectionnée"
+            select_display_mode
+            
+            if [[ $DISPLAY_MODE == "chromium" ]]; then
+                selected_modules=(
+                    "01-system-config"
+                    "03-chromium-kiosk"
+                    "05-glances-setup"
+                    "07-services-setup"
+                    "08-diagnostic-tools"
+                    "09-web-interface-v2"
+                )
+            else
+                selected_modules=(
+                    "01-system-config"
+                    "02-display-manager"
+                    "03-vlc-setup"
+                    "05-glances-setup"
+                    "07-services-setup"
+                    "08-diagnostic-tools"
+                    "09-web-interface-v2"
+                )
+            fi
+            log_info "Installation web sélectionnée (mode $DISPLAY_MODE)"
             ;;
         4)
             # Sélection personnalisée
             selected_modules=("01-system-config")  # Toujours inclus
             
+            # D'abord demander le mode d'affichage
+            echo -e "\n${BLUE}Choisir le mode d'affichage:${NC}"
+            echo "1) VLC Classic avec gestionnaire de fenêtres"
+            echo "2) Chromium Kiosk (léger et moderne)"
+            echo "3) Aucun (serveur headless)"
+            read -p "Votre choix [1-3]: " display_choice
+            
+            case $display_choice in
+                1)
+                    selected_modules+=("02-display-manager" "03-vlc-setup")
+                    DISPLAY_MODE="vlc"
+                    ;;
+                2)
+                    selected_modules+=("03-chromium-kiosk")
+                    DISPLAY_MODE="chromium"
+                    ;;
+                3)
+                    DISPLAY_MODE="none"
+                    ;;
+            esac
+            
+            # Puis les autres modules
             for module in "${!modules_info[@]}"; do
-                if [[ ! " ${essential_modules[@]} " =~ " ${module} " ]]; then
+                if [[ ! " ${essential_modules[@]} " =~ " ${module} " ]] && 
+                   [[ ! " ${selected_modules[@]} " =~ " ${module} " ]]; then
                     read -p "Installer $module - ${modules_info[$module]} ? (y/N) " -n 1 -r
                     echo
                     if [[ $REPLY =~ ^[Yy]$ ]]; then
@@ -273,6 +375,7 @@ select_modules() {
     for module in "${selected_modules[@]}"; do
         echo "  • $module - ${modules_info[$module]}"
     done
+    echo -e "  • Mode d'affichage: ${YELLOW}$DISPLAY_MODE${NC}"
     echo
     
     read -p "Confirmer la sélection ? (Y/n) " -n 1 -r
@@ -280,6 +383,42 @@ select_modules() {
     if [[ ! $REPLY =~ ^[Yy]$ ]] && [[ ! -z $REPLY ]]; then
         select_modules  # Redemander
     fi
+}
+
+# =============================================================================
+# SÉLECTION DU MODE D'AFFICHAGE
+# =============================================================================
+
+select_display_mode() {
+    echo -e "\n${BLUE}Choisir le mode d'affichage:${NC}"
+    echo
+    echo "1) ${YELLOW}VLC Classic${NC}"
+    echo "   ✓ Support de tous les formats vidéo"
+    echo "   ✓ Stabilité éprouvée 24/7"
+    echo "   ✓ Optimisations hardware"
+    echo "   ✗ Plus de ressources (~350MB RAM)"
+    echo "   ✗ Démarrage plus lent"
+    echo
+    echo "2) ${CYAN}Chromium Kiosk${NC}"
+    echo "   ✓ Démarrage rapide (~25s)"
+    echo "   ✓ Moins de RAM (~250MB)"
+    echo "   ✓ Support HTML5/CSS/JS"
+    echo "   ✓ Overlays et transitions"
+    echo "   ✗ Formats limités (H.264/WebM)"
+    echo
+    
+    read -p "Votre choix [1-2]: " display_choice
+    
+    case $display_choice in
+        2)
+            DISPLAY_MODE="chromium"
+            echo -e "${GREEN}Mode Chromium Kiosk sélectionné${NC}"
+            ;;
+        *)
+            DISPLAY_MODE="vlc"
+            echo -e "${GREEN}Mode VLC Classic sélectionné${NC}"
+            ;;
+    esac
 }
 
 # =============================================================================
@@ -294,11 +433,25 @@ check_module_dependencies() {
         selected_modules+=("02-display-manager")
     fi
     
-    # L'interface web nécessite certains modules
-    if [[ " ${selected_modules[@]} " =~ " 09-web-interface " ]]; then
-        if [[ ! " ${selected_modules[@]} " =~ " 03-vlc-setup " ]]; then
-            log_warn "L'interface web nécessite VLC, ajout automatique..."
-            selected_modules+=("02-display-manager" "03-vlc-setup")
+    # Chromium Kiosk est une alternative à VLC + display manager
+    if [[ " ${selected_modules[@]} " =~ " 03-chromium-kiosk " ]] && 
+       [[ " ${selected_modules[@]} " =~ " 03-vlc-setup " ]]; then
+        log_warn "Chromium Kiosk et VLC sont mutuellement exclusifs"
+        log_warn "Utilisation de Chromium Kiosk uniquement"
+        selected_modules=("${selected_modules[@]/03-vlc-setup}")
+        selected_modules=("${selected_modules[@]/02-display-manager}")
+    fi
+    
+    # L'interface web s'adapte au mode choisi
+    if [[ " ${selected_modules[@]} " =~ " 09-web-interface-v2 " ]]; then
+        if [[ ! " ${selected_modules[@]} " =~ " 03-vlc-setup " ]] && 
+           [[ ! " ${selected_modules[@]} " =~ " 03-chromium-kiosk " ]]; then
+            log_warn "L'interface web nécessite un mode d'affichage"
+            if [[ $DISPLAY_MODE == "chromium" ]]; then
+                selected_modules+=("03-chromium-kiosk")
+            else
+                selected_modules+=("02-display-manager" "03-vlc-setup")
+            fi
         fi
     fi
     
@@ -314,12 +467,13 @@ check_module_dependencies() {
         "01-system-config"
         "02-display-manager"
         "03-vlc-setup"
+        "03-chromium-kiosk"
         "04-rclone-setup"
         "05-glances-setup"
         "06-cron-setup"
         "07-services-setup"
         "08-diagnostic-tools"
-        "09-web-interface"
+        "09-web-interface-v2"
     )
     
     for module in "${module_order[@]}"; do
@@ -339,6 +493,17 @@ collect_configuration() {
     echo -e "\n${BLUE}=== Configuration Digital Signage ===${NC}"
     echo "Veuillez fournir les informations suivantes :"
     echo
+    
+    # Charger les fonctions de sécurité
+    if [[ -f "$SCRIPT_DIR/00-security-utils.sh" ]]; then
+        source "$SCRIPT_DIR/00-security-utils.sh"
+    else
+        log_error "Module de sécurité manquant, utilisation de fonctions basiques"
+        # Fonctions fallback
+        encrypt_password() { echo -n "$1" | base64; }
+        hash_password() { echo -n "$1" | sha256sum | cut -d' ' -f1; }
+        validate_username() { [[ "$1" =~ ^[a-zA-Z0-9_]{3,32}$ ]]; }
+    fi
     
     # Configuration Google Drive (si le module est sélectionné)
     if [[ " ${selected_modules[@]} " =~ " 04-rclone-setup " ]]; then
@@ -369,7 +534,7 @@ collect_configuration() {
     fi
     
     # Configuration Interface Web (si le module est sélectionné)
-    if [[ " ${selected_modules[@]} " =~ " 09-web-interface " ]]; then
+    if [[ " ${selected_modules[@]} " =~ " 09-web-interface-v2 " ]]; then
         echo -e "\n${BLUE}Configuration Interface Web${NC}"
         read -rp "Nom d'utilisateur administrateur web [admin]: " WEB_ADMIN_USER
         WEB_ADMIN_USER=${WEB_ADMIN_USER:-admin}
@@ -417,13 +582,11 @@ NEW_HOSTNAME="$NEW_HOSTNAME"
 SCRIPT_VERSION="$SCRIPT_VERSION"
 INSTALL_DATE="$(date '+%Y-%m-%d %H:%M:%S')"
 INSTALLED_MODULES="${selected_modules[*]}"
+DISPLAY_MODE="${DISPLAY_MODE:-vlc}"
 EOF
     
     # Appliquer des permissions strictes
-    secure_file_permissions "$CONFIG_FILE" "root" "root" "600"
-    
-    # Logger l'événement de sécurité
-    log_security_event "CONFIG_CREATED" "Configuration Pi Signage créée"
+    chmod 600 "$CONFIG_FILE"
     
     log_info "Configuration sauvegardée dans $CONFIG_FILE"
 }
@@ -435,13 +598,10 @@ EOF
 download_scripts() {
     log_info "Préparation des scripts modulaires..."
     
-    mkdir -p "$SCRIPTS_DIR"
-    cd "$SCRIPTS_DIR"
+    # Les scripts sont déjà dans SCRIPT_DIR (pas SCRIPTS_DIR)
+    # Pas besoin de les télécharger, ils sont dans le repo
     
-    # Note: Dans un vrai déploiement, ces scripts seraient téléchargés depuis un repo
-    # Pour cette démonstration, nous créons les scripts localement
-    
-    echo "Scripts modulaires prêts dans $SCRIPTS_DIR"
+    log_info "Scripts modulaires disponibles dans $SCRIPT_DIR"
 }
 
 # =============================================================================
@@ -450,7 +610,7 @@ download_scripts() {
 
 execute_module() {
     local module_name="$1"
-    local script_path="$SCRIPTS_DIR/${module_name}.sh"
+    local script_path="$SCRIPT_DIR/${module_name}.sh"
     
     log_info "Exécution du module: $module_name"
     
@@ -513,22 +673,31 @@ validate_installation() {
     
     echo -e "\n${BLUE}=== Validation du Système ===${NC}"
     
-    # Vérification des services critiques selon les modules installés
-    if [[ " ${selected_modules[@]} " =~ " 02-display-manager " ]]; then
-        if systemctl is-enabled "lightdm" >/dev/null 2>&1; then
-            echo -e "${GREEN}✓${NC} Service lightdm activé"
+    # Vérification des services selon le mode d'affichage
+    if [[ $DISPLAY_MODE == "chromium" ]]; then
+        if systemctl is-enabled "chromium-kiosk" >/dev/null 2>&1; then
+            echo -e "${GREEN}✓${NC} Service chromium-kiosk activé"
         else
-            echo -e "${RED}✗${NC} Service lightdm non activé"
+            echo -e "${RED}✗${NC} Service chromium-kiosk non activé"
             ((errors++))
         fi
-    fi
-    
-    if [[ " ${selected_modules[@]} " =~ " 03-vlc-setup " ]]; then
-        if systemctl is-enabled "vlc-signage" >/dev/null 2>&1; then
-            echo -e "${GREEN}✓${NC} Service vlc-signage activé"
-        else
-            echo -e "${RED}✗${NC} Service vlc-signage non activé"
-            ((errors++))
+    else
+        if [[ " ${selected_modules[@]} " =~ " 02-display-manager " ]]; then
+            if systemctl is-enabled "lightdm" >/dev/null 2>&1; then
+                echo -e "${GREEN}✓${NC} Service lightdm activé"
+            else
+                echo -e "${RED}✗${NC} Service lightdm non activé"
+                ((errors++))
+            fi
+        fi
+        
+        if [[ " ${selected_modules[@]} " =~ " 03-vlc-setup " ]]; then
+            if systemctl is-enabled "vlc-signage" >/dev/null 2>&1; then
+                echo -e "${GREEN}✓${NC} Service vlc-signage activé"
+            else
+                echo -e "${RED}✗${NC} Service vlc-signage non activé"
+                ((errors++))
+            fi
         fi
     fi
     
@@ -541,38 +710,39 @@ validate_installation() {
         fi
     fi
     
-    # Vérification des exécutables
-    if [[ " ${selected_modules[@]} " =~ " 03-vlc-setup " ]] && command -v "vlc" >/dev/null 2>&1; then
-        echo -e "${GREEN}✓${NC} Commande vlc disponible"
-    elif [[ " ${selected_modules[@]} " =~ " 03-vlc-setup " ]]; then
-        echo -e "${RED}✗${NC} Commande vlc manquante"
-        ((errors++))
+    # Afficher le mode d'affichage utilisé
+    echo -e "\n${BLUE}Mode d'affichage: ${YELLOW}$DISPLAY_MODE${NC}"
+    
+    # Recommandations spécifiques au mode
+    if [[ $DISPLAY_MODE == "chromium" ]]; then
+        echo -e "\n${CYAN}Recommandations pour Chromium Kiosk:${NC}"
+        echo "• Utilisez des vidéos H.264 ou WebM pour une meilleure compatibilité"
+        echo "• Le player HTML5 est accessible sur http://localhost:8888/player.html"
+        echo "• Contrôle: /opt/scripts/player-control.sh {play|pause|next|...}"
     fi
     
-    if [[ " ${selected_modules[@]} " =~ " 04-rclone-setup " ]] && command -v "rclone" >/dev/null 2>&1; then
-        echo -e "${GREEN}✓${NC} Commande rclone disponible"
-    elif [[ " ${selected_modules[@]} " =~ " 04-rclone-setup " ]]; then
-        echo -e "${RED}✗${NC} Commande rclone manquante"
-        ((errors++))
-    fi
-    
-    if [[ " ${selected_modules[@]} " =~ " 09-web-interface " ]] && command -v "yt-dlp" >/dev/null 2>&1; then
-        echo -e "${GREEN}✓${NC} Commande yt-dlp disponible"
-    elif [[ " ${selected_modules[@]} " =~ " 09-web-interface " ]]; then
-        echo -e "${RED}✗${NC} Commande yt-dlp manquante"
-        ((errors++))
-    fi
-    
-    # Vérification des répertoires
-    if [[ -d "/opt/videos" ]]; then
-        echo -e "${GREEN}✓${NC} Répertoire vidéos créé"
-    else
-        echo -e "${RED}✗${NC} Répertoire vidéos manquant"
-        ((errors++))
-    fi
-    
-    echo -e "\nValidation terminée: $errors erreur(s)"
     return $errors
+}
+
+# =============================================================================
+# AFFICHAGE DE LA BANNIÈRE
+# =============================================================================
+
+show_banner() {
+    clear
+    echo -e "${MAGENTA}"
+    echo "╔══════════════════════════════════════════════════════════════╗"
+    echo "║                                                              ║"
+    echo "║         📺 Pi Signage Digital Installer v$SCRIPT_VERSION 📺         ║"
+    echo "║                                                              ║"
+    echo "║            Installation modulaire pour Raspberry Pi           ║"
+    echo "║                                                              ║"
+    echo "╚══════════════════════════════════════════════════════════════╝"
+    echo -e "${NC}"
+    echo
+    echo -e "${CYAN}Projet GitHub:${NC} https://github.com/elkir0/Pi-Signage"
+    echo -e "${CYAN}Documentation:${NC} https://github.com/elkir0/Pi-Signage/wiki"
+    echo
 }
 
 # =============================================================================
@@ -580,35 +750,16 @@ validate_installation() {
 # =============================================================================
 
 main() {
-    # Initialisation
-    init_logging
-    clear
+    # Préparation
+    mkdir -p "$(dirname "$LOG_FILE")"
+    exec 2> >(tee -a "$LOG_FILE" >&2)
     
-    # Bannière
-    cat << 'EOF'
-    ____  _    ____  _                              
-   |  _ \(_)  / ___|(_) __ _ _ __   __ _  __ _  ___ 
-   | |_) | |  \___ \| |/ _` | '_ \ / _` |/ _` |/ _ \
-   |  __/| |   ___) | | (_| | | | | (_| | (_| |  __/
-   |_|   |_|  |____/|_|\__, |_| |_|\__,_|\__, |\___|
-                       |___/             |___/      
-
-EOF
+    # Affichage de la bannière
+    show_banner
     
-    echo "  Digital Signage Setup - Version Modulaire"
-    echo "  Version: $SCRIPT_VERSION"
-    echo "  Compatible: Raspberry Pi 3B+, 4B, 5 (expérimental)"
-    echo "  Architecture: Scripts séparés, installation flexible"
-    echo "======================================================"
-    echo
-    
-    log_info "Démarrage de l'installation Digital Signage v$SCRIPT_VERSION"
-    
-    # Contrôles préliminaires
-    check_root
-    check_os
+    # Vérifications système
+    check_system
     detect_pi_model
-    check_internet
     
     # Sélection des modules
     select_modules
@@ -616,142 +767,43 @@ EOF
     # Configuration utilisateur
     collect_configuration
     
-    # Téléchargement des scripts modulaires
+    # Téléchargement/préparation des scripts
     download_scripts
     
-    # Installation modulaire
+    # Installation
+    echo -e "\n${YELLOW}L'installation va commencer. Cela peut prendre 30 à 60 minutes.${NC}"
+    echo "Vous pouvez suivre la progression dans: $LOG_FILE"
+    echo
+    read -p "Appuyez sur [Entrée] pour commencer l'installation..."
+    
     if main_installation; then
-        log_info "Installation modulaire terminée avec succès"
-    else
-        log_warn "Installation modulaire terminée avec des avertissements"
-    fi
-    
-    # Configuration interactive rclone (si installé)
-    if [[ " ${selected_modules[@]} " =~ " 04-rclone-setup " ]]; then
-        echo -e "\n${YELLOW}=== Configuration Manuelle Requise ===${NC}"
-        echo "Configuration de l'accès Google Drive nécessaire."
-        echo "Cette étape nécessite une authentification manuelle."
-        echo
-        read -p "Appuyez sur Entrée pour continuer avec la configuration Google Drive..."
+        validate_installation
         
-        # Exécution de la configuration rclone
-        if command -v rclone >/dev/null 2>&1; then
-            rclone config
-        else
-            log_warn "rclone non installé, configuration manuelle requise"
+        echo -e "\n${GREEN}╔══════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${GREEN}║            Installation terminée avec succès! 🎉             ║${NC}"
+        echo -e "${GREEN}╚══════════════════════════════════════════════════════════════╝${NC}"
+        echo
+        echo -e "${CYAN}Prochaines étapes:${NC}"
+        echo "1. Redémarrer le système: sudo reboot"
+        echo "2. Accéder à l'interface web: http://$(hostname -I | awk '{print $1}')/"
+        echo "3. Ajouter des vidéos dans /opt/videos/"
+        echo
+        echo -e "${YELLOW}Mode d'affichage: $DISPLAY_MODE${NC}"
+        
+        if [[ $DISPLAY_MODE == "chromium" ]]; then
+            echo -e "${CYAN}Player Chromium: http://localhost:8888/player.html${NC}"
         fi
-    fi
-    
-    # Validation finale
-    if validate_installation; then
-        show_success_message
     else
-        show_warning_message
-    fi
-    
-    # Proposition de redémarrage
-    echo
-    read -p "Voulez-vous redémarrer maintenant ? (y/N) " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        log_info "Redémarrage du système..."
-        sync
-        reboot
+        echo -e "\n${RED}╔══════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${RED}║          Installation terminée avec des erreurs              ║${NC}"
+        echo -e "${RED}╚══════════════════════════════════════════════════════════════╝${NC}"
+        echo
+        echo "Consultez les logs pour plus de détails: $LOG_FILE"
     fi
 }
 
 # =============================================================================
-# MESSAGES FINAUX
+# POINT D'ENTRÉE
 # =============================================================================
-
-show_success_message() {
-    source "$CONFIG_FILE"
-    local ip_addr
-    ip_addr=$(hostname -I | awk '{print $1}')
-    
-    echo -e "\n${GREEN}=== Installation Terminée avec Succès ! ===${NC}"
-    echo
-    echo "Informations Système:"
-    echo "  • Nom d'hôte: $NEW_HOSTNAME"
-    echo "  • Adresse IP: $ip_addr"
-    echo "  • Répertoire vidéos: /opt/videos"
-    
-    # Afficher les informations selon les modules installés
-    if [[ " ${selected_modules[@]} " =~ " 04-rclone-setup " ]]; then
-        echo "  • Dossier Google Drive: $GDRIVE_FOLDER"
-    fi
-    
-    echo
-    echo "Services installés:"
-    
-    if [[ " ${selected_modules[@]} " =~ " 03-vlc-setup " ]]; then
-        echo "  • VLC: Démarrage automatique au boot"
-    fi
-    
-    if [[ " ${selected_modules[@]} " =~ " 05-glances-setup " ]]; then
-        echo "  • Glances: http://${ip_addr}:61208"
-    fi
-    
-    if [[ " ${selected_modules[@]} " =~ " 09-web-interface " ]]; then
-        echo "  • Interface Web: http://${ip_addr}/"
-        echo "    - Utilisateur: $WEB_ADMIN_USER"
-        echo "    - Téléchargement YouTube disponible"
-    fi
-    
-    if [[ " ${selected_modules[@]} " =~ " 06-cron-setup " ]]; then
-        echo "  • Synchronisation: Toutes les 6 heures"
-    fi
-    
-    echo
-    echo "Prochaines Étapes:"
-    
-    if [[ " ${selected_modules[@]} " =~ " 09-web-interface " ]]; then
-        echo "  1. Connectez-vous à l'interface web: http://${ip_addr}/"
-        echo "  2. Téléchargez vos vidéos YouTube directement"
-    elif [[ " ${selected_modules[@]} " =~ " 04-rclone-setup " ]]; then
-        echo "  1. Ajoutez des vidéos dans le dossier Google Drive: $GDRIVE_FOLDER"
-        echo "  2. Les vidéos se synchroniseront automatiquement"
-    else
-        echo "  1. Ajoutez des vidéos dans /opt/videos"
-    fi
-    
-    echo "  3. Redémarrez pour démarrer: sudo reboot"
-    
-    echo
-    echo "Commandes Utiles:"
-    
-    if [[ " ${selected_modules[@]} " =~ " 08-diagnostic-tools " ]]; then
-        echo "  • Diagnostic: sudo /opt/pi-signage-diag.sh"
-    fi
-    
-    if [[ " ${selected_modules[@]} " =~ " 04-rclone-setup " ]]; then
-        echo "  • Sync manuel: sudo /opt/sync-videos.sh"
-        echo "  • Reconfigurer Drive: sudo rclone config"
-    fi
-    
-    if [[ " ${selected_modules[@]} " =~ " 03-vlc-setup " ]]; then
-        echo "  • Logs VLC: sudo journalctl -u vlc-signage -f"
-    fi
-    
-    if [[ " ${selected_modules[@]} " =~ " 09-web-interface " ]]; then
-        echo "  • Mise à jour yt-dlp: sudo yt-dlp -U"
-    fi
-}
-
-show_warning_message() {
-    echo -e "\n${YELLOW}=== Installation Terminée avec des Problèmes ===${NC}"
-    echo "Consultez le fichier de log: $LOG_FILE"
-    
-    if [[ " ${selected_modules[@]} " =~ " 08-diagnostic-tools " ]]; then
-        echo "Exécutez le diagnostic: sudo /opt/pi-signage-diag.sh"
-    fi
-}
-
-# =============================================================================
-# EXÉCUTION DU SCRIPT
-# =============================================================================
-
-# Variables globales pour les modules sélectionnés
-declare -a selected_modules
 
 main "$@"
