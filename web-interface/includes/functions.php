@@ -230,21 +230,26 @@ function downloadYouTubeVideo($url, $title = null, $progressFile = null) {
     // Construire la commande yt-dlp
     $output_path = VIDEO_DIR . '/' . $filename . '.%(ext)s';
     
-    // Format de téléchargement : préférer 1080p ou 720p, sinon le meilleur disponible
-    $format_string = 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best[ext=mp4]/best';
-    
+    // Commande de base simplifiée
     $cmd = sprintf(
-        '%s -f %s -o %s --no-playlist --restrict-filenames --newline %s',
+        '%s -o %s --no-playlist --restrict-filenames --newline',
         escapeshellcmd(YTDLP_BIN),
-        escapeshellarg($format_string),
-        escapeshellarg($output_path),
-        escapeshellarg($url)
+        escapeshellarg($output_path)
     );
-
-    // Forcer H.264 en mode Chromium avec merge si nécessaire
+    
+    // Mode Chromium : forcer MP4 avec codec H.264
     if (DISPLAY_MODE === 'chromium') {
-        $cmd .= ' --merge-output-format mp4 --recode-video mp4 --postprocessor-args "-c:v libx264 -preset fast -crf 23 -c:a aac -b:a 128k -movflags +faststart"';
+        // Format simple : meilleur MP4 disponible jusqu'à 1080p
+        $cmd .= ' -f "best[ext=mp4][height<=1080]/best[ext=mp4]/best" --merge-output-format mp4';
+        // Si conversion nécessaire, utiliser x264
+        $cmd .= ' --postprocessor-args "Merger:-c:v copy -c:a copy" --postprocessor-args "VideoConvertor:-c:v libx264 -preset fast -crf 23 -c:a aac -b:a 128k"';
+    } else {
+        // Mode VLC : accepter plus de formats
+        $cmd .= ' -f "best[height<=1080]/best"';
     }
+    
+    // Ajouter l'URL à la fin
+    $cmd .= ' ' . escapeshellarg($url);
 
     $cmd .= ' 2>&1';
 
@@ -285,7 +290,31 @@ function downloadYouTubeVideo($url, $title = null, $progressFile = null) {
     logActivity("VIDEO_DOWNLOAD", $url);
 
     if ($status !== 0) {
-        return ['success' => false, 'error' => 'Download failed', 'output' => $output . $stderr];
+        // Si échec, essayer avec une commande plus simple
+        if (strpos($output . $stderr, 'Requested format is not available') !== false || 
+            strpos($output . $stderr, 'Signature extraction failed') !== false) {
+            
+            $output .= "\n[INFO] Tentative avec paramètres simplifiés...\n";
+            
+            // Commande de fallback ultra-simple
+            $fallback_cmd = sprintf(
+                '%s -o %s --no-playlist %s 2>&1',
+                escapeshellcmd(YTDLP_BIN),
+                escapeshellarg($output_path),
+                escapeshellarg($url)
+            );
+            
+            exec($fallback_cmd, $fallback_output, $fallback_status);
+            
+            if ($fallback_status === 0) {
+                $output .= implode("\n", $fallback_output);
+                $status = 0; // Succès avec la commande de fallback
+            } else {
+                return ['success' => false, 'error' => 'Download failed', 'output' => $output . $stderr . "\n" . implode("\n", $fallback_output)];
+            }
+        } else {
+            return ['success' => false, 'error' => 'Download failed', 'output' => $output . $stderr];
+        }
     }
 
     // Mettre à jour la playlist si on est en mode Chromium

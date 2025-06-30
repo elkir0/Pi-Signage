@@ -32,6 +32,13 @@ if (!validateCSRFToken($input['csrf_token'] ?? '')) {
 $url = $input['url'] ?? '';
 $title = $input['title'] ?? null;
 
+// Mettre à jour yt-dlp avant le téléchargement si nécessaire
+exec(YTDLP_BIN . ' -U 2>&1', $updateOutput, $updateStatus);
+if ($updateStatus === 0 && strpos(implode("\n", $updateOutput), 'Updated') !== false) {
+    // yt-dlp a été mis à jour
+    sleep(1); // Petite pause pour s'assurer que la mise à jour est complète
+}
+
 $token = bin2hex(random_bytes(8));
 $progressFile = PROGRESS_DIR . '/' . $token . '.txt';
 
