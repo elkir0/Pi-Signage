@@ -341,21 +341,41 @@ deploy_web_files() {
     mkdir -p "$WEB_ROOT/temp"
     mkdir -p "/opt/videos"
     
-    # Créer la structure assets si elle n'existe pas dans public
-    if [[ ! -d "$WEB_ROOT/public/assets" ]]; then
-        if [[ -d "$WEB_ROOT/assets" ]]; then
-            # Si assets existe à la racine, créer un lien symbolique
-            ln -s "$WEB_ROOT/assets" "$WEB_ROOT/public/assets"
-            log_info "Lien symbolique créé pour assets"
-        else
-            # Sinon créer la structure minimale
-            mkdir -p "$WEB_ROOT/public/assets/"{css,js,images}
-            # Créer un fichier CSS minimal si nécessaire
-            if [[ ! -f "$WEB_ROOT/public/assets/css/style.css" ]]; then
-                echo "/* Pi Signage Web Interface */" > "$WEB_ROOT/public/assets/css/style.css"
-            fi
-            log_info "Structure assets créée"
+    # Gérer les assets - créer la structure dans public et les liens vers les fichiers
+    if [[ -d "$WEB_ROOT/assets" ]]; then
+        # Créer la structure dans public si elle n'existe pas
+        mkdir -p "$WEB_ROOT/public/assets/"{css,js,images}
+        
+        # Créer des liens symboliques pour chaque fichier
+        if [[ -f "$WEB_ROOT/assets/css/style.css" ]]; then
+            ln -sf "$WEB_ROOT/assets/css/style.css" "$WEB_ROOT/public/assets/css/style.css"
+            log_info "Lien créé pour style.css"
         fi
+        
+        if [[ -f "$WEB_ROOT/assets/js/main.js" ]]; then
+            ln -sf "$WEB_ROOT/assets/js/main.js" "$WEB_ROOT/public/assets/js/main.js"
+            log_info "Lien créé pour main.js"
+        fi
+        
+        # Copier les images si elles existent
+        if [[ -d "$WEB_ROOT/assets/images" ]]; then
+            cp -r "$WEB_ROOT/assets/images/"* "$WEB_ROOT/public/assets/images/" 2>/dev/null || true
+        fi
+        
+        # Créer aussi un lien pour dashboard.css s'il existe
+        if [[ -f "$WEB_ROOT/assets/css/dashboard.css" ]]; then
+            ln -sf "$WEB_ROOT/assets/css/dashboard.css" "$WEB_ROOT/public/assets/css/dashboard.css"
+        elif [[ -f "$WEB_ROOT/public/assets/css/dashboard.css" ]]; then
+            log_info "dashboard.css déjà présent"
+        fi
+        
+        log_info "Assets configurés avec succès"
+    else
+        # Si pas d'assets, créer une structure minimale
+        mkdir -p "$WEB_ROOT/public/assets/"{css,js,images}
+        echo "/* Pi Signage Web Interface */" > "$WEB_ROOT/public/assets/css/style.css"
+        echo "// Pi Signage Main JS" > "$WEB_ROOT/public/assets/js/main.js"
+        log_info "Structure assets minimale créée"
     fi
     
     # Nettoyer le répertoire temporaire
@@ -628,6 +648,13 @@ main() {
             failed_steps+=("$step")
         fi
     done
+    
+    # Appliquer le patch de correction des assets si nécessaire
+    local patch_script="$SCRIPT_DIR/patches/fix-web-interface-assets.sh"
+    if [[ -f "$patch_script" ]]; then
+        log_info "Application du patch de correction des assets..."
+        bash "$patch_script" || log_warn "Patch partiellement appliqué"
+    fi
     
     # Validation
     if validate_web_installation; then
