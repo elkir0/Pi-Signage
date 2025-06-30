@@ -425,6 +425,45 @@ deploy_web_files() {
 }
 
 # =============================================================================
+# CONFIGURATION DU WRAPPER YT-DLP
+# =============================================================================
+
+configure_ytdlp_wrapper() {
+    log_info "Configuration du wrapper yt-dlp..."
+    
+    # Créer le wrapper yt-dlp
+    cat > /opt/scripts/yt-dlp-wrapper.sh << 'EOF'
+#!/bin/bash
+# Wrapper pour yt-dlp avec environnement correct
+
+# Définir l'environnement
+export HOME=/var/www
+export PATH=/usr/local/bin:/usr/bin:/bin
+export PYTHONIOENCODING=utf-8
+export LC_ALL=C.UTF-8
+export LANG=C.UTF-8
+
+# Créer le répertoire cache si nécessaire
+mkdir -p /var/www/.cache/yt-dlp 2>/dev/null
+chmod 755 /var/www/.cache 2>/dev/null
+chown -R www-data:www-data /var/www/.cache 2>/dev/null
+
+# Exécuter yt-dlp avec les arguments
+exec /usr/local/bin/yt-dlp "$@"
+EOF
+    
+    # Permissions sur le wrapper
+    chmod 755 /opt/scripts/yt-dlp-wrapper.sh
+    
+    # Créer le répertoire cache pour www-data
+    mkdir -p /var/www/.cache/yt-dlp
+    chown -R www-data:www-data /var/www/.cache
+    chmod -R 755 /var/www/.cache
+    
+    log_info "Wrapper yt-dlp configuré"
+}
+
+# =============================================================================
 # CONFIGURATION SUDOERS POUR REDÉMARRAGE VLC
 # =============================================================================
 
@@ -450,6 +489,7 @@ www-data ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart nginx.service
 www-data ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart php8.2-fpm.service
 www-data ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart glances.service
 www-data ALL=(ALL) NOPASSWD: /opt/scripts/update-playlist.sh
+www-data ALL=(ALL) NOPASSWD: /opt/scripts/yt-dlp-wrapper.sh
 EOF
     
     # Permissions sécurisées pour sudoers
@@ -651,6 +691,7 @@ main() {
         "configure_php_fpm"
         "configure_nginx"
         "deploy_web_files"
+        "configure_ytdlp_wrapper"
         "configure_sudoers"
         "configure_vlc_http"
         "create_update_scripts"

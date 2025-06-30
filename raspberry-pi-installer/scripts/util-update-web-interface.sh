@@ -300,18 +300,8 @@ fi
 setup_ytdlp_wrapper() {
     log_info "Configuration du wrapper yt-dlp..."
     
-    # Exécuter le script de correction si disponible
-    local fix_script="$SCRIPT_DIR/patches/fix-ytdlp-permissions.sh"
-    if [[ -f "$fix_script" ]]; then
-        log_info "Exécution du script de correction des permissions..."
-        if bash "$fix_script" >> "$LOG_FILE" 2>&1; then
-            log_info "Wrapper yt-dlp configuré avec succès"
-        else
-            log_warn "Problème lors de la configuration du wrapper"
-        fi
-    else
-        log_warn "Script de correction non trouvé, création manuelle du wrapper..."
-        # Créer le wrapper manuellement si le script n'existe pas
+    # Créer le wrapper s'il n'existe pas
+    if [[ ! -f "/opt/scripts/yt-dlp-wrapper.sh" ]]; then
         cat > /opt/scripts/yt-dlp-wrapper.sh << 'EOF'
 #!/bin/bash
 export HOME=/var/www
@@ -319,14 +309,25 @@ export PATH=/usr/local/bin:/usr/bin:/bin
 export PYTHONIOENCODING=utf-8
 export LC_ALL=C.UTF-8
 export LANG=C.UTF-8
-mkdir -p /var/www/.cache/yt-dlp
-chmod 755 /var/www/.cache
-chown -R www-data:www-data /var/www/.cache
+mkdir -p /var/www/.cache/yt-dlp 2>/dev/null
+chmod 755 /var/www/.cache 2>/dev/null
+chown -R www-data:www-data /var/www/.cache 2>/dev/null
 exec /usr/local/bin/yt-dlp "$@"
 EOF
         chmod 755 /opt/scripts/yt-dlp-wrapper.sh
+        log_info "Wrapper yt-dlp créé"
+    fi
+    
+    # Créer le répertoire cache
+    mkdir -p /var/www/.cache/yt-dlp
+    chown -R www-data:www-data /var/www/.cache
+    chmod -R 755 /var/www/.cache
+    
+    # Ajouter la permission sudo si nécessaire
+    if ! grep -q "yt-dlp-wrapper.sh" /etc/sudoers.d/pi-signage-web 2>/dev/null; then
         echo "www-data ALL=(ALL) NOPASSWD: /opt/scripts/yt-dlp-wrapper.sh" >> /etc/sudoers.d/pi-signage-web
         chmod 440 /etc/sudoers.d/pi-signage-web
+        log_info "Permission sudo ajoutée pour yt-dlp-wrapper"
     fi
 }
 
