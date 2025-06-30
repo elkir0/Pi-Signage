@@ -196,10 +196,18 @@ function downloadYouTubeVideo($url, $title = null) {
     // Construire la commande yt-dlp
     $output_path = VIDEO_DIR . '/' . $filename . '.%(ext)s';
     $cmd = sprintf(
-        'yt-dlp -f "best[ext=mp4]/best" -o %s --no-playlist --restrict-filenames %s 2>&1',
+        '%s -f "best[ext=mp4]/best" -o %s --no-playlist --restrict-filenames %s',
+        escapeshellcmd(YTDLP_BIN),
         escapeshellarg($output_path),
         escapeshellarg($url)
     );
+
+    // Forcer H.264 en mode Chromium
+    if (DISPLAY_MODE === 'chromium') {
+        $cmd .= ' --recode-video mp4 --postprocessor-args "-c:v libx264 -preset fast -crf 23 -c:a aac -b:a 128k -movflags +faststart"';
+    }
+
+    $cmd .= ' 2>&1';
     
     // Exécuter la commande
     $output = shell_exec($cmd);

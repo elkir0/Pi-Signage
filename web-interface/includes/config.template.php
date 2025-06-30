@@ -20,6 +20,8 @@ define('VIDEO_DIR', '/opt/videos');
 define('SCRIPTS_DIR', '/opt/scripts');
 define('LOG_DIR', '/var/log/pi-signage');
 define('WEB_ROOT', dirname(__DIR__));
+// binaire yt-dlp
+define('YTDLP_BIN', '/usr/local/bin/yt-dlp');
 
 // Mode d'affichage
 if (file_exists('/etc/pi-signage/display-mode.conf')) {

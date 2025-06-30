@@ -213,6 +213,7 @@ function downloadYouTube() {
     const urlInput = document.getElementById('youtube-url');
     const downloadBtn = document.getElementById('download-btn');
     const progressDiv = document.getElementById('download-progress');
+    const csrfToken = document.querySelector('#youtube-form input[name="csrf_token"]').value;
     
     if (!urlInput || !urlInput.value) {
         showNotification('Veuillez entrer une URL YouTube', 'warning');
@@ -228,7 +229,7 @@ function downloadYouTube() {
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ url: urlInput.value })
+        body: JSON.stringify({ url: urlInput.value, csrf_token: csrfToken })
     })
     .then(response => response.json())
     .then(data => {
