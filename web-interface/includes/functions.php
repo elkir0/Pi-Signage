@@ -229,16 +229,21 @@ function downloadYouTubeVideo($url, $title = null, $progressFile = null) {
     
     // Construire la commande yt-dlp
     $output_path = VIDEO_DIR . '/' . $filename . '.%(ext)s';
+    
+    // Format de téléchargement : préférer 1080p ou 720p, sinon le meilleur disponible
+    $format_string = 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best[ext=mp4]/best';
+    
     $cmd = sprintf(
-        '%s -f "best[ext=mp4]/best" -o %s --no-playlist --restrict-filenames --newline %s',
+        '%s -f %s -o %s --no-playlist --restrict-filenames --newline %s',
         escapeshellcmd(YTDLP_BIN),
+        escapeshellarg($format_string),
         escapeshellarg($output_path),
         escapeshellarg($url)
     );
 
-    // Forcer H.264 en mode Chromium
+    // Forcer H.264 en mode Chromium avec merge si nécessaire
     if (DISPLAY_MODE === 'chromium') {
-        $cmd .= ' --recode-video mp4 --postprocessor-args "-c:v libx264 -preset fast -crf 23 -c:a aac -b:a 128k -movflags +faststart"';
+        $cmd .= ' --merge-output-format mp4 --recode-video mp4 --postprocessor-args "-c:v libx264 -preset fast -crf 23 -c:a aac -b:a 128k -movflags +faststart"';
     }
 
     $cmd .= ' 2>&1';
@@ -281,6 +286,16 @@ function downloadYouTubeVideo($url, $title = null, $progressFile = null) {
 
     if ($status !== 0) {
         return ['success' => false, 'error' => 'Download failed', 'output' => $output . $stderr];
+    }
+
+    // Mettre à jour la playlist si on est en mode Chromium
+    if (DISPLAY_MODE === 'chromium' && file_exists('/opt/scripts/update-playlist.sh')) {
+        exec('sudo /opt/scripts/update-playlist.sh 2>&1', $updateOutput, $updateStatus);
+        if ($updateStatus === 0) {
+            $output .= "\n[INFO] Playlist mise à jour automatiquement";
+        } else {
+            $output .= "\n[WARNING] Échec de la mise à jour de la playlist: " . implode("\n", $updateOutput);
+        }
     }
 
     return ['success' => true, 'output' => $output];

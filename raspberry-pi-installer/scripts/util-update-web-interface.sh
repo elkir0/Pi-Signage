@@ -170,6 +170,23 @@ update_full() {
     log_info "Mise à jour complète terminée"
 }
 
+update_sudoers_permissions() {
+    log_info "Mise à jour des permissions sudoers..."
+    
+    local sudoers_file="/etc/sudoers.d/pi-signage-web"
+    if [[ ! -f "$sudoers_file" ]]; then
+        log_warn "Fichier sudoers non trouvé, skip"
+        return 0
+    fi
+    
+    # Vérifier si la permission update-playlist existe déjà
+    if ! grep -q "update-playlist.sh" "$sudoers_file"; then
+        echo "www-data ALL=(ALL) NOPASSWD: /opt/scripts/update-playlist.sh" >> "$sudoers_file"
+        chmod 440 "$sudoers_file"
+        log_info "Permission update-playlist.sh ajoutée pour www-data"
+    fi
+}
+
 fix_nginx_api_routing() {
     log_info "Vérification et correction du routage API nginx..."
     
@@ -237,8 +254,9 @@ else
     update_simple
 fi
 
-# Toujours appliquer la correction nginx après la mise à jour
+# Toujours appliquer les corrections après la mise à jour
 fix_nginx_api_routing
+update_sudoers_permissions
 
 exit 0
 

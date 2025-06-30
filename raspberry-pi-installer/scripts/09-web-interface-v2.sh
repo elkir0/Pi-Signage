@@ -449,6 +449,7 @@ www-data ALL=(ALL) NOPASSWD: /usr/bin/systemctl status pi-signage-watchdog.servi
 www-data ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart nginx.service
 www-data ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart php8.2-fpm.service
 www-data ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart glances.service
+www-data ALL=(ALL) NOPASSWD: /opt/scripts/update-playlist.sh
 EOF
     
     # Permissions sécurisées pour sudoers
