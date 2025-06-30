@@ -269,36 +269,8 @@ function downloadYouTube() {
     });
 }
 
-// Fonction de suivi de progression (non utilisée actuellement)
-// Conservée pour une future implémentation
-function pollYouTubeProgress(token, container, callback) {
-    if (!token) {
-        console.warn('Token manquant pour le suivi de progression');
-        if (callback) callback();
-        return;
-    }
-    
-    const interval = setInterval(() => {
-        fetch(`/api/youtube_progress.php?token=${token}`)
-            .then(resp => resp.json())
-            .then(data => {
-                if (data.success) {
-                    container.innerHTML = `<p>Progression: ${data.progress}%</p>`;
-                    if (data.progress >= 100) {
-                        clearInterval(interval);
-                        if (callback) callback();
-                    }
-                } else {
-                    clearInterval(interval);
-                    if (callback) callback();
-                }
-            })
-            .catch(() => {
-                clearInterval(interval);
-                if (callback) callback();
-            });
-    }, 1000);
-}
+// Fonction de suivi de progression supprimée - Non utilisée
+// Si besoin de réimplémenter un suivi de progression, créer une nouvelle fonction
 
 // Service control
 async function controlService(service, action) {
