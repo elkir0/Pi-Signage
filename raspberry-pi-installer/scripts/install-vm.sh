@@ -64,13 +64,13 @@ echo
 # Détecter quel script est disponible
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-if [[ -f "$SCRIPT_DIR/main_orchestrator_v2.sh" ]]; then
-    echo -e "${GREEN}Script v2.3.0 détecté${NC}"
-    echo "Lancement de l'installation avec choix du mode d'affichage..."
+if [[ -f "$SCRIPT_DIR/../install.sh" ]]; then
+    echo -e "${GREEN}Script d'installation détecté${NC}"
+    echo "Lancement de l'installation..."
     echo
-    exec "$SCRIPT_DIR/main_orchestrator_v2.sh" "$@"
+    exec "$SCRIPT_DIR/../install.sh" "$@"
 elif [[ -f "$SCRIPT_DIR/main_orchestrator.sh" ]]; then
-    echo -e "${GREEN}Script v2.2.0 détecté${NC}"
+    echo -e "${GREEN}Script legacy détecté${NC}"
     echo "Lancement de l'installation classique..."
     echo
     exec "$SCRIPT_DIR/main_orchestrator.sh" "$@"

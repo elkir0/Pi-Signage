@@ -37,7 +37,7 @@ Pi-Signage/
    # Option 1 : Renommer simplement
    mv 09-web-interface-v2.sh 09-web-interface.sh
    
-   # Option 2 : Modifier main_orchestrator.sh pour utiliser v2
+   # Option 2 : Utiliser le nouveau script install.sh
    ```
 
 2. **Le nouveau script va automatiquement**

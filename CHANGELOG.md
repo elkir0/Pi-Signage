@@ -22,7 +22,7 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **Pages web manquantes** :
   - `videos.php` : Interface complète de gestion vidéos avec upload et YouTube
   - `settings.php` : Page de paramètres système avec contrôle services
-- **Script `main_orchestrator_v2.sh`** : Nouveau script principal avec sélection du mode d'affichage
+- **Script `install.sh`** : Nouveau point d'entrée avec sélection du mode d'affichage
 - **Comparaison interactive** : Aide au choix entre VLC et Chromium lors de l'installation
 - **Scripts d'administration Chromium** :
   - `player-control.sh` : Contrôle du player (play, pause, next, etc.)

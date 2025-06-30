@@ -157,11 +157,11 @@ echo "Mode VM activé - Émulation Pi 4B 4GB"
 echo ""
 
 # Demander quel script lancer
-if [[ -f ./main_orchestrator_v2.sh ]]; then
-    echo "Lancement de l'installation v2.3.0..."
-    exec ./main_orchestrator_v2.sh "$@"
+if [[ -f ./install.sh ]]; then
+    echo "Lancement de l'installation..."
+    exec ./install.sh "$@"
 elif [[ -f ./main_orchestrator.sh ]]; then
-    echo "Lancement de l'installation v2.2.0..."
+    echo "Lancement de l'installation..."
     exec ./main_orchestrator.sh "$@"
 else
     echo "ERREUR: Aucun script d'installation trouvé"
@@ -203,7 +203,7 @@ main() {
     echo ""
     echo "2. Option manuelle :"
     echo "   - Le mode VM est activé"
-    echo "   - Lancez maintenant : sudo ./main_orchestrator_v2.sh"
+    echo "   - Lancez maintenant : sudo ./install.sh"
     echo ""
     echo "Note: Les optimisations Pi-spécifiques seront ignorées"
     echo ""

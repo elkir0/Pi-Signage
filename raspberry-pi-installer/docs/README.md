@@ -98,7 +98,7 @@ pi-signage.target                # Target principal groupant tous les services
    chmod +x *.sh
    
    # Lancer l'installation v2.3.0
-   sudo ./main_orchestrator_v2.sh
+   sudo ./install.sh
    ```
 
 2. **Suivre l'assistant d'installation :**
@@ -124,7 +124,7 @@ pi-signage.target                # Target principal groupant tous les services
 
 ```bash
 # 1. Script principal
-sudo ./main_orchestrator_v2.sh
+sudo ./install.sh
 
 # 2. Modules individuels (si besoin)
 sudo ./00-security-utils.sh
@@ -146,7 +146,7 @@ sudo ./10-final-check.sh
 ```bash
 # Le script détecte automatiquement l'environnement VM
 # et installe Xvfb si nécessaire
-sudo ./main_orchestrator_v2.sh
+sudo ./install.sh
 
 # Pour forcer le mode VM manuellement
 touch /etc/pi-signage/vm-mode.conf

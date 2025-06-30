@@ -40,7 +40,7 @@ chmod +x *.sh
 
 ```bash
 # Lancer le script d'installation principal
-sudo ./main_orchestrator_v2.sh
+sudo ./install.sh
 ```
 
 ### 4. Suivre l'assistant
@@ -83,7 +83,7 @@ Pour les tests sur machine virtuelle (QEMU, UTM, VirtualBox) :
 ```bash
 # L'installation détecte automatiquement l'environnement VM
 # et installe Xvfb pour le support headless
-sudo ./main_orchestrator_v2.sh
+sudo ./install.sh
 
 # Le mode VM est activé automatiquement si détecté
 ```
@@ -143,7 +143,7 @@ sudo journalctl -f
 ```bash
 # Nettoyer l'environnement
 unset LOG_FILE CONFIG_FILE
-sudo ./main_orchestrator_v2.sh
+sudo ./install.sh
 ```
 
 ### Services non démarrés

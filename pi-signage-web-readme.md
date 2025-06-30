@@ -42,8 +42,8 @@ L'interface web Pi Signage offre une gestion complète du système de digital si
 # Le module 09 installe automatiquement tout
 sudo ./09-web-interface.sh
 
-# Ou via l'orchestrateur principal
-sudo ./main_orchestrator.sh
+# Ou via le script principal
+sudo ./install.sh
 ```
 
 ### Installation manuelle
