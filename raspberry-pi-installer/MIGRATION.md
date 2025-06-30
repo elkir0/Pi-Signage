@@ -71,6 +71,7 @@ Le nouveau système inclut deux scripts de mise à jour :
 
 # Mise à jour de l'interface web depuis GitHub
 /opt/scripts/update-web-interface.sh
+# Utiliser --full pour réinstaller la configuration
 ```
 
 Ces scripts sont exécutés automatiquement chaque semaine via cron.
