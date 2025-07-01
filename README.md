@@ -3,11 +3,11 @@
 **Solution tout-en-un de digital signage pour Raspberry Pi avec interface web de gestion**
 
 [![Compatible](https://img.shields.io/badge/Compatible-Pi%203B%2B%20%7C%204B%20%7C%205-green.svg)](https://www.raspberrypi.org/)
-[![Version](https://img.shields.io/badge/Version-2.4.0-blue.svg)]()
+[![Version](https://img.shields.io/badge/Version-2.4.1-blue.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)]()
 [![Security](https://img.shields.io/badge/Security-Enhanced-brightgreen.svg)]()
 
-> ✅ **Version stable 2.4.0** : Solution complète avec support audio, gestion de playlist, logo personnalisé et interface web améliorée.
+> ✅ **Version stable 2.4.1** : Version LITE disponible pour Raspberry Pi OS Lite + Corrections de stabilité au démarrage.
 
 ## 🎯 Présentation
 
@@ -70,18 +70,24 @@ Pi-Signage/
 
 ### Installation
 
-#### ⚠️ Problème connu avec Raspberry Pi OS Lite
+#### 🎯 Choisir la bonne version
 
-Si vous rencontrez un écran noir après installation sur Raspberry Pi OS Lite, utilisez la **version LITE** :
+| Votre système | Script à utiliser | Description |
+|---------------|-------------------|-------------|
+| **Raspberry Pi OS Lite** | `install-lite.sh` | Version minimale, configuration simple |
+| **Raspberry Pi OS Desktop** | `main_orchestrator.sh` | Version complète avec optimisations |
+| **VM/Docker** | `main_orchestrator.sh` | Détection automatique mode headless |
+
+#### Installation version LITE (recommandée pour Pi OS Lite)
 
 ```bash
 cd ~/Pi-Signage/raspberry-pi-installer
 sudo ./install-lite.sh
 ```
 
-Cette version utilise une configuration minimale sans modifications système agressives. Voir [README-LITE.md](raspberry-pi-installer/README-LITE.md) pour plus de détails.
+Cette version évite les modifications système qui peuvent causer un écran noir. Voir [README-LITE.md](raspberry-pi-installer/README-LITE.md) pour plus de détails.
 
-#### Installation standard (version 2.4.0)
+#### Installation standard (version complète)
 
 ```bash
 # Cloner le dépôt

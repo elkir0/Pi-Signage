@@ -5,6 +5,29 @@ Toutes les modifications notables du projet Pi Signage Digital sont documentées
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/),
 et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.1] - 2025-01-01
+
+### 🆕 Ajouté
+- **Version LITE** pour Raspberry Pi OS Lite :
+  - Script `install-lite.sh` pour installation minimale
+  - Configuration système sans modifications agressives
+  - Démarrage X11 direct sans display manager
+  - Documentation dédiée `README-LITE.md`
+- **Scripts de réparation d'urgence** :
+  - `fix-boot-order.sh` : Correction rapide des problèmes de boot
+  - `emergency-boot-fix.sh` : Réparation depuis un autre PC
+  - `deep-boot-fix.sh` : Réparation profonde du système
+
+### 🐛 Corrigé
+- **Écran noir sur Raspberry Pi OS Lite** : Suppression de `dtoverlay=vc4-fkms-v3d`
+- **Blocage au démarrage** : Services démarrent progressivement via `10-boot-manager`
+- **Conflits systemd-tmpfiles** : Utilisation de `/var/cache` au lieu de `/tmp`
+
+### 🔄 Modifié
+- **Services systemd** : Dépendances simplifiées (`After=multi-user.target`)
+- **LightDM** : Désactivé au boot, démarre via le gestionnaire de démarrage
+- **Configuration boot** : Paramètres minimaux pour éviter les conflits
+
 ## [2.4.0] - 2025-01-01
 
 ### 🆕 Ajouté
