@@ -70,7 +70,18 @@ Pi-Signage/
 
 ### Installation
 
-#### Installation de la version 2.4.0
+#### ⚠️ Problème connu avec Raspberry Pi OS Lite
+
+Si vous rencontrez un écran noir après installation sur Raspberry Pi OS Lite, utilisez la **version LITE** :
+
+```bash
+cd ~/Pi-Signage/raspberry-pi-installer
+sudo ./install-lite.sh
+```
+
+Cette version utilise une configuration minimale sans modifications système agressives. Voir [README-LITE.md](raspberry-pi-installer/README-LITE.md) pour plus de détails.
+
+#### Installation standard (version 2.4.0)
 
 ```bash
 # Cloner le dépôt
