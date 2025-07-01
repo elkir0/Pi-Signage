@@ -1,9 +1,9 @@
-# 📺 Pi Signage Digital - Version 2.3.0
+# 📺 Pi Signage Digital - Version 2.4.0
 
 **Solution complète de digital signage pour Raspberry Pi avec interface web de gestion**
 
 [![Compatible](https://img.shields.io/badge/Compatible-Pi%203B%2B%20%7C%204B%20%7C%205-green.svg)](https://www.raspberrypi.org/)
-[![Version](https://img.shields.io/badge/Version-2.3.0-blue.svg)]()
+[![Version](https://img.shields.io/badge/Version-2.4.0-blue.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)]()
 [![Security](https://img.shields.io/badge/Security-Enhanced-brightgreen.svg)]()
 
@@ -11,8 +11,11 @@
 
 Pi Signage Digital est une solution clé en main pour transformer vos Raspberry Pi en système d'affichage dynamique professionnel. Conçu pour remplacer des solutions commerciales comme Yodeck, ce système offre :
 
-- ✅ **Deux modes d'affichage** : VLC Classic ou Chromium Kiosk
-- ✅ **Interface web complète** : Upload, gestion vidéos, paramètres système
+- ✅ **Deux modes d'affichage** : VLC Classic ou Chromium Kiosk avec audio
+- ✅ **Interface web complète** : Dashboard, vidéos, playlist, paramètres
+- ✅ **Gestion de playlist** : Organisation de l'ordre de lecture
+- ✅ **Support audio complet** : HDMI/Jack, configuration interactive
+- ✅ **Téléchargement YouTube amélioré** : Format MP4, verbose persistant
 - ✅ **Synchronisation automatique** depuis Google Drive
 - ✅ **Support VM/Headless** : Tests avec Xvfb
 - ✅ **Monitoring web** avec interface Glances sécurisée
@@ -32,11 +35,10 @@ Pi Signage Digital est une solution clé en main pour transformer vos Raspberry 
 | **03-VLC/Chromium** | Lecteur vidéo ou navigateur kiosk | 8 min |
 | **04-rclone** | Synchronisation Google Drive | 5 min |
 | **05-Glances** | Monitoring web sécurisé | 7 min |
-| **06-Watchdog** | Surveillance et récupération | 3 min |
+| **06-Cron** | Tâches planifiées | 3 min |
 | **07-Services** | Services systemd | 5 min |
-| **08-Backup** | Système de sauvegarde | 5 min |
+| **08-Diagnostic** | Outils de diagnostic | 5 min |
 | **09-Web Interface** | Interface de gestion PHP/nginx | 10 min |
-| **10-Final Check** | Vérification finale | 3 min |
 
 **Durée totale d'installation : ~60 minutes**
 
@@ -97,7 +99,7 @@ pi-signage.target                # Target principal groupant tous les services
    # Rendre exécutable
    chmod +x *.sh
    
-   # Lancer l'installation v2.3.0
+   # Lancer l'installation v2.4.0
    sudo ./install.sh
    ```
 
@@ -134,11 +136,10 @@ sudo ./03-vlc-setup.sh              # OU
 sudo ./03-chromium-kiosk.sh         # Selon le mode choisi
 sudo ./04-rclone-gdrive.sh
 sudo ./05-glances-setup.sh
-sudo ./06-watchdog-setup.sh
+sudo ./06-cron-setup.sh
 sudo ./07-services-setup.sh
-sudo ./08-backup-manager.sh
+sudo ./08-diagnostic-tools.sh
 sudo ./09-web-interface-v2.sh
-sudo ./10-final-check.sh
 ```
 
 ### Installation pour VM/Headless
@@ -159,21 +160,27 @@ touch /etc/pi-signage/vm-mode.conf
 #### Communes aux deux modes
 ```bash
 # Contrôle général
-sudo pi-signage status           # État de tous les services
-sudo pi-signage start            # Démarrer tous les services
-sudo pi-signage stop             # Arrêter tous les services
-sudo pi-signage restart          # Redémarrer tous les services
-sudo pi-signage emergency        # Récupération d'urgence
+sudo /opt/scripts/admin-tools/pi-signage status    # État de tous les services
+sudo /opt/scripts/admin-tools/pi-signage start     # Démarrer tous les services
+sudo /opt/scripts/admin-tools/pi-signage stop      # Arrêter tous les services
+sudo /opt/scripts/admin-tools/pi-signage restart   # Redémarrer tous les services
 
 # Diagnostic et maintenance
-sudo pi-signage-diag            # Diagnostic complet du système
-sudo pi-signage-tools           # Menu interactif d'outils
-sudo pi-signage-repair          # Réparation automatique
-sudo pi-signage-logs            # Collecte de logs pour support
+sudo /opt/scripts/admin-tools/pi-signage-diag      # Diagnostic complet
+sudo /opt/scripts/admin-tools/pi-signage-tools     # Menu interactif d'outils
+sudo /opt/scripts/admin-tools/pi-signage-repair    # Réparation automatique
+sudo /opt/scripts/admin-tools/pi-signage-logs      # Collecte de logs
 
-# Synchronisation
-sudo /opt/scripts/sync-videos.sh    # Synchronisation manuelle
-sudo /opt/scripts/test-gdrive.sh    # Test connexion Google Drive
+# Synchronisation Google Drive
+sudo /opt/scripts/admin-tools/sync-videos.sh       # Synchronisation manuelle
+sudo /opt/scripts/admin-tools/test-gdrive.sh       # Test connexion
+
+# Utilitaires
+sudo /opt/scripts/util-configure-audio.sh          # Configuration audio
+sudo /opt/scripts/util-test-audio.sh               # Test audio
+sudo /opt/scripts/util-test-playlist.sh            # Vérifier playlist
+sudo /opt/scripts/util-change-web-password.sh      # Changer mot de passe web
+sudo /opt/scripts/util-update-web-interface.sh     # Mettre à jour interface
 ```
 
 #### Mode Chromium Kiosk (spécifique)
@@ -195,11 +202,12 @@ sudo /opt/scripts/update-playlist.sh
 - **Utilisateur :** admin
 - **Mot de passe :** défini lors de l'installation
 - **Fonctionnalités :**
-  - Dashboard avec état système en temps réel
+  - Dashboard avec état système en temps réel et logo
   - Upload et gestion de vidéos
-  - Téléchargement YouTube (yt-dlp)
+  - Gestion de playlist (ordre de lecture)
+  - Téléchargement YouTube amélioré
+  - Contrôle du player (API player.php)
   - Page de paramètres système
-  - Contrôle des services
   - Monitoring CPU, RAM, température
   - Gestion de l'espace disque
 
@@ -215,10 +223,11 @@ sudo /opt/scripts/update-playlist.sh
   - Logs en temps réel
 
 #### Player HTML5 (Mode Chromium)
-**Accès :** `http://[IP_DU_PI]:8888/player.html`
-- Player HTML5 moderne
+**Accès :** `http://[IP_DU_PI]:8888`
+- Player HTML5 moderne avec support audio
 - Contrôle WebSocket
 - Overlays et transitions
+- Contrôle depuis l'interface web
 
 ### Ajout de Vidéos
 
@@ -227,9 +236,11 @@ sudo /opt/scripts/update-playlist.sh
    - Créer un dossier nommé "Signage" (ou le nom choisi)
 
 2. **Ajouter des vidéos :**
-   - Formats supportés : MP4, AVI, MKV, MOV, WMV
+   - Formats supportés : MP4, AVI, MKV, MOV, WMV, WEBM
    - Résolution recommandée : 1080p
+   - Format MP4 recommandé pour Chromium
    - Les vidéos sont synchronisées automatiquement toutes les 6h
+   - Support audio complet (HDMI/Jack)
 
 3. **Synchronisation manuelle :**
    ```bash
@@ -241,7 +252,7 @@ sudo /opt/scripts/update-playlist.sh
 ### Script de Diagnostic Principal
 
 ```bash
-sudo pi-signage-diag
+sudo /opt/scripts/admin-tools/pi-signage-diag
 ```
 
 **Vérifications effectuées :**
@@ -256,24 +267,24 @@ sudo pi-signage-diag
 ### Outils Spécialisés
 
 ```bash
-# Diagnostic VLC
-sudo /opt/scripts/diag-vlc.sh
-
-# Diagnostic réseau
-sudo /opt/scripts/diag-network.sh
-
-# Diagnostic système
-sudo /opt/scripts/diag-system.sh
-
 # Menu interactif complet
-sudo pi-signage-tools
+sudo /opt/scripts/admin-tools/pi-signage-tools
+
+# Test audio
+sudo /opt/scripts/util-test-audio.sh
+
+# Test playlist
+sudo /opt/scripts/util-test-playlist.sh
+
+# Configuration audio
+sudo /opt/scripts/util-configure-audio.sh
 ```
 
 ### Collecte de Logs
 
 ```bash
 # Collecter tous les logs pour support
-sudo pi-signage-logs
+sudo /opt/scripts/admin-tools/pi-signage-logs
 
 # Fichier généré : /tmp/pi-signage-logs-[DATE].tar.gz
 ```

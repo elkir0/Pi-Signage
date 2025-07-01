@@ -1,4 +1,4 @@
-# 🚀 QUICKSTART - Pi Signage Digital
+# 🚀 QUICKSTART - Pi Signage Digital v2.4.0
 
 **Installation rapide en 4 étapes - 10 minutes chrono**
 
@@ -24,13 +24,16 @@
 
 ```bash
 # Télécharger et lancer l'installation
-wget -O install.sh https://raw.githubusercontent.com/votre-repo/pi-signage/main/install.sh
-chmod +x install.sh
+git clone https://github.com/elkir0/Pi-Signage.git
+cd Pi-Signage/raspberry-pi-installer/scripts
+chmod +x *.sh
 sudo ./install.sh
 ```
 
 **Configuration demandée :**
+- Mode d'affichage : `VLC Classic` ou `Chromium Kiosk`
 - Nom dossier Google Drive : `Signage` (ou votre choix)
+- Mot de passe interface web : `minimum 8 caractères`
 - Mot de passe Glances : `minimum 6 caractères`
 - Hostname du Pi : `pi-signage` (ou votre choix)
 
@@ -68,9 +71,12 @@ sudo reboot
    sudo pi-signage status
    ```
 
-2. **Interface de monitoring :**
-   - Ouvrir : `http://[IP_DU_PI]:61208`
-   - Login : `admin` / `[votre_mot_de_passe]`
+2. **Interfaces web :**
+   - Interface de gestion : `http://[IP_DU_PI]/`
+     - Login : `admin` / `[votre_mot_de_passe_web]`
+   - Monitoring Glances : `http://[IP_DU_PI]:61208`
+     - Login : `admin` / `[votre_mot_de_passe_glances]`
+   - Player HTML5 (mode Chromium) : `http://[IP_DU_PI]:8888`
 
 3. **Diagnostic complet :**
    ```bash
@@ -104,6 +110,10 @@ sudo pi-signage emergency       # Récupération urgence
 sudo pi-signage-diag           # Diagnostic complet
 sudo pi-signage-tools          # Menu interactif
 
+# Audio (nouveau v2.4.0)
+sudo /opt/scripts/util-configure-audio.sh  # Configuration audio
+sudo /opt/scripts/util-test-audio.sh      # Test audio
+
 # Maintenance
 sudo pi-signage-repair         # Réparation auto
 sudo /opt/scripts/sync-videos.sh # Sync manuelle
@@ -119,6 +129,16 @@ sudo systemctl restart lightdm
 **VLC ne démarre pas :**
 ```bash
 sudo systemctl restart vlc-signage
+```
+
+**Chromium ne démarre pas :**
+```bash
+sudo systemctl restart chromium-kiosk
+```
+
+**Pas de son dans les vidéos :**
+```bash
+sudo /opt/scripts/util-configure-audio.sh
 ```
 
 **Pas de vidéos :**
@@ -145,6 +165,8 @@ sudo pi-signage emergency
 - [ ] Diagnostic `sudo pi-signage-diag` OK
 - [ ] Vidéos ajoutées dans Google Drive
 - [ ] Synchronisation testée
+- [ ] Interface web accessible sur port 80
+- [ ] Audio configuré si nécessaire
 
 ## 🎯 Résultat Attendu
 
@@ -189,10 +211,12 @@ sudo pi-signage emergency
 ## 🔗 Liens Utiles
 
 - **Documentation complète :** [README.md](README.md)
-- **Guide technique :** [TECHNICAL.md](TECHNICAL.md)
+- **Guide technique :** [technical_guide.md](technical_guide.md)
+- **Guide de sécurité :** [SECURITY.md](SECURITY.md)
+- **Dépannage :** [troubleshooting.md](troubleshooting.md)
 - **Raspberry Pi Imager :** https://www.raspberrypi.org/software/
 - **Google Drive :** https://drive.google.com
 
 ---
 
-**🎉 Votre système Pi Signage est prêt ! Profitez de votre digital signage maison.**
+**🎉 Votre système Pi Signage v2.4.0 est prêt ! Profitez de votre digital signage professionnel avec support audio complet.**

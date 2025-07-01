@@ -1,6 +1,6 @@
-# 🔐 Guide de Sécurité - Pi Signage Digital
+# 🔐 Guide de Sécurité - Pi Signage Digital v2.4.0
 
-Ce document détaille les mesures de sécurité implémentées dans Pi Signage Digital v2.2.0 et les bonnes pratiques à suivre.
+Ce document détaille les mesures de sécurité implémentées dans Pi Signage Digital v2.4.0 et les bonnes pratiques à suivre.
 
 ## 📋 Table des matières
 
@@ -14,7 +14,7 @@ Ce document détaille les mesures de sécurité implémentées dans Pi Signage D
 
 ## 🎯 Vue d'ensemble
 
-Pi Signage Digital v2.2.0 intègre une architecture de sécurité multicouche :
+Pi Signage Digital v2.4.0 intègre une architecture de sécurité multicouche :
 
 - **Chiffrement** : AES-256-CBC pour les mots de passe stockés
 - **Hachage** : SHA-512 avec salt pour l'authentification
@@ -91,11 +91,20 @@ GLANCES_PASSWORD_ENCRYPTED="$ENCRYPTED"
 
 ### Mots de passe web
 
-L'interface web utilise `password_hash()` PHP avec Bcrypt :
+L'interface web utilise SHA-512 avec salt pour harmonisation avec bash :
 
 ```php
-$hash = password_hash($password, PASSWORD_DEFAULT);
-password_verify($password, $hash);
+// Format : salt:hash
+define('ADMIN_PASSWORD_HASH', 'a1b2c3d4:e5f6g7h8i9j0...');
+
+// Vérification
+$stored_parts = explode(':', ADMIN_PASSWORD_HASH, 2);
+$salt = $stored_parts[0];
+$stored_hash = $stored_parts[1];
+$input_hash = hash('sha512', $salt . $password);
+if (hash_equals($stored_hash, $input_hash)) {
+    // Authentifié
+}
 ```
 
 ## 🔒 Gestion des permissions
@@ -161,7 +170,8 @@ password_verify($password, $hash);
 
 ```ini
 ; Désactivation des fonctions dangereuses
-disable_functions = exec,passthru,system,proc_open,popen,eval
+; Note: exec n'est plus désactivé pour permettre yt-dlp
+disable_functions = passthru,system,proc_open,popen,eval
 
 ; Protection des sessions
 session.cookie_httponly = 1
@@ -176,10 +186,11 @@ display_errors = Off
 ### Authentification
 
 - Utilisateur unique : `admin`
-- Mot de passe hashé avec Bcrypt
+- Mot de passe hashé avec SHA-512 + salt
 - Session régénérée après connexion
-- Timeout de session : 1 heure
+- Timeout de session : 30 minutes
 - Vérification de l'IP (optionnel)
+- Protection CSRF sur tous les formulaires
 
 ## 📝 Bonnes pratiques
 
@@ -189,12 +200,15 @@ display_errors = Off
    - Minimum 8 caractères pour l'interface web
    - Minimum 6 caractères pour Glances
    - Utiliser des caractères variés
+   - Éviter les mots de dictionnaire
 
 2. **Limiter l'accès réseau**
    ```bash
    # Firewall UFW (si installé)
-   sudo ufw allow from 192.168.1.0/24 to any port 80
-   sudo ufw allow from 192.168.1.0/24 to any port 61208
+   sudo ufw allow from 192.168.1.0/24 to any port 80      # Interface web
+   sudo ufw allow from 192.168.1.0/24 to any port 61208   # Glances
+   sudo ufw allow from 192.168.1.0/24 to any port 8888    # Player Chromium
+   sudo ufw deny 8889  # WebSocket local uniquement
    ```
 
 3. **Sauvegarder la clé de chiffrement**
@@ -227,7 +241,8 @@ display_errors = Off
    # Glances
    sudo /opt/scripts/glances-password.sh
    
-   # Interface web : via l'interface
+   # Interface web
+   sudo /opt/scripts/util-change-web-password.sh
    ```
 
 ## 📊 Audit et monitoring
@@ -247,13 +262,15 @@ Le système journalise automatiquement :
 [2024-01-20 15:30:45] SECURITY [LOGIN_SUCCESS] IP:192.168.1.100 User:admin
 [2024-01-20 15:31:02] SECURITY [SERVICE_RESTART] Service:vlc-signage User:admin
 [2024-01-20 15:45:23] SECURITY [CONFIG_MODIFIED] File:/etc/pi-signage/config.conf
+[2024-01-20 15:50:12] SECURITY [YOUTUBE_DOWNLOAD] URL:youtube.com/watch?v=... User:admin
+[2024-01-20 15:55:30] SECURITY [PLAYLIST_UPDATED] Action:reorder User:admin
 ```
 
 ### Commandes d'audit
 
 ```bash
 # Vérifier les permissions
-sudo /opt/scripts/security-audit.sh
+sudo pi-signage-diag --security
 
 # Analyser les tentatives de connexion
 grep "LOGIN_FAILED" /var/log/pi-signage/security.log | tail -20
@@ -297,6 +314,8 @@ sudo find /opt/scripts -type f -exec sha256sum {} \; > checksums.txt
 - [ ] Les services inutiles sont désactivés
 - [ ] Les logs sont actifs et accessibles
 - [ ] Une sauvegarde de la clé de chiffrement existe
+- [ ] Le wrapper yt-dlp a les bonnes permissions (755)
+- [ ] L'audio est configuré si nécessaire
 
 ### Script de vérification
 
@@ -321,6 +340,30 @@ systemctl is-active ssh || echo "Désactivé (OK)"
 echo "Ports en écoute:"
 sudo netstat -tlnp | grep -E "(80|61208|8080)"
 ```
+
+## 📄 Sécurité spécifique v2.4.0
+
+### Wrapper yt-dlp
+
+Le wrapper `/usr/local/bin/yt-dlp` permet l'exécution contrôlée :
+
+```bash
+#!/bin/bash
+# Wrapper sécurisé pour yt-dlp
+# Limite les options et force le format MP4
+
+exec /usr/local/bin/yt-dlp \
+    --format "best[ext=mp4]/best" \
+    --merge-output-format mp4 \
+    "$@"
+```
+
+### Configuration audio
+
+Le script `util-configure-audio.sh` modifie les paramètres système :
+- Vérification des droits root
+- Validation des entrées (sortie 1 ou 2)
+- Journalisation des changements
 
 ## 📚 Ressources supplémentaires
 

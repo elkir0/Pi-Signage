@@ -1,4 +1,4 @@
-# 🔧 Pi Signage - Guide de dépannage v2.3.0
+# 🔧 Pi Signage - Guide de dépannage v2.4.0
 
 Ce guide vous aidera à résoudre les problèmes courants rencontrés avec Pi Signage Digital.
 
@@ -9,6 +9,7 @@ Ce guide vous aidera à résoudre les problèmes courants rencontrés avec Pi Si
 - [Problèmes de lecture vidéo](#problèmes-de-lecture-vidéo)
 - [Problèmes de synchronisation](#problèmes-de-synchronisation)
 - [Problèmes de performance](#problèmes-de-performance)
+- [Problèmes audio](#problèmes-audio)
 - [Outils de diagnostic](#outils-de-diagnostic)
 
 ## 🚨 Problèmes d'installation
@@ -17,7 +18,7 @@ Ce guide vous aidera à résoudre les problèmes courants rencontrés avec Pi Si
 
 **Symptôme** : L'installation échoue avec le message "Package php8.2-json is not available"
 
-**Solution** : Ce package n'existe pas dans PHP 8.2 car JSON est intégré. Le script d'installation v2.3.0 corrige ce problème automatiquement.
+**Solution** : Ce package n'existe pas dans PHP 8.2 car JSON est intégré. Le script d'installation v2.4.0 corrige ce problème automatiquement.
 
 ```bash
 # Si vous avez une ancienne version, mettez à jour :
@@ -43,7 +44,7 @@ sudo bash ./install.sh
 
 **Symptôme** : Écran noir ou pas d'affichage sur VM (QEMU, UTM, VirtualBox)
 
-**Solution** : La v2.3.0 détecte automatiquement l'environnement VM et installe Xvfb. Pour forcer manuellement :
+**Solution** : La v2.4.0 détecte automatiquement l'environnement VM et installe Xvfb. Pour forcer manuellement :
 
 ```bash
 # Créer le marqueur VM
@@ -101,6 +102,16 @@ sudo systemctl restart php8.2-fpm
 sudo tail -f /var/log/pi-signage/php-error.log
 ```
 
+4. **Fonction exec() désactivée** (erreur avec YouTube)
+```bash
+# Vérifier la configuration PHP
+grep disable_functions /etc/php/8.2/fpm/pool.d/pi-signage.conf
+
+# Doit ne PAS contenir 'exec'
+# Si présent, retirer et redémarrer PHP
+sudo systemctl restart php8.2-fpm
+```
+
 ### Authentification échoue
 
 **Symptôme** : Impossible de se connecter avec le mot de passe défini
@@ -123,9 +134,9 @@ sudo /opt/scripts/web-password.sh  # Si ce script existe
 
 ### Pages manquantes (404)
 
-**Symptôme** : Erreur 404 sur `/videos.php` ou `/settings.php`
+**Symptôme** : Erreur 404 sur `/videos.php`, `/settings.php` ou `/playlist.php`
 
-**Solution** : Ces fichiers ont été ajoutés dans la v2.3.0. Mettez à jour :
+**Solution** : Ces fichiers ont été ajoutés dans les versions récentes. Mettez à jour :
 
 ```bash
 # Mettre à jour l'interface web
@@ -168,6 +179,31 @@ sudo chmod 755 /opt/videos
 # Limite définie dans PHP-FPM (150MB par défaut)
 grep upload_max_filesize /etc/php/8.2/fpm/pool.d/pi-signage.conf
 grep post_max_size /etc/php/8.2/fpm/pool.d/pi-signage.conf
+```
+
+### Téléchargement YouTube échoue
+
+**Symptômes** :
+- Erreur 500 sur youtube.php
+- Téléchargement produit des fichiers MKV au lieu de MP4
+- Verbose se ferme automatiquement
+
+**Solutions** :
+
+1. **Vérifier le wrapper yt-dlp**
+```bash
+ls -la /usr/local/bin/yt-dlp
+# Doit être exécutable (755)
+
+# Tester manuellement
+sudo -u www-data /usr/local/bin/yt-dlp --version
+```
+
+2. **Vérifier le format de sortie**
+```bash
+# Le wrapper doit forcer MP4
+cat /usr/local/bin/yt-dlp | grep format
+# Doit contenir: --format "best[ext=mp4]/best" --merge-output-format mp4
 ```
 
 ### Problèmes avec les chemins relatifs
@@ -235,6 +271,8 @@ cat /opt/videos/playlist.json
 
 **Symptôme** : Les nouvelles vidéos n'apparaissent pas
 
+**Note importante** : En mode Chromium, la playlist doit être mise à jour manuellement ou automatiquement après ajout de vidéos.
+
 **Solutions** :
 
 1. **Vérifier la configuration rclone**
@@ -256,6 +294,15 @@ sudo /opt/scripts/sync-videos.sh
 4. **Vérifier les logs**
 ```bash
 tail -f /var/log/pi-signage/sync.log
+```
+
+5. **Mise à jour playlist (mode Chromium)**
+```bash
+# Après synchronisation, mettre à jour la playlist
+sudo /opt/scripts/update-playlist.sh
+
+# Ou depuis l'interface web
+# Paramètres > Update Playlist
 ```
 
 ### Erreur d'authentification Google
@@ -312,6 +359,58 @@ vcgencmd measure_temp
 - Baisser la résolution des vidéos
 - Limiter le framerate à 30fps
 - Désactiver les services non essentiels
+
+## 🎙️ Problèmes audio
+
+### Pas de son dans les vidéos
+
+**Symptôme** : Vidéos muettes alors qu'elles contiennent de l'audio
+
+**Solutions** :
+
+1. **Vérifier la configuration audio**
+```bash
+# Lancer l'utilitaire de configuration
+sudo /opt/scripts/util-configure-audio.sh
+
+# Choisir :
+# 1 = Jack (sortie audio analogique)
+# 2 = HDMI (sortie numérique)
+```
+
+2. **Tester l'audio**
+```bash
+sudo /opt/scripts/util-test-audio.sh
+# Vous devriez entendre un bip de test
+```
+
+3. **Vérifier le volume**
+```bash
+alsamixer
+# Utiliser les flèches pour ajuster
+# S'assurer que le canal n'est pas muté (MM)
+```
+
+4. **Mode Chromium - Vérifier le player**
+```bash
+# Le player ne doit pas avoir l'attribut 'muted'
+grep muted /var/www/pi-signage/public/player.html
+# Ne doit rien retourner
+```
+
+### Son uniquement sur HDMI/Jack
+
+**Solution** : Forcer la sortie audio
+```bash
+# Pour HDMI
+sudo amixer cset numid=3 2
+
+# Pour Jack (sortie analogique)
+sudo amixer cset numid=3 1
+
+# Pour automatique
+sudo amixer cset numid=3 0
+```
 
 ## 🛠️ Outils de diagnostic
 
@@ -388,15 +487,16 @@ sudo pi-signage-logs
 
 3. **Informations à fournir** :
 - Modèle de Raspberry Pi
-- Version de Pi Signage (v2.3.0)
+- Version de Pi Signage (v2.4.0)
 - Mode d'affichage (VLC ou Chromium)
 - Description détaillée du problème
 - Contenu du diagnostic
 - Archive des logs
+- Configuration audio si pertinent
 
 4. **Créer une issue sur GitHub** avec toutes ces informations
 
-## 🔄 Mise à jour vers v2.3.0
+## 🔄 Mise à jour vers v2.4.0
 
 Si vous avez une version antérieure :
 
@@ -415,9 +515,11 @@ cd raspberry-pi-installer/scripts
 sudo ./install.sh
 ```
 
-Les principales corrections de la v2.3.0 :
-- ✅ Support VM/Headless avec Xvfb
-- ✅ Authentification SHA-512 harmonisée
-- ✅ Permissions corrigées
-- ✅ Chemins absolus dans PHP
-- ✅ Pages videos.php et settings.php ajoutées
+Les principales nouveautés de la v2.4.0 :
+- ✅ Support audio complet (HDMI/Jack)
+- ✅ Page playlist.php pour gestion ordre de lecture
+- ✅ API player.php pour contrôle
+- ✅ Logo Pi Signage intégré
+- ✅ Téléchargement YouTube format MP4 forcé
+- ✅ Scripts audio : configure et test
+- ✅ Mise à jour automatique playlist après upload

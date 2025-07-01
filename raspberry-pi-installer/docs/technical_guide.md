@@ -1,4 +1,4 @@
-# 🔧 TECHNICAL - Guide Technique Pi Signage Digital
+# 🔧 TECHNICAL - Guide Technique Pi Signage Digital v2.4.0
 
 **Documentation technique complète de l'architecture, des modules et des outils**
 
@@ -38,7 +38,7 @@ Google Drive → rclone → /opt/videos → VLC → HDMI Output
 
 ### Module 00 - Orchestrateur Principal
 
-**Fichier :** `main-setup.sh`
+**Fichier :** `install.sh`
 
 **Responsabilités :**
 - Détection automatique du modèle Raspberry Pi
@@ -132,9 +132,9 @@ unclutter -idle 1 &     # Masquer curseur
 /opt/scripts/vlc-signage.sh &
 ```
 
-### Module 03 - Configuration VLC
+### Module 03 - Configuration VLC/Chromium
 
-**Fichier :** `03-vlc-setup.sh`
+**Fichiers :** `03-vlc-setup.sh` ou `03-chromium-kiosk.sh`
 
 **Responsabilités :**
 - Installation VLC + codecs
@@ -151,6 +151,7 @@ random=1                # Lecture aléatoire
 loop=1                  # Boucle infinie
 volume=256              # Volume maximum
 disable-screensaver=1   # Empêcher mise en veille
+audio-output=alsa       # Sortie audio ALSA
 ```
 
 **Script VLC intelligent (/opt/scripts/vlc-signage.sh) :**

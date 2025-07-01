@@ -1,13 +1,15 @@
-# Pi Signage - Interface Web v2.3.0
+# Pi Signage - Interface Web v2.4.0
 
 Interface web moderne de gestion pour Pi Signage Digital avec support des modes VLC et Chromium Kiosk.
 
 ## 🎯 Fonctionnalités
 
-- **Dashboard temps réel** : Monitoring CPU, RAM, température, espace disque
-- **Gestion des vidéos** : Upload, suppression, organisation de la playlist
-- **Téléchargement YouTube** : Intégration yt-dlp pour vos propres vidéos
-- **Paramètres système** : Contrôle des services, redémarrage, configuration
+- **Dashboard temps réel** : Monitoring CPU, RAM, température, espace disque avec logo
+- **Gestion des vidéos** : Upload, suppression, téléchargement YouTube amélioré
+- **Gestion de playlist** : Page dédiée pour organiser l'ordre de lecture
+- **Téléchargement YouTube** : Verbose persistant, format MP4 forcé
+- **API de contrôle** : player.php pour contrôler play/pause/stop/next
+- **Paramètres système** : Contrôle des services, mise à jour playlist
 - **Support multi-modes** : Interface adaptative VLC/Chromium
 - **Sécurité renforcée** : SHA-512, CSRF, headers de sécurité
 
@@ -16,9 +18,10 @@ Interface web moderne de gestion pour Pi Signage Digital avec support des modes 
 ```
 web-interface/
 ├── public/              # Fichiers accessibles publiquement
-│   ├── index.php       # Page de connexion
+│   ├── index.php       # Page de connexion avec logo
 │   ├── dashboard.php   # Tableau de bord principal
 │   ├── videos.php      # Gestion des vidéos
+│   ├── playlist.php    # Gestion de la playlist
 │   ├── settings.php    # Paramètres système
 │   └── logout.php      # Déconnexion
 ├── includes/           # Fichiers PHP inclus (non accessibles directement)
@@ -29,18 +32,17 @@ web-interface/
 │   └── security.php    # Fonctions de sécurité (CSRF, headers)
 ├── api/                # Points d'accès API REST
 │   ├── status.php      # Statut du système
-│   ├── videos.php      # API gestion des vidéos
 │   ├── control.php     # Contrôle des services
-│   ├── upload.php      # Upload de vidéos
-│   └── youtube.php     # Téléchargement YouTube
+│   ├── player.php      # Contrôle du player (play/pause/stop/next)
+│   ├── youtube.php     # Téléchargement YouTube amélioré
+│   └── youtube_progress.php # Stub pour éviter erreurs 400
 ├── assets/             # Ressources statiques
 │   ├── css/           # Styles CSS
 │   ├── js/            # Scripts JavaScript
 │   └── images/        # Images et icônes
 └── templates/          # Templates HTML réutilisables
-    ├── header.php
-    ├── footer.php
-    └── navigation.php
+    ├── navigation.php  # Navigation avec logo
+    └── header-meta.php # Meta tags pour favicon et logo
 ```
 
 ## 🚀 Installation
@@ -95,6 +97,11 @@ define('ADMIN_PASSWORD_HASH', 'salt:hash');
 // Mode d'affichage
 define('DISPLAY_MODE', 'vlc'); // ou 'chromium'
 
+// Logo et branding
+define('LOGO_PATH', 'assets/images/logo.png');
+define('APP_NAME', 'Pi Signage');
+define('APP_VERSION', '2.4.0');
+
 // Services
 define('GLANCES_URL', 'http://localhost:61208');
 ```
@@ -111,8 +118,15 @@ define('GLANCES_URL', 'http://localhost:61208');
 - Upload de vidéos (drag & drop supporté)
 - Liste avec taille et date
 - Suppression avec confirmation
-- Téléchargement YouTube via yt-dlp
+- Téléchargement YouTube amélioré avec verbose persistant
+- Mise à jour automatique de la playlist après upload
 - Barre de progression espace disque
+
+### Gestion playlist (`playlist.php`)
+- Sélection des vidéos à diffuser
+- Organisation de l'ordre de lecture
+- Sauvegarde automatique
+- Synchronisation avec le player
 
 ### Paramètres (`settings.php`)
 - Informations système détaillées
@@ -141,10 +155,16 @@ define('GLANCES_URL', 'http://localhost:61208');
 - Actions : start, stop, restart, status
 - Services : vlc-signage, chromium-kiosk, nginx, glances
 
-### `/api/youtube.php`
-- Télécharge une vidéo YouTube pour l'utilisateur connecté
-- Envoyer `csrf_token` et `url` via POST JSON
+### `/api/player.php`
+- Actions : play, pause, stop, next, previous, reload, update_playlist
+- Support VLC (via HTTP) et Chromium (via WebSocket)
 - Retourne `{success: bool, message?: string}`
+
+### `/api/youtube.php`
+- Téléchargement avec format MP4 forcé
+- Verbose détaillé dans la réponse
+- Mise à jour automatique de la playlist
+- Retourne `{success: bool, output: string, playlist_updated?: bool}`
 
 ## 💻 Développement
 
@@ -189,12 +209,22 @@ assets/
 
 ## 🔄 Mises à jour
 
-Un script de mise à jour automatique est disponible :
+Un script de mise à jour est disponible :
 ```bash
-sudo /opt/scripts/update-web-interface.sh
+sudo /opt/scripts/util-update-web-interface.sh
 ```
-Par défaut la configuration est préservée. Utiliser `--full` pour réinitialiser
-les fichiers de configuration et définir un nouveau mot de passe.
+
+Autres scripts utilitaires :
+```bash
+# Changer le mot de passe web
+sudo /opt/scripts/util-change-web-password.sh
+
+# Configurer l'audio
+sudo /opt/scripts/util-configure-audio.sh
+
+# Tester la playlist
+sudo /opt/scripts/util-test-playlist.sh
+```
 
 ## 🐛 Dépannage
 
