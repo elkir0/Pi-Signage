@@ -237,12 +237,17 @@ function downloadYouTube() {
             showNotification('Téléchargement terminé!', 'success');
             urlInput.value = '';
             if (data.output) {
-                progressDiv.innerHTML = '<pre>' + data.output + '</pre>';
+                progressDiv.innerHTML = '<h4>Résultat du téléchargement :</h4><pre style="max-height: 400px; overflow-y: auto;">' + data.output + '</pre>';
             }
             if (data.playlist_updated) {
-                progressDiv.innerHTML += '<p>✓ Playlist mise à jour</p>';
+                progressDiv.innerHTML += '<p class="alert alert-success">✓ Playlist mise à jour automatiquement</p>';
+            } else {
+                progressDiv.innerHTML += '<p class="alert alert-warning">La playlist doit être mise à jour manuellement</p>';
             }
-            // Rafraîchir la liste des vidéos après 2 secondes
+            // Ajouter un bouton pour fermer le verbose
+            progressDiv.innerHTML += '<button class="btn btn-secondary" onclick="document.getElementById(\'download-progress\').style.display=\'none\'">Fermer</button>';
+            
+            // Rafraîchir la liste des vidéos après 5 secondes (pas 2)
             setTimeout(() => {
                 if (typeof refreshVideoList === 'function') {
                     refreshVideoList();
@@ -250,7 +255,7 @@ function downloadYouTube() {
                     // Recharger la page si la fonction n'existe pas
                     window.location.reload();
                 }
-            }, 2000);
+            }, 5000);
         } else {
             showNotification('Erreur de téléchargement', 'error');
             if (data.output) {

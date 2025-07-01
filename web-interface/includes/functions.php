@@ -202,6 +202,14 @@ function handleVideoUpload(array $file) {
 
     chmod($destination, 0640);
     logActivity('VIDEO_UPLOAD', $filename);
+    
+    // Mettre à jour la playlist si en mode Chromium
+    if (DISPLAY_MODE === 'chromium' && file_exists('/opt/scripts/update-playlist.sh')) {
+        exec('sudo /opt/scripts/update-playlist.sh 2>&1', $updateOutput, $updateStatus);
+        if ($updateStatus === 0) {
+            return ['success' => true, 'message' => 'Vidéo uploadée et playlist mise à jour'];
+        }
+    }
 
     return ['success' => true, 'message' => 'Vidéo uploadée'];
 }

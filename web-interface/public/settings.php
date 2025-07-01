@@ -161,7 +161,7 @@ if ($displayMode === 'chromium') {
                         <div class="col-4">
                             <h3>Mise à jour Playlist</h3>
                             <p>Force la mise à jour de la playlist vidéo</p>
-                            <button onclick="piSignage.controlPlayer('update-playlist')" 
+                            <button onclick="piSignage.controlPlayer('update_playlist')" 
                                     class="btn btn-success">
                                 📋 Mettre à jour
                             </button>
