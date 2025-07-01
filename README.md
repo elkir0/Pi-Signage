@@ -141,11 +141,12 @@ L'installation est **modulaire** - vous pouvez choisir :
 - **[🔐 Guide de sécurité](raspberry-pi-installer/docs/SECURITY.md)**
 - **[🌐 Documentation interface web](web-interface/README.md)**
 - **[📝 Guide de migration v2](raspberry-pi-installer/MIGRATION.md)**
+- **[📺 Guide Chromium Kiosk](raspberry-pi-installer/docs/CHROMIUM_KIOSK_GUIDE.md)**
+- **[🔧 Guide outils admin](raspberry-pi-installer/scripts/admin-tools/ADMIN-TOOLS-GUIDE.md)**
 
 ### Guides spécifiques
-- [Configuration Google Drive](raspberry-pi-installer/docs/google-drive-setup.md)
-- [Personnalisation de l'installation](raspberry-pi-installer/docs/customization.md)
 - [Dépannage](raspberry-pi-installer/docs/troubleshooting.md)
+- [Proposition Chromium](raspberry-pi-installer/docs/CHROMIUM_KIOSK_PROPOSAL.md)
 
 ## ✨ Fonctionnalités
 
@@ -159,12 +160,14 @@ L'installation est **modulaire** - vous pouvez choisir :
 - ✅ **Sécurité renforcée** : Chiffrement, permissions strictes, validation
 
 ### 🌐 Interface Web
-- ✅ **Dashboard moderne** : Vue d'ensemble en temps réel
+- ✅ **Dashboard moderne** : Vue d'ensemble en temps réel avec logo
 - ✅ **Gestion des vidéos** : Upload, suppression, organisation
-- ✅ **Téléchargement YouTube** : Via yt-dlp (vos propres vidéos)
+- ✅ **Gestion de playlist** : Page dédiée pour organiser l'ordre de lecture
+- ✅ **Téléchargement YouTube** : Amélioré avec verbose persistant
+- ✅ **API de contrôle** : player.php pour contrôler la lecture
 - ✅ **Monitoring système** : CPU, RAM, température, stockage
 - ✅ **Contrôle à distance** : Démarrer/arrêter les services
-- ✅ **Page paramètres** : Gestion des services et configuration système
+- ✅ **Page paramètres** : Gestion des services et mise à jour playlist
 - ✅ **Détection du mode** : Interface adaptée selon VLC ou Chromium
 - ✅ **Sécurité** : Authentification SHA-512, CSRF, headers de sécurité
 

@@ -5,6 +5,52 @@ Toutes les modifications notables du projet Pi Signage Digital sont documentées
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/),
 et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2025-01-01
+
+### 🆕 Ajouté
+- **Support audio complet** : 
+  - Configuration HDMI/Jack avec `util-configure-audio.sh`
+  - Volume réglable, 85% par défaut
+  - Autoplay avec son dans Chromium
+  - Script de test audio `util-test-audio.sh`
+- **Page de gestion de playlist** (`playlist.php`) :
+  - Organisation de l'ordre de lecture
+  - Sélection des vidéos à diffuser
+  - Sauvegarde automatique
+- **Logo Pi Signage** :
+  - Intégration dans toute l'interface web
+  - Favicon et meta tags
+  - Page de connexion avec logo
+- **API player.php** :
+  - Contrôle complet du player (play, pause, stop, next)
+  - Mise à jour de playlist à distance
+  - Support VLC et Chromium
+- **Scripts utilitaires** :
+  - `util-test-playlist.sh` : Vérification de la playlist
+  - `util-configure-audio.sh` : Configuration audio interactive
+  - `util-test-audio.sh` : Test du son
+
+### 🔄 Modifié
+- **Téléchargement YouTube** :
+  - Format MP4 forcé pour compatibilité Chromium
+  - Sélection de la meilleure qualité (bestvideo+bestaudio)
+  - Verbose persistant avec bouton de fermeture
+- **Player HTML5** :
+  - Suppression de l'attribut muted
+  - Ajout des contrôles vidéo
+  - Bouton play si autoplay bloqué
+- **Interface web** :
+  - Navigation avec nouveau menu Playlist
+  - Mise à jour automatique après upload/téléchargement
+  - Amélioration du feedback utilisateur
+
+### 🐛 Corrigé
+- **Erreur 400** : youtube_progress.php retourne toujours succès
+- **Format vidéo** : Plus de fichiers MKV, seulement MP4
+- **Mise à jour playlist** : Automatique après upload
+- **Bouton update_playlist** : Action corrigée dans settings.php
+- **API player.php** : Création du fichier manquant
+
 ## [2.3.0] - 2024-01-30
 
 ### 🆕 Ajouté
