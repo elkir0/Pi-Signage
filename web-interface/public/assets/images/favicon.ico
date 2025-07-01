@@ -1,0 +1,3 @@
+# Favicon placeholder
+# In production, convert logo.png to favicon.ico using an image converter
+# For now, browsers will fallback to using logo.png if no .ico is found

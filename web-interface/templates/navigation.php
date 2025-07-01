@@ -12,7 +12,10 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 ?>
 <nav class="navbar">
     <div class="navbar-brand">
-        <a href="dashboard.php">🖥️ Pi Signage</a>
+        <a href="dashboard.php">
+            <img src="assets/images/logo.png" alt="Pi Signage" class="navbar-logo">
+            <span class="navbar-title">Pi Signage</span>
+        </a>
     </div>
     
     <ul class="navbar-menu">
@@ -52,6 +55,24 @@ $currentPage = basename($_SERVER['PHP_SELF']);
     text-decoration: none;
     font-size: 1.25rem;
     font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.navbar-logo {
+    height: 40px;
+    width: auto;
+    filter: brightness(0) invert(1);
+    transition: transform 0.3s ease;
+}
+
+.navbar-brand a:hover .navbar-logo {
+    transform: scale(1.05);
+}
+
+.navbar-title {
+    display: inline-block;
 }
 
 .navbar-menu {

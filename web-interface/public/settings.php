@@ -70,6 +70,7 @@ if ($displayMode === 'chromium') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Paramètres - Pi Signage</title>
+    <?php include dirname(__DIR__) . '/templates/header-meta.php'; ?>
     <link rel="stylesheet" href="assets/css/style.css">
 </head>
 <body>

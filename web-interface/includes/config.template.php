@@ -56,5 +56,10 @@ define('SESSION_LIFETIME', 3600); // 1 heure
 // Mode debug (désactiver en production)
 define('DEBUG_MODE', false);
 
+// Logo et branding
+define('LOGO_PATH', 'assets/images/logo.png');
+define('APP_NAME', 'Pi Signage');
+define('APP_VERSION', '2.3.0');
+
 // Timezone
 date_default_timezone_set('Europe/Paris');

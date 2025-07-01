@@ -54,6 +54,7 @@ setSecurityHeaders();
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
     <title>Pi Signage - Connexion</title>
+    <?php include dirname(__DIR__) . '/templates/header-meta.php'; ?>
     <link rel="stylesheet" href="assets/css/style.css">
     <style>
         /* Styles inline pour la page de connexion */
@@ -87,6 +88,14 @@ setSecurityHeaders();
             color: white;
             padding: 2rem;
             text-align: center;
+        }
+        
+        .login-logo {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 1rem;
+            display: block;
+            filter: brightness(0) invert(1);
         }
         
         .login-header h1 {
@@ -184,7 +193,8 @@ setSecurityHeaders();
 <body>
     <div class="login-container">
         <div class="login-header">
-            <h1>🖥️ Pi Signage</h1>
+            <img src="assets/images/logo.png" alt="Pi Signage" class="login-logo">
+            <h1>Pi Signage</h1>
             <p>Interface de gestion Digital Signage</p>
         </div>
         
