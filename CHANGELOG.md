@@ -5,6 +5,24 @@ Toutes les modifications notables du projet Pi Signage Digital sont documentées
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/),
 et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.2] - 2025-01-01
+
+### 🔄 Modifié
+- **Installation unifiée** : Suppression de la version LITE, une seule installation stable pour tous
+- **Optimisations supprimées** : 
+  - Plus d'overclocking ni de modifications GPU agressives
+  - Configuration système conservative par défaut
+  - Suppression des modifications mémoire risquées
+- **Compatibilité améliorée** : Le script `main_orchestrator.sh` fonctionne sur tous les systèmes sans modifications risquées
+
+### 🗑️ Supprimé
+- Scripts `install-lite.sh`, `01-system-config-lite.sh`, `02-x11-minimal.sh`
+- Documentation `README-LITE.md`
+- Toutes les optimisations GPU spécifiques dans `03-chromium-kiosk.sh`
+
+### 📝 Notes
+Cette version unifie l'installation en supprimant toutes les optimisations qui pouvaient causer des instabilités. Le système utilise maintenant les configurations par défaut du Raspberry Pi, garantissant une meilleure stabilité sur tous les modèles.
+
 ## [2.4.1] - 2025-01-01
 
 ### 🆕 Ajouté

@@ -940,7 +940,7 @@ EOF
 # =============================================================================
 
 optimize_chromium() {
-    log_info "Application des optimisations Chromium..."
+    log_info "Configuration des préférences Chromium..."
     
     # Préférences Chromium pour réduire l'utilisation mémoire
     local prefs_dir="/home/pi/.config/chromium/Default"
@@ -969,20 +969,8 @@ EOF
 
     chown -R pi:pi /home/pi/.config
     
-    # Configuration GPU selon le modèle de Pi
-    case "${PI_MODEL:-unknown}" in
-        "3B+")
-            # Pi 3B+ : optimisations conservatrices
-            echo "gpu_mem=128" >> /boot/config.txt
-            ;;
-        "4B"|"5")
-            # Pi 4/5 : utiliser le GPU
-            echo "gpu_mem=256" >> /boot/config.txt
-            echo "dtoverlay=vc4-fkms-v3d" >> /boot/config.txt
-            ;;
-    esac
-    
-    log_info "Optimisations appliquées"
+    # Pas de modifications GPU - laissons le système avec ses valeurs par défaut
+    log_info "Préférences Chromium configurées (pas de modifications GPU)"
 }
 
 # =============================================================================

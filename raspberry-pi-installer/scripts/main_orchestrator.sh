@@ -12,7 +12,7 @@ set -euo pipefail
 # CONSTANTES GLOBALES
 # =============================================================================
 
-readonly SCRIPT_VERSION="2.4.1"
+readonly SCRIPT_VERSION="2.4.2"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly CONFIG_DIR="/etc/pi-signage"
 readonly CONFIG_FILE="$CONFIG_DIR/config.conf"
