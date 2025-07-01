@@ -86,9 +86,10 @@ try {
         throw new Exception("Video directory is not writable: " . VIDEO_DIR);
     }
     
-    // Construire la commande - Forcer MP4 pour Chromium
+    // Construire la commande
+    // Le wrapper gère déjà le format MP4, ne pas dupliquer les options
     $cmd = sprintf(
-        'timeout 300 %s -f "best[ext=mp4]/best" --merge-output-format mp4 -o %s %s 2>&1',
+        'timeout 300 %s -o %s %s 2>&1',
         YTDLP_BIN,
         escapeshellarg($outputPath),
         escapeshellarg($url)

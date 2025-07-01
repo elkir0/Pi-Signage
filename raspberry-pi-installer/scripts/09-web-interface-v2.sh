@@ -454,7 +454,12 @@ chmod 755 /var/www/.cache 2>/dev/null
 chown -R www-data:www-data /var/www/.cache 2>/dev/null
 
 # Exécuter yt-dlp avec les arguments - Forcer MP4 pour Chromium
-exec /usr/local/bin/yt-dlp -f "best[ext=mp4]/best" --merge-output-format mp4 "$@"
+# Sélection intelligente : préférer MP4, sinon convertir
+exec /usr/local/bin/yt-dlp \
+    --format "best[ext=mp4]/best" \
+    --merge-output-format mp4 \
+    --postprocessor-args "-c:v copy -c:a copy" \
+    "$@"
 EOF
     
     # Permissions sur le wrapper
