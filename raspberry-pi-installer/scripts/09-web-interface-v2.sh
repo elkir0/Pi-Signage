@@ -383,6 +383,21 @@ deploy_web_files() {
             cp -r "$WEB_ROOT/assets/images/"* "$WEB_ROOT/public/assets/images/" 2>/dev/null || true
         fi
         
+        # S'assurer que le logo est présent
+        if [[ -f "$temp_dir/$WEB_INTERFACE_DIR/public/assets/images/logo.png" ]]; then
+            cp "$temp_dir/$WEB_INTERFACE_DIR/public/assets/images/logo.png" "$WEB_ROOT/public/assets/images/"
+            log_info "Logo Pi Signage copié"
+        elif [[ -f "$WEB_ROOT/assets/images/logo.png" ]]; then
+            cp "$WEB_ROOT/assets/images/logo.png" "$WEB_ROOT/public/assets/images/"
+            log_info "Logo copié depuis assets existants"
+        fi
+        
+        # Copier aussi le favicon
+        if [[ -f "$temp_dir/$WEB_INTERFACE_DIR/public/assets/images/favicon.ico" ]]; then
+            cp "$temp_dir/$WEB_INTERFACE_DIR/public/assets/images/favicon.ico" "$WEB_ROOT/public/assets/images/"
+            log_info "Favicon copié"
+        fi
+        
         # Créer aussi un lien pour dashboard.css s'il existe
         if [[ -f "$WEB_ROOT/assets/css/dashboard.css" ]]; then
             ln -sf "$WEB_ROOT/assets/css/dashboard.css" "$WEB_ROOT/public/assets/css/dashboard.css"
@@ -397,6 +412,14 @@ deploy_web_files() {
         echo "/* Pi Signage Web Interface */" > "$WEB_ROOT/public/assets/css/style.css"
         echo "// Pi Signage Main JS" > "$WEB_ROOT/public/assets/js/main.js"
         log_info "Structure assets minimale créée"
+        
+        # Copier le logo depuis le dépôt cloné si disponible
+        if [[ -f "$temp_dir/$WEB_INTERFACE_DIR/public/assets/images/logo.png" ]]; then
+            cp "$temp_dir/$WEB_INTERFACE_DIR/public/assets/images/logo.png" "$WEB_ROOT/public/assets/images/"
+            log_info "Logo copié avec succès"
+        else
+            log_warning "Logo non trouvé dans le dépôt"
+        fi
     fi
     
     # Nettoyer le répertoire temporaire
