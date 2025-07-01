@@ -271,10 +271,11 @@ SyslogIdentifier=pi-signage-watchdog
 
 # Sécurité
 NoNewPrivileges=yes
-PrivateTmp=yes
+# PrivateTmp peut causer des conflits avec systemd-tmpfiles
+PrivateTmp=no
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target
 EOF
     
     # Activer le service watchdog

@@ -412,8 +412,8 @@ create_vlc_service() {
     cat > "$VLC_SERVICE" << 'EOF'
 [Unit]
 Description=VLC Digital Signage
-After=graphical-session.target lightdm.service
-Wants=graphical-session.target
+After=multi-user.target network.target sound.target
+Wants=network.target sound.target
 
 [Service]
 Type=simple
@@ -422,7 +422,8 @@ Group=signage
 Environment=DISPLAY=:7.0
 Environment=HOME=/home/signage
 Environment=XDG_RUNTIME_DIR=/run/user/1001
-ExecStartPre=/bin/sleep 30
+# Attendre que lightdm soit vraiment prêt
+ExecStartPre=/bin/bash -c 'until systemctl is-active lightdm.service >/dev/null 2>&1; do sleep 2; done; sleep 5'
 ExecStart=/opt/scripts/vlc-signage.sh
 Restart=always
 RestartSec=10
@@ -430,10 +431,11 @@ StandardOutput=journal
 StandardError=journal
 KillMode=mixed
 KillSignal=SIGTERM
+TimeoutStartSec=120
 TimeoutStopSec=30
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target
 EOF
     
     # Recharger systemd et activer le service

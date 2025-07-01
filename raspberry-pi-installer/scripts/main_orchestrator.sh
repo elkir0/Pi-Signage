@@ -222,6 +222,7 @@ select_modules() {
         ["07-services-setup"]="Services systemd et watchdog"
         ["08-diagnostic-tools"]="Outils de diagnostic et dépannage"
         ["09-web-interface-v2"]="Interface web avec téléchargement YouTube"
+        ["10-boot-manager"]="Gestionnaire de démarrage progressif (évite les blocages)"
     )
     
     # Modules essentiels toujours installés
@@ -257,6 +258,7 @@ select_modules() {
                     "07-services-setup"
                     "08-diagnostic-tools"
                     "09-web-interface-v2"
+                    "10-boot-manager"
                 )
             else
                 selected_modules=(
@@ -269,6 +271,7 @@ select_modules() {
                     "07-services-setup"
                     "08-diagnostic-tools"
                     "09-web-interface-v2"
+                    "10-boot-manager"
                 )
             fi
             log_info "Installation complète sélectionnée (mode $DISPLAY_MODE)"
@@ -284,6 +287,7 @@ select_modules() {
                     "04-rclone-setup"
                     "06-cron-setup"
                     "07-services-setup"
+                    "10-boot-manager"
                 )
             else
                 selected_modules=(
@@ -293,6 +297,7 @@ select_modules() {
                     "04-rclone-setup"
                     "06-cron-setup"
                     "07-services-setup"
+                    "10-boot-manager"
                 )
             fi
             log_info "Installation minimale sélectionnée (mode $DISPLAY_MODE)"
@@ -309,6 +314,7 @@ select_modules() {
                     "07-services-setup"
                     "08-diagnostic-tools"
                     "09-web-interface-v2"
+                    "10-boot-manager"
                 )
             else
                 selected_modules=(
@@ -319,6 +325,7 @@ select_modules() {
                     "07-services-setup"
                     "08-diagnostic-tools"
                     "09-web-interface-v2"
+                    "10-boot-manager"
                 )
             fi
             log_info "Installation web sélectionnée (mode $DISPLAY_MODE)"
@@ -479,6 +486,7 @@ check_module_dependencies() {
         "07-services-setup"
         "08-diagnostic-tools"
         "09-web-interface-v2"
+        "10-boot-manager"
     )
     
     for module in "${module_order[@]}"; do

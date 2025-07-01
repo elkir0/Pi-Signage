@@ -423,15 +423,14 @@ EOF
 # =============================================================================
 
 enable_display_services() {
-    log_info "Activation des services d'affichage..."
+    log_info "Configuration des services d'affichage..."
     
-    # Activation de LightDM
-    if systemctl enable lightdm; then
-        log_info "Service LightDM activé"
-    else
-        log_error "Échec de l'activation de LightDM"
-        return 1
-    fi
+    # NE PAS activer LightDM automatiquement pour éviter les blocages au boot
+    # Il sera activé par le service de démarrage Pi Signage
+    log_info "Service LightDM configuré (activation différée)"
+    
+    # Désactiver le démarrage automatique pour l'instant
+    systemctl disable lightdm 2>/dev/null || true
     
     # Définir LightDM comme gestionnaire d'affichage par défaut
     systemctl set-default graphical.target
@@ -481,11 +480,11 @@ validate_display_installation() {
         fi
     done
     
-    # Vérification du service LightDM
-    if systemctl is-enabled lightdm >/dev/null 2>&1; then
-        log_info "✓ Service LightDM activé"
+    # Vérification du service LightDM (configuré mais pas activé)
+    if systemctl list-unit-files lightdm.service >/dev/null 2>&1; then
+        log_info "✓ Service LightDM installé (activation différée)"
     else
-        log_error "✗ Service LightDM non activé"
+        log_error "✗ Service LightDM non installé"
         ((errors++))
     fi
     

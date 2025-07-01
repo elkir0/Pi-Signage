@@ -164,8 +164,10 @@ log_kiosk "=== Démarrage Chromium Kiosk ==="
 export DISPLAY=:0
 export XAUTHORITY=/home/$USER/.Xauthority
 
-# Créer le répertoire de logs
+# Créer les répertoires nécessaires
 mkdir -p "$(dirname "$LOG_FILE")"
+mkdir -p /var/cache/chromium-kiosk
+chown $USER:$USER /var/cache/chromium-kiosk
 
 # Détecter si on est en mode VM et démarrer Xvfb si nécessaire
 if [[ -f /etc/pi-signage/vm-mode.conf ]] || ! [[ -f /proc/device-tree/model ]]; then
@@ -226,7 +228,7 @@ CHROMIUM_FLAGS=(
     --disable-background-networking
     --enable-features=OverlayScrollbar
     --start-maximized
-    --user-data-dir=/tmp/chromium-kiosk
+    --user-data-dir=/var/cache/chromium-kiosk
 )
 
 # Optimisations pour Raspberry Pi
