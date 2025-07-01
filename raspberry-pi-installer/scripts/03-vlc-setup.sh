@@ -491,35 +491,30 @@ configure_permissions() {
 }
 
 # =============================================================================
-# OPTIMISATIONS VLC POUR RASPBERRY PI
+# CONFIGURATION ENVIRONNEMENT VLC
 # =============================================================================
 
-optimize_vlc_pi() {
-    log_info "Application des optimisations VLC pour Raspberry Pi..."
+configure_vlc_environment() {
+    log_info "Configuration de l'environnement VLC..."
     
-    # Créer un script d'optimisation GPU
-    cat > "/opt/scripts/vlc-optimize.sh" << 'EOF'
+    # Créer un script d'environnement VLC (sans modifications système)
+    cat > "/opt/scripts/vlc-env.sh" << 'EOF'
 #!/bin/bash
 
-# Optimisations pour VLC sur Raspberry Pi
+# Variables d'environnement pour VLC
 
-# GPU Memory
-if [[ -f /boot/config.txt ]]; then
-    if ! grep -q "gpu_mem=" /boot/config.txt; then
-        echo "gpu_mem=128" >> /boot/config.txt
-    fi
-fi
-
-# Codec optimizations
+# Réduire la verbosité
 export VLC_VERBOSE=0
+
+# Path des plugins VLC
 export VLC_PLUGIN_PATH=/usr/lib/vlc/plugins
 
-echo "Optimisations VLC appliquées"
+echo "Environnement VLC configuré"
 EOF
     
-    chmod +x /opt/scripts/vlc-optimize.sh
+    chmod +x /opt/scripts/vlc-env.sh
     
-    log_info "Optimisations VLC créées"
+    log_info "Configuration d'environnement VLC créée"
 }
 
 # =============================================================================
@@ -594,7 +589,7 @@ main() {
         "create_waiting_message"
         "create_vlc_service"
         "configure_permissions"
-        "optimize_vlc_pi"
+        "configure_vlc_environment"
     )
     
     local failed_steps=()

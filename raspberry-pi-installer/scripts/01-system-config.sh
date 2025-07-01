@@ -208,9 +208,6 @@ configure_boot_stable() {
     cat >> "$boot_path/config.txt" << 'EOF'
 
 # === Configuration Digital Signage STABLE ===
-# GPU memory (conservateur)
-gpu_mem=128
-
 # Force HDMI output
 hdmi_force_hotplug=1
 hdmi_group=2

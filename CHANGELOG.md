@@ -13,12 +13,15 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   - Plus d'overclocking ni de modifications GPU agressives
   - Configuration système conservative par défaut
   - Suppression des modifications mémoire risquées
+  - Suppression de gpu_mem dans VLC et système
 - **Compatibilité améliorée** : Le script `main_orchestrator.sh` fonctionne sur tous les systèmes sans modifications risquées
 
 ### 🗑️ Supprimé
 - Scripts `install-lite.sh`, `01-system-config-lite.sh`, `02-x11-minimal.sh`
 - Documentation `README-LITE.md`
 - Toutes les optimisations GPU spécifiques dans `03-chromium-kiosk.sh`
+- Fonction `optimize_vlc_pi` remplacée par `configure_vlc_environment`
+- Configuration `gpu_mem=128` dans `01-system-config.sh`
 
 ### 📝 Notes
 Cette version unifie l'installation en supprimant toutes les optimisations qui pouvaient causer des instabilités. Le système utilise maintenant les configurations par défaut du Raspberry Pi, garantissant une meilleure stabilité sur tous les modèles.
