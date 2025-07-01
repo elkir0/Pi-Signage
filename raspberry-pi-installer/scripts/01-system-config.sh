@@ -19,6 +19,8 @@ readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Charger les fonctions de sécurité
 if [[ -f "$SCRIPT_DIR/00-security-utils.sh" ]]; then
     source "$SCRIPT_DIR/00-security-utils.sh"
+    # Initialiser et nettoyer dpkg si nécessaire
+    init_dpkg_cleanup
 else
     echo "ERREUR: Fichier de sécurité manquant: 00-security-utils.sh" >&2
     exit 1

@@ -70,7 +70,11 @@ repair_dpkg() {
     
     # Configurer dpkg
     echo "[DPKG] Configuration de dpkg..."
-    dpkg --configure -a || true
+    if [[ $EUID -ne 0 ]]; then
+        sudo dpkg --configure -a || true
+    else
+        dpkg --configure -a || true
+    fi
     
     # Réparer les dépendances
     echo "[DPKG] Réparation des dépendances..."
@@ -94,17 +98,21 @@ safe_execute() {
     local timeout="${4:-300}"  # 5 minutes par défaut
     
     local attempt=1
+    local temp_output
     
     while [[ $attempt -le $max_retries ]]; do
         echo "[SAFE_EXEC] Tentative $attempt/$max_retries: $cmd"
         
         # Vérifier et réparer dpkg si nécessaire avant d'exécuter
-        if [[ "$cmd" =~ apt-get|apt|dpkg ]] && ! check_dpkg_health; then
+        if [[ "$cmd" =~ (apt-get|apt|dpkg) ]] && ! check_dpkg_health; then
             echo "[SAFE_EXEC] Réparation de dpkg nécessaire..."
             repair_dpkg
         fi
         
-        if timeout "$timeout" bash -c "$cmd"; then
+        # Capturer la sortie pour détecter les erreurs dpkg
+        temp_output=$(mktemp)
+        if timeout "$timeout" bash -c "$cmd" 2>&1 | tee "$temp_output"; then
+            rm -f "$temp_output"
             echo "[SAFE_EXEC] Commande réussie"
             return 0
         fi
@@ -112,11 +120,18 @@ safe_execute() {
         local exit_code=$?
         echo "[SAFE_EXEC] Échec (code: $exit_code)"
         
-        # Si c'est une erreur dpkg, essayer de réparer
-        if [[ "$cmd" =~ apt-get|apt|dpkg ]] && [[ $exit_code -eq 100 || $exit_code -eq 0 ]]; then
+        # Vérifier si la sortie contient des erreurs dpkg
+        if grep -q "dpkg was interrupted" "$temp_output" 2>/dev/null || \
+           grep -q "Could not get lock" "$temp_output" 2>/dev/null || \
+           grep -q "Unable to acquire the dpkg frontend lock" "$temp_output" 2>/dev/null; then
+            echo "[SAFE_EXEC] Erreur dpkg détectée, tentative de réparation..."
+            repair_dpkg
+        elif [[ "$cmd" =~ (apt-get|apt|dpkg) ]] && [[ $exit_code -eq 100 || $exit_code -eq 0 ]]; then
             echo "[SAFE_EXEC] Tentative de réparation dpkg..."
             repair_dpkg
         fi
+        
+        rm -f "$temp_output"
         
         if [[ $attempt -lt $max_retries ]]; then
             echo "[SAFE_EXEC] Nouvelle tentative dans ${retry_delay}s..."
@@ -440,6 +455,24 @@ check_secure_environment() {
 }
 
 # =============================================================================
+# INITIALISATION AUTOMATIQUE
+# =============================================================================
+
+# Fonction d'initialisation pour nettoyer dpkg au démarrage
+init_dpkg_cleanup() {
+    echo "[INIT] Vérification de l'état de dpkg..."
+    
+    # Vérifier si dpkg nécessite une configuration
+    if dpkg --audit 2>&1 | grep -q "packages" || \
+       [[ -f /var/lib/dpkg/updates/* ]] 2>/dev/null; then
+        echo "[INIT] Configuration de dpkg requise, exécution automatique..."
+        repair_dpkg
+    else
+        echo "[INIT] dpkg est en bon état"
+    fi
+}
+
+# =============================================================================
 # EXPORT DES FONCTIONS
 # =============================================================================
 
@@ -464,3 +497,4 @@ export -f create_secure_temp_dir
 export -f log_security_event
 export -f check_secure_environment
 export -f get_encryption_key
+export -f init_dpkg_cleanup

@@ -502,6 +502,8 @@ collect_configuration() {
     # Charger les fonctions de sécurité
     if [[ -f "$SCRIPT_DIR/00-security-utils.sh" ]]; then
         source "$SCRIPT_DIR/00-security-utils.sh"
+        # Initialiser et nettoyer dpkg si nécessaire
+        init_dpkg_cleanup
     else
         log_error "Module de sécurité manquant, utilisation de fonctions basiques"
         # Fonctions fallback
