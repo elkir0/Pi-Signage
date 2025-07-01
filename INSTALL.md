@@ -1,4 +1,4 @@
-# 🚀 Guide d'installation Pi Signage Digital v2.3.0
+# 🚀 Guide d'installation Pi Signage Digital v2.4.2
 
 ## 📋 Prérequis
 
@@ -40,7 +40,7 @@ chmod +x *.sh
 
 ```bash
 # Lancer le script d'installation principal
-sudo ./install.sh
+sudo ./main_orchestrator.sh
 ```
 
 ### 4. Suivre l'assistant
@@ -83,7 +83,7 @@ Pour les tests sur machine virtuelle (QEMU, UTM, VirtualBox) :
 ```bash
 # L'installation détecte automatiquement l'environnement VM
 # et installe Xvfb pour le support headless
-sudo ./install.sh
+sudo ./main_orchestrator.sh
 
 # Le mode VM est activé automatiquement si détecté
 ```
@@ -143,7 +143,7 @@ sudo journalctl -f
 ```bash
 # Nettoyer l'environnement
 unset LOG_FILE CONFIG_FILE
-sudo ./install.sh
+sudo ./main_orchestrator.sh
 ```
 
 ### Services non démarrés

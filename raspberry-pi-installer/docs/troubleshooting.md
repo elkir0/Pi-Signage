@@ -14,22 +14,27 @@ Ce guide vous aidera à résoudre les problèmes courants rencontrés avec Pi Si
 
 ## 🚨 Problèmes d'installation
 
-### Écran noir après installation sur Raspberry Pi OS Lite
+### Écran noir après installation
 
 **Symptôme** : Écran totalement noir après redémarrage, pas d'affichage
 
-**Cause** : Modifications système trop agressives dans la version standard
+**Cause** : Problème de configuration X11 ou de service d'affichage
 
-**Solution** : Utiliser la version LITE
+**Solution** : La version 2.4.2 a supprimé toutes les optimisations agressives
 ```bash
-cd ~/Pi-Signage/raspberry-pi-installer
-sudo ./install-lite.sh
+# Mettre à jour vers la dernière version
+cd ~/Pi-Signage
+git pull origin main
+
+# Relancer l'installation
+cd raspberry-pi-installer/scripts
+sudo ./main_orchestrator.sh
 ```
 
-La version LITE évite les modifications problématiques :
-- Pas de `dtoverlay=vc4-fkms-v3d`
+La version actuelle utilise les configurations par défaut du Pi :
 - Pas de modifications GPU
-- Démarrage X11 simple sans display manager
+- Pas d'overclocking
+- Configuration système stable
 
 ## 🚨 Autres problèmes d'installation
 
