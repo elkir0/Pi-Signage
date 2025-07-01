@@ -3,25 +3,25 @@
 **Solution tout-en-un de digital signage pour Raspberry Pi avec interface web de gestion**
 
 [![Compatible](https://img.shields.io/badge/Compatible-Pi%203B%2B%20%7C%204B%20%7C%205-green.svg)](https://www.raspberrypi.org/)
-[![Version](https://img.shields.io/badge/Version-2.3.0-green.svg)]()
+[![Version](https://img.shields.io/badge/Version-2.4.0-blue.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)]()
 [![Security](https://img.shields.io/badge/Security-Enhanced-brightgreen.svg)]()
 
-> ✅ **Version stable 2.3.0** : Solution complète avec deux modes d'affichage (VLC Classic et Chromium Kiosk), interface web de gestion et sécurité renforcée.
+> ✅ **Version stable 2.4.0** : Solution complète avec support audio, gestion de playlist, logo personnalisé et interface web améliorée.
 
 ## 🎯 Présentation
 
 Pi Signage Digital est une solution professionnelle complète pour transformer vos Raspberry Pi en système d'affichage dynamique. Ce projet offre une installation automatisée avec une sécurité renforcée et une interface web moderne.
 
-### 🎬 Nouveautés v2.3.0 - Version stable
-- **Mode VLC Classic** : Stabilité éprouvée, support de tous les formats vidéo
-- **Mode Chromium Kiosk** : Léger et moderne, support HTML5 et overlays
-- **Installation adaptative** : Choix du mode selon vos besoins
-- **Player HTML5** : Interface moderne avec WebSocket pour Chromium
-- **Support VM/Headless** : Installation avec Xvfb pour tests et développement
-- **Interface web améliorée** : Nouvelles pages de gestion vidéos et paramètres
-- **Authentification harmonisée** : SHA-512 unifié entre bash et PHP
-- **Corrections de bugs** : Permissions, chemins, et stabilité améliorés
+### 🎬 Nouveautés v2.4.0 - Version stable
+- **Support audio complet** : Configuration HDMI/Jack avec volume réglable
+- **Page de gestion de playlist** : Organisation de l'ordre de lecture
+- **Logo Pi Signage intégré** : Branding personnalisé dans toute l'interface
+- **API player.php** : Contrôle complet du player (play/pause/stop/next)
+- **Téléchargement YouTube amélioré** : Format MP4 forcé, verbose persistant
+- **Scripts utilitaires audio** : Configuration et test du son
+- **Mise à jour automatique playlist** : Après upload ou téléchargement
+- **Corrections majeures** : exec() PHP, format vidéo, playlist Chromium
 
 ### 🔐 Fonctionnalités de sécurité
 - **Chiffrement des mots de passe** avec AES-256-CBC
@@ -147,6 +147,7 @@ L'installation est **modulaire** - vous pouvez choisir :
 ### Guides spécifiques
 - [Dépannage](raspberry-pi-installer/docs/troubleshooting.md)
 - [Proposition Chromium](raspberry-pi-installer/docs/CHROMIUM_KIOSK_PROPOSAL.md)
+- [Changelog complet](CHANGELOG.md)
 
 ## ✨ Fonctionnalités
 
@@ -265,24 +266,23 @@ git pull
 sudo /opt/scripts/update-web-interface.sh       # --full pour reinitialiser
 ```
 
-## 📋 Changelog v2.3.0
-
-### Corrections majeures
-- ✅ Suppression du package php8.2-json (intégré dans PHP 8.2)
-- ✅ Support VM/Headless avec Xvfb pour tests
-- ✅ Correction des sections dupliquées dans Glances
-- ✅ Création du répertoire home pour l'utilisateur signage
-- ✅ Harmonisation de l'authentification (SHA-512 unifié)
-- ✅ Correction des permissions fichiers et répertoires
-- ✅ Utilisation des chemins absolus dans tous les fichiers PHP
-- ✅ Correction de l'ownership /opt/videos pour www-data
+## 📋 Changelog v2.4.0
 
 ### Nouvelles fonctionnalités
-- ✅ Page de gestion des vidéos (videos.php)
-- ✅ Page des paramètres système (settings.php)
-- ✅ Détection automatique de l'environnement VM
-- ✅ Support Xvfb pour environnements sans écran
-- ✅ Création automatique du dossier assets
+- ✅ **Support audio complet** : HDMI/Jack, volume 85% par défaut
+- ✅ **Page playlist.php** : Gestion de l'ordre de lecture
+- ✅ **API player.php** : Contrôle play/pause/stop/next/update_playlist
+- ✅ **Logo Pi Signage** : Intégré dans navigation, login et favicon
+- ✅ **Scripts audio** : util-configure-audio.sh et util-test-audio.sh
+- ✅ **Wrapper yt-dlp** : Force le format MP4 pour compatibilité
+
+### Corrections majeures
+- ✅ Fonction exec() réactivée dans PHP pour yt-dlp
+- ✅ Format vidéo YouTube forcé en MP4 (plus de MKV)
+- ✅ Mise à jour automatique playlist après upload
+- ✅ Verbose YouTube persistant avec bouton fermeture
+- ✅ Autoplay avec son dans Chromium (attribut muted retiré)
+- ✅ Support fichiers MKV dans update-playlist.sh
 
 ## 🤝 Contribution
 
