@@ -395,3 +395,54 @@ function checkDiskSpace() {
         ]
     ];
 }
+
+/**
+ * Enregistrer une playlist personnalisée
+ */
+function savePlaylist(array $filenames) {
+    $videos = [];
+
+    foreach ($filenames as $name) {
+        $base = basename($name);
+        if (!isValidFilename($base)) {
+            continue;
+        }
+
+        $path = VIDEO_DIR . '/' . $base;
+        if (!file_exists($path)) {
+            continue;
+        }
+
+        $videos[] = [
+            'path' => '/videos/' . $base,
+            'name' => $base
+        ];
+    }
+
+    $playlist = [
+        'version' => '1.0',
+        'updated' => date('c'),
+        'videos' => $videos
+    ];
+
+    $json = json_encode($playlist, JSON_PRETTY_PRINT);
+    if ($json === false) {
+        return false;
+    }
+
+    $dir = dirname(PLAYLIST_FILE);
+    if (!is_dir($dir)) {
+        mkdir($dir, 0755, true);
+    }
+
+    if (file_put_contents(PLAYLIST_FILE, $json) === false) {
+        return false;
+    }
+
+    chmod(PLAYLIST_FILE, 0644);
+    @chown(PLAYLIST_FILE, 'www-data');
+
+    logActivity('PLAYLIST_SAVED', strval(count($videos)) . ' videos');
+
+    return true;
+}

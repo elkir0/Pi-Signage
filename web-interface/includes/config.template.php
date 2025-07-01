@@ -20,6 +20,7 @@ define('VIDEO_DIR', '/opt/videos');
 define('SCRIPTS_DIR', '/opt/scripts');
 define('LOG_DIR', '/var/log/pi-signage');
 define('PROGRESS_DIR', '/tmp/pi-signage-progress');
+define('PLAYLIST_FILE', '/var/www/pi-signage-player/api/playlist.json');
 define('WEB_ROOT', dirname(__DIR__));
 // binaire yt-dlp - utilise le wrapper pour éviter les problèmes de permissions
 define('YTDLP_BIN', 'sudo /opt/scripts/yt-dlp-wrapper.sh');
