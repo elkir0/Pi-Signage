@@ -100,7 +100,7 @@ pi-signage.target                # Target principal groupant tous les services
    chmod +x *.sh
    
    # Lancer l'installation v2.4.0
-   sudo ./install.sh
+   sudo ./main_orchestrator.sh
    ```
 
 2. **Suivre l'assistant d'installation :**
@@ -126,7 +126,7 @@ pi-signage.target                # Target principal groupant tous les services
 
 ```bash
 # 1. Script principal
-sudo ./install.sh
+sudo ./main_orchestrator.sh
 
 # 2. Modules individuels (si besoin)
 sudo ./00-security-utils.sh
@@ -147,7 +147,7 @@ sudo ./09-web-interface-v2.sh
 ```bash
 # Le script détecte automatiquement l'environnement VM
 # et installe Xvfb si nécessaire
-sudo ./install.sh
+sudo ./main_orchestrator.sh
 
 # Pour forcer le mode VM manuellement
 touch /etc/pi-signage/vm-mode.conf
@@ -496,7 +496,7 @@ sudo ufw enable
 
 ### Installation
 ```bash
-sudo ./install.sh                    # Installation complète
+sudo ./main_orchestrator.sh                    # Installation complète
 sudo /opt/scripts/setup-gdrive.sh   # Configuration Google Drive
 ```
 

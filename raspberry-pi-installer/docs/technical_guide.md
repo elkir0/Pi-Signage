@@ -38,7 +38,7 @@ Google Drive → rclone → /opt/videos → VLC → HDMI Output
 
 ### Module 00 - Orchestrateur Principal
 
-**Fichier :** `install.sh`
+**Fichier :** `main_orchestrator.sh`
 
 **Responsabilités :**
 - Détection automatique du modèle Raspberry Pi

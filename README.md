@@ -44,12 +44,11 @@ Pi-Signage/
 │   │   ├── 03-chromium-kiosk.sh # Installation Chromium Kiosk (nouveau!)
 │   │   ├── 04-rclone-gdrive.sh  # Synchronisation Google Drive
 │   │   ├── 05-glances-setup.sh  # Monitoring
-│   │   ├── 06-watchdog-setup.sh # Surveillance système
+│   │   ├── 06-cron-setup.sh     # Tâches planifiées
 │   │   ├── 07-services-setup.sh # Services systemd
-│   │   ├── 08-backup-manager.sh # Gestion des sauvegardes
+│   │   ├── 08-diagnostic-tools.sh # Outils de diagnostic
 │   │   ├── 09-web-interface-v2.sh # Interface web (nouvelle version)
-│   │   ├── 10-final-check.sh    # Vérification finale
-│   │   └── install.sh           # Script principal d'installation
+│   │   └── main_orchestrator.sh # Script principal d'installation
 │   ├── docs/                    # Documentation technique
 │   └── examples/                # Fichiers de configuration exemple
 │
@@ -71,7 +70,7 @@ Pi-Signage/
 
 ### Installation
 
-#### Installation de la version 2.3.0
+#### Installation de la version 2.4.0
 
 ```bash
 # Cloner le dépôt
@@ -81,8 +80,8 @@ cd Pi-Signage/raspberry-pi-installer/scripts
 # Rendre les scripts exécutables
 chmod +x *.sh
 
-# Lancer l'installation v2.3.0
-sudo ./install.sh
+# Lancer l'installation v2.4.0
+sudo ./main_orchestrator.sh
 ```
 
 #### Installation sur VM/Headless pour tests
@@ -94,7 +93,7 @@ cd Pi-Signage/raspberry-pi-installer/scripts
 
 # Installation avec support Xvfb automatique
 chmod +x *.sh
-sudo ./install.sh
+sudo ./main_orchestrator.sh
 
 # Le script détecte automatiquement l'environnement VM et installe Xvfb
 ```
@@ -105,10 +104,10 @@ Si vous obtenez l'erreur "variable en lecture seule" :
 ```bash
 # Option 1 : Nettoyer l'environnement
 unset LOG_FILE CONFIG_FILE
-sudo ./install.sh
+sudo ./main_orchestrator.sh
 
 # Option 2 : Utiliser un nouveau shell
-sudo bash ./install.sh
+sudo bash ./main_orchestrator.sh
 ```
 
 #### Modes d'affichage disponibles (nouveau!)
@@ -231,12 +230,12 @@ tail -f /var/log/pi-signage/chromium.log
 sudo pi-signage-diag                 # Diagnostic complet
 
 # Mise à jour
-sudo /opt/scripts/update-ytdlp.sh              # Mettre à jour yt-dlp
-sudo /opt/scripts/update-web-interface.sh      # Mettre à jour l'interface web
+sudo /opt/scripts/util-update-web-interface.sh      # Mettre à jour l'interface web
 #   (ajouter --full pour réinitialiser la configuration)
 
-# Sécurité
-sudo /opt/scripts/glances-password.sh          # Changer le mot de passe Glances
+# Configuration
+sudo /opt/scripts/util-configure-audio.sh      # Configurer l'audio (HDMI/Jack)
+sudo /opt/scripts/util-test-audio.sh           # Tester le son
 ```
 
 ## 📊 Accès aux Interfaces
@@ -263,7 +262,7 @@ Pour une mise à jour manuelle :
 ```bash
 cd /path/to/Pi-Signage
 git pull
-sudo /opt/scripts/update-web-interface.sh       # --full pour reinitialiser
+sudo /opt/scripts/util-update-web-interface.sh       # --full pour reinitialiser
 ```
 
 ## 📋 Changelog v2.4.0

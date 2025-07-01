@@ -27,7 +27,7 @@
 git clone https://github.com/elkir0/Pi-Signage.git
 cd Pi-Signage/raspberry-pi-installer/scripts
 chmod +x *.sh
-sudo ./install.sh
+sudo ./main_orchestrator.sh
 ```
 
 **Configuration demandée :**

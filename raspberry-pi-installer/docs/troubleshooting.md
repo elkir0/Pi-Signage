@@ -23,7 +23,7 @@ Ce guide vous aidera à résoudre les problèmes courants rencontrés avec Pi Si
 ```bash
 # Si vous avez une ancienne version, mettez à jour :
 git pull origin main
-sudo ./install.sh
+sudo ./main_orchestrator.sh
 ```
 
 ### Erreur "readonly variable" lors de l'installation
@@ -34,10 +34,10 @@ sudo ./install.sh
 ```bash
 # Option 1 : Nettoyer l'environnement
 unset LOG_FILE CONFIG_FILE SCRIPT_DIR
-sudo ./install.sh
+sudo ./main_orchestrator.sh
 
 # Option 2 : Utiliser un nouveau shell
-sudo bash ./install.sh
+sudo bash ./main_orchestrator.sh
 ```
 
 ### Installation sur VM/Headless - Pas d'affichage
@@ -512,7 +512,7 @@ git pull
 
 # Réinstaller
 cd raspberry-pi-installer/scripts
-sudo ./install.sh
+sudo ./main_orchestrator.sh
 ```
 
 Les principales nouveautés de la v2.4.0 :
