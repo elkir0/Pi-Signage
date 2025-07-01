@@ -22,6 +22,9 @@ $currentPage = basename($_SERVER['PHP_SELF']);
         <li class="<?= $currentPage === 'videos.php' ? 'active' : '' ?>">
             <a href="videos.php">📹 Vidéos</a>
         </li>
+        <li class="<?= $currentPage === 'playlist.php' ? 'active' : '' ?>">
+            <a href="playlist.php">📑 Playlist</a>
+        </li>
         <li class="<?= $currentPage === 'settings.php' ? 'active' : '' ?>">
             <a href="settings.php">⚙️ Paramètres</a>
         </li>
