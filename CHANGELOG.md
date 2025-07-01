@@ -29,6 +29,11 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   - `util-test-playlist.sh` : Vérification de la playlist
   - `util-configure-audio.sh` : Configuration audio interactive
   - `util-test-audio.sh` : Test du son
+  - `dpkg-health-check.sh` : Vérification et réparation automatique de dpkg
+- **Gestion robuste des erreurs dpkg** :
+  - Détection automatique des problèmes dpkg au démarrage
+  - Réparation automatique des verrous et paquets non configurés
+  - Support spécifique pour Raspberry Pi après interruptions
 
 ### 🔄 Modifié
 - **Téléchargement YouTube** :

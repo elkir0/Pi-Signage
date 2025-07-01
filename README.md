@@ -80,9 +80,14 @@ cd Pi-Signage/raspberry-pi-installer/scripts
 # Rendre les scripts exécutables
 chmod +x *.sh
 
+# (Optionnel) Vérifier l'état de dpkg avant l'installation
+./dpkg-health-check.sh
+
 # Lancer l'installation v2.4.0
 sudo ./main_orchestrator.sh
 ```
+
+> **Note**: Si vous rencontrez des erreurs dpkg pendant l'installation (courantes sur Raspberry Pi après interruptions), le script tentera automatiquement de les réparer. Utilisez `./dpkg-health-check.sh --auto` pour une réparation manuelle.
 
 #### Installation sur VM/Headless pour tests
 

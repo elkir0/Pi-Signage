@@ -14,6 +14,26 @@ Ce guide vous aidera à résoudre les problèmes courants rencontrés avec Pi Si
 
 ## 🚨 Problèmes d'installation
 
+### Erreurs dpkg sur Raspberry Pi
+
+**Symptôme** : Messages d'erreur dpkg pendant l'installation, paquets non configurés
+
+**Cause** : Interruption d'installation précédente, coupure de courant, manque d'espace
+
+**Solution** :
+```bash
+# Utiliser le script de vérification automatique
+cd ~/Pi-Signage/raspberry-pi-installer/scripts
+./dpkg-health-check.sh --auto
+
+# Ou réparer manuellement
+sudo dpkg --configure -a
+sudo apt-get update --fix-missing
+sudo apt-get install -f
+```
+
+Pour plus de détails, consultez le [Guide de dépannage dpkg](../../../docs/dpkg-troubleshooting.md).
+
 ### Erreur "php8.2-json package not found"
 
 **Symptôme** : L'installation échoue avec le message "Package php8.2-json is not available"

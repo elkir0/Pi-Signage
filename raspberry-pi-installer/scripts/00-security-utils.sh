@@ -68,25 +68,54 @@ repair_dpkg() {
         rm -f /var/cache/apt/archives/lock
     fi
     
-    # Configurer dpkg
-    echo "[DPKG] Configuration de dpkg..."
+    # Configurer dpkg - ÉTAPE CRITIQUE
+    echo "[DPKG] Configuration de dpkg (cette étape peut prendre plusieurs minutes)..."
     if [[ $EUID -ne 0 ]]; then
-        sudo dpkg --configure -a || true
+        sudo dpkg --configure -a || {
+            echo "[DPKG] Première tentative échouée, réessai avec force..."
+            sudo dpkg --configure -a --force-confold --force-confdef || true
+        }
     else
-        dpkg --configure -a || true
+        dpkg --configure -a || {
+            echo "[DPKG] Première tentative échouée, réessai avec force..."
+            dpkg --configure -a --force-confold --force-confdef || true
+        }
     fi
     
+    # Nettoyer le cache apt AVANT la mise à jour
+    echo "[DPKG] Nettoyage préalable du cache..."
+    apt-get clean || true
+    rm -rf /var/lib/apt/lists/* || true
+    
     # Réparer les dépendances
-    echo "[DPKG] Réparation des dépendances..."
-    apt-get update --fix-missing || true
-    apt-get install -f -y || true
+    echo "[DPKG] Mise à jour des sources de paquets..."
+    apt-get update --fix-missing || {
+        echo "[DPKG] Échec de la mise à jour, nettoyage et réessai..."
+        rm -rf /var/lib/apt/lists/*
+        apt-get clean
+        apt-get update || true
+    }
+    
+    echo "[DPKG] Installation des dépendances manquantes..."
+    apt-get install -f -y || {
+        echo "[DPKG] Tentative de réparation forcée..."
+        apt-get install -f -y --force-yes || true
+    }
     
     # Nettoyer
-    echo "[DPKG] Nettoyage du cache..."
+    echo "[DPKG] Nettoyage final..."
     apt-get clean || true
     apt-get autoclean || true
+    apt-get autoremove -y || true
     
-    echo "[DPKG] Réparation terminée"
+    # Vérifier si dpkg est maintenant sain
+    if dpkg --audit 2>&1 | grep -q "packages"; then
+        echo "[DPKG] ⚠️  Des paquets nécessitent encore une configuration"
+        echo "[DPKG] Vous pouvez essayer manuellement: sudo dpkg --configure -a"
+    else
+        echo "[DPKG] ✓ Réparation terminée avec succès"
+    fi
+    
     return 0
 }
 
@@ -120,9 +149,24 @@ safe_execute() {
         echo "[SAFE_EXEC] Échec (code: $exit_code)"
         
         # Si c'est une erreur dpkg, essayer de réparer
-        if [[ "$cmd" =~ apt-get|apt|dpkg ]] && [[ $exit_code -eq 100 || $exit_code -eq 0 ]]; then
-            echo "[SAFE_EXEC] Tentative de réparation dpkg..."
-            repair_dpkg
+        if [[ "$cmd" =~ apt-get|apt|dpkg ]]; then
+            case $exit_code in
+                100)
+                    echo "[SAFE_EXEC] Erreur dpkg détectée (code 100), tentative de réparation..."
+                    repair_dpkg
+                    ;;
+                124)
+                    echo "[SAFE_EXEC] Timeout détecté, possible verrou dpkg..."
+                    repair_dpkg
+                    ;;
+                1)
+                    # Vérifier si c'est vraiment une erreur dpkg
+                    if dpkg --audit 2>&1 | grep -q "packages"; then
+                        echo "[SAFE_EXEC] Paquets non configurés détectés, réparation..."
+                        repair_dpkg
+                    fi
+                    ;;
+            esac
         fi
         
         if [[ $attempt -lt $max_retries ]]; then

@@ -761,6 +761,16 @@ main() {
     mkdir -p "$(dirname "$LOG_FILE")"
     exec 2> >(tee -a "$LOG_FILE" >&2)
     
+    # Charger les fonctions de sécurité dès le début
+    if [[ -f "$SCRIPT_DIR/00-security-utils.sh" ]]; then
+        source "$SCRIPT_DIR/00-security-utils.sh"
+        # Initialiser et nettoyer dpkg si nécessaire
+        init_dpkg_cleanup
+    else
+        log_error "Module de sécurité manquant: 00-security-utils.sh"
+        log_error "Impossible de vérifier l'état de dpkg"
+    fi
+    
     # Affichage de la bannière
     show_banner
     
@@ -768,11 +778,13 @@ main() {
     check_system
     
     # Vérifier et réparer dpkg si nécessaire AVANT toute installation
-    if ! check_dpkg_health; then
-        echo ""
-        echo "⚠️  Le système de paquets nécessite une réparation"
-        echo ""
-        repair_dpkg
+    if command -v check_dpkg_health >/dev/null 2>&1; then
+        if ! check_dpkg_health; then
+            echo ""
+            echo "⚠️  Le système de paquets nécessite une réparation"
+            echo ""
+            repair_dpkg
+        fi
     fi
     
     detect_pi_model
