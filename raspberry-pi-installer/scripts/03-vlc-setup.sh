@@ -89,7 +89,7 @@ install_vlc() {
         "vlc-plugin-visualization"
         "vlc-l10n"
         "libvlc-dev"
-        "ffmpeg"
+        # ffmpeg déjà installé dans 01-system-config.sh
         "gstreamer1.0-tools"
         "gstreamer1.0-plugins-good"
         "gstreamer1.0-plugins-bad"
@@ -478,7 +478,13 @@ configure_permissions() {
     
     # Permissions sécurisées sur les répertoires
     secure_dir_permissions "/home/signage" "signage" "signage" "750"
-    secure_dir_permissions "$VIDEO_DIR" "signage" "signage" "750"
+    # Le répertoire $VIDEO_DIR est déjà créé dans 01-system-config.sh
+    # On ajuste juste les permissions si nécessaire
+    if [[ -d "$VIDEO_DIR" ]]; then
+        secure_dir_permissions "$VIDEO_DIR" "signage" "signage" "750"
+    else
+        log_error "Répertoire vidéos non trouvé : $VIDEO_DIR"
+    fi
     
     # Permissions pour les logs avec accès restreint
     mkdir -p /var/log/pi-signage

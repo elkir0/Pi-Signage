@@ -94,9 +94,7 @@ install_web_server() {
         "php8.2-xml"
         "php8.2-mbstring"
         "php8.2-zip"
-        "python3-pip"
-        "ffmpeg"
-        "git"  # Ajout de git pour cloner le dépôt
+        # python3-pip, ffmpeg et git déjà installés dans 01-system-config.sh
     )
     
     # Installation

@@ -84,14 +84,22 @@ install_chromium() {
     # Paquets nécessaires pour Chromium kiosk
     local packages=(
         "chromium-browser"
-        "xserver-xorg-core"
-        "xserver-xorg-video-fbdev"
-        "xinit"
-        "x11-xserver-utils"
-        "unclutter"
         "nginx"  # Pour servir le player local
-        "jq"     # Pour manipuler JSON
     )
+    
+    # Ajouter les paquets X11 seulement si pas déjà installés par 02-display-manager
+    if ! dpkg -l xserver-xorg-core >/dev/null 2>&1; then
+        packages+=(
+            "xserver-xorg-core"
+            "xserver-xorg-video-fbdev"
+            "xinit"
+            "x11-xserver-utils"
+            "unclutter"
+        )
+        log_info "Ajout des paquets X11 (non installés par display-manager)"
+    else
+        log_info "Paquets X11 déjà installés, pas de réinstallation"
+    fi
     
     # Détection VM et ajout xvfb si nécessaire
     if [[ -f /etc/pi-signage/vm-mode.conf ]] || ! [[ -f /proc/device-tree/model ]]; then
@@ -1132,8 +1140,8 @@ EOF
 configure_audio() {
     log_info "Configuration de l'audio pour Chromium..."
     
-    # Installer les paquets audio
-    apt-get install -y alsa-utils pulseaudio 2>/dev/null || true
+    # Les paquets audio sont déjà installés dans 01-system-config.sh
+    # apt-get install -y alsa-utils pulseaudio 2>/dev/null || true
     
     # Configurer le volume par défaut à 85%
     amixer set Master 85% 2>/dev/null || amixer set PCM 85% 2>/dev/null || true

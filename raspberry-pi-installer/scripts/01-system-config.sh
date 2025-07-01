@@ -224,8 +224,10 @@ max_framebuffers=2
 disable_splash=1
 boot_delay=0
 
-# Disable unnecessary hardware
-dtparam=audio=off
+# Audio enabled for video playback
+dtparam=audio=on
+
+# Disable camera (not needed)
 camera_auto_detect=0
 
 # === FIN Configuration Digital Signage ===
@@ -313,8 +315,9 @@ create_directories() {
 install_base_packages() {
     log_info "Installation des paquets de base..."
     
-    # Paquets essentiels pour le système
+    # Paquets essentiels pour le système (consolidés pour éviter les redondances)
     local base_packages=(
+        # Outils système de base
         "curl"
         "wget"
         "unzip"
@@ -329,6 +332,15 @@ install_base_packages() {
         "ca-certificates"
         "apt-transport-https"
         "software-properties-common"
+        
+        # Outils supplémentaires souvent réinstallés
+        "jq"              # Pour JSON (utilisé par chromium et web)
+        "bc"              # Pour calculs (utilisé dans scripts)
+        "net-tools"       # Pour diagnostics réseau
+        "ffmpeg"          # Pour traitement vidéo (VLC et YouTube)
+        "python3"         # Pour scripts
+        "python3-pip"     # Pour packages Python
+        "alsa-utils"      # Pour gestion audio
     )
     
     # Installation des paquets

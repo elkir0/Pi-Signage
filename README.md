@@ -3,11 +3,11 @@
 **Solution tout-en-un de digital signage pour Raspberry Pi avec interface web de gestion**
 
 [![Compatible](https://img.shields.io/badge/Compatible-Pi%203B%2B%20%7C%204B%20%7C%205-green.svg)](https://www.raspberrypi.org/)
-[![Version](https://img.shields.io/badge/Version-2.4.2-blue.svg)]()
+[![Version](https://img.shields.io/badge/Version-2.4.3-blue.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)]()
 [![Security](https://img.shields.io/badge/Security-Enhanced-brightgreen.svg)]()
 
-> ✅ **Version stable 2.4.2** : Installation stable sans optimisations agressives + Compatibilité améliorée pour tous les systèmes.
+> ✅ **Version stable 2.4.3** : Installation optimisée avec élimination des redondances + Performance améliorée.
 
 ## 🎯 Présentation
 

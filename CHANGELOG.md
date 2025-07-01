@@ -5,6 +5,23 @@ Toutes les modifications notables du projet Pi Signage Digital sont documentées
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/),
 et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.3] - 2025-01-01
+
+### 🔧 Optimisations de l'installation
+- **Consolidation des paquets** : Tous les paquets de base dans `01-system-config.sh`
+- **Élimination des redondances** : Plus d'installation multiple des mêmes paquets
+- **Audio cohérent** : Activé dès le début (plus de désactivation/réactivation)
+- **Détection X11** : Chromium vérifie si X11 est déjà installé
+- **Performance** : Installation plus rapide et moins d'utilisation réseau
+
+### 🐛 Corrections
+- Suppression des installations multiples de curl, git, ffmpeg, jq, etc.
+- Un seul script crée `/opt/videos` (au lieu de 10 !)
+- Configuration audio cohérente dans tous les scripts
+
+### 📝 Documentation
+- Ajout de `docs/OPTIMIZATIONS.md` détaillant les problèmes corrigés
+
 ## [2.4.2] - 2025-01-01
 
 ### 🔄 Modifié
