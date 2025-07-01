@@ -298,7 +298,11 @@ create_html5_player() {
 </head>
 <body>
     <div id="player-container">
-        <video id="video-player" autoplay muted></video>
+        <video id="video-player" autoplay controls></video>
+        <div id="play-button" class="hidden" onclick="window.player.startWithSound()">
+            <div class="play-icon">▶</div>
+            <p>Cliquez pour démarrer avec le son</p>
+        </div>
         <div id="no-content" class="hidden">
             <div class="no-content-message">
                 <h1>📺 Pi Signage</h1>
@@ -399,6 +403,36 @@ body {
 
 .hidden {
     display: none !important;
+}
+
+#play-button {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(255, 255, 255, 0.95);
+    padding: 40px;
+    border-radius: 10px;
+    cursor: pointer;
+    text-align: center;
+    transition: transform 0.2s;
+    z-index: 100;
+}
+
+#play-button:hover {
+    transform: translate(-50%, -50%) scale(1.05);
+}
+
+.play-icon {
+    font-size: 60px;
+    color: #333;
+    margin-bottom: 10px;
+}
+
+#play-button p {
+    color: #333;
+    font-size: 16px;
+    margin: 0;
 }
 
 #debug-panel {
@@ -546,14 +580,18 @@ class PiSignagePlayer {
         this.player.src = video.path;
         this.videoTitle.textContent = video.name || 'Sans titre';
         
+        // Configuration du volume
+        this.player.volume = 1.0; // Volume au maximum
+        this.player.muted = false; // S'assurer que le son n'est pas coupé
+        
         // Forcer la lecture
         const playPromise = this.player.play();
         if (playPromise !== undefined) {
             playPromise.catch(error => {
                 console.error('Autoplay failed:', error);
-                // Réessayer avec son coupé
-                this.player.muted = true;
-                this.player.play();
+                this.updateDebug('Autoplay bloqué, clic utilisateur requis');
+                // Afficher un bouton pour démarrer avec son
+                this.showPlayButton();
             });
         }
     }
@@ -566,6 +604,25 @@ class PiSignagePlayer {
     previous() {
         this.currentIndex = (this.currentIndex - 1 + this.playlist.length) % this.playlist.length;
         this.play();
+    }
+    
+    showPlayButton() {
+        document.getElementById('play-button').classList.remove('hidden');
+    }
+    
+    hidePlayButton() {
+        document.getElementById('play-button').classList.add('hidden');
+    }
+    
+    startWithSound() {
+        this.hidePlayButton();
+        this.player.muted = false;
+        this.player.volume = 1.0;
+        this.player.play().then(() => {
+            this.updateDebug('Lecture démarrée avec son');
+        }).catch(err => {
+            console.error('Erreur de lecture:', err);
+        });
     }
     
     handleError() {
@@ -1064,6 +1121,46 @@ EOF
 }
 
 # =============================================================================
+# CONFIGURATION AUDIO
+# =============================================================================
+
+configure_audio() {
+    log_info "Configuration de l'audio pour Chromium..."
+    
+    # Installer les paquets audio
+    apt-get install -y alsa-utils pulseaudio 2>/dev/null || true
+    
+    # Configurer le volume par défaut à 85%
+    amixer set Master 85% 2>/dev/null || amixer set PCM 85% 2>/dev/null || true
+    
+    # Ajouter l'utilisateur pi au groupe audio
+    usermod -a -G audio pi
+    
+    # Créer la configuration ALSA pour pi
+    cat > /home/pi/.asoundrc << 'EOF'
+pcm.!default {
+    type hw
+    card 0
+}
+
+ctl.!default {
+    type hw
+    card 0
+}
+EOF
+    
+    chown pi:pi /home/pi/.asoundrc
+    
+    # Activer la sortie HDMI pour l'audio
+    if ! grep -q "hdmi_drive=2" /boot/config.txt; then
+        echo "hdmi_drive=2" >> /boot/config.txt
+        log_info "Configuration HDMI audio ajoutée"
+    fi
+    
+    log_info "Audio configuré pour Chromium"
+}
+
+# =============================================================================
 # VALIDATION DE L'INSTALLATION
 # =============================================================================
 
@@ -1134,6 +1231,7 @@ main() {
         "create_html5_player"
         "create_systemd_service"
         "configure_x11_minimal"
+        "configure_audio"
         "optimize_chromium"
         "create_admin_scripts"
         "ensure_youtube_compatibility"
