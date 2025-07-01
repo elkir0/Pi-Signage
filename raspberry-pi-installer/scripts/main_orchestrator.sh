@@ -764,6 +764,15 @@ main() {
     
     # Vérifications système
     check_system
+    
+    # Vérifier et réparer dpkg si nécessaire AVANT toute installation
+    if ! check_dpkg_health; then
+        echo ""
+        echo "⚠️  Le système de paquets nécessite une réparation"
+        echo ""
+        repair_dpkg
+    fi
+    
     detect_pi_model
     
     # Sélection des modules

@@ -750,6 +750,19 @@ EOF
 }
 EOF
 
+    # Installer nginx si nécessaire
+    if ! command -v nginx >/dev/null 2>&1; then
+        log_info "Installation de nginx..."
+        safe_execute "apt-get install -y nginx" || {
+            log_error "Impossible d'installer nginx"
+            return 1
+        }
+    fi
+    
+    # Créer les répertoires nginx si nécessaire
+    mkdir -p /etc/nginx/sites-available
+    mkdir -p /etc/nginx/sites-enabled
+    
     # Configuration nginx pour servir le player
     cat > "/etc/nginx/sites-available/pi-signage-player" << 'EOF'
 server {
@@ -788,7 +801,7 @@ server {
 EOF
 
     # Activer le site
-    ln -sf /etc/nginx/sites-available/pi-signage-player /etc/nginx/sites-enabled/
+    ln -sf /etc/nginx/sites-available/pi-signage-player /etc/nginx/sites-enabled/pi-signage-player
     
     # Permissions
     secure_dir_permissions "$PLAYER_DIR" "www-data" "www-data" "755"

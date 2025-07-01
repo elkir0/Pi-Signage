@@ -10,6 +10,82 @@
 # GESTION D'ERREURS ROBUSTE
 # =============================================================================
 
+# Fonction pour vérifier la santé de dpkg
+check_dpkg_health() {
+    # Vérifier si dpkg est en cours d'exécution
+    if pgrep -x dpkg >/dev/null || pgrep -x apt-get >/dev/null || pgrep -x apt >/dev/null; then
+        echo "[DPKG] Processus dpkg/apt en cours, attente..."
+        sleep 5
+        return 1
+    fi
+    
+    # Vérifier les verrous
+    if [[ -f /var/lib/dpkg/lock-frontend ]] || [[ -f /var/lib/dpkg/lock ]]; then
+        # Vérifier si les fichiers sont vraiment verrouillés
+        if lsof /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || lsof /var/lib/dpkg/lock >/dev/null 2>&1; then
+            echo "[DPKG] Verrous dpkg détectés"
+            return 1
+        fi
+    fi
+    
+    # Vérifier si dpkg est configuré
+    if dpkg --audit 2>&1 | grep -q "packages"; then
+        echo "[DPKG] Des paquets nécessitent une configuration"
+        return 1
+    fi
+    
+    return 0
+}
+
+# Fonction pour réparer dpkg
+repair_dpkg() {
+    echo "[DPKG] Tentative de réparation du système de paquets..."
+    
+    # Tuer les processus bloqués (avec prudence)
+    local dpkg_pids=$(pgrep -x dpkg || true)
+    local apt_pids=$(pgrep -x apt-get || true)
+    local apt_pids2=$(pgrep -x apt || true)
+    
+    if [[ -n "$dpkg_pids" ]] || [[ -n "$apt_pids" ]] || [[ -n "$apt_pids2" ]]; then
+        echo "[DPKG] Arrêt des processus bloqués..."
+        killall -9 dpkg 2>/dev/null || true
+        killall -9 apt-get 2>/dev/null || true
+        killall -9 apt 2>/dev/null || true
+        sleep 2
+    fi
+    
+    # Supprimer les verrous si aucun processus ne les utilise
+    if ! lsof /var/lib/dpkg/lock-frontend >/dev/null 2>&1; then
+        rm -f /var/lib/dpkg/lock-frontend
+    fi
+    if ! lsof /var/lib/dpkg/lock >/dev/null 2>&1; then
+        rm -f /var/lib/dpkg/lock
+    fi
+    if ! lsof /var/lib/apt/lists/lock >/dev/null 2>&1; then
+        rm -f /var/lib/apt/lists/lock
+    fi
+    if ! lsof /var/cache/apt/archives/lock >/dev/null 2>&1; then
+        rm -f /var/cache/apt/archives/lock
+    fi
+    
+    # Configurer dpkg
+    echo "[DPKG] Configuration de dpkg..."
+    dpkg --configure -a || true
+    
+    # Réparer les dépendances
+    echo "[DPKG] Réparation des dépendances..."
+    apt-get update --fix-missing || true
+    apt-get install -f -y || true
+    
+    # Nettoyer
+    echo "[DPKG] Nettoyage du cache..."
+    apt-get clean || true
+    apt-get autoclean || true
+    
+    echo "[DPKG] Réparation terminée"
+    return 0
+}
+
 # Fonction pour exécuter une commande avec retry et timeout
 safe_execute() {
     local cmd="$1"
@@ -22,6 +98,12 @@ safe_execute() {
     while [[ $attempt -le $max_retries ]]; do
         echo "[SAFE_EXEC] Tentative $attempt/$max_retries: $cmd"
         
+        # Vérifier et réparer dpkg si nécessaire avant d'exécuter
+        if [[ "$cmd" =~ apt-get|apt|dpkg ]] && ! check_dpkg_health; then
+            echo "[SAFE_EXEC] Réparation de dpkg nécessaire..."
+            repair_dpkg
+        fi
+        
         if timeout "$timeout" bash -c "$cmd"; then
             echo "[SAFE_EXEC] Commande réussie"
             return 0
@@ -29,6 +111,12 @@ safe_execute() {
         
         local exit_code=$?
         echo "[SAFE_EXEC] Échec (code: $exit_code)"
+        
+        # Si c'est une erreur dpkg, essayer de réparer
+        if [[ "$cmd" =~ apt-get|apt|dpkg ]] && [[ $exit_code -eq 100 || $exit_code -eq 0 ]]; then
+            echo "[SAFE_EXEC] Tentative de réparation dpkg..."
+            repair_dpkg
+        fi
         
         if [[ $attempt -lt $max_retries ]]; then
             echo "[SAFE_EXEC] Nouvelle tentative dans ${retry_delay}s..."
@@ -356,6 +444,8 @@ check_secure_environment() {
 # =============================================================================
 
 # Export pour utilisation dans d'autres scripts
+export -f check_dpkg_health
+export -f repair_dpkg
 export -f safe_execute
 export -f wait_for_service
 export -f wait_for_process

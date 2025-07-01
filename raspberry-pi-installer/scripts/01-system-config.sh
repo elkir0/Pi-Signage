@@ -326,6 +326,7 @@ install_base_packages() {
         "cron"
         "systemd"
         "dbus"
+        "lsof"
         "ca-certificates"
         "apt-transport-https"
         "software-properties-common"
