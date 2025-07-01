@@ -104,15 +104,14 @@ safe_execute() {
         echo "[SAFE_EXEC] Tentative $attempt/$max_retries: $cmd"
         
         # Vérifier et réparer dpkg si nécessaire avant d'exécuter
-        if [[ "$cmd" =~ (apt-get|apt|dpkg) ]] && ! check_dpkg_health; then
-            echo "[SAFE_EXEC] Réparation de dpkg nécessaire..."
-            repair_dpkg
+        if [[ "$cmd" =~ apt-get|apt|dpkg ]]; then
+            if ! check_dpkg_health; then
+                echo "[SAFE_EXEC] Réparation de dpkg nécessaire..."
+                repair_dpkg
+            fi
         fi
         
-        # Capturer la sortie pour détecter les erreurs dpkg
-        temp_output=$(mktemp)
-        if timeout "$timeout" bash -c "$cmd" 2>&1 | tee "$temp_output"; then
-            rm -f "$temp_output"
+        if timeout "$timeout" bash -c "$cmd"; then
             echo "[SAFE_EXEC] Commande réussie"
             return 0
         fi
@@ -120,18 +119,11 @@ safe_execute() {
         local exit_code=$?
         echo "[SAFE_EXEC] Échec (code: $exit_code)"
         
-        # Vérifier si la sortie contient des erreurs dpkg
-        if grep -q "dpkg was interrupted" "$temp_output" 2>/dev/null || \
-           grep -q "Could not get lock" "$temp_output" 2>/dev/null || \
-           grep -q "Unable to acquire the dpkg frontend lock" "$temp_output" 2>/dev/null; then
-            echo "[SAFE_EXEC] Erreur dpkg détectée, tentative de réparation..."
-            repair_dpkg
-        elif [[ "$cmd" =~ (apt-get|apt|dpkg) ]] && [[ $exit_code -eq 100 || $exit_code -eq 0 ]]; then
+        # Si c'est une erreur dpkg, essayer de réparer
+        if [[ "$cmd" =~ apt-get|apt|dpkg ]] && [[ $exit_code -eq 100 || $exit_code -eq 0 ]]; then
             echo "[SAFE_EXEC] Tentative de réparation dpkg..."
             repair_dpkg
         fi
-        
-        rm -f "$temp_output"
         
         if [[ $attempt -lt $max_retries ]]; then
             echo "[SAFE_EXEC] Nouvelle tentative dans ${retry_delay}s..."
@@ -476,9 +468,18 @@ init_dpkg_cleanup() {
 # EXPORT DES FONCTIONS
 # =============================================================================
 
+# Fonction d'initialisation pour nettoyer dpkg au démarrage
+init_dpkg_cleanup() {
+    if ! check_dpkg_health; then
+        echo "[INIT] Nettoyage dpkg nécessaire au démarrage..."
+        repair_dpkg
+    fi
+}
+
 # Export pour utilisation dans d'autres scripts
 export -f check_dpkg_health
 export -f repair_dpkg
+export -f init_dpkg_cleanup
 export -f safe_execute
 export -f wait_for_service
 export -f wait_for_process
