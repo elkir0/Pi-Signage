@@ -12,7 +12,7 @@ set -euo pipefail
 # CONSTANTES GLOBALES
 # =============================================================================
 
-readonly SCRIPT_VERSION="2.4.3"
+readonly SCRIPT_VERSION="2.4.6"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly CONFIG_DIR="/etc/pi-signage"
 readonly CONFIG_FILE="$CONFIG_DIR/config.conf"
@@ -690,10 +690,16 @@ validate_installation() {
     
     # Vérification des services selon le mode d'affichage
     if [[ $DISPLAY_MODE == "chromium" ]]; then
-        if systemctl is-enabled "chromium-kiosk" >/dev/null 2>&1; then
-            echo -e "${GREEN}✓${NC} Service chromium-kiosk activé"
+        # En mode Chromium avec boot manager, le service n'est PAS activé au boot
+        # C'est pi-signage-startup qui le lance
+        if systemctl list-unit-files chromium-kiosk.service >/dev/null 2>&1; then
+            if systemctl is-enabled "chromium-kiosk" >/dev/null 2>&1; then
+                echo -e "${YELLOW}⚠${NC} Service chromium-kiosk activé (sera géré par boot manager)"
+            else
+                echo -e "${GREEN}✓${NC} Service chromium-kiosk présent (géré par boot manager)"
+            fi
         else
-            echo -e "${RED}✗${NC} Service chromium-kiosk non activé"
+            echo -e "${RED}✗${NC} Service chromium-kiosk manquant"
             ((errors++))
         fi
     else

@@ -204,34 +204,13 @@ configure_boot_stable() {
         log_info "Sauvegarde de config.txt créée"
     fi
     
-    # Configuration minimale et stable pour digital signage
-    cat >> "$boot_path/config.txt" << 'EOF'
-
-# === Configuration Digital Signage STABLE ===
-# Force HDMI output
-hdmi_force_hotplug=1
-hdmi_group=2
-hdmi_mode=82  # 1080p 60Hz
-
-# Display
-disable_overscan=1
-
-# Hardware acceleration (stable)
-dtoverlay=vc4-fkms-v3d
-max_framebuffers=2
-
-# Boot optimizations (légères)
-disable_splash=1
-boot_delay=0
-
-# Audio enabled for video playback
-dtparam=audio=on
-
-# Disable camera (not needed)
-camera_auto_detect=0
-
-# === FIN Configuration Digital Signage ===
-EOF
+    # NE PAS MODIFIER /boot/config.txt - Conformément aux exigences
+    # Toutes les modifications de boot doivent être faites manuellement
+    log_warn "AUCUNE modification de /boot/config.txt effectuée"
+    log_info "Si nécessaire, utilisez raspi-config pour configurer:"
+    log_info "  - La sortie HDMI : Advanced Options > Resolution"
+    log_info "  - L'audio : System Options > Audio"
+    log_info "  - L'accélération GPU : Advanced Options > GL Driver"
     
     log_info "Configuration boot stable appliquée"
 }
@@ -241,23 +220,11 @@ EOF
 # =============================================================================
 
 configure_cmdline() {
-    log_info "Configuration des paramètres de démarrage..."
+    log_info "Vérification des paramètres de démarrage..."
     
-    local boot_path="/boot"
-    [[ -d "/boot/firmware" ]] && boot_path="/boot/firmware"
-    
-    if [[ -f "$boot_path/cmdline.txt" ]]; then
-        # Sauvegarde
-        cp "$boot_path/cmdline.txt" "$boot_path/cmdline.txt.backup-$(date +%Y%m%d)"
-        
-        # Optimisations légères pour l'affichage
-        if ! grep -q "logo.nologo" "$boot_path/cmdline.txt"; then
-            sed -i 's/$/ logo.nologo consoleblank=0/' "$boot_path/cmdline.txt"
-            log_info "Optimisations d'affichage ajoutées à cmdline.txt"
-        fi
-    else
-        log_warn "Fichier cmdline.txt introuvable"
-    fi
+    # NE PAS MODIFIER /boot/cmdline.txt - Conformément aux exigences
+    log_warn "AUCUNE modification de /boot/cmdline.txt effectuée"
+    log_info "Les paramètres de boot ne sont pas modifiés par ce script"
 }
 
 # =============================================================================
@@ -309,11 +276,79 @@ create_directories() {
 }
 
 # =============================================================================
+# PRÉPARATION DU SYSTÈME
+# =============================================================================
+
+prepare_system() {
+    log_info "Préparation du système pour l'installation..."
+    
+    # Vérifier et réparer dpkg si nécessaire
+    if command -v check_dpkg_health >/dev/null 2>&1; then
+        if ! check_dpkg_health; then
+            log_info "Réparation de dpkg avant installation..."
+            repair_dpkg
+        fi
+    fi
+    
+    # Mettre à jour les listes de paquets
+    log_info "Mise à jour des listes de paquets..."
+    apt-get update || {
+        log_warn "Première mise à jour échouée, nettoyage et réessai..."
+        apt-get clean
+        rm -rf /var/lib/apt/lists/*
+        apt-get update
+    }
+    
+    # Installer les dépendances système critiques en premier
+    log_info "Installation des dépendances système critiques..."
+    
+    # Détecter l'architecture
+    local arch=$(dpkg --print-architecture)
+    log_info "Architecture: $arch"
+    
+    local critical_deps=(
+        "libgtk-3-common"  # Souvent manquant, bloque Chromium
+        "libgtk-3-0"       # Dépendance GTK pour interfaces graphiques
+    )
+    
+    for dep in "${critical_deps[@]}"; do
+        # Vérifier si le paquet est installé (avec ou sans architecture)
+        if ! dpkg -l "$dep" 2>/dev/null | grep -q "^ii" && 
+           ! dpkg -l "$dep:$arch" 2>/dev/null | grep -q "^ii"; then
+            log_info "Installation de la dépendance critique: $dep"
+            
+            # Essayer d'installer avec --fix-broken si nécessaire
+            apt-get install -y "$dep" || {
+                log_warn "Tentative avec --fix-broken pour $dep"
+                apt-get install -y --fix-broken "$dep" || {
+                    log_warn "Tentative avec architecture explicite: $dep:$arch"
+                    apt-get install -y --fix-broken "$dep:$arch" || true
+                }
+            }
+        else
+            log_info "$dep déjà installé"
+        fi
+    done
+    
+    # Vérifier spécifiquement que libgtk-3-0 est bien installé
+    if ! dpkg -l | grep -q "^ii.*libgtk-3-0"; then
+        log_error "libgtk-3-0 toujours manquant après installation!"
+        log_info "Tentative de réparation forcée..."
+        apt-get update
+        apt-get install -f -y
+        apt-get install -y --fix-broken libgtk-3-0 || true
+    fi
+}
+
+# =============================================================================
 # INSTALLATION DES PAQUETS DE BASE
 # =============================================================================
 
 install_base_packages() {
     log_info "Installation des paquets de base..."
+    
+    # Préparer le système d'abord
+    prepare_system
     
     # Paquets essentiels pour le système (consolidés pour éviter les redondances)
     local base_packages=(
@@ -343,12 +378,22 @@ install_base_packages() {
         "alsa-utils"      # Pour gestion audio
     )
     
-    # Installation des paquets
-    if apt-get install -y "${base_packages[@]}"; then
-        log_info "Paquets de base installés avec succès"
+    # Utiliser la fonction robuste si disponible
+    if command -v safe_apt_install >/dev/null 2>&1; then
+        if safe_apt_install "${base_packages[@]}"; then
+            log_info "Paquets de base installés avec succès"
+        else
+            log_error "Échec de l'installation des paquets de base"
+            return 1
+        fi
     else
-        log_error "Échec de l'installation des paquets de base"
-        return 1
+        # Fallback sur apt-get standard
+        if apt-get install -y "${base_packages[@]}"; then
+            log_info "Paquets de base installés avec succès"
+        else
+            log_error "Échec de l'installation des paquets de base"
+            return 1
+        fi
     fi
 }
 

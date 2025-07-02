@@ -90,10 +90,25 @@ install_glances() {
     
     # Installation des paquets avec retry
     log_info "Installation de Glances via apt..."
-    local install_cmd="apt-get install -y ${packages[*]}"
-    if ! safe_execute "$install_cmd" 3 10; then
-        log_error "Échec de l'installation de Glances après plusieurs tentatives"
-        return 1
+    
+    # Filtrer les paquets déjà installés
+    local packages_to_install=()
+    for pkg in "${packages[@]}"; do
+        if ! dpkg -l "$pkg" >/dev/null 2>&1; then
+            packages_to_install+=("$pkg")
+        else
+            log_info "$pkg déjà installé"
+        fi
+    done
+    
+    if [[ ${#packages_to_install[@]} -gt 0 ]]; then
+        local install_cmd="apt-get install -y ${packages_to_install[*]}"
+        if ! safe_execute "$install_cmd" 3 10; then
+            log_error "Échec de l'installation de Glances après plusieurs tentatives"
+            return 1
+        fi
+    else
+        log_info "Tous les paquets requis sont déjà installés"
     fi
     
     log_info "Glances et dépendances installés avec succès"

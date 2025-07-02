@@ -5,6 +5,51 @@ Toutes les modifications notables du projet Pi Signage Digital sont documentées
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/),
 et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.6] - 2025-01-02
+
+### 🔒 Sécurité absolue du boot
+- **Suppression TOTALE des modifications de boot** : Plus aucune modification de `/boot/config.txt` ni `/boot/cmdline.txt`
+- **Script 01-system-config.sh** : Les fonctions `configure_boot_stable()` et `configure_cmdline()` n'écrivent plus rien
+- **Conformité stricte** : Respect absolu de la directive "aucune modification du boot"
+- **Configuration manuelle** : Instructions pour utiliser `raspi-config` si des ajustements sont nécessaires
+
+### 📝 Modifications
+- Fonction `configure_boot_stable()` : Ne fait plus aucune modification
+- Fonction `configure_cmdline()` : Ne fait plus aucune modification
+- Messages d'information ajoutés pour guider l'utilisateur vers `raspi-config`
+
+### ✨ Nouvelles fonctionnalités
+- **Mode test intégré** : Proposé automatiquement après installation Chromium
+- **Diagnostic amélioré** : `pi-signage-diag --verify-chromium` pour vérifier la configuration
+- **Scripts consolidés** : Toutes les fonctions de test/vérification intégrées dans les scripts principaux
+- **Boot manager amélioré** : Gestion des conflits de services (désactive `x11-kiosk` automatiquement)
+- **Test touchscreen** : Support intégré pour l'écran tactile officiel Raspberry Pi
+
+## [2.4.5] - 2025-01-01
+
+### 🚨 Corrections critiques
+- **Suppression de toutes les modifications de `/boot/config.txt`** : Conformément aux exigences, aucun script ne modifie plus le boot
+- **Correction du problème d'écran noir** : Suppression de `hdmi_drive=2` qui causait l'écran noir au démarrage
+- **Script de réparation** : `fix-black-screen-boot.sh` pour réparer les systèmes affectés
+
+### 🔧 Fichiers modifiés
+- `03-chromium-kiosk.sh` : Suppression de la modification hdmi_drive=2
+- `util-configure-audio.sh` : Suppression de la modification hdmi_drive=2
+
+## [2.4.4] - 2025-01-01
+
+### 🔧 Améliorations de robustesse
+- **Fonction `safe_apt_install`** : Installation robuste avec récupération automatique
+- **Préparation système** : Installation des dépendances critiques avant tout
+- **Gestion dpkg améliorée** : Détection et réparation automatique des dépendances cassées
+- **Chromium sans DRM** : Installation avec `--no-install-recommends` pour éviter Widevine
+
+### 🐛 Corrections
+- Résolution du problème `libgtk-3-common` manquant
+- Correction du code retour 0 mal interprété dans `safe_execute`
+- Installation des dépendances GTK avant Chromium
+- Vérification `apt-get check` pour détecter les problèmes
+
 ## [2.4.3] - 2025-01-01
 
 ### 🔧 Optimisations de l'installation
@@ -12,12 +57,16 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **Élimination des redondances** : Plus d'installation multiple des mêmes paquets
 - **Audio cohérent** : Activé dès le début (plus de désactivation/réactivation)
 - **Détection X11** : Chromium vérifie si X11 est déjà installé
+- **Détection services** : Scripts vérifient l'existence des services avant manipulation
 - **Performance** : Installation plus rapide et moins d'utilisation réseau
 
 ### 🐛 Corrections
 - Suppression des installations multiples de curl, git, ffmpeg, jq, etc.
 - Un seul script crée `/opt/videos` (au lieu de 10 !)
 - Configuration audio cohérente dans tous les scripts
+- Glances vérifie les paquets avant installation
+- Watchdog détecte dynamiquement les services à surveiller
+- Scripts cron vérifient l'existence des services
 
 ### 📝 Documentation
 - Ajout de `docs/OPTIMIZATIONS.md` détaillant les problèmes corrigés

@@ -3,17 +3,25 @@
 **Solution tout-en-un de digital signage pour Raspberry Pi avec interface web de gestion**
 
 [![Compatible](https://img.shields.io/badge/Compatible-Pi%203B%2B%20%7C%204B%20%7C%205-green.svg)](https://www.raspberrypi.org/)
-[![Version](https://img.shields.io/badge/Version-2.4.3-blue.svg)]()
+[![Version](https://img.shields.io/badge/Version-2.4.6-blue.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)]()
 [![Security](https://img.shields.io/badge/Security-Enhanced-brightgreen.svg)]()
 
-> ✅ **Version stable 2.4.3** : Installation optimisée avec élimination des redondances + Performance améliorée.
+> ✅ **Version stable 2.4.6** : AUCUNE modification des fichiers de boot (/boot/config.txt et /boot/cmdline.txt) - Installation 100% sûre.
 
 ## 🎯 Présentation
 
 Pi Signage Digital est une solution professionnelle complète pour transformer vos Raspberry Pi en système d'affichage dynamique. Ce projet offre une installation automatisée avec une sécurité renforcée et une interface web moderne.
 
-### 🎬 Nouveautés v2.4.0 - Version stable
+### 🎬 Nouveautés v2.4.6
+- **Sécurité boot absolue** : AUCUNE modification de /boot/config.txt ou cmdline.txt
+- **Mode test intégré** : Test automatique proposé après installation
+- **Diagnostic Chromium** : Vérification complète via `pi-signage-diag --verify-chromium`
+- **Boot manager amélioré** : Gestion des conflits de services automatique
+- **Scripts consolidés** : Toutes les fonctions de test intégrées dans les scripts principaux
+- **Réparation images** : Script `util-fix-missing-images.sh` pour corriger logo/favicon manquants
+
+### 📦 Fonctionnalités v2.4.0+
 - **Support audio complet** : Configuration HDMI/Jack avec volume réglable
 - **Page de gestion de playlist** : Organisation de l'ordre de lecture
 - **Logo Pi Signage intégré** : Branding personnalisé dans toute l'interface
@@ -234,7 +242,10 @@ tail -f /var/log/pi-signage/chromium.log
 ### Commun aux deux modes
 ```bash
 # Diagnostic
-sudo pi-signage-diag                 # Diagnostic complet
+sudo pi-signage-diag                      # Diagnostic complet
+sudo pi-signage-diag --verify-chromium    # Vérifier config Chromium
+sudo pi-signage-diag --fix-black-screen   # Réparer écran noir
+sudo pi-signage-tools                     # Menu interactif complet
 
 # Mise à jour
 sudo /opt/scripts/util-update-web-interface.sh      # Mettre à jour l'interface web

@@ -34,6 +34,12 @@ check_dpkg_health() {
         return 1
     fi
     
+    # Vérifier les dépendances cassées
+    if ! apt-get check >/dev/null 2>&1; then
+        echo "[DPKG] Dépendances cassées détectées"
+        return 1
+    fi
+    
     return 0
 }
 
@@ -102,11 +108,62 @@ repair_dpkg() {
         apt-get install -f -y --force-yes || true
     }
     
+    # Installer les dépendances GTK critiques si manquantes
+    echo "[DPKG] Vérification des dépendances GTK..."
+    
+    # Détecter l'architecture pour les paquets multi-arch
+    local arch=$(dpkg --print-architecture)
+    echo "[DPKG] Architecture détectée: $arch"
+    
+    # Liste des dépendances critiques
+    local gtk_deps=("libgtk-3-common" "libgtk-3-0")
+    
+    for dep in "${gtk_deps[@]}"; do
+        # Vérifier avec et sans architecture
+        if ! dpkg -l "$dep" >/dev/null 2>&1 && ! dpkg -l "$dep:$arch" >/dev/null 2>&1; then
+            echo "[DPKG] Installation de la dépendance manquante: $dep"
+            # Essayer d'installer avec update des listes
+            apt-get update
+            apt-get install -y "$dep" || {
+                echo "[DPKG] Tentative avec architecture spécifique: $dep:$arch"
+                apt-get install -y "$dep:$arch" || true
+            }
+        fi
+    done
+    
+    # Si libgtk-3-0 n'est toujours pas installé, forcer
+    if ! dpkg -l | grep -q "libgtk-3-0"; then
+        echo "[DPKG] FORCE: Installation de libgtk-3-0 avec --fix-broken"
+        apt-get update
+        apt-get install -y --fix-broken libgtk-3-0 || true
+    fi
+    
     # Nettoyer
     echo "[DPKG] Nettoyage final..."
     apt-get clean || true
     apt-get autoclean || true
     apt-get autoremove -y || true
+    
+    # Forcer la configuration des paquets non configurés
+    echo "[DPKG] Tentative de configuration forcée des paquets..."
+    local unconfigured_packages
+    unconfigured_packages=$(dpkg -l | grep "^iU" | awk '{print $2}')
+    
+    if [[ -n "$unconfigured_packages" ]]; then
+        echo "[DPKG] Paquets non configurés trouvés:"
+        echo "$unconfigured_packages"
+        
+        # Essayer de les configurer un par un
+        while IFS= read -r pkg; do
+            if [[ -n "$pkg" ]]; then
+                echo "[DPKG] Configuration de: $pkg"
+                dpkg --configure "$pkg" || {
+                    echo "[DPKG] Échec, tentative de suppression: $pkg"
+                    dpkg --remove --force-remove-reinstreq "$pkg" || true
+                }
+            fi
+        done <<< "$unconfigured_packages"
+    fi
     
     # Vérifier si dpkg est maintenant sain
     if dpkg --audit 2>&1 | grep -q "packages"; then
@@ -140,12 +197,16 @@ safe_execute() {
             fi
         fi
         
-        if timeout "$timeout" bash -c "$cmd"; then
+        # Exécuter la commande et capturer le code de sortie
+        timeout "$timeout" bash -c "$cmd"
+        local exit_code=$?
+        
+        # Si succès (code 0) ou code 124 (timeout atteint mais commande OK)
+        if [[ $exit_code -eq 0 ]]; then
             echo "[SAFE_EXEC] Commande réussie"
             return 0
         fi
         
-        local exit_code=$?
         echo "[SAFE_EXEC] Échec (code: $exit_code)"
         
         # Si c'est une erreur dpkg, essayer de réparer
@@ -488,6 +549,68 @@ check_secure_environment() {
     fi
     
     return $warnings
+}
+
+# Fonction pour installer des paquets de manière robuste
+safe_apt_install() {
+    local packages=("$@")
+    
+    if [[ ${#packages[@]} -eq 0 ]]; then
+        echo "[APT] Aucun paquet à installer"
+        return 0
+    fi
+    
+    echo "[APT] Installation des paquets: ${packages[*]}"
+    
+    # Vérifier la santé de dpkg avant
+    if ! check_dpkg_health; then
+        echo "[APT] Réparation préalable de dpkg..."
+        repair_dpkg
+    fi
+    
+    # Mise à jour des listes si nécessaire
+    if [[ ! -d /var/lib/apt/lists ]] || [[ -z "$(ls -A /var/lib/apt/lists)" ]]; then
+        echo "[APT] Mise à jour des listes de paquets..."
+        apt-get update || true
+    fi
+    
+    # Installer les paquets avec options de récupération
+    local install_opts="-y --no-install-recommends"
+    
+    # Première tentative normale
+    if apt-get install $install_opts "${packages[@]}"; then
+        echo "[APT] Installation réussie"
+        return 0
+    fi
+    
+    # Si échec, réparer et réessayer
+    echo "[APT] Échec, tentative de réparation..."
+    apt-get install -f -y
+    
+    # Deuxième tentative avec --fix-missing
+    if apt-get install $install_opts --fix-missing "${packages[@]}"; then
+        echo "[APT] Installation réussie après réparation"
+        return 0
+    fi
+    
+    # Dernière tentative: installer un par un
+    echo "[APT] Installation individuelle des paquets..."
+    local failed_packages=()
+    for pkg in "${packages[@]}"; do
+        if ! dpkg -l "$pkg" >/dev/null 2>&1; then
+            if ! apt-get install $install_opts "$pkg"; then
+                failed_packages+=("$pkg")
+            fi
+        fi
+    done
+    
+    if [[ ${#failed_packages[@]} -gt 0 ]]; then
+        echo "[APT] AVERTISSEMENT: Paquets non installés: ${failed_packages[*]}"
+        return 1
+    fi
+    
+    echo "[APT] Tous les paquets installés"
+    return 0
 }
 
 # =============================================================================

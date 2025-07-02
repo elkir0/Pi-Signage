@@ -34,10 +34,8 @@ configure_audio_output() {
             echo -e "${GREEN}Configuration HDMI...${NC}"
             # Forcer la sortie HDMI
             amixer cset numid=3 2 2>/dev/null || true
-            # Configuration dans config.txt
-            if ! grep -q "hdmi_drive=2" /boot/config.txt; then
-                echo "hdmi_drive=2" >> /boot/config.txt
-            fi
+            # NE PAS modifier /boot/config.txt - conformément aux exigences
+            echo -e "${YELLOW}Note: Pas de modification de /boot/config.txt${NC}"
             ;;
         2)
             echo -e "${GREEN}Configuration Jack 3.5mm...${NC}"

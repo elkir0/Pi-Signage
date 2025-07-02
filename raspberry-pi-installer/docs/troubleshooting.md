@@ -261,6 +261,41 @@ require_once dirname(__DIR__) . '/includes/config.php';
 require_once '../includes/config.php';
 ```
 
+### Images manquantes (logo/favicon)
+
+**Symptômes** :
+- Logo Pi Signage non visible dans l'interface
+- Favicon absent dans l'onglet du navigateur
+- Icônes cassées dans la navigation
+
+**Solutions** :
+
+1. **Utiliser le script de réparation automatique**
+```bash
+sudo /opt/scripts/util-fix-missing-images.sh
+```
+
+2. **Via le menu de diagnostic**
+```bash
+sudo pi-signage-tools
+# Choisir option 12
+```
+
+3. **Téléchargement manuel**
+```bash
+# Logo
+sudo wget -O /var/www/pi-signage/public/assets/images/logo.png \
+  https://raw.githubusercontent.com/elkir0/Pi-Signage/main/web-interface/public/assets/images/logo.png
+
+# Favicon
+sudo wget -O /var/www/pi-signage/public/assets/images/favicon.ico \
+  https://raw.githubusercontent.com/elkir0/Pi-Signage/main/web-interface/public/assets/images/favicon.ico
+
+# Permissions
+sudo chown www-data:www-data /var/www/pi-signage/public/assets/images/*
+sudo systemctl reload nginx
+```
+
 ## 🎬 Problèmes de lecture vidéo
 
 ### Mode VLC - Pas de lecture

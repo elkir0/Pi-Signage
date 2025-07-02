@@ -158,12 +158,14 @@ sudo pi-signage emergency
 - [ ] WiFi/Ethernet configuré et fonctionnel
 - [ ] Script d'installation téléchargé et exécuté
 - [ ] Configuration utilisateur complétée
-- [ ] Google Drive configuré et testé
+- [ ] Mode d'affichage choisi (VLC ou Chromium)
+- [ ] Mode test exécuté après installation (si Chromium)
+- [ ] Google Drive configuré et testé (si choisi)
 - [ ] Redémarrage effectué
-- [ ] Services vérifiés avec `sudo pi-signage status`
+- [ ] Services vérifiés avec `sudo pi-signage-tools`
 - [ ] Interface Glances accessible
 - [ ] Diagnostic `sudo pi-signage-diag` OK
-- [ ] Vidéos ajoutées dans Google Drive
+- [ ] Vidéos ajoutées dans /opt/videos ou Google Drive
 - [ ] Synchronisation testée
 - [ ] Interface web accessible sur port 80
 - [ ] Audio configuré si nécessaire
@@ -219,4 +221,4 @@ sudo pi-signage emergency
 
 ---
 
-**🎉 Votre système Pi Signage v2.4.0 est prêt ! Profitez de votre digital signage professionnel avec support audio complet.**
+**🎉 Votre système Pi Signage v2.4.6 est prêt ! Profitez de votre digital signage professionnel 100% sûr (aucune modification du boot).**

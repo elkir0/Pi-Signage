@@ -59,9 +59,34 @@
 - **Cohérence système** : Configuration audio et GPU cohérente
 - **Maintenance simplifiée** : Centralisation des paquets de base
 
+## Scripts 04-10 : Problèmes supplémentaires
+
+### 04-rclone-setup.sh
+- ✅ Gère correctement l'installation d'unzip si nécessaire
+- ⚠️ Le script de sync crée /opt/videos alors qu'il devrait juste vérifier
+
+### 05-glances-setup.sh
+- ❌ Installe `curl` déjà présent dans 01-system-config.sh
+- **Solution** : Vérification avant installation ajoutée
+
+### 06-cron-setup.sh
+- ⚠️ Crée des scripts qui supposent l'existence de services optionnels
+- **Solution** : Les scripts devraient vérifier l'existence des services
+
+### 07-services-setup.sh  
+- ❌ Le watchdog surveillait des services potentiellement non installés
+- **Solution** : Détection dynamique des services à surveiller
+
+### 08-diagnostic-tools.sh
+- ✅ Aucune installation de paquets, seulement création d'outils
+
+### 10-boot-manager.sh
+- ✅ Gère le démarrage progressif sans installer de paquets
+
 ## Recommandations futures
 
 1. **Créer un fichier de manifeste** listant tous les paquets par module
 2. **Utiliser un système de cache** pour éviter les vérifications répétées
 3. **Centraliser la création des répertoires** dans une fonction unique
 4. **Logger les paquets installés** pour éviter les doublons
+5. **Vérifier l'existence des services** avant de les surveiller/redémarrer

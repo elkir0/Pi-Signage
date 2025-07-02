@@ -337,6 +337,21 @@ deploy_web_files() {
     fi
     cp -r "$temp_dir/$WEB_INTERFACE_DIR/templates" "$WEB_ROOT/"
     
+    # Vérification immédiate des images critiques
+    log_info "Vérification de la copie des images..."
+    if [[ -f "$WEB_ROOT/public/assets/images/logo.png" ]]; then
+        log_info "✓ Logo copié avec succès"
+    else
+        log_error "✗ Logo non copié ! Vérification du dépôt temporaire..."
+        ls -la "$temp_dir/$WEB_INTERFACE_DIR/public/assets/images/" 2>/dev/null || log_error "Dossier images introuvable dans le clone"
+    fi
+    
+    if [[ -f "$WEB_ROOT/public/assets/images/favicon.ico" ]]; then
+        log_info "✓ Favicon copié avec succès"
+    else
+        log_error "✗ Favicon non copié !"
+    fi
+    
     # Créer le fichier de configuration à partir du template
     if [[ -f "$temp_dir/$WEB_INTERFACE_DIR/includes/config.template.php" ]]; then
         cp "$temp_dir/$WEB_INTERFACE_DIR/includes/config.template.php" "$WEB_ROOT/includes/config.php"
@@ -362,64 +377,74 @@ deploy_web_files() {
     mkdir -p "/tmp/pi-signage-progress"
     chmod 777 "/tmp/pi-signage-progress"
     
-    # Gérer les assets - créer la structure dans public et les liens vers les fichiers
+    # Vérifier et corriger les assets après la copie depuis GitHub
+    log_info "Vérification et configuration des assets..."
+    
+    # S'assurer que les répertoires existent
+    mkdir -p "$WEB_ROOT/public/assets/"{css,js,images}
+    
+    # Les fichiers devraient déjà être présents après la copie du dossier public
+    # Vérifier chaque fichier important
+    
+    # 1. Logo
+    if [[ ! -f "$WEB_ROOT/public/assets/images/logo.png" ]]; then
+        log_warn "Logo manquant dans public/assets/images/"
+        # Essayer de le récupérer depuis différentes sources
+        if [[ -f "$temp_dir/$WEB_INTERFACE_DIR/public/assets/images/logo.png" ]]; then
+            cp "$temp_dir/$WEB_INTERFACE_DIR/public/assets/images/logo.png" "$WEB_ROOT/public/assets/images/"
+            log_info "Logo copié depuis le dépôt temporaire"
+        elif [[ -f "$temp_dir/$WEB_INTERFACE_DIR/assets/images/logo.png" ]]; then
+            cp "$temp_dir/$WEB_INTERFACE_DIR/assets/images/logo.png" "$WEB_ROOT/public/assets/images/"
+            log_info "Logo copié depuis assets/images du dépôt"
+        elif [[ -f "$WEB_ROOT/assets/images/logo.png" ]]; then
+            cp "$WEB_ROOT/assets/images/logo.png" "$WEB_ROOT/public/assets/images/"
+            log_info "Logo copié depuis assets locaux"
+        else
+            log_error "Logo introuvable dans toutes les sources !"
+        fi
+    else
+        log_info "✓ Logo présent"
+    fi
+    
+    # 2. Favicon
+    if [[ ! -f "$WEB_ROOT/public/assets/images/favicon.ico" ]]; then
+        log_warn "Favicon manquant"
+        if [[ -f "$temp_dir/$WEB_INTERFACE_DIR/public/assets/images/favicon.ico" ]]; then
+            cp "$temp_dir/$WEB_INTERFACE_DIR/public/assets/images/favicon.ico" "$WEB_ROOT/public/assets/images/"
+            log_info "Favicon copié depuis le dépôt"
+        else
+            log_error "Favicon introuvable !"
+        fi
+    else
+        log_info "✓ Favicon présent"
+    fi
+    
+    # 3. CSS/JS - Gérer les liens symboliques si nécessaire
     if [[ -d "$WEB_ROOT/assets" ]]; then
-        # Créer la structure dans public si elle n'existe pas
-        mkdir -p "$WEB_ROOT/public/assets/"{css,js,images}
-        
-        # Créer des liens symboliques pour chaque fichier
-        if [[ -f "$WEB_ROOT/assets/css/style.css" ]]; then
+        # Si un dossier assets existe à la racine, créer des liens
+        if [[ -f "$WEB_ROOT/assets/css/style.css" ]] && [[ ! -f "$WEB_ROOT/public/assets/css/style.css" ]]; then
             ln -sf "$WEB_ROOT/assets/css/style.css" "$WEB_ROOT/public/assets/css/style.css"
             log_info "Lien créé pour style.css"
         fi
         
-        if [[ -f "$WEB_ROOT/assets/js/main.js" ]]; then
+        if [[ -f "$WEB_ROOT/assets/js/main.js" ]] && [[ ! -f "$WEB_ROOT/public/assets/js/main.js" ]]; then
             ln -sf "$WEB_ROOT/assets/js/main.js" "$WEB_ROOT/public/assets/js/main.js"
             log_info "Lien créé pour main.js"
         fi
-        
-        # Copier les images si elles existent
-        if [[ -d "$WEB_ROOT/assets/images" ]]; then
-            cp -r "$WEB_ROOT/assets/images/"* "$WEB_ROOT/public/assets/images/" 2>/dev/null || true
-        fi
-        
-        # S'assurer que le logo est présent
-        if [[ -f "$temp_dir/$WEB_INTERFACE_DIR/public/assets/images/logo.png" ]]; then
-            cp "$temp_dir/$WEB_INTERFACE_DIR/public/assets/images/logo.png" "$WEB_ROOT/public/assets/images/"
-            log_info "Logo Pi Signage copié"
-        elif [[ -f "$WEB_ROOT/assets/images/logo.png" ]]; then
-            cp "$WEB_ROOT/assets/images/logo.png" "$WEB_ROOT/public/assets/images/"
-            log_info "Logo copié depuis assets existants"
-        fi
-        
-        # Copier aussi le favicon
-        if [[ -f "$temp_dir/$WEB_INTERFACE_DIR/public/assets/images/favicon.ico" ]]; then
-            cp "$temp_dir/$WEB_INTERFACE_DIR/public/assets/images/favicon.ico" "$WEB_ROOT/public/assets/images/"
-            log_info "Favicon copié"
-        fi
-        
-        # Créer aussi un lien pour dashboard.css s'il existe
-        if [[ -f "$WEB_ROOT/assets/css/dashboard.css" ]]; then
-            ln -sf "$WEB_ROOT/assets/css/dashboard.css" "$WEB_ROOT/public/assets/css/dashboard.css"
-        elif [[ -f "$WEB_ROOT/public/assets/css/dashboard.css" ]]; then
-            log_info "dashboard.css déjà présent"
-        fi
-        
-        log_info "Assets configurés avec succès"
-    else
-        # Si pas d'assets, créer une structure minimale
-        mkdir -p "$WEB_ROOT/public/assets/"{css,js,images}
-        echo "/* Pi Signage Web Interface */" > "$WEB_ROOT/public/assets/css/style.css"
-        echo "// Pi Signage Main JS" > "$WEB_ROOT/public/assets/js/main.js"
-        log_info "Structure assets minimale créée"
-        
-        # Copier le logo depuis le dépôt cloné si disponible
-        if [[ -f "$temp_dir/$WEB_INTERFACE_DIR/public/assets/images/logo.png" ]]; then
-            cp "$temp_dir/$WEB_INTERFACE_DIR/public/assets/images/logo.png" "$WEB_ROOT/public/assets/images/"
-            log_info "Logo copié avec succès"
-        else
-            log_warning "Logo non trouvé dans le dépôt"
-        fi
+    fi
+    
+    # 4. Vérification finale
+    log_info "État final des assets :"
+    [[ -f "$WEB_ROOT/public/assets/images/logo.png" ]] && log_info "  ✓ logo.png" || log_error "  ✗ logo.png MANQUANT"
+    [[ -f "$WEB_ROOT/public/assets/images/favicon.ico" ]] && log_info "  ✓ favicon.ico" || log_error "  ✗ favicon.ico MANQUANT"
+    [[ -f "$WEB_ROOT/public/assets/css/style.css" ]] && log_info "  ✓ style.css" || log_warn "  ✗ style.css manquant"
+    [[ -f "$WEB_ROOT/public/assets/css/dashboard.css" ]] && log_info "  ✓ dashboard.css" || log_warn "  ✗ dashboard.css manquant"
+    [[ -f "$WEB_ROOT/public/assets/js/main.js" ]] && log_info "  ✓ main.js" || log_warn "  ✗ main.js manquant"
+    
+    # Debug : lister le contenu pour diagnostic
+    if [[ ! -f "$WEB_ROOT/public/assets/images/logo.png" ]] || [[ ! -f "$WEB_ROOT/public/assets/images/favicon.ico" ]]; then
+        log_warn "Contenu de public/assets/images/ :"
+        ls -la "$WEB_ROOT/public/assets/images/" 2>/dev/null || log_error "Répertoire images n'existe pas !"
     fi
     
     # Nettoyer le répertoire temporaire
@@ -758,6 +783,91 @@ exit 0
 EOF
 
     chmod +x /opt/scripts/util-refresh-playlist.sh
+    
+    # Script de réparation des images manquantes
+    cat > /opt/scripts/util-fix-missing-images.sh << 'EOF'
+#!/usr/bin/env bash
+
+# =============================================================================
+# Utilitaire pour réparer les images manquantes de l'interface web
+# =============================================================================
+
+set -euo pipefail
+
+# Couleurs
+readonly RED='\033[0;31m'
+readonly GREEN='\033[0;32m'
+readonly YELLOW='\033[1;33m'
+readonly NC='\033[0m'
+
+# Constantes
+readonly WEB_ROOT="/var/www/pi-signage"
+readonly GITHUB_RAW="https://raw.githubusercontent.com/elkir0/Pi-Signage/main"
+
+# Vérification root
+if [[ $EUID -ne 0 ]]; then
+    echo -e "${RED}[ERROR]${NC} Ce script doit être exécuté en tant que root"
+    exit 1
+fi
+
+echo -e "${GREEN}=== Réparation des images manquantes ===${NC}"
+echo
+
+# Vérifier l'état actuel
+echo -e "${YELLOW}État actuel des images :${NC}"
+[[ -f "$WEB_ROOT/public/assets/images/logo.png" ]] && echo "  ✓ logo.png présent" || echo "  ✗ logo.png MANQUANT"
+[[ -f "$WEB_ROOT/public/assets/images/favicon.ico" ]] && echo "  ✓ favicon.ico présent" || echo "  ✗ favicon.ico MANQUANT"
+
+# Si tout est OK, sortir
+if [[ -f "$WEB_ROOT/public/assets/images/logo.png" ]] && [[ -f "$WEB_ROOT/public/assets/images/favicon.ico" ]]; then
+    echo -e "\n${GREEN}Toutes les images sont présentes !${NC}"
+    exit 0
+fi
+
+echo -e "\n${YELLOW}Téléchargement des images depuis GitHub...${NC}"
+
+# Créer le répertoire si nécessaire
+mkdir -p "$WEB_ROOT/public/assets/images"
+
+# Logo
+if [[ ! -f "$WEB_ROOT/public/assets/images/logo.png" ]]; then
+    echo "Téléchargement du logo..."
+    if wget -q -O "$WEB_ROOT/public/assets/images/logo.png" "$GITHUB_RAW/web-interface/public/assets/images/logo.png"; then
+        echo -e "${GREEN}✓${NC} Logo téléchargé"
+        chown www-data:www-data "$WEB_ROOT/public/assets/images/logo.png"
+    else
+        echo -e "${RED}✗${NC} Échec du téléchargement du logo"
+    fi
+fi
+
+# Favicon
+if [[ ! -f "$WEB_ROOT/public/assets/images/favicon.ico" ]]; then
+    echo "Téléchargement du favicon..."
+    if wget -q -O "$WEB_ROOT/public/assets/images/favicon.ico" "$GITHUB_RAW/web-interface/public/assets/images/favicon.ico"; then
+        echo -e "${GREEN}✓${NC} Favicon téléchargé"
+        chown www-data:www-data "$WEB_ROOT/public/assets/images/favicon.ico"
+    else
+        echo -e "${RED}✗${NC} Échec du téléchargement du favicon"
+    fi
+fi
+
+# Vérification finale
+echo -e "\n${YELLOW}État final :${NC}"
+[[ -f "$WEB_ROOT/public/assets/images/logo.png" ]] && echo -e "  ${GREEN}✓${NC} logo.png présent" || echo -e "  ${RED}✗${NC} logo.png MANQUANT"
+[[ -f "$WEB_ROOT/public/assets/images/favicon.ico" ]] && echo -e "  ${GREEN}✓${NC} favicon.ico présent" || echo -e "  ${RED}✗${NC} favicon.ico MANQUANT"
+
+# Redémarrer nginx si nécessaire
+if systemctl is-active nginx >/dev/null 2>&1; then
+    echo -e "\n${YELLOW}Rechargement de nginx...${NC}"
+    systemctl reload nginx
+    echo -e "${GREEN}✓${NC} Nginx rechargé"
+fi
+
+echo -e "\n${GREEN}=== Réparation terminée ===${NC}"
+echo "Les images devraient maintenant être visibles dans l'interface web."
+EOF
+
+    chmod +x /opt/scripts/util-fix-missing-images.sh
     
     # Ajouter une tâche cron pour mise à jour hebdomadaire
     cat > /etc/cron.d/pi-signage-updates << 'EOF'

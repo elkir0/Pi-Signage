@@ -91,10 +91,12 @@ configure_systemd_targets() {
     )
     
     for service in "${services_to_disable[@]}"; do
-        if systemctl is-enabled "$service" >/dev/null 2>&1; then
-            log_info "Désactivation du service: $service"
-            systemctl disable "$service" 2>/dev/null || true
-            systemctl mask "$service" 2>/dev/null || true
+        if systemctl list-unit-files "$service" >/dev/null 2>&1; then
+            if systemctl is-enabled "$service" >/dev/null 2>&1; then
+                log_info "Désactivation du service: $service"
+                systemctl disable "$service" 2>/dev/null || true
+                systemctl mask "$service" 2>/dev/null || true
+            fi
         fi
     done
     
@@ -117,7 +119,23 @@ create_watchdog_service() {
 # =============================================================================
 
 LOG_FILE="/var/log/pi-signage/watchdog.log"
-CRITICAL_SERVICES=("lightdm" "vlc-signage" "glances")
+# Déterminer les services à surveiller selon ce qui est installé
+CRITICAL_SERVICES=()
+if systemctl list-unit-files lightdm.service >/dev/null 2>&1; then
+    CRITICAL_SERVICES+=("lightdm")
+fi
+if systemctl list-unit-files vlc-signage.service >/dev/null 2>&1; then
+    CRITICAL_SERVICES+=("vlc-signage")
+fi
+if systemctl list-unit-files glances.service >/dev/null 2>&1; then
+    CRITICAL_SERVICES+=("glances")
+fi
+
+# Si aucun service critique n'est installé, ne pas surveiller
+if [[ ${#CRITICAL_SERVICES[@]} -eq 0 ]]; then
+    log_watchdog "Aucun service critique à surveiller"
+    exit 0
+fi
 CHECK_INTERVAL=30
 
 # Fonction de logging

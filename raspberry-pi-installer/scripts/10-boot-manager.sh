@@ -152,17 +152,25 @@ case "$DISPLAY_MODE" in
         ;;
         
     chromium)
-        # Démarrer Chromium Kiosk directement
-        if [[ -x /opt/scripts/chromium-kiosk.sh ]]; then
-            log "Démarrage de Chromium Kiosk..."
-            # Créer un service temporaire pour Chromium
-            systemd-run --uid=signage --gid=signage \
-                --setenv=HOME=/home/signage \
-                --setenv=DISPLAY=:0 \
-                --property=Restart=always \
-                --property=RestartSec=10 \
-                --unit=chromium-kiosk \
-                /opt/scripts/chromium-kiosk.sh
+        # Démarrer X11 et Chromium Kiosk
+        log "Démarrage du mode Chromium Kiosk..."
+        
+        # Option 1: Utiliser le service x11-kiosk s'il existe
+        if systemctl list-unit-files x11-kiosk.service >/dev/null 2>&1; then
+            log "Démarrage via x11-kiosk.service..."
+            systemctl start x11-kiosk || log "ERREUR: Échec du démarrage de x11-kiosk"
+        
+        # Option 2: Démarrer manuellement
+        elif [[ -x /opt/scripts/start-x11-kiosk.sh ]]; then
+            log "Démarrage manuel de X11 + Chromium..."
+            /opt/scripts/start-x11-kiosk.sh &
+            
+        # Option 3: Lancer directement avec xinit
+        elif [[ -x /opt/scripts/chromium-kiosk.sh ]]; then
+            log "Démarrage direct avec xinit..."
+            su - pi -c "xinit /opt/scripts/chromium-kiosk.sh -- :0 -nocursor" &
+        else
+            log "ERREUR: Aucun script de démarrage Chromium trouvé"
         fi
         ;;
         
@@ -230,6 +238,7 @@ disable_auto_start_services() {
         "gdm3"
         "vlc-signage"
         "chromium-kiosk"
+        "x11-kiosk"
         "pi-signage-watchdog"
     )
     

@@ -420,6 +420,150 @@ check_configuration() {
     echo ""
 }
 
+# Fonction intégrée depuis verify-chromium-boot.sh
+verify_chromium_boot() {
+    print_header "VÉRIFICATION DU DÉMARRAGE CHROMIUM KIOSK"
+    
+    # 1. Vérifier le mode d'affichage
+    print_info "Mode d'affichage configuré :"
+    if [[ -f /etc/pi-signage/display-mode.conf ]]; then
+        local mode
+        mode=$(cat /etc/pi-signage/display-mode.conf)
+        print_info "Mode: $mode"
+        if [[ "$mode" != "chromium" ]]; then
+            print_warn "ATTENTION: Le mode n'est pas 'chromium' !"
+        fi
+    else
+        print_error "Fichier display-mode.conf non trouvé"
+    fi
+    
+    echo ""
+    print_info "Services activés au démarrage :"
+    
+    # Services à vérifier
+    local services=(
+        "pi-signage-startup"
+        "chromium-kiosk" 
+        "x11-kiosk"
+        "lightdm"
+        "nginx"
+    )
+    
+    for service in "${services[@]}"; do
+        if systemctl is-enabled "$service" 2>/dev/null | grep -q "enabled"; then
+            print_ok "$service : activé"
+        else
+            print_error "$service : désactivé ou inexistant"
+        fi
+    done
+    
+    echo ""
+    print_info "Vérification des scripts :"
+    
+    local scripts=(
+        "/opt/scripts/pi-signage-startup.sh"
+        "/opt/scripts/chromium-kiosk.sh"
+        "/opt/scripts/start-x11-kiosk.sh"
+        "/opt/scripts/update-playlist.sh"
+    )
+    
+    for script in "${scripts[@]}"; do
+        if [[ -f "$script" ]]; then
+            print_ok "$script : présent"
+        else
+            print_error "$script : manquant"
+        fi
+    done
+    
+    echo ""
+    print_info "Vérification du player HTML :"
+    
+    if [[ -f /var/www/pi-signage-player/player.html ]]; then
+        print_ok "Player HTML présent"
+    else
+        print_error "Player HTML manquant"
+    fi
+    
+    if [[ -f /var/www/pi-signage-player/api/playlist.json ]]; then
+        print_ok "Playlist JSON présente"
+        if command -v jq >/dev/null 2>&1; then
+            local videos
+            videos=$(jq -r '.videos | length' /var/www/pi-signage-player/api/playlist.json 2>/dev/null || echo "0")
+            print_info "Nombre de vidéos dans la playlist: $videos"
+        fi
+    else
+        print_error "Playlist JSON manquante"
+    fi
+    
+    echo ""
+    print_info "Vérification des vidéos :"
+    if [[ -d /opt/videos ]]; then
+        local count
+        count=$(find /opt/videos -type f \( -name "*.mp4" -o -name "*.webm" -o -name "*.mov" -o -name "*.mkv" \) | wc -l)
+        print_info "Nombre de vidéos dans /opt/videos: $count"
+        if [[ $count -eq 0 ]]; then
+            print_warn "ATTENTION: Aucune vidéo trouvée !"
+        fi
+    else
+        print_error "Dossier /opt/videos non trouvé"
+    fi
+    
+    echo ""
+    print_header "ANALYSE DU MÉCANISME DE DÉMARRAGE"
+    
+    # Déterminer le mécanisme de démarrage
+    if systemctl is-enabled pi-signage-startup 2>/dev/null | grep -q "enabled"; then
+        if systemctl is-enabled x11-kiosk 2>/dev/null | grep -q "enabled"; then
+            print_warn "CONFLIT POTENTIEL: pi-signage-startup ET x11-kiosk sont tous deux activés !"
+            print_info "Cela peut causer des problèmes de démarrage."
+            print_info "Solution recommandée :"
+            print_info "  sudo systemctl disable x11-kiosk"
+            print_info "  sudo systemctl stop x11-kiosk"
+        else
+            print_ok "Configuration correcte : Boot manager actif, services individuels désactivés"
+        fi
+    else
+        if systemctl is-enabled x11-kiosk 2>/dev/null | grep -q "enabled"; then
+            print_warn "x11-kiosk est activé mais pas le boot manager"
+            print_info "Cela peut fonctionner mais n'est pas la configuration recommandée."
+        else
+            print_error "PROBLÈME: Aucun service de démarrage n'est activé !"
+            print_info "Solution :"
+            print_info "  sudo systemctl enable pi-signage-startup"
+        fi
+    fi
+    
+    echo ""
+}
+
+# Fonction intégrée depuis fix-black-screen-boot.sh
+fix_black_screen() {
+    print_header "RÉPARATION ÉCRAN NOIR"
+    
+    print_info "Vérification de hdmi_drive=2 dans /boot/config.txt..."
+    
+    if [[ -f /boot/config.txt ]]; then
+        if grep -q "^hdmi_drive=2$" /boot/config.txt; then
+            print_warn "hdmi_drive=2 détecté - peut causer un écran noir"
+            print_info "Pour corriger, exécutez :"
+            print_info "  sudo sed -i '/^hdmi_drive=2$/d' /boot/config.txt"
+            print_info "  sudo reboot"
+        else
+            print_ok "hdmi_drive=2 non présent"
+        fi
+        
+        print_info "Paramètres HDMI actuels :"
+        grep -E "(hdmi|dtoverlay)" /boot/config.txt || echo "Aucun paramètre HDMI trouvé"
+    else
+        print_error "Fichier /boot/config.txt non trouvé"
+    fi
+    
+    print_info "Note: L'audio HDMI devrait fonctionner sans hdmi_drive=2"
+    print_info "Pour configurer l'audio, utilisez: sudo raspi-config > Advanced Options > Audio"
+    
+    echo ""
+}
+
 generate_support_info() {
     print_header "INFORMATIONS DE SUPPORT"
     
@@ -503,6 +647,12 @@ BANNER
     
     check_configuration
     ((total_checks++))
+    
+    # Vérifications spécifiques Chromium si applicable
+    if [[ -f /etc/pi-signage/display-mode.conf ]] && grep -q "chromium" /etc/pi-signage/display-mode.conf 2>/dev/null; then
+        verify_chromium_boot
+        ((total_checks++))
+    fi
     
     generate_support_info
     
@@ -984,9 +1134,12 @@ BANNER
     echo "7) Diagnostic système"
     echo "8) Synchronisation manuelle"
     echo "9) Test Google Drive"
+    echo "10) Vérification démarrage Chromium"
+    echo "11) Réparation écran noir"
+    echo "12) Réparer images manquantes (logo/favicon)"
     echo "0) Quitter"
     echo ""
-    read -p "Votre choix [0-9]: " choice
+    read -p "Votre choix [0-12]: " choice
     
     case $choice in
         1)
@@ -1032,6 +1185,31 @@ BANNER
         9)
             echo "Test Google Drive..."
             /opt/scripts/test-gdrive.sh
+            read -p "Appuyez sur Entrée pour continuer..."
+            ;;
+        10)
+            echo "Vérification du démarrage Chromium..."
+            /opt/pi-signage-diag.sh | grep -A 100 "VÉRIFICATION DU DÉMARRAGE CHROMIUM KIOSK"
+            read -p "Appuyez sur Entrée pour continuer..."
+            ;;
+        11)
+            echo "Réparation écran noir..."
+            /opt/pi-signage-diag.sh | grep -A 20 "RÉPARATION ÉCRAN NOIR"
+            read -p "Appuyez sur Entrée pour continuer..."
+            ;;
+        12)
+            echo "Réparation des images manquantes..."
+            if [[ -f /opt/scripts/util-fix-missing-images.sh ]]; then
+                /opt/scripts/util-fix-missing-images.sh
+            else
+                echo "Script de réparation non trouvé !"
+                echo "Téléchargement manuel des images..."
+                echo ""
+                echo "Logo: https://raw.githubusercontent.com/elkir0/Pi-Signage/main/web-interface/public/assets/images/logo.png"
+                echo "Favicon: https://raw.githubusercontent.com/elkir0/Pi-Signage/main/web-interface/public/assets/images/favicon.ico"
+                echo ""
+                echo "Copiez ces fichiers dans: /var/www/pi-signage/public/assets/images/"
+            fi
             read -p "Appuyez sur Entrée pour continuer..."
             ;;
         0)

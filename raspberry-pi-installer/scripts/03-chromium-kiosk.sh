@@ -82,7 +82,10 @@ install_chromium() {
     log_info "Installation de Chromium..."
     
     # Paquets nécessaires pour Chromium kiosk
+    # IMPORTANT: Installer d'abord les dépendances GTK pour éviter les problèmes
     local packages=(
+        "libgtk-3-common"   # Dépendance critique à installer en premier
+        "libgtk-3-0"        # Requis pour Chromium
         "chromium-browser"
         "nginx"  # Pour servir le player local
     )
@@ -107,19 +110,43 @@ install_chromium() {
         packages+=("xvfb")
     fi
     
-    # Installation avec retry
-    local install_cmd="apt-get update && apt-get install -y ${packages[*]}"
-    if safe_execute "$install_cmd" 3 10; then
-        log_info "Chromium et dépendances installés avec succès"
-    else
-        log_error "Échec de l'installation de Chromium"
-        return 1
+    # Mise à jour des listes de paquets
+    log_info "Mise à jour des listes de paquets..."
+    safe_execute "apt-get update" 2 5
+    
+    # Réparer les dépendances cassées si nécessaire
+    if ! dpkg --audit >/dev/null 2>&1; then
+        log_warn "Dépendances cassées détectées, réparation..."
+        safe_execute "apt-get install -f -y" 2 10
     fi
     
-    # Vérification
+    # Utiliser la fonction robuste d'installation
+    if safe_apt_install "${packages[@]}"; then
+        log_info "Chromium et dépendances installés avec succès"
+    else
+        # Si chromium-browser échoue, essayer chromium
+        log_warn "Tentative avec le paquet 'chromium' au lieu de 'chromium-browser'"
+        
+        # Retirer chromium-browser et ajouter chromium
+        local alt_packages=("${packages[@]}")
+        alt_packages[2]="chromium"  # Remplacer chromium-browser par chromium
+        
+        if safe_apt_install "${alt_packages[@]}"; then
+            log_info "Chromium installé avec succès (version alternative)"
+        else
+            log_error "Échec de l'installation de Chromium"
+            return 1
+        fi
+    fi
+    
+    # Vérification (chromium-browser ou chromium)
     if command -v chromium-browser >/dev/null 2>&1; then
         local version
         version=$(chromium-browser --version 2>/dev/null || echo "Version inconnue")
+        log_info "Chromium disponible: $version"
+    elif command -v chromium >/dev/null 2>&1; then
+        local version
+        version=$(chromium --version 2>/dev/null || echo "Version inconnue")
         log_info "Chromium disponible: $version"
     else
         log_error "Chromium non disponible après installation"
@@ -1164,13 +1191,266 @@ EOF
     
     chown pi:pi /home/pi/.asoundrc
     
-    # Activer la sortie HDMI pour l'audio
-    if ! grep -q "hdmi_drive=2" /boot/config.txt; then
-        echo "hdmi_drive=2" >> /boot/config.txt
-        log_info "Configuration HDMI audio ajoutée"
-    fi
+    # NE PAS modifier /boot/config.txt - conformément aux exigences
+    # L'audio HDMI fonctionne généralement sans hdmi_drive=2
+    log_info "Configuration audio terminée (sans modification de boot)"
     
     log_info "Audio configuré pour Chromium"
+}
+
+# =============================================================================
+# MODE TEST INTÉGRÉ (depuis test-chromium-startup.sh et test-x11-touchscreen.sh)
+# =============================================================================
+
+run_chromium_test_mode() {
+    log_info "=== MODE TEST CHROMIUM KIOSK ==="
+    
+    # Arrêter tout ce qui tourne
+    log_info "Arrêt des services existants..."
+    systemctl stop chromium-kiosk 2>/dev/null || true
+    systemctl stop x11-kiosk 2>/dev/null || true
+    systemctl stop pi-signage-startup 2>/dev/null || true
+    pkill -f chromium 2>/dev/null || true
+    pkill -f xinit 2>/dev/null || true
+    sleep 2
+    
+    # Vérifier les prérequis
+    log_info "Vérification des prérequis..."
+    
+    # Mode d'affichage
+    if [[ -f /etc/pi-signage/display-mode.conf ]]; then
+        local mode
+        mode=$(cat /etc/pi-signage/display-mode.conf)
+        log_info "✓ Mode configuré: $mode"
+    else
+        log_warn "Pas de mode configuré, création..."
+        mkdir -p /etc/pi-signage
+        echo "chromium" > /etc/pi-signage/display-mode.conf
+    fi
+    
+    # Vidéos
+    local video_count
+    video_count=$(find /opt/videos -type f \( -name "*.mp4" -o -name "*.webm" -o -name "*.mov" -o -name "*.mkv" \) 2>/dev/null | wc -l)
+    if [[ $video_count -gt 0 ]]; then
+        log_info "✓ $video_count vidéo(s) trouvée(s)"
+    else
+        log_warn "⚠ Aucune vidéo dans /opt/videos"
+    fi
+    
+    # Mise à jour de la playlist
+    log_info "Mise à jour de la playlist..."
+    if [[ -x /opt/scripts/update-playlist.sh ]]; then
+        /opt/scripts/update-playlist.sh
+        log_info "✓ Playlist mise à jour"
+    else
+        log_error "Script update-playlist.sh non trouvé"
+    fi
+    
+    # Menu de test
+    echo ""
+    echo "Test de démarrage Chromium Kiosk"
+    echo "==================================="
+    echo "1) Via le boot manager (pi-signage-startup)"
+    echo "2) Via x11-kiosk service"
+    echo "3) Direct xinit"
+    echo "4) Test X11 avec terminal (startx)"
+    echo "5) Test écran tactile (si présent)"
+    echo "6) Quitter"
+    echo ""
+    read -p "Choisir la méthode [1-6]: " method
+    
+    case $method in
+        1)
+            log_info "Démarrage via boot manager..."
+            systemctl start pi-signage-startup
+            echo "Attendez 15 secondes..."
+            sleep 15
+            echo ""
+            echo "Statut:"
+            systemctl status pi-signage-startup --no-pager
+            echo ""
+            echo "Logs:"
+            tail -n 20 /var/log/pi-signage-startup.log 2>/dev/null || echo "Pas de logs"
+            ;;
+        
+        2)
+            log_info "Démarrage via x11-kiosk..."
+            systemctl start x11-kiosk
+            echo "Attendez 10 secondes..."
+            sleep 10
+            echo ""
+            echo "Statut:"
+            systemctl status x11-kiosk --no-pager
+            ;;
+        
+        3)
+            log_info "Démarrage direct avec xinit..."
+            echo "Chromium va démarrer. Pour quitter: Ctrl+Alt+Backspace"
+            sleep 3
+            su - pi -c "xinit /opt/scripts/chromium-kiosk.sh -- :0 -nocursor"
+            ;;
+        
+        4)
+            log_info "Test X11 simple..."
+            # Installation minimale si X11 n'est pas présent
+            if ! command -v startx &> /dev/null; then
+                log_info "Installation de X11..."
+                apt-get update
+                apt-get install -y xserver-xorg xinit xterm
+            fi
+            echo "Pour quitter X11, faites Ctrl+Alt+Backspace ou fermez toutes les fenêtres"
+            sleep 3
+            startx
+            ;;
+        
+        5)
+            log_info "Test écran tactile..."
+            test_touchscreen
+            ;;
+        
+        6)
+            log_info "Sortie du mode test"
+            return 0
+            ;;
+    esac
+    
+    echo ""
+    echo "=== Vérifications post-démarrage ==="
+    echo ""
+    
+    # Vérifier si X est lancé
+    if pgrep -x Xorg > /dev/null; then
+        log_info "✓ X11 est en cours d'exécution"
+    else
+        log_error "✗ X11 n'est pas démarré"
+    fi
+    
+    # Vérifier si Chromium est lancé
+    if pgrep -f chromium > /dev/null; then
+        log_info "✓ Chromium est en cours d'exécution"
+    else
+        log_error "✗ Chromium n'est pas démarré"
+    fi
+    
+    # Vérifier nginx
+    if systemctl is-active nginx > /dev/null; then
+        log_info "✓ Nginx est actif (player sur http://localhost:8888/player.html)"
+    else
+        log_error "✗ Nginx n'est pas actif"
+    fi
+    
+    echo ""
+    echo "Pour voir les logs en temps réel:"
+    echo "  tail -f /var/log/pi-signage/chromium.log"
+    echo "  journalctl -f"
+    echo ""
+}
+
+# Fonction de test écran tactile (intégrée depuis test-x11-touchscreen.sh)
+test_touchscreen() {
+    log_info "Test de l'écran tactile..."
+    
+    # Vérifier si on est en SSH ou directement sur le Pi
+    if [[ -n "$SSH_CLIENT" ]] || [[ -n "$SSH_TTY" ]]; then
+        log_warn "Vous êtes en SSH. Ce test doit être exécuté directement sur le Pi"
+        log_info "ou utilisez 'export DISPLAY=:0' avant de lancer les commandes X11"
+        echo ""
+    fi
+    
+    # Créer un fichier de configuration X11 pour le tactile
+    cat > /tmp/99-calibration.conf << 'EOF'
+Section "InputClass"
+    Identifier "calibration"
+    MatchProduct "FT5406 memory based driver"
+    Option "TransformationMatrix" "1 0 0 0 1 0 0 0 1"
+    Option "SwapAxes" "0"
+EndSection
+EOF
+    
+    if [[ -d /etc/X11/xorg.conf.d ]]; then
+        cp /tmp/99-calibration.conf /etc/X11/xorg.conf.d/
+        log_info "Configuration tactile appliquée"
+    fi
+    
+    # Créer un xinitrc de test
+    cat > /tmp/test-xinitrc << 'EOF'
+#!/bin/sh
+# xinitrc de test pour écran tactile
+
+# Désactiver l'économiseur d'écran
+xset s off
+xset -dpms
+xset s noblank
+
+# Message d'accueil
+xmessage -center "X11 fonctionne ! Testez le tactile en cliquant" &
+
+# Lancer Chromium avec une page de test tactile
+chromium-browser --kiosk --touch-events=enabled --enable-touch-drag-drop https://www.google.com/maps &
+
+# Garder X11 actif
+exec xterm
+EOF
+    
+    chmod +x /tmp/test-xinitrc
+    
+    echo ""
+    echo "Options de test tactile:"
+    echo "a) Lancer le test tactile avec Google Maps"
+    echo "b) Lancer Chromium Pi Signage avec support tactile"
+    echo "c) Instructions manuelles"
+    echo ""
+    read -p "Votre choix [a-c]: " choice
+    
+    case $choice in
+        a)
+            log_info "Lancement du test tactile..."
+            echo "Pour quitter, utilisez Alt+F4"
+            sleep 3
+            xinit /tmp/test-xinitrc -- :0
+            ;;
+        
+        b)
+            log_info "Lancement de Pi Signage avec support tactile..."
+            # Modifier temporairement le script chromium-kiosk pour activer le tactile
+            if [[ -f /opt/scripts/chromium-kiosk.sh ]]; then
+                # Ajouter les flags tactiles
+                sed -i '/CHROMIUM_FLAGS=(/a\    --touch-events=enabled\n    --enable-touch-drag-drop\n    --touch-devices=1' /opt/scripts/chromium-kiosk.sh
+                xinit /opt/scripts/chromium-kiosk.sh -- :0
+            else
+                log_error "Script chromium-kiosk.sh non trouvé"
+            fi
+            ;;
+        
+        c)
+            echo ""
+            echo "=== Instructions pour tester l'écran tactile ==="
+            echo ""
+            echo "1. Pour un test basique X11 :"
+            echo "   startx"
+            echo ""
+            echo "2. Pour tester Chromium avec l'écran tactile :"
+            echo "   xinit chromium-browser --kiosk --touch-events=enabled http://google.com -- :0"
+            echo ""
+            echo "3. Configuration tactile :"
+            echo "   - L'écran tactile officiel devrait fonctionner automatiquement"
+            echo "   - Pour calibrer : sudo apt-get install xinput-calibrator && xinput_calibrator"
+            echo ""
+            echo "4. Résolution de problèmes :"
+            echo "   - Vérifier les logs : journalctl -xe"
+            echo "   - Tester le tactile : evtest (choisir FT5406)"
+            echo "   - Rotation écran : sudo nano /boot/config.txt"
+            echo "     Ajouter : display_rotate=2 (pour 180°)"
+            echo ""
+            echo "Notes importantes:"
+            echo "• L'écran tactile officiel 7\" utilise le driver FT5406"
+            echo "• La résolution native est 800x480"
+            echo "• Le tactile devrait fonctionner automatiquement avec X11"
+            echo "• Support multi-touch limité (single touch principalement)"
+            ;;
+    esac
+    
+    rm -f /tmp/test-xinitrc /tmp/99-calibration.conf
 }
 
 # =============================================================================
@@ -1267,6 +1547,14 @@ main() {
         log_info "Player accessible sur: http://localhost:8888/player.html"
         log_info "Contrôle: /opt/scripts/player-control.sh {play|pause|next|...}"
         log_info "Mise à jour playlist: /opt/scripts/update-playlist.sh"
+        
+        # Proposer le mode test
+        echo ""
+        read -p "Voulez-vous lancer le mode test maintenant ? [o/N] " -n 1 -r
+        echo ""
+        if [[ $REPLY =~ ^[Oo]$ ]]; then
+            run_chromium_test_mode
+        fi
     else
         log_warn "Installation terminée avec des avertissements"
     fi

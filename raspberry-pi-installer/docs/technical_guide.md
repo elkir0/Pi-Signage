@@ -567,14 +567,21 @@ apt-get upgrade -y --with-new-pkgs \
 
 ### Optimisations Boot
 
-**Réduction temps de démarrage :**
-```bash
-# /boot/cmdline.txt
-quiet                    # Pas de messages boot
-logo.nologo             # Pas de logo
-consoleblank=0          # Pas de screensaver console
+**Important : AUCUNE modification automatique des fichiers de boot**
 
-# Services disabled
+Le système ne modifie PAS :
+- `/boot/config.txt`
+- `/boot/cmdline.txt`
+
+Pour optimiser manuellement le boot :
+```bash
+# Utiliser raspi-config pour :
+sudo raspi-config
+# - Advanced Options > Boot Order
+# - Display Options > Resolution
+# - System Options > Audio
+
+# Services à désactiver manuellement :
 systemctl mask apt-daily.timer
 systemctl mask apt-daily-upgrade.timer
 systemctl mask man-db.timer
