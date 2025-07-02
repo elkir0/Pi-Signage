@@ -13,6 +13,8 @@
 
 Pi Signage Digital est une solution professionnelle complète pour transformer vos Raspberry Pi en système d'affichage dynamique. Ce projet offre une installation automatisée avec une sécurité renforcée et une interface web moderne.
 
+> 🆕 **Nouveau : [VLC Minimal Edition](vlc-minimal-installer/)** - Pour une installation ultra-simple en 5 minutes avec 100% de fiabilité ! Idéal si vous voulez juste des vidéos qui tournent en boucle sans complexité.
+
 ### 🎬 Nouveautés v2.4.6
 - **Sécurité boot absolue** : AUCUNE modification de /boot/config.txt ou cmdline.txt
 - **Mode test intégré** : Test automatique proposé après installation

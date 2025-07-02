@@ -1,0 +1,13 @@
+# Fichiers temporaires
+*.tmp
+*.log
+*.swp
+*~
+
+# Fichiers système
+.DS_Store
+Thumbs.db
+
+# Dossier de test
+test/
+videos/
