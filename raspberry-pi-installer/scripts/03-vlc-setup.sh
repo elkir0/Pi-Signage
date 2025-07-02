@@ -381,46 +381,74 @@ EOF
 # CONFIGURATION DU DÉMARRAGE AUTOMATIQUE SELON L'ENVIRONNEMENT
 # =============================================================================
 
-# Fonction pour configurer l'autologin de l'utilisateur signage
+# Fonction pour vérifier l'autologin SANS LE CASSER
 configure_signage_autologin() {
-    log_info "Configuration de l'autologin pour l'utilisateur signage..."
+    log_info "Vérification de l'autologin existant..."
     
-    # Pour LightDM
+    local autologin_user=""
+    local autologin_configured=false
+    
+    # D'ABORD vérifier si un autologin existe déjà
+    
+    # Vérifier LightDM
     if [[ -f /etc/lightdm/lightdm.conf ]]; then
-        if ! grep -q "autologin-user=signage" /etc/lightdm/lightdm.conf; then
-            # Remplacer ou ajouter l'autologin
-            if grep -q "autologin-user=" /etc/lightdm/lightdm.conf; then
-                sed -i 's/autologin-user=.*/autologin-user=signage/g' /etc/lightdm/lightdm.conf
-            else
-                sed -i 's/#autologin-user=/autologin-user=signage/g' /etc/lightdm/lightdm.conf
+        if grep -q "^autologin-user=" /etc/lightdm/lightdm.conf; then
+            autologin_user=$(grep "^autologin-user=" /etc/lightdm/lightdm.conf | cut -d'=' -f2)
+            log_info "Autologin LightDM déjà configuré pour: $autologin_user"
+            autologin_configured=true
+        fi
+    fi
+    
+    # Vérifier GDM3
+    if [[ -f /etc/gdm3/custom.conf ]] && [[ -z "$autologin_user" ]]; then
+        if grep -q "AutomaticLoginEnable=true" /etc/gdm3/custom.conf; then
+            autologin_user=$(grep "AutomaticLogin=" /etc/gdm3/custom.conf | cut -d'=' -f2)
+            log_info "Autologin GDM3 déjà configuré pour: $autologin_user"
+            autologin_configured=true
+        fi
+    fi
+    
+    # Vérifier l'autologin console (raspi-config / Imager)
+    if [[ -f /etc/systemd/system/getty@tty1.service.d/autologin.conf ]] && [[ -z "$autologin_user" ]]; then
+        if grep -q "autologin" /etc/systemd/system/getty@tty1.service.d/autologin.conf; then
+            autologin_user=$(grep -oP 'autologin \K\w+' /etc/systemd/system/getty@tty1.service.d/autologin.conf || echo "")
+            if [[ -n "$autologin_user" ]]; then
+                log_info "Autologin console déjà configuré pour: $autologin_user"
+                autologin_configured=true
             fi
-            sed -i 's/#autologin-user-timeout=0/autologin-user-timeout=0/g' /etc/lightdm/lightdm.conf
-            log_info "Autologin configuré pour LightDM"
         fi
     fi
     
-    # Pour GDM3
-    if [[ -f /etc/gdm3/custom.conf ]]; then
-        if ! grep -q "AutomaticLogin=signage" /etc/gdm3/custom.conf; then
-            # Supprimer l'ancienne config si elle existe
-            sed -i '/AutomaticLoginEnable=/d' /etc/gdm3/custom.conf
-            sed -i '/AutomaticLogin=/d' /etc/gdm3/custom.conf
-            # Ajouter la nouvelle
-            sed -i '/\[daemon\]/a\AutomaticLoginEnable=true\nAutomaticLogin=signage' /etc/gdm3/custom.conf
-            log_info "Autologin configuré pour GDM3"
+    # IMPORTANT: Si un autologin existe déjà, on l'utilise !
+    if [[ $autologin_configured == true ]] && [[ -n "$autologin_user" ]]; then
+        if [[ "$autologin_user" != "signage" ]]; then
+            log_warn "ATTENTION: L'autologin est configuré pour '$autologin_user', pas 'signage'"
+            log_warn "VLC s'exécutera sous l'utilisateur '$autologin_user'"
+            
+            # On adapte notre configuration
+            # Copier la config VLC pour cet utilisateur
+            local user_home=$(getent passwd "$autologin_user" | cut -d: -f6)
+            if [[ -n "$user_home" ]] && [[ -d "$user_home" ]]; then
+                log_info "Adaptation de la configuration pour l'utilisateur $autologin_user"
+                
+                # Copier les fichiers nécessaires
+                mkdir -p "$user_home/.config"
+                if [[ -d "/home/signage/.config/vlc" ]]; then
+                    cp -r "/home/signage/.config/vlc" "$user_home/.config/"
+                    chown -R "$autologin_user:$autologin_user" "$user_home/.config/vlc"
+                fi
+                
+                # Mettre à jour le service VLC pour utiliser cet utilisateur
+                if [[ -f "$VLC_SERVICE" ]]; then
+                    sed -i "s/User=signage/User=$autologin_user/g" "$VLC_SERVICE"
+                    sed -i "s|Environment=HOME=/home/signage|Environment=HOME=$user_home|g" "$VLC_SERVICE"
+                fi
+            fi
         fi
-    fi
-    
-    # Pour systemd (console autologin) - utile si pas d'interface graphique
-    if [[ ! -f /etc/lightdm/lightdm.conf ]] && [[ ! -f /etc/gdm3/custom.conf ]]; then
-        mkdir -p /etc/systemd/system/getty@tty1.service.d/
-        cat > /etc/systemd/system/getty@tty1.service.d/autologin.conf << 'EOF'
-[Service]
-ExecStart=
-ExecStart=-/sbin/agetty --autologin signage --noclear %I $TERM
-EOF
-        systemctl daemon-reload
-        log_info "Autologin console configuré pour signage"
+    else
+        # Seulement si AUCUN autologin n'existe
+        log_warn "Aucun autologin détecté. L'utilisateur devra se connecter manuellement."
+        log_info "Pour activer l'autologin, utilisez raspi-config ou l'outil de configuration de votre environnement."
     fi
 }
 

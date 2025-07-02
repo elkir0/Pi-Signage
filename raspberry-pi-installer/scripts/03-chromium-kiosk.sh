@@ -955,22 +955,47 @@ configure_autostart() {
     fi
 }
 
-# Fonction commune pour configurer l'autologin de l'utilisateur pi
+# Fonction pour vérifier et préserver l'autologin existant
 configure_pi_autologin() {
-    log_info "Configuration de l'autologin pour l'utilisateur pi..."
+    log_info "Vérification de l'autologin existant..."
     
-    # Pour LightDM
+    local autologin_configured=false
+    local existing_user=""
+    
+    # Pour LightDM - VÉRIFIER SANS MODIFIER si déjà configuré
     if [[ -f /etc/lightdm/lightdm.conf ]]; then
-        if ! grep -q "autologin-user=pi" /etc/lightdm/lightdm.conf; then
+        # Vérifier si un autologin est déjà configuré
+        if grep -q "^autologin-user=" /etc/lightdm/lightdm.conf; then
+            existing_user=$(grep "^autologin-user=" /etc/lightdm/lightdm.conf | cut -d'=' -f2)
+            log_info "Autologin déjà configuré pour: $existing_user"
+            autologin_configured=true
+            
+            # Si c'est pas l'utilisateur pi, on demande
+            if [[ "$existing_user" != "pi" ]]; then
+                log_warn "L'autologin est configuré pour '$existing_user', pas 'pi'"
+                log_warn "Pi Signage utilisera l'utilisateur '$existing_user' au lieu de 'pi'"
+                # On adapte notre configuration pour utiliser cet utilisateur
+                echo "KIOSK_USER=$existing_user" >> /tmp/kiosk-user.conf
+            fi
+        else
+            # Seulement si PAS déjà configuré
+            log_info "Configuration de l'autologin pour pi..."
             sed -i 's/#autologin-user=/autologin-user=pi/g' /etc/lightdm/lightdm.conf
             sed -i 's/#autologin-user-timeout=0/autologin-user-timeout=0/g' /etc/lightdm/lightdm.conf
-            log_info "Autologin configuré pour LightDM"
         fi
     fi
     
-    # Pour GDM3
+    # Pour GDM3 - VÉRIFIER SANS MODIFIER si déjà configuré
     if [[ -f /etc/gdm3/custom.conf ]]; then
-        if ! grep -q "AutomaticLoginEnable=true" /etc/gdm3/custom.conf; then
+        if grep -q "AutomaticLoginEnable=true" /etc/gdm3/custom.conf; then
+            existing_user=$(grep "AutomaticLogin=" /etc/gdm3/custom.conf | cut -d'=' -f2)
+            log_info "Autologin GDM3 déjà configuré pour: $existing_user"
+            autologin_configured=true
+            if [[ "$existing_user" != "pi" ]]; then
+                echo "KIOSK_USER=$existing_user" >> /tmp/kiosk-user.conf
+            fi
+        else
+            # Seulement si PAS déjà configuré
             sed -i '/\[daemon\]/a\AutomaticLoginEnable=true\nAutomaticLogin=pi' /etc/gdm3/custom.conf
             log_info "Autologin configuré pour GDM3"
         fi
@@ -988,16 +1013,29 @@ EOF
         fi
     fi
     
-    # Pour systemd (console autologin)
-    if systemctl is-enabled getty@tty1.service >/dev/null 2>&1; then
-        mkdir -p /etc/systemd/system/getty@tty1.service.d/
-        cat > /etc/systemd/system/getty@tty1.service.d/autologin.conf << 'EOF'
-[Service]
-ExecStart=
-ExecStart=-/sbin/agetty --autologin pi --noclear %I $TERM
-EOF
-        systemctl daemon-reload
-        log_info "Autologin console configuré"
+    # Pour Raspberry Pi Imager / raspi-config autologin
+    # Vérifier si configuré via raspi-config (Bookworm)
+    if [[ -f /etc/systemd/system/getty@tty1.service.d/autologin.conf ]]; then
+        if grep -q "autologin" /etc/systemd/system/getty@tty1.service.d/autologin.conf; then
+            existing_user=$(grep -oP 'autologin \K\w+' /etc/systemd/system/getty@tty1.service.d/autologin.conf || echo "")
+            if [[ -n "$existing_user" ]]; then
+                log_info "Autologin console déjà configuré pour: $existing_user"
+                autologin_configured=true
+                if [[ "$existing_user" != "pi" ]]; then
+                    echo "KIOSK_USER=$existing_user" >> /tmp/kiosk-user.conf
+                fi
+            fi
+        fi
+    fi
+    
+    # Si vraiment aucun autologin n'est configuré nulle part
+    if [[ $autologin_configured == false ]]; then
+        log_warn "Aucun autologin détecté. Configuration pour l'utilisateur pi..."
+        # Seulement si on a LightDM
+        if [[ -f /etc/lightdm/lightdm.conf ]]; then
+            sed -i 's/#autologin-user=/autologin-user=pi/g' /etc/lightdm/lightdm.conf
+            sed -i 's/#autologin-user-timeout=0/autologin-user-timeout=0/g' /etc/lightdm/lightdm.conf
+        fi
     fi
 }
 

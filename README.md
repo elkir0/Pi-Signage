@@ -170,6 +170,7 @@ L'installation est **modulaire** - vous pouvez choisir :
 
 ### Guides spécifiques
 - [Dépannage](raspberry-pi-installer/docs/troubleshooting.md)
+- [Compatibilité Bookworm](raspberry-pi-installer/docs/BOOKWORM_COMPATIBILITY.md) 🆕
 - [Proposition Chromium](raspberry-pi-installer/docs/CHROMIUM_KIOSK_PROPOSAL.md)
 - [Changelog complet](CHANGELOG.md)
 

@@ -895,6 +895,12 @@ main() {
     # Détection de l'environnement graphique
     detect_graphical_environment
     
+    # Vérification de l'autologin existant
+    if [[ -x "$SCRIPT_DIR/util-check-autologin.sh" ]]; then
+        log_info "Vérification de l'autologin existant..."
+        "$SCRIPT_DIR/util-check-autologin.sh" || true
+    fi
+    
     # Vérifier et réparer dpkg si nécessaire AVANT toute installation
     if command -v check_dpkg_health >/dev/null 2>&1; then
         if ! check_dpkg_health; then
