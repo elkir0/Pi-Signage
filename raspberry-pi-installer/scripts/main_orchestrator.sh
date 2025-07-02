@@ -12,7 +12,7 @@ set -euo pipefail
 # CONSTANTES GLOBALES
 # =============================================================================
 
-readonly SCRIPT_VERSION="2.4.6"
+readonly SCRIPT_VERSION="2.4.7"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly CONFIG_DIR="/etc/pi-signage"
 readonly CONFIG_FILE="$CONFIG_DIR/config.conf"
@@ -96,6 +96,88 @@ check_system() {
     fi
     
     log_info "Système vérifié avec succès"
+}
+
+# =============================================================================
+# DÉTECTION DE L'ENVIRONNEMENT GRAPHIQUE
+# =============================================================================
+
+detect_graphical_environment() {
+    log_info "Détection de l'environnement graphique..."
+    
+    local has_gui=false
+    local gui_type="none"
+    local gui_session=""
+    local display_server=""
+    
+    # Vérifier si on a un serveur X11 ou Wayland
+    if [[ -n "${DISPLAY:-}" ]] || [[ -n "${WAYLAND_DISPLAY:-}" ]]; then
+        has_gui=true
+        if [[ -n "${WAYLAND_DISPLAY:-}" ]]; then
+            display_server="wayland"
+        else
+            display_server="x11"
+        fi
+    fi
+    
+    # Vérifier les processus graphiques
+    if pgrep -x "Xorg|X|Xwayland" > /dev/null 2>&1; then
+        has_gui=true
+        display_server="x11"
+    elif pgrep -x "wayfire|weston|sway" > /dev/null 2>&1; then
+        has_gui=true
+        display_server="wayland"
+    fi
+    
+    # Vérifier les gestionnaires de session
+    if systemctl is-active lightdm > /dev/null 2>&1; then
+        has_gui=true
+        gui_type="lightdm"
+        gui_session="LXDE"
+    elif systemctl is-active gdm3 > /dev/null 2>&1; then
+        has_gui=true
+        gui_type="gdm3"
+        gui_session="GNOME"
+    elif systemctl is-active sddm > /dev/null 2>&1; then
+        has_gui=true
+        gui_type="sddm"
+        gui_session="KDE"
+    elif [[ -f /usr/bin/startx ]]; then
+        # X11 minimal installé
+        has_gui=true
+        gui_type="startx"
+        gui_session="minimal"
+    fi
+    
+    # Vérifier si on est sur Raspberry Pi OS Desktop
+    if [[ -f /usr/bin/raspberrypi-ui-mods ]] || [[ -d /usr/share/raspberrypi-ui-mods ]]; then
+        has_gui=true
+        gui_type="raspberrypi-desktop"
+        if [[ -f /etc/lightdm/lightdm.conf ]]; then
+            gui_session="PIXEL"
+        else
+            gui_session="wayfire"  # Nouveau desktop Bookworm
+        fi
+    fi
+    
+    # Stocker les résultats
+    cat > /tmp/gui-environment.conf << EOF
+HAS_GUI=$has_gui
+GUI_TYPE="$gui_type"
+GUI_SESSION="$gui_session"
+DISPLAY_SERVER="$display_server"
+EOF
+    
+    if [[ $has_gui == true ]]; then
+        log_info "Environnement graphique détecté:"
+        log_info "  - Type: $gui_type"
+        log_info "  - Session: $gui_session"
+        log_info "  - Serveur: $display_server"
+    else
+        log_info "Aucun environnement graphique détecté (mode headless)"
+    fi
+    
+    return 0
 }
 
 # =============================================================================
@@ -207,13 +289,30 @@ EOF
 
 select_modules() {
     echo -e "\n${CYAN}=== Sélection des Modules d'Installation ===${NC}"
-    echo "Choisissez les modules à installer :"
+    
+    # Charger les infos sur l'environnement graphique
+    local has_gui=false
+    local gui_type="none"
+    if [[ -f /tmp/gui-environment.conf ]]; then
+        source /tmp/gui-environment.conf
+    fi
+    
+    # Adapter le message selon l'environnement
+    if [[ $has_gui == true ]]; then
+        echo -e "${GREEN}Interface graphique détectée : $gui_type ($gui_session)${NC}"
+        echo "L'installation s'adaptera à votre environnement existant."
+    else
+        echo -e "${YELLOW}Aucune interface graphique détectée.${NC}"
+        echo "Une interface minimale sera installée si nécessaire."
+    fi
+    
+    echo -e "\nChoisissez les modules à installer :"
     echo
     
     # Définition des modules disponibles avec descriptions
     declare -A modules_info=(
         ["01-system-config"]="Configuration système de base (recommandé)"
-        ["02-display-manager"]="Gestionnaire d'affichage X11/LightDM (requis pour VLC)"
+        ["02-display-manager"]="Gestionnaire d'affichage X11/LightDM (seulement si pas d'interface graphique)"
         ["03-vlc-setup"]="Lecteur vidéo VLC en mode kiosque"
         ["03-chromium-kiosk"]="Mode Chromium Kiosk (alternative moderne à VLC)"
         ["04-rclone-setup"]="Synchronisation Google Drive"
@@ -263,7 +362,6 @@ select_modules() {
             else
                 selected_modules=(
                     "01-system-config"
-                    "02-display-manager"
                     "03-vlc-setup"
                     "04-rclone-setup"
                     "05-glances-setup"
@@ -273,6 +371,10 @@ select_modules() {
                     "09-web-interface-v2"
                     "10-boot-manager"
                 )
+                # Ajouter display-manager seulement si pas d'interface graphique
+                if [[ $has_gui != true ]]; then
+                    selected_modules=("01-system-config" "02-display-manager" "${selected_modules[@]:1}")
+                fi
             fi
             log_info "Installation complète sélectionnée (mode $DISPLAY_MODE)"
             ;;
@@ -292,7 +394,6 @@ select_modules() {
             else
                 selected_modules=(
                     "01-system-config"
-                    "02-display-manager"
                     "03-vlc-setup"
                     "04-rclone-setup"
                     "06-cron-setup"
@@ -790,6 +891,9 @@ main() {
     
     # Vérifications système
     check_system
+    
+    # Détection de l'environnement graphique
+    detect_graphical_environment
     
     # Vérifier et réparer dpkg si nécessaire AVANT toute installation
     if command -v check_dpkg_health >/dev/null 2>&1; then

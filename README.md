@@ -3,19 +3,23 @@
 **Solution tout-en-un de digital signage pour Raspberry Pi avec interface web de gestion**
 
 [![Compatible](https://img.shields.io/badge/Compatible-Pi%203B%2B%20%7C%204B%20%7C%205-green.svg)](https://www.raspberrypi.org/)
-[![Version](https://img.shields.io/badge/Version-2.4.6-blue.svg)]()
+[![Version](https://img.shields.io/badge/Version-2.4.7-blue.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)]()
 [![Security](https://img.shields.io/badge/Security-Enhanced-brightgreen.svg)]()
 
-> ✅ **Version stable 2.4.6** : AUCUNE modification des fichiers de boot (/boot/config.txt et /boot/cmdline.txt) - Installation 100% sûre.
+> ✅ **Version stable 2.4.7** : Détection automatique de l'environnement graphique + AUCUNE modification des fichiers de boot - Installation 100% sûre et adaptative.
 
 ## 🎯 Présentation
 
 Pi Signage Digital est une solution professionnelle complète pour transformer vos Raspberry Pi en système d'affichage dynamique. Ce projet offre une installation automatisée avec une sécurité renforcée et une interface web moderne.
 
-> 🆕 **Nouveau : [VLC Minimal Edition](vlc-minimal-installer/)** - Pour une installation ultra-simple en 5 minutes avec 100% de fiabilité ! Idéal si vous voulez juste des vidéos qui tournent en boucle sans complexité.
+### 🎬 Nouveautés v2.4.7
+- **Détection automatique de l'environnement graphique** : S'adapte à LightDM, Wayland, X11 existant
+- **Installation intelligente** : Utilise l'interface graphique existante au lieu de réinstaller
+- **Support multi-environnements** : Compatible Raspberry Pi OS Desktop, Bookworm, environnements custom
+- **Configuration adaptative** : Chromium/VLC s'intègrent parfaitement à votre session graphique
 
-### 🎬 Nouveautés v2.4.6
+### 🎬 Fonctionnalités v2.4.6
 - **Sécurité boot absolue** : AUCUNE modification de /boot/config.txt ou cmdline.txt
 - **Mode test intégré** : Test automatique proposé après installation
 - **Diagnostic Chromium** : Vérification complète via `pi-signage-diag --verify-chromium`
@@ -75,8 +79,10 @@ Pi-Signage/
 ### Prérequis
 - **Raspberry Pi** : 3B+, 4B (2GB minimum recommandé) ou 5
 - **Carte SD** : 32GB minimum (Classe 10 ou supérieure)
-- **OS** : Raspberry Pi OS Lite 64-bit (Bookworm)
+- **OS** : Raspberry Pi OS (Lite ou Desktop) 32/64-bit (Bookworm)
 - **Réseau** : Connexion internet stable
+
+> 🆕 **Compatible avec Raspberry Pi OS Desktop** : L'installateur détecte automatiquement votre environnement graphique existant et s'y adapte !
 
 ### Installation
 

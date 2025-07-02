@@ -72,6 +72,12 @@ load_config() {
         log_error "Fichier de configuration introuvable"
         return 1
     fi
+    
+    # Charger aussi l'environnement graphique détecté
+    if [[ -f /tmp/gui-environment.conf ]]; then
+        source /tmp/gui-environment.conf
+        log_info "Environnement graphique: $GUI_TYPE ($GUI_SESSION)"
+    fi
 }
 
 # =============================================================================
@@ -90,8 +96,9 @@ install_chromium() {
         "nginx"  # Pour servir le player local
     )
     
-    # Ajouter les paquets X11 seulement si pas déjà installés par 02-display-manager
-    if ! dpkg -l xserver-xorg-core >/dev/null 2>&1; then
+    # Ajouter les paquets X11 seulement si pas d'environnement graphique existant
+    local has_gui="${HAS_GUI:-false}"
+    if [[ $has_gui != true ]] && ! dpkg -l xserver-xorg-core >/dev/null 2>&1; then
         packages+=(
             "xserver-xorg-core"
             "xserver-xorg-video-fbdev"
@@ -99,9 +106,9 @@ install_chromium() {
             "x11-xserver-utils"
             "unclutter"
         )
-        log_info "Ajout des paquets X11 (non installés par display-manager)"
+        log_info "Ajout des paquets X11 (pas d'interface graphique détectée)"
     else
-        log_info "Paquets X11 déjà installés, pas de réinstallation"
+        log_info "Interface graphique existante, utilisation de l'environnement actuel"
     fi
     
     # Détection VM et ajout xvfb si nécessaire
@@ -911,9 +918,130 @@ EOF
 }
 
 # =============================================================================
-# CONFIGURATION DE DÉMARRAGE X11 MINIMAL
+# CONFIGURATION DE DÉMARRAGE SELON L'ENVIRONNEMENT
 # =============================================================================
 
+configure_autostart() {
+    log_info "Configuration du démarrage automatique..."
+    
+    local has_gui="${HAS_GUI:-false}"
+    local gui_type="${GUI_TYPE:-none}"
+    local gui_session="${GUI_SESSION:-}"
+    
+    if [[ $has_gui == true ]]; then
+        log_info "Configuration pour environnement graphique existant: $gui_type"
+        
+        case "$gui_type" in
+            "lightdm")
+                configure_lightdm_autostart
+                ;;
+            "raspberrypi-desktop")
+                configure_raspberrypi_desktop_autostart
+                ;;
+            "gdm3"|"sddm")
+                configure_generic_autostart
+                ;;
+            "startx")
+                configure_x11_minimal
+                ;;
+            *)
+                log_warn "Type d'interface non reconnu, utilisation de la configuration générique"
+                configure_generic_autostart
+                ;;
+        esac
+    else
+        log_info "Pas d'interface graphique, installation X11 minimal"
+        configure_x11_minimal
+    fi
+}
+
+# Configuration pour LightDM (Raspberry Pi OS classique)
+configure_lightdm_autostart() {
+    log_info "Configuration de l'autostart pour LightDM..."
+    
+    # Configurer l'autologin si pas déjà fait
+    if [[ -f /etc/lightdm/lightdm.conf ]]; then
+        if ! grep -q "autologin-user=pi" /etc/lightdm/lightdm.conf; then
+            sed -i 's/#autologin-user=/autologin-user=pi/g' /etc/lightdm/lightdm.conf
+            sed -i 's/#autologin-user-timeout=0/autologin-user-timeout=0/g' /etc/lightdm/lightdm.conf
+        fi
+    fi
+    
+    # Créer le fichier autostart pour LXDE
+    mkdir -p /home/pi/.config/lxsession/LXDE-pi
+    cat > /home/pi/.config/lxsession/LXDE-pi/autostart << 'EOF'
+@lxpanel --profile LXDE-pi
+@pcmanfm --desktop --profile LXDE-pi
+@xscreensaver -no-splash
+@point-rpi
+@xset s off
+@xset -dpms
+@xset s noblank
+@/opt/scripts/chromium-kiosk.sh
+EOF
+    
+    chown -R pi:pi /home/pi/.config
+}
+
+# Configuration pour Raspberry Pi OS Desktop moderne (Wayfire/Wayland)
+configure_raspberrypi_desktop_autostart() {
+    log_info "Configuration de l'autostart pour Raspberry Pi Desktop (Wayfire)..."
+    
+    # Créer le répertoire autostart
+    mkdir -p /home/pi/.config/autostart
+    
+    # Créer le fichier .desktop pour démarrage automatique
+    cat > /home/pi/.config/autostart/chromium-kiosk.desktop << 'EOF'
+[Desktop Entry]
+Type=Application
+Name=Chromium Kiosk
+Exec=/opt/scripts/chromium-kiosk.sh
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Delay=5
+EOF
+    
+    chmod +x /home/pi/.config/autostart/chromium-kiosk.desktop
+    chown -R pi:pi /home/pi/.config
+    
+    # Désactiver l'économiseur d'écran pour Wayfire
+    if [[ -f /home/pi/.config/wayfire.ini ]]; then
+        if ! grep -q "idle" /home/pi/.config/wayfire.ini; then
+            echo -e "\n[idle]\ndpms_timeout = 0\nidle_timeout = 0" >> /home/pi/.config/wayfire.ini
+        fi
+    fi
+}
+
+# Configuration générique pour autres environnements
+configure_generic_autostart() {
+    log_info "Configuration générique de l'autostart..."
+    
+    # Utiliser systemd user service
+    mkdir -p /home/pi/.config/systemd/user
+    cat > /home/pi/.config/systemd/user/chromium-kiosk.service << 'EOF'
+[Unit]
+Description=Chromium Kiosk Mode
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStartPre=/bin/sleep 10
+ExecStart=/opt/scripts/chromium-kiosk.sh
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target
+EOF
+    
+    # Activer le service utilisateur
+    su - pi -c "systemctl --user enable chromium-kiosk.service"
+    
+    chown -R pi:pi /home/pi/.config
+}
+
+# Configuration X11 minimal (quand pas d'interface graphique)
 configure_x11_minimal() {
     log_info "Configuration de X11 minimal..."
     
@@ -1523,7 +1651,7 @@ main() {
         "create_kiosk_script"
         "create_html5_player"
         "create_systemd_service"
-        "configure_x11_minimal"
+        "configure_autostart"
         "configure_audio"
         "optimize_chromium"
         "create_admin_scripts"

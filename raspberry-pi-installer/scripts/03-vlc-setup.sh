@@ -71,6 +71,12 @@ load_config() {
         log_error "Fichier de configuration introuvable"
         return 1
     fi
+    
+    # Charger aussi l'environnement graphique détecté
+    if [[ -f /tmp/gui-environment.conf ]]; then
+        source /tmp/gui-environment.conf
+        log_info "Environnement graphique: $GUI_TYPE ($GUI_SESSION)"
+    fi
 }
 
 # =============================================================================
@@ -340,15 +346,22 @@ main() {
     mkdir -p "$(dirname "$LOG_FILE")"
     
     # Attendre que le système soit complètement prêt
-    while ! xset q >/dev/null 2>&1; do
-        log_vlc "Attente de l'initialisation de X11..."
-        sleep 5
-    done
-    
-    # Désactiver l'économiseur d'écran
-    xset s off
-    xset -dpms
-    xset s noblank
+    if [[ -n "${WAYLAND_DISPLAY:-}" ]]; then
+        # Environnement Wayland
+        log_vlc "Environnement Wayland détecté"
+        sleep 10  # Attendre que Wayland soit prêt
+    else
+        # Environnement X11
+        while ! xset q >/dev/null 2>&1; do
+            log_vlc "Attente de l'initialisation de X11..."
+            sleep 5
+        done
+        
+        # Désactiver l'économiseur d'écran (X11 uniquement)
+        xset s off
+        xset -dpms
+        xset s noblank
+    fi
     
     # Démarrer la lecture
     play_videos
@@ -362,6 +375,80 @@ EOF
     chmod +x "$VLC_SCRIPT"
     
     log_info "Script VLC créé: $VLC_SCRIPT"
+}
+
+# =============================================================================
+# CONFIGURATION DU DÉMARRAGE AUTOMATIQUE SELON L'ENVIRONNEMENT
+# =============================================================================
+
+configure_vlc_autostart() {
+    log_info "Configuration du démarrage automatique de VLC..."
+    
+    local has_gui="${HAS_GUI:-false}"
+    local gui_type="${GUI_TYPE:-none}"
+    local gui_session="${GUI_SESSION:-}"
+    
+    if [[ $has_gui == true ]]; then
+        log_info "Configuration pour environnement graphique existant: $gui_type"
+        
+        case "$gui_type" in
+            "lightdm")
+                # Pas besoin de configuration supplémentaire, utilise le service systemd
+                log_info "LightDM détecté, VLC démarrera via le service systemd"
+                ;;
+                
+            "raspberrypi-desktop")
+                # Configuration pour Raspberry Pi Desktop moderne
+                if [[ "$gui_session" == "wayfire" ]] || [[ "$gui_session" == "PIXEL" ]]; then
+                    # Créer un fichier .desktop pour autostart
+                    mkdir -p /home/signage/.config/autostart
+                    cat > /home/signage/.config/autostart/vlc-signage.desktop << 'EOF'
+[Desktop Entry]
+Type=Application
+Name=VLC Digital Signage
+Exec=/opt/scripts/vlc-signage.sh
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Delay=10
+EOF
+                    chmod +x /home/signage/.config/autostart/vlc-signage.desktop
+                    chown -R signage:signage /home/signage/.config
+                    log_info "Configuration autostart pour $gui_session"
+                fi
+                ;;
+                
+            "gdm3"|"sddm")
+                # Configuration générique via systemd user
+                mkdir -p /home/signage/.config/systemd/user
+                cat > /home/signage/.config/systemd/user/vlc-signage.service << 'EOF'
+[Unit]
+Description=VLC Digital Signage User Service
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStartPre=/bin/sleep 15
+ExecStart=/opt/scripts/vlc-signage.sh
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target
+EOF
+                chown -R signage:signage /home/signage/.config
+                su - signage -c "systemctl --user enable vlc-signage.service"
+                log_info "Service utilisateur configuré pour $gui_type"
+                ;;
+                
+            *)
+                log_warn "Type d'interface non reconnu: $gui_type"
+                log_info "Utilisation du service systemd standard"
+                ;;
+        esac
+    else
+        log_info "Pas d'interface graphique, le service systemd gèrera le démarrage avec LightDM"
+    fi
 }
 
 # =============================================================================
@@ -409,7 +496,43 @@ EOF
 create_vlc_service() {
     log_info "Création du service systemd pour VLC..."
     
-    cat > "$VLC_SERVICE" << 'EOF'
+    # Adapter selon l'environnement graphique
+    local has_gui="${HAS_GUI:-false}"
+    local gui_type="${GUI_TYPE:-none}"
+    local display_env="DISPLAY=:0"
+    local exec_start_pre=""
+    
+    # Configuration spécifique selon l'environnement
+    if [[ $has_gui == true ]]; then
+        case "$gui_type" in
+            "lightdm")
+                display_env="DISPLAY=:0"
+                exec_start_pre="ExecStartPre=/bin/bash -c 'until systemctl is-active lightdm.service >/dev/null 2>&1; do sleep 2; done; sleep 5'"
+                ;;
+            "raspberrypi-desktop")
+                display_env="DISPLAY=:0"
+                if [[ "$GUI_SESSION" == "wayfire" ]]; then
+                    display_env="WAYLAND_DISPLAY=wayland-0"
+                fi
+                exec_start_pre="ExecStartPre=/bin/sleep 10"
+                ;;
+            "gdm3"|"sddm")
+                display_env="DISPLAY=:0"
+                exec_start_pre="ExecStartPre=/bin/sleep 15"
+                ;;
+            *)
+                # Pour les environnements sans GUI, on utilise le display :7.0 de LightDM
+                display_env="DISPLAY=:7.0"
+                exec_start_pre="ExecStartPre=/bin/bash -c 'until systemctl is-active lightdm.service >/dev/null 2>&1; do sleep 2; done; sleep 5'"
+                ;;
+        esac
+    else
+        # Pas de GUI détecté, on utilise la config classique avec LightDM
+        display_env="DISPLAY=:7.0"
+        exec_start_pre="ExecStartPre=/bin/bash -c 'until systemctl is-active lightdm.service >/dev/null 2>&1; do sleep 2; done; sleep 5'"
+    fi
+    
+    cat > "$VLC_SERVICE" << EOF
 [Unit]
 Description=VLC Digital Signage
 After=multi-user.target network.target sound.target
@@ -419,11 +542,10 @@ Wants=network.target sound.target
 Type=simple
 User=signage
 Group=signage
-Environment=DISPLAY=:7.0
+Environment=$display_env
 Environment=HOME=/home/signage
 Environment=XDG_RUNTIME_DIR=/run/user/1001
-# Attendre que lightdm soit vraiment prêt
-ExecStartPre=/bin/bash -c 'until systemctl is-active lightdm.service >/dev/null 2>&1; do sleep 2; done; sleep 5'
+$exec_start_pre
 ExecStart=/opt/scripts/vlc-signage.sh
 Restart=always
 RestartSec=10
@@ -594,6 +716,7 @@ main() {
         "create_vlc_script"
         "create_waiting_message"
         "create_vlc_service"
+        "configure_vlc_autostart"
         "configure_permissions"
         "configure_vlc_environment"
     )
