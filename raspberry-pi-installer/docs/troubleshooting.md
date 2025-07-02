@@ -36,6 +36,54 @@ La version actuelle utilise les configurations par défaut du Pi :
 - Pas d'overclocking
 - Configuration système stable
 
+### Mode Chromium Kiosk - Pas de démarrage automatique
+
+**Symptôme** : Après installation en mode Chromium, seulement une invite de commande au redémarrage
+
+**Cause** : Cycle de dépendance systemd empêchant le démarrage des services
+
+**Solution rapide** :
+```bash
+# Utiliser le script de diagnostic avec correction automatique
+sudo pi-signage-diag --fix-chromium-cycle
+sudo reboot
+```
+
+**Solution manuelle** :
+```bash
+# 1. Corriger le fichier pi-signage.target
+sudo tee /etc/systemd/system/pi-signage.target << 'EOF'
+[Unit]
+Description=Pi Signage System Target
+Documentation=Digital Signage Complete System
+Requires=multi-user.target
+After=multi-user.target
+AllowIsolate=yes
+
+[Install]
+WantedBy=graphical.target
+EOF
+
+# 2. Activer les services nécessaires
+sudo systemctl enable x11-kiosk.service
+sudo systemctl enable chromium-kiosk.service
+sudo systemctl enable pi-signage-startup.service
+
+# 3. Recharger et redémarrer
+sudo systemctl daemon-reload
+sudo reboot
+```
+
+**Vérification après redémarrage** :
+```bash
+# Vérifier le statut
+sudo systemctl status pi-signage-startup
+sudo journalctl -b -u pi-signage-startup
+
+# Diagnostic complet mode Chromium
+sudo pi-signage-diag --verify-chromium
+```
+
 ## 🚨 Autres problèmes d'installation
 
 ### Erreurs dpkg sur Raspberry Pi

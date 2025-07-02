@@ -460,12 +460,12 @@ configure_service_dependencies() {
 [Unit]
 Description=Pi Signage System Target
 Documentation=Digital Signage Complete System
-Requires=graphical.target
-After=graphical.target
+Requires=multi-user.target
+After=multi-user.target
 AllowIsolate=yes
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=graphical.target
 EOF
     
     # Modifier les services pour qu'ils dépendent du target pi-signage

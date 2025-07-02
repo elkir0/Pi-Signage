@@ -536,6 +536,78 @@ verify_chromium_boot() {
     echo ""
 }
 
+# Fonction de correction du cycle de dépendance systemd
+fix_chromium_cycle() {
+    print_header "CORRECTION DU CYCLE DE DÉPENDANCE SYSTEMD"
+    
+    local fixed=0
+    
+    # 1. Sauvegarder la configuration actuelle
+    if [[ -f /etc/systemd/system/pi-signage.target ]]; then
+        print_info "Sauvegarde de la configuration actuelle..."
+        cp /etc/systemd/system/pi-signage.target /etc/systemd/system/pi-signage.target.bak
+        print_ok "Sauvegarde créée: pi-signage.target.bak"
+    fi
+    
+    # 2. Créer la configuration corrigée
+    print_info "Création de la configuration corrigée..."
+    cat > /etc/systemd/system/pi-signage.target << 'EOF'
+[Unit]
+Description=Pi Signage System Target
+Documentation=Digital Signage Complete System
+Requires=multi-user.target
+After=multi-user.target
+AllowIsolate=yes
+
+[Install]
+WantedBy=graphical.target
+EOF
+    print_ok "Configuration pi-signage.target corrigée"
+    ((fixed++))
+    
+    # 3. Activer les services nécessaires
+    print_info "Activation des services..."
+    
+    if systemctl list-unit-files x11-kiosk.service >/dev/null 2>&1; then
+        systemctl enable x11-kiosk.service
+        print_ok "Service x11-kiosk.service activé"
+        ((fixed++))
+    fi
+    
+    if systemctl list-unit-files chromium-kiosk.service >/dev/null 2>&1; then
+        systemctl enable chromium-kiosk.service
+        print_ok "Service chromium-kiosk.service activé"
+        ((fixed++))
+    fi
+    
+    if systemctl list-unit-files pi-signage-startup.service >/dev/null 2>&1; then
+        systemctl enable pi-signage-startup.service
+        print_ok "Service pi-signage-startup.service activé"
+        ((fixed++))
+    fi
+    
+    # 4. Recharger systemd
+    print_info "Rechargement de systemd..."
+    systemctl daemon-reload
+    print_ok "Configuration systemd rechargée"
+    
+    # 5. Vérifier la correction
+    print_info "Vérification de la correction..."
+    if systemd-analyze verify pi-signage.target 2>&1 | grep -q "cyclic"; then
+        print_error "ERREUR: Le cycle de dépendance persiste!"
+        systemd-analyze verify pi-signage.target
+    else
+        print_ok "Aucun cycle de dépendance détecté"
+        ((fixed++))
+    fi
+    
+    echo ""
+    print_info "Corrections appliquées: $fixed"
+    print_info "Pour appliquer les changements, redémarrez le système:"
+    print_info "  sudo reboot"
+    echo ""
+}
+
 # Fonction intégrée depuis fix-black-screen-boot.sh
 fix_black_screen() {
     print_header "RÉPARATION ÉCRAN NOIR"
@@ -595,6 +667,33 @@ generate_support_info() {
 # =============================================================================
 
 main() {
+    # Gérer les arguments de ligne de commande
+    case "${1:-}" in
+        --verify-chromium)
+            verify_chromium_boot
+            exit 0
+            ;;
+        --fix-black-screen)
+            fix_black_screen
+            exit 0
+            ;;
+        --fix-chromium-cycle)
+            fix_chromium_cycle
+            exit 0
+            ;;
+        --help)
+            echo "Usage: pi-signage-diag [option]"
+            echo "Options:"
+            echo "  --verify-chromium    Vérifier la configuration Chromium Kiosk"
+            echo "  --fix-black-screen   Corriger le problème d'écran noir"
+            echo "  --fix-chromium-cycle Corriger le cycle de dépendance systemd"
+            echo "  --help               Afficher cette aide"
+            echo ""
+            echo "Sans option, exécute le diagnostic complet."
+            exit 0
+            ;;
+    esac
+    
     # Bannière
     cat << 'BANNER'
     ____  _    ____  _                              
