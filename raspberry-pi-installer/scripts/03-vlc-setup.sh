@@ -381,12 +381,58 @@ EOF
 # CONFIGURATION DU DÉMARRAGE AUTOMATIQUE SELON L'ENVIRONNEMENT
 # =============================================================================
 
+# Fonction pour configurer l'autologin de l'utilisateur signage
+configure_signage_autologin() {
+    log_info "Configuration de l'autologin pour l'utilisateur signage..."
+    
+    # Pour LightDM
+    if [[ -f /etc/lightdm/lightdm.conf ]]; then
+        if ! grep -q "autologin-user=signage" /etc/lightdm/lightdm.conf; then
+            # Remplacer ou ajouter l'autologin
+            if grep -q "autologin-user=" /etc/lightdm/lightdm.conf; then
+                sed -i 's/autologin-user=.*/autologin-user=signage/g' /etc/lightdm/lightdm.conf
+            else
+                sed -i 's/#autologin-user=/autologin-user=signage/g' /etc/lightdm/lightdm.conf
+            fi
+            sed -i 's/#autologin-user-timeout=0/autologin-user-timeout=0/g' /etc/lightdm/lightdm.conf
+            log_info "Autologin configuré pour LightDM"
+        fi
+    fi
+    
+    # Pour GDM3
+    if [[ -f /etc/gdm3/custom.conf ]]; then
+        if ! grep -q "AutomaticLogin=signage" /etc/gdm3/custom.conf; then
+            # Supprimer l'ancienne config si elle existe
+            sed -i '/AutomaticLoginEnable=/d' /etc/gdm3/custom.conf
+            sed -i '/AutomaticLogin=/d' /etc/gdm3/custom.conf
+            # Ajouter la nouvelle
+            sed -i '/\[daemon\]/a\AutomaticLoginEnable=true\nAutomaticLogin=signage' /etc/gdm3/custom.conf
+            log_info "Autologin configuré pour GDM3"
+        fi
+    fi
+    
+    # Pour systemd (console autologin) - utile si pas d'interface graphique
+    if [[ ! -f /etc/lightdm/lightdm.conf ]] && [[ ! -f /etc/gdm3/custom.conf ]]; then
+        mkdir -p /etc/systemd/system/getty@tty1.service.d/
+        cat > /etc/systemd/system/getty@tty1.service.d/autologin.conf << 'EOF'
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin signage --noclear %I $TERM
+EOF
+        systemctl daemon-reload
+        log_info "Autologin console configuré pour signage"
+    fi
+}
+
 configure_vlc_autostart() {
     log_info "Configuration du démarrage automatique de VLC..."
     
     local has_gui="${HAS_GUI:-false}"
     local gui_type="${GUI_TYPE:-none}"
     local gui_session="${GUI_SESSION:-}"
+    
+    # Toujours configurer l'autologin pour l'utilisateur signage
+    configure_signage_autologin
     
     if [[ $has_gui == true ]]; then
         log_info "Configuration pour environnement graphique existant: $gui_type"

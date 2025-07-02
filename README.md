@@ -88,6 +88,8 @@ Pi-Signage/
 
 Le script d'installation `main_orchestrator.sh` s'adapte automatiquement à votre système (Raspberry Pi OS Lite, Desktop ou VM/Docker) et propose une installation modulaire stable sans optimisations agressives.
 
+> 🎬 **Démarrage automatique garanti** : Après installation et redémarrage, le système lance automatiquement VLC ou Chromium en plein écran sans aucune intervention. L'autologin est configuré automatiquement pour tous les environnements supportés.
+
 #### Installation standard
 
 ```bash

@@ -955,17 +955,58 @@ configure_autostart() {
     fi
 }
 
-# Configuration pour LightDM (Raspberry Pi OS classique)
-configure_lightdm_autostart() {
-    log_info "Configuration de l'autostart pour LightDM..."
+# Fonction commune pour configurer l'autologin de l'utilisateur pi
+configure_pi_autologin() {
+    log_info "Configuration de l'autologin pour l'utilisateur pi..."
     
-    # Configurer l'autologin si pas déjà fait
+    # Pour LightDM
     if [[ -f /etc/lightdm/lightdm.conf ]]; then
         if ! grep -q "autologin-user=pi" /etc/lightdm/lightdm.conf; then
             sed -i 's/#autologin-user=/autologin-user=pi/g' /etc/lightdm/lightdm.conf
             sed -i 's/#autologin-user-timeout=0/autologin-user-timeout=0/g' /etc/lightdm/lightdm.conf
+            log_info "Autologin configuré pour LightDM"
         fi
     fi
+    
+    # Pour GDM3
+    if [[ -f /etc/gdm3/custom.conf ]]; then
+        if ! grep -q "AutomaticLoginEnable=true" /etc/gdm3/custom.conf; then
+            sed -i '/\[daemon\]/a\AutomaticLoginEnable=true\nAutomaticLogin=pi' /etc/gdm3/custom.conf
+            log_info "Autologin configuré pour GDM3"
+        fi
+    fi
+    
+    # Pour SDDM
+    if [[ -d /etc/sddm.conf.d ]]; then
+        if [[ ! -f /etc/sddm.conf.d/autologin.conf ]]; then
+            cat > /etc/sddm.conf.d/autologin.conf << 'EOF'
+[Autologin]
+User=pi
+Session=plasma
+EOF
+            log_info "Autologin configuré pour SDDM"
+        fi
+    fi
+    
+    # Pour systemd (console autologin)
+    if systemctl is-enabled getty@tty1.service >/dev/null 2>&1; then
+        mkdir -p /etc/systemd/system/getty@tty1.service.d/
+        cat > /etc/systemd/system/getty@tty1.service.d/autologin.conf << 'EOF'
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin pi --noclear %I $TERM
+EOF
+        systemctl daemon-reload
+        log_info "Autologin console configuré"
+    fi
+}
+
+# Configuration pour LightDM (Raspberry Pi OS classique)
+configure_lightdm_autostart() {
+    log_info "Configuration de l'autostart pour LightDM..."
+    
+    # Configurer l'autologin
+    configure_pi_autologin
     
     # Créer le fichier autostart pour LXDE
     mkdir -p /home/pi/.config/lxsession/LXDE-pi
@@ -986,6 +1027,9 @@ EOF
 # Configuration pour Raspberry Pi OS Desktop moderne (Wayfire/Wayland)
 configure_raspberrypi_desktop_autostart() {
     log_info "Configuration de l'autostart pour Raspberry Pi Desktop (Wayfire)..."
+    
+    # Configurer l'autologin pour Raspberry Pi Desktop
+    configure_pi_autologin
     
     # Créer le répertoire autostart
     mkdir -p /home/pi/.config/autostart
