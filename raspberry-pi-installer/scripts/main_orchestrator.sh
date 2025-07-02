@@ -181,6 +181,70 @@ EOF
 }
 
 # =============================================================================
+# DÉTECTION DE L'AUTOLOGIN EXISTANT
+# =============================================================================
+
+detect_autologin() {
+    log_info "Vérification de l'autologin existant..."
+    
+    local autologin_user=""
+    local autologin_method=""
+    
+    # Vérifier LightDM
+    if [[ -f /etc/lightdm/lightdm.conf ]]; then
+        if grep -q "^autologin-user=" /etc/lightdm/lightdm.conf; then
+            autologin_user=$(grep "^autologin-user=" /etc/lightdm/lightdm.conf | cut -d'=' -f2)
+            autologin_method="LightDM"
+            log_info "Autologin LightDM configuré pour: $autologin_user"
+        fi
+    fi
+    
+    # Vérifier GDM3
+    if [[ -f /etc/gdm3/custom.conf ]] && [[ -z "$autologin_user" ]]; then
+        if grep -q "AutomaticLoginEnable=true" /etc/gdm3/custom.conf; then
+            autologin_user=$(grep "AutomaticLogin=" /etc/gdm3/custom.conf | cut -d'=' -f2)
+            autologin_method="GDM3"
+            log_info "Autologin GDM3 configuré pour: $autologin_user"
+        fi
+    fi
+    
+    # Vérifier SDDM
+    if [[ -f /etc/sddm.conf.d/autologin.conf ]] && [[ -z "$autologin_user" ]]; then
+        if grep -q "User=" /etc/sddm.conf.d/autologin.conf; then
+            autologin_user=$(grep "User=" /etc/sddm.conf.d/autologin.conf | cut -d'=' -f2)
+            autologin_method="SDDM"
+            log_info "Autologin SDDM configuré pour: $autologin_user"
+        fi
+    fi
+    
+    # Vérifier systemd/getty (console)
+    if [[ -f /etc/systemd/system/getty@tty1.service.d/autologin.conf ]] && [[ -z "$autologin_user" ]]; then
+        if grep -q "autologin" /etc/systemd/system/getty@tty1.service.d/autologin.conf; then
+            autologin_user=$(grep -oP 'autologin \K\w+' /etc/systemd/system/getty@tty1.service.d/autologin.conf || echo "")
+            if [[ -n "$autologin_user" ]]; then
+                autologin_method="Console (systemd)"
+                log_info "Autologin console configuré pour: $autologin_user"
+            fi
+        fi
+    fi
+    
+    # Stocker les résultats
+    if [[ -n "$autologin_user" ]]; then
+        cat > /tmp/autologin-detected.conf << EOF
+AUTOLOGIN_USER="$autologin_user"
+AUTOLOGIN_METHOD="$autologin_method"
+AUTOLOGIN_HOME="$(getent passwd "$autologin_user" | cut -d: -f6)"
+EOF
+        log_info "Pi Signage s'adaptera à l'utilisateur existant: $autologin_user"
+    else
+        log_warn "Aucun autologin détecté. L'utilisateur devra se connecter manuellement."
+        log_info "Pour activer l'autologin: raspi-config > System Options > Boot / Auto Login"
+    fi
+    
+    return 0
+}
+
+# =============================================================================
 # DÉTECTION DU MODÈLE DE RASPBERRY PI
 # =============================================================================
 
@@ -895,11 +959,8 @@ main() {
     # Détection de l'environnement graphique
     detect_graphical_environment
     
-    # Vérification de l'autologin existant
-    if [[ -x "$SCRIPT_DIR/util-check-autologin.sh" ]]; then
-        log_info "Vérification de l'autologin existant..."
-        "$SCRIPT_DIR/util-check-autologin.sh" || true
-    fi
+    # Détection de l'autologin existant
+    detect_autologin
     
     # Vérifier et réparer dpkg si nécessaire AVANT toute installation
     if command -v check_dpkg_health >/dev/null 2>&1; then

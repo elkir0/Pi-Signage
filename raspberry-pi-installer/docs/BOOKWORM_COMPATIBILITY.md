@@ -43,10 +43,8 @@ Pi Signage s'adapte à votre configuration :
 Pour vérifier votre configuration actuelle :
 
 ```bash
-# Utiliser notre script de vérification
-./util-check-autologin.sh
-
-# Ou manuellement
+# L'installateur vérifie automatiquement lors de l'installation
+# Pour vérifier manuellement :
 grep "autologin" /etc/lightdm/lightdm.conf 2>/dev/null
 grep "autologin" /etc/systemd/system/getty@tty1.service.d/autologin.conf 2>/dev/null
 ```
@@ -86,7 +84,7 @@ Lors de la création de la carte SD, dans les options avancées :
 
 1. **Avant l'installation** : Si vous voulez l'autologin, configurez-le d'abord via raspi-config
 2. **Utilisateur recommandé** : `pi` pour Chromium, `signage` pour VLC (mais tout utilisateur fonctionne)
-3. **Vérification** : Utilisez `./util-check-autologin.sh` pour vérifier la configuration
+3. **Vérification** : L'installateur affiche automatiquement l'autologin détecté
 
 ## 🔧 Détails techniques
 
