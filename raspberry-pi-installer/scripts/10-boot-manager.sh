@@ -152,11 +152,33 @@ case "$DISPLAY_MODE" in
         ;;
         
     chromium)
-        # Démarrer X11 et Chromium Kiosk
+        # Démarrer Chromium Kiosk selon l'environnement
         log "Démarrage du mode Chromium Kiosk..."
         
-        # Option 1: Utiliser le service x11-kiosk s'il existe
-        if systemctl list-unit-files x11-kiosk.service >/dev/null 2>&1; then
+        # Charger la configuration pour obtenir GUI_TYPE
+        if [[ -f /etc/pi-signage/config.conf ]]; then
+            source /etc/pi-signage/config.conf
+        fi
+        
+        # Si on a LightDM, le démarrer d'abord (autostart configuré)
+        if [[ "${GUI_TYPE:-}" == "lightdm" ]] && systemctl list-unit-files lightdm.service >/dev/null 2>&1; then
+            log "Interface graphique LightDM détectée, démarrage..."
+            systemctl start lightdm || log "ERREUR: Échec du démarrage de LightDM"
+            
+            # Attendre que LightDM soit prêt
+            for i in {1..30}; do
+                if systemctl is-active lightdm >/dev/null 2>&1; then
+                    log "LightDM actif après $i secondes"
+                    break
+                fi
+                sleep 1
+            done
+            
+            # L'autostart de LightDM lancera Chromium Kiosk
+            log "Chromium Kiosk sera lancé par l'autostart de LightDM"
+            
+        # Sinon, démarrage direct X11
+        elif systemctl list-unit-files x11-kiosk.service >/dev/null 2>&1; then
             log "Démarrage via x11-kiosk.service..."
             systemctl start x11-kiosk || log "ERREUR: Échec du démarrage de x11-kiosk"
         
