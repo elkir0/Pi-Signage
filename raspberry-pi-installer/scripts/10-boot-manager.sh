@@ -233,6 +233,18 @@ EOF
 disable_auto_start_services() {
     log_info "Désactivation du démarrage automatique des services..."
     
+    # Charger la configuration pour obtenir GUI_TYPE
+    if [[ -f "$CONFIG_FILE" ]]; then
+        source "$CONFIG_FILE"
+    fi
+    
+    # Ne PAS désactiver les gestionnaires de bureau si on a une interface graphique existante
+    local skip_display_managers=false
+    if [[ -n "${GUI_TYPE:-}" ]] && [[ "${GUI_TYPE}" != "none" ]]; then
+        skip_display_managers=true
+        log_info "Interface graphique détectée ($GUI_TYPE), conservation des gestionnaires de bureau"
+    fi
+    
     local services=(
         "lightdm"
         "gdm3"
@@ -243,6 +255,12 @@ disable_auto_start_services() {
     )
     
     for service in "${services[@]}"; do
+        # Skip les display managers si on a une GUI existante
+        if [[ "$skip_display_managers" == "true" ]] && [[ "$service" =~ ^(lightdm|gdm3|sddm)$ ]]; then
+            log_info "  - $service conservé (interface graphique existante)"
+            continue
+        fi
+        
         if systemctl list-unit-files "$service.service" >/dev/null 2>&1; then
             systemctl disable "$service" 2>/dev/null || true
             log_info "  - $service désactivé au boot"
