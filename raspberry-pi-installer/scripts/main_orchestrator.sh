@@ -109,8 +109,20 @@ detect_graphical_environment() {
     local gui_type="none"
     local gui_session=""
     local display_server=""
+    local compositor=""
     
-    # Vérifier si on a un serveur X11 ou Wayland
+    # Détection du compositeur Wayland (labwc prioritaire sur Bookworm récent)
+    if command -v labwc >/dev/null 2>&1; then
+        compositor="labwc"
+        display_server="wayland"
+        has_gui=true
+    elif command -v wayfire >/dev/null 2>&1; then
+        compositor="wayfire"
+        display_server="wayland"
+        has_gui=true
+    fi
+    
+    # Vérifier si on a un serveur X11 ou Wayland actif
     if [[ -n "${DISPLAY:-}" ]] || [[ -n "${WAYLAND_DISPLAY:-}" ]]; then
         has_gui=true
         if [[ -n "${WAYLAND_DISPLAY:-}" ]]; then
@@ -123,17 +135,32 @@ detect_graphical_environment() {
     # Vérifier les processus graphiques
     if pgrep -x "Xorg|X|Xwayland" > /dev/null 2>&1; then
         has_gui=true
-        display_server="x11"
-    elif pgrep -x "wayfire|weston|sway" > /dev/null 2>&1; then
+        if [[ -z "$display_server" ]]; then
+            display_server="x11"
+        fi
+    elif pgrep -x "labwc|wayfire|weston|sway" > /dev/null 2>&1; then
         has_gui=true
         display_server="wayland"
+        # Identifier le compositeur actif
+        if pgrep -x "labwc" > /dev/null 2>&1; then
+            compositor="labwc"
+        elif pgrep -x "wayfire" > /dev/null 2>&1; then
+            compositor="wayfire"
+        fi
     fi
     
     # Vérifier les gestionnaires de session
     if systemctl is-active lightdm > /dev/null 2>&1; then
         has_gui=true
         gui_type="lightdm"
-        gui_session="LXDE"
+        # Déterminer la session selon le compositeur
+        if [[ "$compositor" == "labwc" ]]; then
+            gui_session="LXDE-pi-labwc"
+        elif [[ "$compositor" == "wayfire" ]]; then
+            gui_session="LXDE-pi-wayfire"
+        else
+            gui_session="LXDE-pi-x"
+        fi
     elif systemctl is-active gdm3 > /dev/null 2>&1; then
         has_gui=true
         gui_type="gdm3"
@@ -152,11 +179,8 @@ detect_graphical_environment() {
     # Vérifier si on est sur Raspberry Pi OS Desktop
     if [[ -f /usr/bin/raspberrypi-ui-mods ]] || [[ -d /usr/share/raspberrypi-ui-mods ]]; then
         has_gui=true
-        gui_type="raspberrypi-desktop"
-        if [[ -f /etc/lightdm/lightdm.conf ]]; then
-            gui_session="PIXEL"
-        else
-            gui_session="wayfire"  # Nouveau desktop Bookworm
+        if [[ -z "$gui_type" ]] || [[ "$gui_type" == "none" ]]; then
+            gui_type="raspberrypi-desktop"
         fi
     fi
     
@@ -166,6 +190,7 @@ HAS_GUI=$has_gui
 GUI_TYPE="$gui_type"
 GUI_SESSION="$gui_session"
 DISPLAY_SERVER="$display_server"
+COMPOSITOR="$compositor"
 EOF
     
     if [[ $has_gui == true ]]; then
@@ -173,6 +198,9 @@ EOF
         log_info "  - Type: $gui_type"
         log_info "  - Session: $gui_session"
         log_info "  - Serveur: $display_server"
+        if [[ -n "$compositor" ]]; then
+            log_info "  - Compositeur: $compositor"
+        fi
     else
         log_info "Aucun environnement graphique détecté (mode headless)"
     fi
@@ -745,6 +773,11 @@ collect_configuration() {
     read -rp "Nom d'hôte pour ce Pi [pi-signage]: " NEW_HOSTNAME
     NEW_HOSTNAME=${NEW_HOSTNAME:-pi-signage}
     
+    # Charger la détection de l'environnement graphique si elle existe
+    if [[ -f /tmp/gui-environment.conf ]]; then
+        source /tmp/gui-environment.conf
+    fi
+    
     # Sauvegarde de la configuration
     mkdir -p "$(dirname "$CONFIG_FILE")"
     cat > "$CONFIG_FILE" << EOF
@@ -763,6 +796,13 @@ SCRIPT_VERSION="$SCRIPT_VERSION"
 INSTALL_DATE="$(date '+%Y-%m-%d %H:%M:%S')"
 INSTALLED_MODULES="${selected_modules[*]}"
 DISPLAY_MODE="${DISPLAY_MODE:-vlc}"
+
+# Environnement graphique détecté
+HAS_GUI="${HAS_GUI:-false}"
+GUI_TYPE="${GUI_TYPE:-none}"
+GUI_SESSION="${GUI_SESSION:-}"
+DISPLAY_SERVER="${DISPLAY_SERVER:-}"
+COMPOSITOR="${COMPOSITOR:-}"
 EOF
     
     # Appliquer des permissions strictes

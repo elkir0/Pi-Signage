@@ -96,6 +96,17 @@ install_chromium() {
         "nginx"  # Pour servir le player local
     )
     
+    # Charger la configuration pour obtenir le serveur d'affichage
+    if [[ -f "$CONFIG_FILE" ]]; then
+        source "$CONFIG_FILE"
+    fi
+    
+    # Ajouter seatd si on utilise Wayland
+    if [[ "${DISPLAY_SERVER:-}" == "wayland" ]]; then
+        packages+=("seatd")
+        log_info "Ajout de seatd pour support Wayland"
+    fi
+    
     # Ajouter les paquets X11 seulement si pas d'environnement graphique existant
     local has_gui="${HAS_GUI:-false}"
     if [[ $has_gui != true ]] && ! dpkg -l xserver-xorg-core >/dev/null 2>&1; then
@@ -159,6 +170,52 @@ install_chromium() {
         log_error "Chromium non disponible après installation"
         return 1
     fi
+    
+    # Configurer les permissions si nécessaire
+    configure_permissions
+}
+
+# =============================================================================
+# CONFIGURATION DES PERMISSIONS
+# =============================================================================
+
+configure_permissions() {
+    log_info "Configuration des permissions..."
+    
+    # Ajouter l'utilisateur pi aux groupes nécessaires
+    local groups=(video audio input tty)
+    
+    # Ajouter seat si seatd est installé
+    if systemctl list-unit-files seatd.service >/dev/null 2>&1; then
+        groups+=(seat)
+    fi
+    
+    for group in "${groups[@]}"; do
+        if getent group "$group" >/dev/null; then
+            usermod -a -G "$group" pi 2>/dev/null || true
+            log_info "Utilisateur pi ajouté au groupe $group"
+        fi
+    done
+    
+    # Activer et démarrer seatd si installé (pour Wayland)
+    if [[ "${DISPLAY_SERVER:-}" == "wayland" ]] && systemctl list-unit-files seatd.service >/dev/null 2>&1; then
+        log_info "Activation de seatd pour Wayland"
+        systemctl enable seatd >/dev/null 2>&1 || true
+        systemctl start seatd >/dev/null 2>&1 || true
+    fi
+    
+    # Créer les règles udev pour les permissions
+    cat > /etc/udev/rules.d/99-kiosk.rules << 'EOF'
+# Permissions pour mode kiosk
+SUBSYSTEM=="input", GROUP="input", MODE="0664"
+SUBSYSTEM=="drm", GROUP="video", MODE="0664"
+SUBSYSTEM=="seat", GROUP="seat", MODE="0664"
+EOF
+    
+    # Recharger les règles udev
+    udevadm control --reload-rules >/dev/null 2>&1 || true
+    
+    log_info "Permissions configurées"
 }
 
 # =============================================================================
@@ -202,9 +259,20 @@ trap cleanup SIGTERM SIGINT
 # Initialisation
 log_kiosk "=== Démarrage Chromium Kiosk ==="
 
-# Variables d'environnement pour X11
-export DISPLAY=:0
-export XAUTHORITY=/home/$USER/.Xauthority
+# Détecter le système d'affichage
+if [[ -n "${WAYLAND_DISPLAY:-}" ]]; then
+    log_kiosk "Système Wayland détecté"
+    IS_WAYLAND=true
+    # Variables d'environnement pour Wayland
+    export XDG_SESSION_TYPE=wayland
+    export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+else
+    log_kiosk "Système X11 détecté"
+    IS_WAYLAND=false
+    # Variables d'environnement pour X11
+    export DISPLAY=:0
+    export XAUTHORITY=/home/$USER/.Xauthority
+fi
 
 # Créer les répertoires nécessaires
 mkdir -p "$(dirname "$LOG_FILE")"
@@ -212,7 +280,7 @@ mkdir -p /var/cache/chromium-kiosk
 chown $USER:$USER /var/cache/chromium-kiosk
 
 # Détecter si on est en mode VM et démarrer Xvfb si nécessaire
-if [[ -f /etc/pi-signage/vm-mode.conf ]] || ! [[ -f /proc/device-tree/model ]]; then
+if [[ "$IS_WAYLAND" == "false" ]] && ([[ -f /etc/pi-signage/vm-mode.conf ]] || ! [[ -f /proc/device-tree/model ]]); then
     log_kiosk "Mode VM détecté, démarrage de Xvfb"
     # Tuer tout Xvfb existant
     pkill -f Xvfb || true
@@ -223,30 +291,32 @@ if [[ -f /etc/pi-signage/vm-mode.conf ]] || ! [[ -f /proc/device-tree/model ]]; 
     export DISPLAY=:0
 fi
 
-# Attendre que X11 soit prêt
-for i in {1..30}; do
-    if xset q &>/dev/null; then
-        log_kiosk "X11 disponible après $i secondes"
-        break
-    fi
-    sleep 1
-done
+# Configuration spécifique X11
+if [[ "$IS_WAYLAND" == "false" ]]; then
+    # Attendre que X11 soit prêt
+    for i in {1..30}; do
+        if xset q &>/dev/null; then
+            log_kiosk "X11 disponible après $i secondes"
+            break
+        fi
+        sleep 1
+    done
 
-# Désactiver l'économiseur d'écran et le DPMS
-xset s off
-xset -dpms
-xset s noblank
+    # Désactiver l'économiseur d'écran et le DPMS
+    xset s off
+    xset -dpms
+    xset s noblank
 
-# Masquer le curseur après 1 seconde d'inactivité
-unclutter -idle 1 &
+    # Masquer le curseur après 1 seconde d'inactivité
+    unclutter -idle 1 &
+fi
 
 # Nettoyer les profils Chromium précédents
 rm -rf /home/$USER/.cache/chromium
 rm -rf /home/$USER/.config/chromium
 
-# Options Chromium optimisées pour Raspberry Pi
+# Options Chromium de base
 CHROMIUM_FLAGS=(
-    --kiosk
     --noerrdialogs
     --disable-infobars
     --disable-session-crashed-bubble
@@ -259,7 +329,6 @@ CHROMIUM_FLAGS=(
     --overscroll-history-navigation=0
     --disable-pinch
     --autoplay-policy=no-user-gesture-required
-    --window-size=1920,1080
     --window-position=0,0
     --check-for-update-interval=31536000
     --disable-background-timer-throttling
@@ -269,9 +338,30 @@ CHROMIUM_FLAGS=(
     --disable-ipc-flooding-protection
     --disable-background-networking
     --enable-features=OverlayScrollbar
-    --start-maximized
     --user-data-dir=/var/cache/chromium-kiosk
 )
+
+# Flags spécifiques selon le système d'affichage
+if [[ "$IS_WAYLAND" == "true" ]]; then
+    log_kiosk "Configuration des flags Wayland"
+    # IMPORTANT: L'ordre est critique pour Wayland
+    CHROMIUM_FLAGS=(
+        --start-maximized  # DOIT être AVANT --start-fullscreen
+        --start-fullscreen
+        --kiosk
+        --ozone-platform=wayland
+        --enable-features=UseOzonePlatform,OverlayScrollbar
+        "${CHROMIUM_FLAGS[@]}"
+    )
+else
+    log_kiosk "Configuration des flags X11"
+    CHROMIUM_FLAGS=(
+        --kiosk
+        --start-maximized
+        --window-size=1920,1080
+        "${CHROMIUM_FLAGS[@]}"
+    )
+fi
 
 # Optimisations pour Raspberry Pi
 case "$PI_MODEL" in
@@ -869,9 +959,14 @@ EOF
 create_systemd_service() {
     log_info "Création du service systemd..."
     
+    # Pour compatibilité, on crée deux services :
+    # 1. Service système pour démarrage sans session graphique (headless)
+    # 2. Service utilisateur pour démarrage dans session graphique
+    
+    # Service système (pour headless/X11 minimal)
     cat > "$SERVICE_FILE" << 'EOF'
 [Unit]
-Description=Chromium Kiosk Mode for Pi Signage
+Description=Chromium Kiosk Mode for Pi Signage (System)
 After=network.target
 
 [Service]
@@ -906,14 +1001,65 @@ KillMode=mixed
 WantedBy=graphical.target
 EOF
 
-    # Recharger systemd et activer le service
+    # Service utilisateur (recommandé pour desktop)
+    local user_service_dir="/home/pi/.config/systemd/user"
+    mkdir -p "$user_service_dir"
+    
+    cat > "$user_service_dir/chromium-kiosk.service" << 'EOF'
+[Unit]
+Description=Chromium Kiosk Mode for Pi Signage (User)
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStartPre=/bin/sleep 5
+ExecStart=/opt/scripts/chromium-kiosk.sh
+Restart=on-failure
+RestartSec=5
+
+# Variables d'environnement
+Environment="DISPLAY=:0"
+Environment="WAYLAND_DISPLAY=wayland-0"
+Environment="XDG_RUNTIME_DIR=/run/user/1000"
+
+# Logs
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
+EOF
+
+    chown -R pi:pi "$user_service_dir"
+    
+    # Recharger systemd
     systemctl daemon-reload
     
-    if systemctl enable chromium-kiosk.service; then
-        log_info "Service Chromium Kiosk activé"
+    # Déterminer quel service activer selon l'environnement
+    local has_gui="${HAS_GUI:-false}"
+    local display_server="${DISPLAY_SERVER:-}"
+    
+    if [[ $has_gui == true ]] && [[ "$display_server" == "wayland" || "${GUI_TYPE:-}" == "lightdm" ]]; then
+        # Pour desktop avec session graphique, utiliser le service utilisateur
+        log_info "Activation du service utilisateur (recommandé pour desktop)"
+        su - pi -c "systemctl --user daemon-reload"
+        su - pi -c "systemctl --user enable chromium-kiosk.service"
+        
+        # Activer linger pour que le service utilisateur démarre au boot
+        loginctl enable-linger pi
+        
+        log_info "Service utilisateur Chromium Kiosk activé"
+        log_info "Note: Le service démarrera avec la session graphique de l'utilisateur pi"
     else
-        log_error "Échec de l'activation du service"
-        return 1
+        # Pour headless ou X11 minimal, utiliser le service système
+        log_info "Activation du service système (mode headless/X11 minimal)"
+        if systemctl enable chromium-kiosk.service; then
+            log_info "Service système Chromium Kiosk activé"
+        else
+            log_error "Échec de l'activation du service"
+            return 1
+        fi
     fi
 }
 
@@ -924,40 +1070,116 @@ EOF
 configure_autostart() {
     log_info "Configuration du démarrage automatique..."
     
+    # Charger la configuration pour obtenir les variables d'environnement
+    if [[ -f "$CONFIG_FILE" ]]; then
+        source "$CONFIG_FILE"
+    fi
+    
     local has_gui="${HAS_GUI:-false}"
     local gui_type="${GUI_TYPE:-none}"
     local gui_session="${GUI_SESSION:-}"
+    local compositor="${COMPOSITOR:-}"
+    local display_server="${DISPLAY_SERVER:-}"
     
     if [[ $has_gui == true ]]; then
-        log_info "Configuration pour environnement graphique existant: $gui_type"
+        log_info "Configuration pour environnement graphique existant:"
+        log_info "  - Type: $gui_type"
+        log_info "  - Serveur: $display_server"
+        log_info "  - Compositeur: $compositor"
         
-        case "$gui_type" in
-            "lightdm")
-                configure_lightdm_autostart
-                ;;
-            "raspberrypi-desktop")
-                configure_raspberrypi_desktop_autostart
-                ;;
-            "gdm3"|"sddm")
-                configure_generic_autostart
-                ;;
-            "startx")
-                configure_x11_minimal
-                ;;
-            *)
-                log_warn "Type d'interface non reconnu, utilisation de la configuration générique"
-                configure_generic_autostart
-                ;;
-        esac
+        # Configuration selon le serveur d'affichage et compositeur
+        if [[ "$display_server" == "wayland" ]]; then
+            case "$compositor" in
+                "labwc")
+                    configure_labwc_autostart
+                    ;;
+                "wayfire")
+                    configure_wayfire_autostart
+                    ;;
+                *)
+                    log_warn "Compositeur Wayland non reconnu: $compositor"
+                    configure_generic_autostart
+                    ;;
+            esac
+        else
+            # Configuration X11
+            case "$gui_type" in
+                "lightdm")
+                    configure_lightdm_autostart
+                    ;;
+                "raspberrypi-desktop")
+                    # Raspberry Pi Desktop peut être X11 ou Wayland
+                    if [[ "$display_server" == "wayland" ]]; then
+                        if [[ "$compositor" == "labwc" ]]; then
+                            configure_labwc_autostart
+                        else
+                            configure_wayfire_autostart
+                        fi
+                    else
+                        configure_lightdm_autostart
+                    fi
+                    ;;
+                "gdm3"|"sddm")
+                    configure_generic_autostart
+                    ;;
+                "startx")
+                    configure_x11_minimal
+                    ;;
+                *)
+                    log_warn "Type d'interface non reconnu, utilisation de la configuration générique"
+                    configure_generic_autostart
+                    ;;
+            esac
+        fi
     else
         log_info "Pas d'interface graphique, installation X11 minimal"
         configure_x11_minimal
     fi
 }
 
-# Fonction pour vérifier et préserver l'autologin existant
+# Fonction pour configurer l'autologin via raspi-config
 configure_pi_autologin() {
-    log_info "Vérification de l'autologin existant..."
+    log_info "Configuration de l'autologin..."
+    
+    # Vérifier si raspi-config est disponible
+    if ! command -v raspi-config >/dev/null 2>&1; then
+        log_warn "raspi-config non disponible, configuration manuelle"
+        configure_pi_autologin_manual
+        return
+    fi
+    
+    # Vérifier l'autologin existant d'abord
+    local existing_user=""
+    local autologin_configured=false
+    
+    # Pour LightDM
+    if [[ -f /etc/lightdm/lightdm.conf ]]; then
+        if grep -q "^autologin-user=" /etc/lightdm/lightdm.conf; then
+            existing_user=$(grep "^autologin-user=" /etc/lightdm/lightdm.conf | cut -d'=' -f2)
+            log_info "Autologin déjà configuré pour: $existing_user"
+            autologin_configured=true
+        fi
+    fi
+    
+    # Si pas d'autologin configuré, utiliser raspi-config
+    if [[ $autologin_configured == false ]]; then
+        log_info "Configuration de l'autologin via raspi-config..."
+        # B4 = Desktop Autologin
+        raspi-config nonint do_boot_behaviour B4
+        if [[ $? -eq 0 ]]; then
+            log_info "Autologin configuré avec succès via raspi-config"
+        else
+            log_warn "Échec de raspi-config, tentative de configuration manuelle"
+            configure_pi_autologin_manual
+        fi
+    else
+        log_info "Autologin déjà configuré, préservation de la configuration existante"
+    fi
+}
+
+# Fonction de fallback pour configuration manuelle
+configure_pi_autologin_manual() {
+    log_info "Configuration manuelle de l'autologin..."
     
     local autologin_configured=false
     local existing_user=""
@@ -1060,6 +1282,74 @@ configure_lightdm_autostart() {
 EOF
     
     chown -R pi:pi /home/pi/.config
+}
+
+# Configuration pour labwc (nouveau compositeur Wayland par défaut sur Bookworm)
+configure_labwc_autostart() {
+    log_info "Configuration de l'autostart pour labwc (Wayland)..."
+    
+    # Configurer l'autologin via raspi-config
+    configure_pi_autologin
+    
+    # Créer le répertoire de configuration labwc
+    mkdir -p /etc/xdg/labwc
+    
+    # Créer le script autostart pour labwc
+    cat > /etc/xdg/labwc/autostart << 'EOF'
+#!/bin/sh
+# labwc autostart pour Pi Signage Chromium Kiosk
+
+# Désactiver les composants desktop non nécessaires
+/usr/bin/kanshi &
+/usr/bin/lxsession-xdg-autostart &
+
+# Attendre que le système soit prêt
+sleep 5
+
+# Lancer Chromium en mode kiosk
+/opt/scripts/chromium-kiosk.sh &
+EOF
+    
+    chmod +x /etc/xdg/labwc/autostart
+    
+    log_info "Configuration labwc terminée"
+}
+
+# Configuration pour Wayfire (compositeur Wayland précédent)
+configure_wayfire_autostart() {
+    log_info "Configuration de l'autostart pour Wayfire (Wayland)..."
+    
+    # Configurer l'autologin
+    configure_pi_autologin
+    
+    # Configuration Wayfire pour l'utilisateur
+    mkdir -p /home/pi/.config
+    
+    # Créer ou mettre à jour wayfire.ini
+    cat > /home/pi/.config/wayfire.ini << 'EOF'
+[core]
+plugins = autostart idle
+
+[autostart]
+# Désactiver les composants non nécessaires
+autostart_wf_shell = false
+panel = false
+background = false
+screensaver = false
+dpms = false
+
+# Lancer Chromium Kiosk
+chromium_kiosk = /opt/scripts/chromium-kiosk.sh
+
+[idle]
+# Désactiver l'économiseur d'écran
+screensaver_timeout = 0
+dpms_timeout = 0
+EOF
+    
+    chown pi:pi /home/pi/.config/wayfire.ini
+    
+    log_info "Configuration Wayfire terminée"
 }
 
 # Configuration pour Raspberry Pi OS Desktop moderne (Wayfire/Wayland)

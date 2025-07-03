@@ -94,6 +94,7 @@ create_startup_script() {
 #!/bin/bash
 
 # Script de démarrage progressif Pi Signage
+# Version simplifiée - L'affichage est géré par autologin/autostart
 LOG_FILE="/var/log/pi-signage-startup.log"
 
 log() {
@@ -123,87 +124,14 @@ fi
 
 log "Mode d'affichage détecté: $DISPLAY_MODE"
 
-# Démarrer les services selon le mode
-case "$DISPLAY_MODE" in
-    vlc)
-        # Démarrer LightDM
-        if [[ -f /etc/systemd/system/lightdm.service ]] || systemctl list-unit-files lightdm.service >/dev/null 2>&1; then
-            log "Démarrage de LightDM..."
-            systemctl start lightdm || log "ERREUR: Échec du démarrage de LightDM"
-            
-            # Attendre que LightDM soit prêt
-            for i in {1..30}; do
-                if systemctl is-active lightdm >/dev/null 2>&1; then
-                    log "LightDM actif après $i secondes"
-                    break
-                fi
-                sleep 1
-            done
-            
-            # Attendre encore un peu pour que X soit complètement prêt
-            sleep 5
-        fi
-        
-        # Démarrer VLC
-        if systemctl list-unit-files vlc-signage.service >/dev/null 2>&1; then
-            log "Démarrage de VLC..."
-            systemctl start vlc-signage || log "ERREUR: Échec du démarrage de VLC"
-        fi
-        ;;
-        
-    chromium)
-        # Démarrer Chromium Kiosk selon l'environnement
-        log "Démarrage du mode Chromium Kiosk..."
-        
-        # Charger la configuration pour obtenir GUI_TYPE
-        if [[ -f /etc/pi-signage/config.conf ]]; then
-            source /etc/pi-signage/config.conf
-        fi
-        
-        # Si on a LightDM, le démarrer d'abord (autostart configuré)
-        if [[ "${GUI_TYPE:-}" == "lightdm" ]] && systemctl list-unit-files lightdm.service >/dev/null 2>&1; then
-            log "Interface graphique LightDM détectée, démarrage..."
-            systemctl start lightdm || log "ERREUR: Échec du démarrage de LightDM"
-            
-            # Attendre que LightDM soit prêt
-            for i in {1..30}; do
-                if systemctl is-active lightdm >/dev/null 2>&1; then
-                    log "LightDM actif après $i secondes"
-                    break
-                fi
-                sleep 1
-            done
-            
-            # L'autostart de LightDM lancera Chromium Kiosk
-            log "Chromium Kiosk sera lancé par l'autostart de LightDM"
-            
-        # Sinon, démarrage direct X11
-        elif systemctl list-unit-files x11-kiosk.service >/dev/null 2>&1; then
-            log "Démarrage via x11-kiosk.service..."
-            systemctl start x11-kiosk || log "ERREUR: Échec du démarrage de x11-kiosk"
-        
-        # Option 2: Démarrer manuellement
-        elif [[ -x /opt/scripts/start-x11-kiosk.sh ]]; then
-            log "Démarrage manuel de X11 + Chromium..."
-            /opt/scripts/start-x11-kiosk.sh &
-            
-        # Option 3: Lancer directement avec xinit
-        elif [[ -x /opt/scripts/chromium-kiosk.sh ]]; then
-            log "Démarrage direct avec xinit..."
-            su - pi -c "xinit /opt/scripts/chromium-kiosk.sh -- :0 -nocursor" &
-        else
-            log "ERREUR: Aucun script de démarrage Chromium trouvé"
-        fi
-        ;;
-        
-    none)
-        log "Mode headless, pas de service d'affichage à démarrer"
-        ;;
-        
-    *)
-        log "ERREUR: Mode d'affichage inconnu: $DISPLAY_MODE"
-        ;;
-esac
+# Note: L'affichage (VLC/Chromium) est maintenant géré par:
+# - Autologin configuré via raspi-config
+# - Autostart configuré selon l'environnement (X11/Wayland/labwc)
+# - Services utilisateur pour Chromium sur Desktop
+# Ce script gère uniquement les services auxiliaires
+
+log "Mode d'affichage configuré: $DISPLAY_MODE"
+log "Les services d'affichage seront démarrés par autologin/autostart"
 
 # Démarrer les services auxiliaires
 sleep 5
@@ -253,39 +181,25 @@ EOF
 # =============================================================================
 
 disable_auto_start_services() {
-    log_info "Désactivation du démarrage automatique des services..."
+    log_info "Configuration des services pour démarrage géré..."
     
-    # Charger la configuration pour obtenir GUI_TYPE
-    if [[ -f "$CONFIG_FILE" ]]; then
-        source "$CONFIG_FILE"
-    fi
+    # Avec la nouvelle approche, nous ne désactivons plus les services principaux
+    # car ils sont gérés par autologin/autostart ou services utilisateur
     
-    # Ne PAS désactiver les gestionnaires de bureau si on a une interface graphique existante
-    local skip_display_managers=false
-    if [[ -n "${GUI_TYPE:-}" ]] && [[ "${GUI_TYPE}" != "none" ]]; then
-        skip_display_managers=true
-        log_info "Interface graphique détectée ($GUI_TYPE), conservation des gestionnaires de bureau"
-    fi
+    log_info "Les services suivants seront gérés automatiquement :"
+    log_info "  - Gestionnaires de bureau (lightdm/gdm3) : conservés pour autologin"
+    log_info "  - Services d'affichage (vlc/chromium) : démarrés par autostart"
+    log_info "  - Services auxiliaires : démarrés par ce script"
     
-    local services=(
-        "lightdm"
-        "gdm3"
-        "vlc-signage"
-        "chromium-kiosk"
-        "x11-kiosk"
-        "pi-signage-watchdog"
+    # On ne désactive que les services qui pourraient causer des conflits
+    local services_to_disable=(
+        "x11-kiosk"  # Remplacé par autologin/autostart
     )
     
-    for service in "${services[@]}"; do
-        # Skip les display managers si on a une GUI existante
-        if [[ "$skip_display_managers" == "true" ]] && [[ "$service" =~ ^(lightdm|gdm3|sddm)$ ]]; then
-            log_info "  - $service conservé (interface graphique existante)"
-            continue
-        fi
-        
+    for service in "${services_to_disable[@]}"; do
         if systemctl list-unit-files "$service.service" >/dev/null 2>&1; then
             systemctl disable "$service" 2>/dev/null || true
-            log_info "  - $service désactivé au boot"
+            log_info "  - $service désactivé (remplacé par nouvelle approche)"
         fi
     done
 }
@@ -377,9 +291,10 @@ main() {
     if validate_boot_manager; then
         log_info "Gestionnaire de démarrage configuré avec succès"
         log_info ""
-        log_info "Au prochain redémarrage :"
-        log_info "- Démarrage progressif des services"
-        log_info "- Délai de 10-15 secondes avant l'affichage"
+        log_info "Nouvelle approche de démarrage :"
+        log_info "- Autologin géré par raspi-config"
+        log_info "- Affichage démarré par autostart (X11/Wayland/labwc)"
+        log_info "- Services auxiliaires gérés par ce script"
         log_info "- Logs disponibles dans /var/log/pi-signage-startup.log"
     else
         log_error "Configuration incomplète du gestionnaire de démarrage"
