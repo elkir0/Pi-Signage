@@ -667,6 +667,9 @@ generate_support_info() {
 # =============================================================================
 
 main() {
+    # Définir le fichier de rapport
+    local REPORT_FILE="/tmp/pi-signage-diagnostic-$(date +%Y%m%d-%H%M%S).txt"
+    
     # Gérer les arguments de ligne de commande
     case "${1:-}" in
         --verify-chromium)
@@ -747,22 +750,18 @@ BANNER
     check_configuration
     ((total_checks++))
     
-    # Vérifications spécifiques Chromium si applicable
-    if [[ -f /etc/pi-signage/display-mode.conf ]] && grep -q "chromium" /etc/pi-signage/display-mode.conf 2>/dev/null; then
-        verify_chromium_boot
-        ((total_checks++))
-    fi
-    
-    generate_support_info
-    
-    # Résumé final
+    # Rapport final
+    echo ""
     print_header "RÉSUMÉ DU DIAGNOSTIC"
     
     local success_rate
     success_rate=$(( (total_checks - failed_checks) * 100 / total_checks ))
     
+    echo "Tests réussis: $((total_checks - failed_checks))/$total_checks ($success_rate%)"
+    echo ""
+    
     if [[ $failed_checks -eq 0 ]]; then
-        print_ok "Système en bon état ($success_rate% des vérifications réussies)"
+        print_ok "Système Pi Signage opérationnel à 100%"
     elif [[ $failed_checks -le 2 ]]; then
         print_warn "Système fonctionnel avec des avertissements ($success_rate% des vérifications réussies)"
     else
@@ -782,6 +781,7 @@ BANNER
 # =============================================================================
 
 main "$@"
+
 EOF
     
     chmod +x "$DIAG_SCRIPT"
