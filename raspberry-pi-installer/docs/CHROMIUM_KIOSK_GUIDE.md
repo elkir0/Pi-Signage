@@ -1,8 +1,10 @@
-# 🌐 Guide du Mode Chromium Kiosk
+# 🌐 Guide du Mode Chromium Kiosk - v2.4.8
 
 ## Vue d'ensemble
 
 Le mode Chromium Kiosk est une alternative moderne et légère au mode VLC Classic traditionnel. Il utilise un navigateur Chromium en mode kiosk avec un player HTML5 local pour la lecture des vidéos.
+
+> 🆕 **Support Bookworm natif** : La v2.4.8 apporte un support complet de Raspberry Pi OS Bookworm avec détection automatique de l'environnement graphique (X11/Wayland/labwc) et configuration adaptative.
 
 ## 🎯 Avantages du Mode Chromium
 
@@ -29,6 +31,11 @@ Le mode Chromium Kiosk est une alternative moderne et légère au mode VLC Class
 - 1GB RAM minimum (2GB+ recommandé)
 - Carte SD 16GB minimum
 
+### Système d'exploitation
+- **Raspberry Pi OS Bookworm** (32 ou 64-bit)
+  - **Desktop** : Support natif Wayland/labwc (Pi 4/5) ou X11 (Pi 3)
+  - **Lite** : Installation automatique X11 minimal
+
 ### Formats vidéo supportés
 - **H.264 (MP4)** : Recommandé ✅
 - **WebM (VP8)** : Support partiel
@@ -47,8 +54,8 @@ Le système télécharge automatiquement les vidéos YouTube en **H.264/MP4** co
 git clone https://github.com/elkir0/Pi-Signage.git
 cd Pi-Signage/raspberry-pi-installer/scripts
 
-# Lancer l'installation v2.3
-sudo ./install.sh
+# Lancer l'installation v2.4.8
+sudo ./main_orchestrator.sh
 
 # Choisir "2) Chromium Kiosk" quand demandé
 ```
@@ -159,9 +166,9 @@ Dans `/var/www/pi-signage-player/player.html`, modifier la section overlay :
 
 Le script détecte automatiquement le modèle et applique les optimisations :
 
-- **Pi 3B+** : Mode conservateur, GPU limité
-- **Pi 4B** : Accélération hardware activée
-- **Pi 5** : Performances maximales
+- **Pi 3B+** : Mode conservateur, GPU limité, X11 uniquement
+- **Pi 4B** : Accélération hardware activée, support Wayland/labwc
+- **Pi 5** : Performances maximales, Wayland/labwc optimisé
 
 ### Modifier les flags Chromium
 
@@ -172,6 +179,14 @@ CHROMIUM_FLAGS=(
     --kiosk
     --window-size=1920,1080
     # Ajouter vos flags ici
+)
+
+# Pour Wayland (Pi 4/5 avec Bookworm Desktop)
+CHROMIUM_FLAGS+=(
+    --ozone-platform=wayland
+    --enable-features=UseOzonePlatform
+    --start-maximized
+    --start-fullscreen
 )
 ```
 
@@ -193,6 +208,56 @@ Commandes disponibles :
 - `previous` : Vidéo précédente
 - `reload` : Recharger la page
 - `update_playlist` : Recharger la playlist
+
+## 🆕 Support Bookworm et Wayland
+
+### Détection automatique de l'environnement
+
+Le script détecte et s'adapte automatiquement à :
+
+- **X11** : Pi 3 ou installations traditionnelles
+- **Wayland avec labwc** : Pi 4/5 avec Bookworm Desktop
+- **Wayland avec wayfire** : Anciennes versions Bookworm
+- **Mode headless** : Raspberry Pi OS Lite avec X11 minimal
+
+### Configuration Wayland/labwc
+
+Pour les Pi 4/5 avec Bookworm Desktop, le système :
+
+1. **Détecte labwc** automatiquement
+2. **Configure l'autologin** via raspi-config
+3. **Installe seatd** pour les permissions
+4. **Configure l'autostart** dans `/etc/xdg/labwc/autostart`
+5. **Applique les flags Chromium** spécifiques à Wayland
+
+### Permissions et sécurité
+
+Le mode Wayland nécessite des permissions spécifiques :
+
+```bash
+# Ajout automatique au groupe video (pour accès GPU)
+sudo usermod -a -G video $USER
+
+# Configuration seatd (gestion des sièges Wayland)
+sudo systemctl enable seatd
+sudo usermod -a -G _seatd $USER
+```
+
+### Dépannage Wayland
+
+Si Chromium ne démarre pas en mode Wayland :
+
+```bash
+# Vérifier l'environnement
+echo $WAYLAND_DISPLAY  # Doit afficher wayland-1
+echo $XDG_SESSION_TYPE # Doit afficher wayland
+
+# Vérifier les logs labwc
+journalctl -u session-c1.scope -f
+
+# Forcer le mode X11 si nécessaire
+export CHROMIUM_FLAGS="--ozone-platform=x11"
+```
 
 ## 🎥 Compatibilité YouTube
 
@@ -242,9 +307,14 @@ sudo systemctl status chromium-kiosk
 tail -f /var/log/pi-signage/chromium.log
 ```
 
-3. Vérifier X11 :
+3. Vérifier l'environnement graphique :
 ```bash
+# Pour X11
 echo $DISPLAY  # Doit afficher :0
+
+# Pour Wayland
+echo $WAYLAND_DISPLAY  # Doit afficher wayland-1
+echo $XDG_SESSION_TYPE # Doit afficher wayland ou x11
 ```
 
 ### Écran noir

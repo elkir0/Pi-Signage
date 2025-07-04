@@ -1,6 +1,8 @@
-# 🚀 QUICKSTART - Pi Signage Digital v2.4.0
+# 🚀 QUICKSTART - Pi Signage Digital v2.4.8
 
 **Installation rapide en 4 étapes - 10 minutes chrono**
+
+> 🆕 **Support Bookworm natif** : Détection automatique de votre environnement (X11/Wayland/labwc) et configuration adaptative pour une compatibilité maximale !
 
 ## ⚡ Installation Express
 
@@ -8,7 +10,9 @@
 
 1. **Flasher la carte SD :**
    - [Raspberry Pi Imager](https://www.raspberrypi.org/software/)
-   - **OS :** Raspberry Pi OS Lite 64-bit
+   - **OS :** Raspberry Pi OS Bookworm (Lite ou Desktop) 32/64-bit
+     - **Desktop** : Support natif Wayland/labwc (Pi 4/5) ou X11 (Pi 3)
+     - **Lite** : Installation automatique de l'environnement graphique
    - **Options avancées :** Activer SSH, configurer WiFi si nécessaire
 
 2. **Premier boot :**
@@ -110,7 +114,7 @@ sudo pi-signage emergency       # Récupération urgence
 sudo pi-signage-diag           # Diagnostic complet
 sudo pi-signage-tools          # Menu interactif
 
-# Audio (nouveau v2.4.0)
+# Audio
 sudo /opt/scripts/util-configure-audio.sh  # Configuration audio
 sudo /opt/scripts/util-test-audio.sh      # Test audio
 
@@ -123,7 +127,12 @@ sudo /opt/scripts/sync-videos.sh # Sync manuelle
 
 **Écran noir :**
 ```bash
+# Pour X11/Desktop traditionnel
 sudo systemctl restart lightdm
+
+# Pour Bookworm Wayland (Pi 4/5)
+# L'affichage est géré par autologin/autostart
+sudo systemctl restart chromium-kiosk  # ou vlc-signage
 ```
 
 **VLC ne démarre pas :**
@@ -134,6 +143,9 @@ sudo systemctl restart vlc-signage
 **Chromium ne démarre pas :**
 ```bash
 sudo systemctl restart chromium-kiosk
+
+# Vérifier l'environnement graphique
+echo $XDG_SESSION_TYPE  # doit afficher x11 ou wayland
 ```
 
 **Pas de son dans les vidéos :**
@@ -154,11 +166,12 @@ sudo pi-signage emergency
 
 ## 📋 Checklist Installation
 
-- [ ] Raspberry Pi OS Lite 64-bit installé
+- [ ] Raspberry Pi OS Bookworm installé (Lite ou Desktop)
 - [ ] WiFi/Ethernet configuré et fonctionnel
 - [ ] Script d'installation téléchargé et exécuté
 - [ ] Configuration utilisateur complétée
 - [ ] Mode d'affichage choisi (VLC ou Chromium)
+- [ ] Environnement graphique détecté (X11/Wayland/labwc)
 - [ ] Mode test exécuté après installation (si Chromium)
 - [ ] Google Drive configuré et testé (si choisi)
 - [ ] Redémarrage effectué

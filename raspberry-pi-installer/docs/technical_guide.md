@@ -1,6 +1,8 @@
-# 🔧 TECHNICAL - Guide Technique Pi Signage Digital v2.4.0
+# 🔧 TECHNICAL - Guide Technique Pi Signage Digital v2.4.8
 
 **Documentation technique complète de l'architecture, des modules et des outils**
+
+> 🆕 **v2.4.8** : Support natif Bookworm avec détection automatique X11/Wayland/labwc et configuration adaptative
 
 ## 🏗️ Architecture Générale
 
@@ -19,8 +21,8 @@
 │  │ VLC         │  │ Drive       │  │ Diagnostic  │         │
 │  └─────────────┘  └─────────────┘  └─────────────┘         │
 ├─────────────────────────────────────────────────────────────┤
-│                   Raspberry Pi OS Lite                     │
-│              (Optimisé pour Digital Signage)               │
+│            Raspberry Pi OS Bookworm (Lite/Desktop)         │
+│    Support natif X11 (Pi 3) et Wayland/labwc (Pi 4/5)     │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -49,10 +51,11 @@ Google Drive → rclone → /opt/videos → VLC → HDMI Output
 
 **Fonctions clés :**
 ```bash
-detect_pi_model()      # Détection Pi 3/4/5 avec variants
-check_internet()       # Validation connectivité
-collect_configuration() # Interface utilisateur
-execute_module()       # Lancement modules avec validation
+detect_pi_model()              # Détection Pi 3/4/5 avec variants
+detect_graphical_environment() # Détection X11/Wayland/labwc (v2.4.8)
+check_internet()              # Validation connectivité
+collect_configuration()       # Interface utilisateur
+execute_module()              # Lancement modules avec validation
 ```
 
 **Configuration générée :**
@@ -64,6 +67,9 @@ VIDEO_DIR="/opt/videos"
 NEW_HOSTNAME="pi-signage"
 PI_GENERATION="4"
 PI_VARIANT="4GB"
+DISPLAY_SERVER="wayland"      # v2.4.8: x11/wayland
+COMPOSITOR="labwc"            # v2.4.8: labwc/wayfire/none
+HAS_GUI="true"                # v2.4.8: détection interface existante
 ```
 
 ### Module 01 - Configuration Système
@@ -96,10 +102,13 @@ PI_VARIANT="4GB"
 **Fichier :** `02-display-manager.sh`
 
 **Responsabilités :**
-- Installation X11 + LightDM + Openbox
+- Installation X11 + LightDM + Openbox (mode VLC uniquement)
+- Préservation interface existante si Desktop (v2.4.8)
 - Configuration auto-login utilisateur `signage`
 - Mode kiosque (pas de barres, fenêtres)
 - Scripts de configuration d'affichage
+
+> 🆕 **v2.4.8** : Le module détecte et préserve les environnements graphiques existants (Wayland/labwc sur Bookworm Desktop)
 
 **Utilisateur signage :**
 ```bash
@@ -137,10 +146,16 @@ unclutter -idle 1 &     # Masquer curseur
 **Fichiers :** `03-vlc-setup.sh` ou `03-chromium-kiosk.sh`
 
 **Responsabilités :**
-- Installation VLC + codecs
-- Configuration mode kiosque
+- Installation VLC + codecs ou Chromium
+- Configuration mode kiosque adaptée à l'environnement
 - Script de lecture intelligent
 - Service systemd avec surveillance
+
+> 🆕 **v2.4.8 - Mode Chromium** :
+> - Détection automatique X11/Wayland/labwc
+> - Configuration raspi-config pour autologin
+> - Support seatd pour permissions Wayland
+> - Autostart adaptatif selon l'environnement
 
 **Configuration VLC (/home/signage/.config/vlc/vlcrc) :**
 ```ini
@@ -716,6 +731,75 @@ normal: < 80%, warning: 80-95%, critical: > 95%
 normal: < 2.0, warning: 2.0-4.0, critical: > 4.0
 ```
 
+## 🆕 Compatibilité Bookworm (v2.4.8)
+
+### Détection de l'Environnement
+
+**Fonction de détection automatique :**
+```bash
+detect_graphical_environment() {
+    # Détection du serveur d'affichage
+    if [[ -n "${WAYLAND_DISPLAY:-}" ]]; then
+        display_server="wayland"
+    elif [[ -n "${DISPLAY:-}" ]]; then
+        display_server="x11"
+    fi
+    
+    # Détection du compositeur Wayland
+    if command -v labwc >/dev/null 2>&1; then
+        compositor="labwc"
+    elif command -v wayfire >/dev/null 2>&1; then
+        compositor="wayfire"
+    fi
+}
+```
+
+### Configuration Adaptative
+
+**Par environnement :**
+
+| Environnement | Pi Model | Configuration | Méthode Autostart |
+|---------------|----------|---------------|-------------------|
+| X11/LXDE | Pi 3 | LightDM + Openbox | ~/.config/lxsession/LXDE-pi/autostart |
+| Wayland/labwc | Pi 4/5 | labwc + seatd | /etc/xdg/labwc/autostart |
+| Wayland/wayfire | Pi 4 ancien | wayfire | ~/.config/wayfire.ini |
+| Headless | Tous | X11 minimal | systemd service |
+
+### Flags Chromium Wayland
+
+**Configuration spécifique :**
+```bash
+# Ordre critique pour Wayland
+CHROMIUM_FLAGS=(
+    --start-maximized      # DOIT être AVANT --start-fullscreen
+    --start-fullscreen
+    --kiosk
+    --ozone-platform=wayland
+    --enable-features=UseOzonePlatform
+)
+```
+
+### Permissions Wayland
+
+**Configuration seatd :**
+```bash
+# Installation et configuration
+apt-get install -y seatd
+systemctl enable seatd
+usermod -a -G _seatd signage
+
+# Règles udev pour accès GPU
+echo 'KERNEL=="card[0-9]*", GROUP="video", MODE="0660"' > /etc/udev/rules.d/50-gpu-signage.rules
+```
+
+### Boot Manager Simplifié
+
+**Nouvelle approche v2.4.8 :**
+- Utilisation de raspi-config pour l'autologin
+- Préservation des gestionnaires de bureau existants
+- Services utilisateur pour environnements Desktop
+- Démarrage via autostart natif de chaque environnement
+
 ---
 
-Ce guide technique fournit tous les détails nécessaires pour comprendre, maintenir et étendre le système Pi Signage Digital. Pour toute question spécifique ou contribution, référez-vous aux scripts sources qui contiennent des commentaires détaillés.
+Ce guide technique fournit tous les détails nécessaires pour comprendre, maintenir et étendre le système Pi Signage Digital v2.4.8 avec support complet de Raspberry Pi OS Bookworm. Pour toute question spécifique ou contribution, référez-vous aux scripts sources qui contiennent des commentaires détaillés.

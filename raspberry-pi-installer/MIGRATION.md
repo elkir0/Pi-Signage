@@ -1,6 +1,54 @@
-# Guide de Migration - Interface Web v2
+# Guide de Migration - Pi Signage Digital
 
-## Changements principaux
+## Migration vers v2.4.8 - Support Bookworm
+
+### Changements majeurs
+
+#### Environnement graphique
+- **Détection automatique** : X11, Wayland, labwc
+- **Autologin via raspi-config** : Méthode officielle et fiable
+- **Support natif Wayland** : Configuration automatique pour Pi 4/5
+- **Préservation des environnements existants** : Plus de réinstallation forcée
+
+#### Configuration système
+- **Boot manager simplifié** : Utilise l'autologin natif
+- **Services utilisateur** : Support systemd --user pour Desktop
+- **Permissions Wayland** : seatd et règles udev automatiques
+- **Ordre des flags Chromium** : Corrigé pour Wayland
+
+### Instructions de migration
+
+```bash
+# 1. Mettre à jour le code
+cd ~/Pi-Signage
+git pull origin main
+
+# 2. Réinstaller avec la nouvelle version
+cd raspberry-pi-installer/scripts
+sudo ./main_orchestrator.sh
+
+# 3. Le système va automatiquement :
+# - Détecter votre environnement (X11/Wayland/labwc)
+# - Configurer l'autologin approprié
+# - Adapter les services au contexte
+```
+
+### Vérification post-migration
+
+```bash
+# Vérifier l'environnement détecté
+cat /etc/pi-signage/config.conf | grep -E "DISPLAY_SERVER|COMPOSITOR|HAS_GUI"
+
+# Vérifier l'autologin
+cat /etc/lightdm/lightdm.conf | grep autologin
+
+# Pour Wayland, vérifier labwc
+ls -la /etc/xdg/labwc/autostart
+```
+
+## Migration Interface Web v1 vers v2
+
+### Changements principaux
 
 ### Avant (v1)
 - Le script `09-web-interface.sh` créait tous les fichiers PHP avec des commandes `cat`
@@ -91,3 +139,66 @@ php -S localhost:8000 -t public/
 - Les mots de passe sont toujours hashés/chiffrés
 - La sécurité reste identique à la v1
 - Compatible avec la même infrastructure (nginx, PHP-FPM)
+
+## Problèmes connus lors de la migration v2.4.8
+
+### 1. Services qui ne démarrent pas après migration
+
+**Problème** : Les services restent sur l'ancienne configuration
+
+**Solution** :
+```bash
+# Désactiver les anciens services
+sudo systemctl disable x11-kiosk
+sudo systemctl disable pi-signage-startup
+
+# Recharger systemd
+sudo systemctl daemon-reload
+
+# Redémarrer
+sudo reboot
+```
+
+### 2. Chromium ne fonctionne pas sur Wayland
+
+**Problème** : Écran noir ou erreur de connexion Wayland
+
+**Solution** :
+```bash
+# Vérifier les permissions
+groups signage  # Doit inclure video, render, _seatd
+
+# Si manquant
+sudo usermod -a -G video,render,_seatd signage
+sudo systemctl restart seatd
+```
+
+### 3. Autologin ne fonctionne pas
+
+**Problème** : Le système demande un mot de passe au démarrage
+
+**Solution** :
+```bash
+# Reconfigurer via raspi-config
+sudo raspi-config nonint do_boot_behaviour B2
+
+# Vérifier
+systemctl get-default  # Doit être graphical.target
+```
+
+## Retour en arrière si nécessaire
+
+Si vous rencontrez des problèmes majeurs :
+
+```bash
+# 1. Revenir à la version précédente
+cd ~/Pi-Signage
+git checkout v2.4.0
+
+# 2. Réinstaller
+cd raspberry-pi-installer/scripts
+sudo ./main_orchestrator.sh
+
+# 3. Désactiver les nouveaux services
+sudo systemctl disable seatd
+```

@@ -3,17 +3,26 @@
 **Solution tout-en-un de digital signage pour Raspberry Pi avec interface web de gestion**
 
 [![Compatible](https://img.shields.io/badge/Compatible-Pi%203B%2B%20%7C%204B%20%7C%205-green.svg)](https://www.raspberrypi.org/)
-[![Version](https://img.shields.io/badge/Version-2.4.7-blue.svg)]()
+[![Version](https://img.shields.io/badge/Version-2.4.8-blue.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)]()
 [![Security](https://img.shields.io/badge/Security-Enhanced-brightgreen.svg)]()
+[![Bookworm](https://img.shields.io/badge/Bookworm-Ready-success.svg)]()
 
-> ✅ **Version stable 2.4.7** : Détection automatique de l'environnement graphique + AUCUNE modification des fichiers de boot - Installation 100% sûre et adaptative.
+> ✅ **Version 2.4.8** : Support complet Raspberry Pi OS Bookworm avec Wayland/labwc + Compatibilité X11 préservée - Installation intelligente et adaptative.
 
 ## 🎯 Présentation
 
-Pi Signage Digital est une solution professionnelle complète pour transformer vos Raspberry Pi en système d'affichage dynamique. Ce projet offre une installation automatisée avec une sécurité renforcée et une interface web moderne.
+Pi Signage Digital est une solution professionnelle complète pour transformer vos Raspberry Pi en système d'affichage dynamique. Ce projet offre une installation automatisée avec une sécurité renforcée et une interface web moderne, maintenant avec support natif de Raspberry Pi OS Bookworm.
 
-### 🎬 Nouveautés v2.4.7
+### 🎬 Nouveautés v2.4.8 - Support Bookworm Complet
+- **Support natif Wayland/labwc** : Détection et configuration automatique du nouveau compositeur labwc (Pi 4/5)
+- **Autologin amélioré** : Utilisation de raspi-config pour une compatibilité maximale
+- **Détection avancée** : Reconnaissance X11/Wayland/labwc/wayfire avec adaptation automatique
+- **Permissions Wayland** : Installation et configuration de seatd pour les environnements Wayland
+- **Services utilisateur** : Support des services systemd utilisateur pour les environnements desktop
+- **Boot manager simplifié** : Utilisation de l'autologin natif du système
+
+### 🎬 Fonctionnalités v2.4.7
 - **Détection automatique de l'environnement graphique** : S'adapte à LightDM, Wayland, X11 existant
 - **Installation intelligente** : Utilise l'interface graphique existante au lieu de réinstaller
 - **Support multi-environnements** : Compatible Raspberry Pi OS Desktop, Bookworm, environnements custom
@@ -79,16 +88,16 @@ Pi-Signage/
 ### Prérequis
 - **Raspberry Pi** : 3B+, 4B (2GB minimum recommandé) ou 5
 - **Carte SD** : 32GB minimum (Classe 10 ou supérieure)
-- **OS** : Raspberry Pi OS (Lite ou Desktop) 32/64-bit (Bookworm)
+- **OS** : Raspberry Pi OS Bookworm (Lite ou Desktop) 32/64-bit
 - **Réseau** : Connexion internet stable
 
-> 🆕 **Compatible avec Raspberry Pi OS Desktop** : L'installateur détecte automatiquement votre environnement graphique existant et s'y adapte !
+> 🆕 **Compatibilité Bookworm Native** : Support complet de Wayland/labwc sur Pi 4/5 et X11 sur Pi 3. L'installateur détecte automatiquement votre environnement (X11/Wayland/labwc) et s'adapte !
 
 ### Installation
 
 Le script d'installation `main_orchestrator.sh` s'adapte automatiquement à votre système (Raspberry Pi OS Lite, Desktop ou VM/Docker) et propose une installation modulaire stable sans optimisations agressives.
 
-> 🎬 **Démarrage automatique garanti** : Après installation et redémarrage, le système lance automatiquement VLC ou Chromium en plein écran sans aucune intervention. L'autologin est configuré automatiquement pour tous les environnements supportés.
+> 🎬 **Démarrage automatique garanti** : L'autologin est configuré via raspi-config et le démarrage utilise les mécanismes natifs du système (autostart X11 ou labwc/wayfire).
 
 #### Installation standard
 
@@ -156,6 +165,17 @@ L'installation est **modulaire** - vous pouvez choisir :
 - Les composants à installer
 - Le niveau de fonctionnalités
 
+#### Environnements supportés
+
+**Raspberry Pi OS Desktop (Bookworm)** :
+- 🆕 **Wayland/labwc** : Support natif sur Pi 4/5 avec configuration automatique
+- ✅ **X11/LXDE** : Support traditionnel sur Pi 3 et antérieurs
+- ✅ **Détection automatique** : Le système s'adapte à votre configuration
+
+**Raspberry Pi OS Lite** :
+- ✅ **X11 minimal** : Installation automatique si nécessaire
+- ✅ **Mode headless** : Support complet sans interface graphique
+
 ## 📖 Documentation
 
 ### Guides principaux
@@ -169,8 +189,9 @@ L'installation est **modulaire** - vous pouvez choisir :
 - **[🔧 Guide outils admin](raspberry-pi-installer/scripts/admin-tools/ADMIN-TOOLS-GUIDE.md)**
 
 ### Guides spécifiques
+- **[🆕 Référence Kiosk Bookworm](raspberry-pi-installer/docs/BOOKWORM_KIOSK_REFERENCE.md)** - Guide technique complet
+- [Compatibilité Bookworm](raspberry-pi-installer/docs/BOOKWORM_COMPATIBILITY.md)
 - [Dépannage](raspberry-pi-installer/docs/troubleshooting.md)
-- [Compatibilité Bookworm](raspberry-pi-installer/docs/BOOKWORM_COMPATIBILITY.md) 🆕
 - [Proposition Chromium](raspberry-pi-installer/docs/CHROMIUM_KIOSK_PROPOSAL.md)
 - [Changelog complet](CHANGELOG.md)
 
@@ -294,23 +315,27 @@ git pull
 sudo /opt/scripts/util-update-web-interface.sh       # --full pour reinitialiser
 ```
 
-## 📋 Changelog v2.4.0
+## 📋 Changelog
 
-### Nouvelles fonctionnalités
+### v2.4.8 - Support Bookworm Complet (Décembre 2024)
+- 🆕 **Support natif Wayland/labwc** : Configuration automatique pour Pi 4/5
+- 🆕 **Détection avancée** : Reconnaissance X11/Wayland/labwc/wayfire
+- 🆕 **Autologin raspi-config** : Méthode officielle et fiable
+- 🆕 **Services utilisateur** : Support systemd --user pour desktop
+- 🆕 **Permissions Wayland** : seatd et règles udev automatiques
+- 🆕 **Boot manager simplifié** : Utilise l'autologin natif
+- 🆕 **Documentation Bookworm** : Guide technique complet ajouté
+- ✅ Ordre des flags Chromium corrigé pour Wayland
+- ✅ Support labwc dans autostart
+- ✅ Préservation des gestionnaires de bureau existants
+
+### v2.4.0 - Interface Web Améliorée
 - ✅ **Support audio complet** : HDMI/Jack, volume 85% par défaut
 - ✅ **Page playlist.php** : Gestion de l'ordre de lecture
 - ✅ **API player.php** : Contrôle play/pause/stop/next/update_playlist
 - ✅ **Logo Pi Signage** : Intégré dans navigation, login et favicon
 - ✅ **Scripts audio** : util-configure-audio.sh et util-test-audio.sh
 - ✅ **Wrapper yt-dlp** : Force le format MP4 pour compatibilité
-
-### Corrections majeures
-- ✅ Fonction exec() réactivée dans PHP pour yt-dlp
-- ✅ Format vidéo YouTube forcé en MP4 (plus de MKV)
-- ✅ Mise à jour automatique playlist après upload
-- ✅ Verbose YouTube persistant avec bouton fermeture
-- ✅ Autoplay avec son dans Chromium (attribut muted retiré)
-- ✅ Support fichiers MKV dans update-playlist.sh
 
 ## 🤝 Contribution
 

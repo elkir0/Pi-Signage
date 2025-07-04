@@ -5,6 +5,57 @@ Toutes les modifications notables du projet Pi Signage Digital sont documentées
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/),
 et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.8] - 2025-01-03
+
+### 🆕 Support natif Raspberry Pi OS Bookworm
+
+#### Nouvelles fonctionnalités
+- **Détection automatique de l'environnement graphique** : X11, Wayland, labwc, wayfire
+- **Support natif Wayland/labwc** : Configuration automatique pour Pi 4/5 avec Bookworm Desktop
+- **Autologin via raspi-config** : Méthode officielle et fiable (`raspi-config nonint do_boot_behaviour`)
+- **Services utilisateur** : Support systemd --user pour environnements Desktop
+- **Permissions Wayland** : Installation et configuration automatique de seatd
+- **Boot manager simplifié** : Utilise l'autologin natif du système
+- **Documentation Bookworm** : Guide technique complet ajouté (`BOOKWORM_KIOSK_REFERENCE.md`)
+
+#### Améliorations
+- **Configuration adaptative** : Le système s'adapte automatiquement à l'environnement détecté
+- **Préservation des environnements existants** : Plus de réinstallation forcée de LightDM/X11
+- **Ordre des flags Chromium** : Corrigé pour Wayland (`--start-maximized` avant `--start-fullscreen`)
+- **Support labwc dans autostart** : Configuration `/etc/xdg/labwc/autostart`
+- **Règles udev GPU** : Permissions automatiques pour l'accès au matériel graphique
+
+#### Corrections
+- **Circular dependency systemd** : Résolu en simplifiant la chaîne de démarrage
+- **Permissions GPU Wayland** : Ajout aux groupes video, render, _seatd
+- **Détection des compositeurs** : Support labwc (nouveau) et wayfire (ancien)
+- **Variables d'environnement** : Configuration correcte pour Wayland
+
+#### Fichiers modifiés
+- `main_orchestrator.sh` : Ajout `detect_graphical_environment()`, variables DISPLAY_SERVER/COMPOSITOR/HAS_GUI
+- `03-chromium-kiosk.sh` : Support Wayland complet, autologin raspi-config, seatd
+- `10-boot-manager.sh` : Simplifié pour utiliser l'autologin natif
+- `08-diagnostic-tools.sh` : Corrections des erreurs unbound variable et fonctions manquantes
+
+#### Documentation mise à jour
+- Tous les guides incluent maintenant les informations Bookworm
+- Nouveau guide de référence technique Bookworm
+- Instructions de migration v2.4.8
+
+## [2.4.7] - 2025-01-02
+
+### 🔍 Détection intelligente de l'environnement graphique
+- **Support des installations Desktop existantes** : Détection automatique de LightDM, X11, Wayland
+- **Installation adaptative** : Ne réinstalle pas X11/LightDM si déjà présent
+- **Configuration flexible** : S'adapte à l'environnement existant au lieu de forcer une configuration
+- **Support multi-environnements** : Compatible Raspberry Pi OS Desktop, Bookworm, installations custom
+
+### 🔧 Améliorations
+- **Script 02-display-manager.sh** : Détecte et utilise l'interface graphique existante
+- **Nouvelle logique** : `detect_existing_gui()` vérifie LightDM, Wayland, X11
+- **Installation minimale** : N'installe que les composants manquants
+- **Messages clairs** : Informe l'utilisateur de l'environnement détecté
+
 ## [2.4.6] - 2025-01-02
 
 ### 🔒 Sécurité absolue du boot

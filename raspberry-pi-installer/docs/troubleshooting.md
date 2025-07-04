@@ -1,10 +1,14 @@
-# 🔧 Pi Signage - Guide de dépannage v2.4.0
+# 🔧 Pi Signage - Guide de dépannage v2.4.8
 
 Ce guide vous aidera à résoudre les problèmes courants rencontrés avec Pi Signage Digital.
+
+> 🆕 **v2.4.8** : Nouvelles sections pour Bookworm, Wayland/labwc et résolution des problèmes spécifiques aux environnements graphiques modernes.
 
 ## 📋 Table des matières
 
 - [Problèmes d'installation](#problèmes-dinstallation)
+- [Problèmes spécifiques Bookworm](#problèmes-spécifiques-bookworm)
+- [Problèmes Wayland/labwc](#problèmes-waylandlabwc)
 - [Problèmes d'interface web](#problèmes-dinterface-web)
 - [Problèmes de lecture vidéo](#problèmes-de-lecture-vidéo)
 - [Problèmes de synchronisation](#problèmes-de-synchronisation)
@@ -20,7 +24,7 @@ Ce guide vous aidera à résoudre les problèmes courants rencontrés avec Pi Si
 
 **Cause** : Problème de configuration X11 ou de service d'affichage
 
-**Solution** : La version 2.4.2 a supprimé toutes les optimisations agressives
+**Solution** : La version 2.4.8 détecte automatiquement votre environnement graphique
 ```bash
 # Mettre à jour vers la dernière version
 cd ~/Pi-Signage
@@ -31,10 +35,11 @@ cd raspberry-pi-installer/scripts
 sudo ./main_orchestrator.sh
 ```
 
-La version actuelle utilise les configurations par défaut du Pi :
-- Pas de modifications GPU
-- Pas d'overclocking
-- Configuration système stable
+La version actuelle :
+- Détecte automatiquement X11/Wayland/labwc
+- Configure l'autologin via raspi-config
+- Utilise les configurations par défaut du Pi
+- S'adapte à votre environnement graphique existant
 
 ### Mode Chromium Kiosk - Pas de démarrage automatique
 
@@ -158,6 +163,107 @@ ps aux | grep Xvfb
 # Corriger les permissions
 sudo chmod 755 /opt/scripts/*.sh
 sudo chown root:root /opt/scripts/*.sh
+```
+
+## 🆕 Problèmes spécifiques Bookworm
+
+### LightDM désactivé mais pas de démarrage Chromium
+
+**Symptôme** : Après installation sur Bookworm, le système démarre sur le bureau normal sans kiosque
+
+**Cause** : L'autologin n'est pas configuré correctement pour Bookworm
+
+**Solution** :
+```bash
+# Configurer l'autologin via raspi-config
+sudo raspi-config nonint do_boot_behaviour B2
+
+# Vérifier la configuration
+cat /etc/lightdm/lightdm.conf | grep autologin
+
+# Redémarrer
+sudo reboot
+```
+
+### Chromium ne démarre pas sur Wayland
+
+**Symptôme** : Message d'erreur "Failed to connect to Wayland display"
+
+**Solution** :
+```bash
+# Vérifier l'environnement
+echo $XDG_SESSION_TYPE  # Doit afficher "wayland"
+echo $WAYLAND_DISPLAY   # Doit afficher "wayland-1"
+
+# Si manquant, forcer X11
+sudo nano /opt/scripts/chromium-kiosk.sh
+# Remplacer --ozone-platform=wayland par --ozone-platform=x11
+```
+
+## 🖥️ Problèmes Wayland/labwc
+
+### labwc autostart ne fonctionne pas
+
+**Symptôme** : labwc démarre mais pas Chromium/VLC
+
+**Cause** : Mauvais chemin ou permissions du fichier autostart
+
+**Solution** :
+```bash
+# Vérifier le fichier autostart
+ls -la /etc/xdg/labwc/autostart
+
+# Créer/corriger si nécessaire
+sudo mkdir -p /etc/xdg/labwc
+sudo tee /etc/xdg/labwc/autostart << 'EOF'
+#!/bin/bash
+sleep 2
+/opt/scripts/chromium-kiosk.sh &
+EOF
+
+sudo chmod +x /etc/xdg/labwc/autostart
+```
+
+### Permissions GPU manquantes
+
+**Symptôme** : "Permission denied" accès /dev/dri/card0
+
+**Solution** :
+```bash
+# Ajouter l'utilisateur aux groupes nécessaires
+sudo usermod -a -G video,render signage
+
+# Installer et configurer seatd
+sudo apt-get install -y seatd
+sudo systemctl enable seatd
+sudo usermod -a -G _seatd signage
+
+# Appliquer les règles udev
+sudo udevadm control --reload-rules
+sudo udevadm trigger
+
+# Redémarrer
+sudo reboot
+```
+
+### Chromium plein écran incorrect sur Wayland
+
+**Symptôme** : Chromium ne remplit pas tout l'écran, barres visibles
+
+**Cause** : Ordre incorrect des flags Chromium pour Wayland
+
+**Solution** :
+```bash
+# Éditer le script
+sudo nano /opt/scripts/chromium-kiosk.sh
+
+# S'assurer que l'ordre est :
+# --start-maximized (DOIT être AVANT --start-fullscreen)
+# --start-fullscreen
+# --kiosk
+
+# Redémarrer le service
+sudo systemctl restart chromium-kiosk
 ```
 
 ## 🌐 Problèmes d'interface web

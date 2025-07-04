@@ -1,11 +1,12 @@
-# 📺 Pi Signage Digital - Version 2.4.0
+# 📺 Pi Signage Digital - Version 2.4.8
 
 **Solution complète de digital signage pour Raspberry Pi avec interface web de gestion**
 
 [![Compatible](https://img.shields.io/badge/Compatible-Pi%203B%2B%20%7C%204B%20%7C%205-green.svg)](https://www.raspberrypi.org/)
-[![Version](https://img.shields.io/badge/Version-2.4.0-blue.svg)]()
+[![Version](https://img.shields.io/badge/Version-2.4.8-blue.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)]()
 [![Security](https://img.shields.io/badge/Security-Enhanced-brightgreen.svg)]()
+[![Bookworm](https://img.shields.io/badge/Bookworm-Native-success.svg)]()
 
 ## 🎯 Présentation
 
@@ -65,7 +66,9 @@ pi-signage.target                # Target principal groupant tous les services
 - Connexion internet (Ethernet ou WiFi configuré)
 
 **Logiciel requis :**
-- Raspberry Pi OS Lite 64-bit (recommandé)
+- Raspberry Pi OS Bookworm (Lite ou Desktop) 32/64-bit
+  - **Desktop** : Support natif Wayland/labwc sur Pi 4/5, X11 sur Pi 3
+  - **Lite** : Installation automatique de l'environnement graphique minimal
 - Accès SSH ou clavier/écran connecté
 - Compte Google avec Google Drive
 
@@ -73,7 +76,7 @@ pi-signage.target                # Target principal groupant tous les services
 
 1. **Flasher l'OS :**
    - Télécharger [Raspberry Pi Imager](https://www.raspberrypi.org/software/)
-   - Flasher Raspberry Pi OS Lite 64-bit
+   - Flasher Raspberry Pi OS Bookworm (Lite ou Desktop selon préférence)
    - Activer SSH dans les options avancées
 
 2. **Configuration WiFi (si nécessaire) :**
@@ -90,6 +93,8 @@ pi-signage.target                # Target principal groupant tous les services
 
 ### Installation Automatique
 
+> 🆕 **Détection automatique Bookworm** : Le script détecte automatiquement votre environnement (X11, Wayland, labwc) et s'adapte en conséquence. Support natif de Raspberry Pi OS Bookworm !
+
 1. **Télécharger et lancer l'installation :**
    ```bash
    # Cloner le dépôt
@@ -99,7 +104,7 @@ pi-signage.target                # Target principal groupant tous les services
    # Rendre exécutable
    chmod +x *.sh
    
-   # Lancer l'installation v2.4.0
+   # Lancer l'installation v2.4.8
    sudo ./main_orchestrator.sh
    ```
 
@@ -614,7 +619,27 @@ sudo chown -R signage:signage /home/signage/.config/
 
 ## 📝 Notes de Version
 
-### Version 2.3.0 (Actuelle)
+### Version 2.4.8 (Actuelle) - Support Bookworm Complet
+- 🆕 **Support natif Wayland/labwc** : Configuration automatique pour Pi 4/5
+- 🆕 **Détection avancée** : Reconnaissance X11/Wayland/labwc/wayfire
+- 🆕 **Autologin raspi-config** : Méthode officielle et fiable
+- 🆕 **Services utilisateur** : Support systemd --user pour desktop
+- 🆕 **Permissions Wayland** : seatd et règles udev automatiques
+- 🆕 **Boot manager simplifié** : Utilise l'autologin natif
+- 🆕 **Documentation Bookworm** : Guide technique complet ajouté
+- ✅ Ordre des flags Chromium corrigé pour Wayland
+- ✅ Support labwc dans autostart
+- ✅ Préservation des gestionnaires de bureau existants
+
+### Version 2.4.0
+- ✨ **Support audio complet** : HDMI/Jack, volume 85% par défaut
+- ✨ **Page playlist.php** : Gestion de l'ordre de lecture
+- ✨ **API player.php** : Contrôle play/pause/stop/next/update_playlist
+- ✨ **Logo Pi Signage** : Intégré dans navigation, login et favicon
+- ✨ **Scripts audio** : util-configure-audio.sh et util-test-audio.sh
+- ✨ **Wrapper yt-dlp** : Force le format MP4 pour compatibilité
+
+### Version 2.3.0
 - ✨ **Deux modes d'affichage** : VLC Classic et Chromium Kiosk
 - ✨ **Interface web complète** : Dashboard, vidéos, paramètres
 - ✨ **Support VM/Headless** : Installation avec Xvfb
