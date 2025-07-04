@@ -400,7 +400,12 @@ deploy_web_files() {
             cp "$WEB_ROOT/assets/images/logo.png" "$WEB_ROOT/public/assets/images/"
             log_info "Logo copié depuis assets locaux"
         else
-            log_error "Logo introuvable dans toutes les sources !"
+            log_warn "Logo introuvable localement, téléchargement depuis GitHub..."
+            if curl -fsSL "https://raw.githubusercontent.com/elkir0/Pi-Signage/main/web-interface/public/assets/images/logo.png" -o "$WEB_ROOT/public/assets/images/logo.png"; then
+                log_info "✓ Logo téléchargé depuis GitHub"
+            else
+                log_error "✗ Échec du téléchargement du logo depuis GitHub"
+            fi
         fi
     else
         log_info "✓ Logo présent"
@@ -413,7 +418,12 @@ deploy_web_files() {
             cp "$temp_dir/$WEB_INTERFACE_DIR/public/assets/images/favicon.ico" "$WEB_ROOT/public/assets/images/"
             log_info "Favicon copié depuis le dépôt"
         else
-            log_error "Favicon introuvable !"
+            log_warn "Favicon introuvable localement, téléchargement depuis GitHub..."
+            if curl -fsSL "https://raw.githubusercontent.com/elkir0/Pi-Signage/main/web-interface/public/assets/images/favicon.ico" -o "$WEB_ROOT/public/assets/images/favicon.ico"; then
+                log_info "✓ Favicon téléchargé depuis GitHub"
+            else
+                log_error "✗ Échec du téléchargement du favicon depuis GitHub"
+            fi
         fi
     else
         log_info "✓ Favicon présent"

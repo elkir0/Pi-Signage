@@ -682,23 +682,12 @@ main() {
             fix_chromium_cycle
             exit 0
             ;;
-        --fix-chromium-issues)
-            # Exécuter le script de correction des problèmes Chromium
-            if [[ -f /opt/scripts/util-fix-chromium-issues.sh ]]; then
-                bash /opt/scripts/util-fix-chromium-issues.sh
-            else
-                echo "Script de correction Chromium non trouvé"
-                exit 1
-            fi
-            exit 0
-            ;;
         --help)
             echo "Usage: pi-signage-diag [option]"
             echo "Options:"
             echo "  --verify-chromium      Vérifier la configuration Chromium Kiosk"
             echo "  --fix-black-screen     Corriger le problème d'écran noir"
             echo "  --fix-chromium-cycle   Corriger le cycle de dépendance systemd"
-            echo "  --fix-chromium-issues  Corriger curseur, traduction et images manquantes"
             echo "  --help                 Afficher cette aide"
             echo ""
             echo "Sans option, exécute le diagnostic complet."
@@ -1154,15 +1143,6 @@ echo -e "\nJournalctl errors récentes:"
 journalctl --since "1 hour ago" --priority=err --no-pager | tail -10
 EOF
     
-    # Copier le script de correction Chromium si présent
-    if [[ -f "$SCRIPT_DIR/util-fix-chromium-issues.sh" ]]; then
-        cp "$SCRIPT_DIR/util-fix-chromium-issues.sh" /opt/scripts/
-        chmod +x /opt/scripts/util-fix-chromium-issues.sh
-        log_info "Script de correction Chromium copié"
-    else
-        log_warn "Script util-fix-chromium-issues.sh non trouvé dans $SCRIPT_DIR"
-    fi
-    
     # Rendre les scripts exécutables
     chmod +x /opt/scripts/diag-vlc.sh
     chmod +x /opt/scripts/diag-network.sh
@@ -1478,11 +1458,9 @@ BANNER
     echo "9) Test Google Drive"
     echo "10) Vérification démarrage Chromium"
     echo "11) Réparation écran noir"
-    echo "12) Réparer images manquantes (logo/favicon)"
-    echo "13) Corriger problèmes Chromium (curseur/traduction/images)"
     echo "0) Quitter"
     echo ""
-    read -p "Votre choix [0-13]: " choice
+    read -p "Votre choix [0-11]: " choice
     
     case $choice in
         1)
@@ -1538,34 +1516,6 @@ BANNER
         11)
             echo "Réparation écran noir..."
             /opt/pi-signage-diag.sh --fix-black-screen
-            read -p "Appuyez sur Entrée pour continuer..."
-            ;;
-        12)
-            echo "Réparation des images manquantes..."
-            if [[ -f /opt/scripts/util-fix-missing-images.sh ]]; then
-                /opt/scripts/util-fix-missing-images.sh
-            else
-                echo "Script de réparation non trouvé !"
-                echo "Téléchargement manuel des images..."
-                echo ""
-                echo "Logo: https://raw.githubusercontent.com/elkir0/Pi-Signage/main/web-interface/public/assets/images/logo.png"
-                echo "Favicon: https://raw.githubusercontent.com/elkir0/Pi-Signage/main/web-interface/public/assets/images/favicon.ico"
-                echo ""
-                echo "Copiez ces fichiers dans: /var/www/pi-signage/public/assets/images/"
-            fi
-            read -p "Appuyez sur Entrée pour continuer..."
-            ;;
-        13)
-            echo "Correction des problèmes Chromium..."
-            if [[ -f /opt/scripts/util-fix-chromium-issues.sh ]]; then
-                /opt/scripts/util-fix-chromium-issues.sh
-            else
-                echo "Script de correction non trouvé !"
-                echo "Téléchargement depuis GitHub..."
-                curl -fsSL https://raw.githubusercontent.com/elkir0/Pi-Signage/main/raspberry-pi-installer/scripts/util-fix-chromium-issues.sh -o /opt/scripts/util-fix-chromium-issues.sh
-                chmod +x /opt/scripts/util-fix-chromium-issues.sh
-                /opt/scripts/util-fix-chromium-issues.sh
-            fi
             read -p "Appuyez sur Entrée pour continuer..."
             ;;
         0)

@@ -94,6 +94,7 @@ install_chromium() {
         "libgtk-3-0"        # Requis pour Chromium
         "chromium-browser"
         "nginx"  # Pour servir le player local
+        "unclutter"  # Pour masquer le curseur de la souris
     )
     
     # Charger la configuration pour obtenir le serveur d'affichage
