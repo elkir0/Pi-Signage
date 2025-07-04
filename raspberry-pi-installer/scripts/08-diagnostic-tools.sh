@@ -111,11 +111,9 @@ print_info() {
     echo -e "${BLUE}ℹ${NC} $1"
 }
 
-# =============================================================================
-# FONCTIONS DE DIAGNOSTIC
-# =============================================================================
+# Les fonctions de diagnostic sont maintenant dans le script généré ci-dessous
 
-check_system_info() {
+check_system_info_source() {
     print_header "INFORMATIONS SYSTÈME"
     
     echo "Date/Heure: $(date)"
@@ -684,13 +682,24 @@ main() {
             fix_chromium_cycle
             exit 0
             ;;
+        --fix-chromium-issues)
+            # Exécuter le script de correction des problèmes Chromium
+            if [[ -f /opt/scripts/util-fix-chromium-issues.sh ]]; then
+                bash /opt/scripts/util-fix-chromium-issues.sh
+            else
+                echo "Script de correction Chromium non trouvé"
+                exit 1
+            fi
+            exit 0
+            ;;
         --help)
             echo "Usage: pi-signage-diag [option]"
             echo "Options:"
-            echo "  --verify-chromium    Vérifier la configuration Chromium Kiosk"
-            echo "  --fix-black-screen   Corriger le problème d'écran noir"
-            echo "  --fix-chromium-cycle Corriger le cycle de dépendance systemd"
-            echo "  --help               Afficher cette aide"
+            echo "  --verify-chromium      Vérifier la configuration Chromium Kiosk"
+            echo "  --fix-black-screen     Corriger le problème d'écran noir"
+            echo "  --fix-chromium-cycle   Corriger le cycle de dépendance systemd"
+            echo "  --fix-chromium-issues  Corriger curseur, traduction et images manquantes"
+            echo "  --help                 Afficher cette aide"
             echo ""
             echo "Sans option, exécute le diagnostic complet."
             exit 0
@@ -774,6 +783,231 @@ BANNER
     
     # Code de sortie basé sur le nombre d'erreurs
     exit $failed_checks
+}
+
+# =============================================================================
+# FONCTIONS DE DIAGNOSTIC
+# =============================================================================
+
+check_system_info() {
+    print_header "INFORMATIONS SYSTÈME"
+    
+    echo "Date/Heure: $(date)"
+    echo "Hostname: $(hostname)"
+    echo "Uptime: $(uptime -p)"
+    
+    if [[ -f /proc/cpuinfo ]]; then
+        local pi_model
+        pi_model=$(grep "Model" /proc/cpuinfo | cut -d':' -f2 | xargs)
+        echo "Modèle Pi: $pi_model"
+    fi
+    
+    if [[ -f /etc/os-release ]]; then
+        source /etc/os-release
+        echo "OS: $PRETTY_NAME"
+    fi
+    
+    local ip_addr
+    ip_addr=$(hostname -I | awk '{print $1}' 2>/dev/null || echo "N/A")
+    echo "Adresse IP: $ip_addr"
+    
+    echo ""
+}
+
+check_services_status() {
+    print_header "ÉTAT DES SERVICES"
+    
+    local services=("chromium-kiosk" "nginx" "glances" "pi-signage-watchdog" "cron")
+    local all_ok=true
+    
+    for service in "${services[@]}"; do
+        if systemctl is-active "$service" >/dev/null 2>&1; then
+            if systemctl is-enabled "$service" >/dev/null 2>&1; then
+                print_ok "$service (actif et activé)"
+            else
+                print_warn "$service (actif mais non activé au démarrage)"
+                all_ok=false
+            fi
+        else
+            print_error "$service (inactif)"
+            all_ok=false
+        fi
+    done
+    
+    echo ""
+    return $([[ "$all_ok" == "true" ]] && echo 0 || echo 1)
+}
+
+check_processes() {
+    print_header "PROCESSUS CRITIQUES"
+    
+    local processes=("chromium" "nginx" "glances")
+    local all_ok=true
+    
+    for process in "${processes[@]}"; do
+        if pgrep -f "$process" >/dev/null 2>&1; then
+            local count
+            count=$(pgrep -f "$process" | wc -l)
+            print_ok "$process ($count processus)"
+        else
+            print_error "$process (aucun processus)"
+            all_ok=false
+        fi
+    done
+    
+    echo ""
+    return $([[ "$all_ok" == "true" ]] && echo 0 || echo 1)
+}
+
+check_display() {
+    print_header "AFFICHAGE"
+    
+    # Vérifier l'environnement graphique
+    if [[ -f /tmp/gui-environment.conf ]]; then
+        source /tmp/gui-environment.conf
+        print_ok "Environnement graphique: ${GUI_TYPE:-Inconnu} (${GUI_SESSION:-N/A})"
+    fi
+    
+    # Vérifier le service chromium-kiosk
+    if systemctl is-active chromium-kiosk >/dev/null 2>&1; then
+        print_ok "Chromium Kiosk actif"
+    else
+        print_error "Chromium Kiosk inactif"
+    fi
+    
+    echo ""
+}
+
+check_videos() {
+    print_header "VIDÉOS ET SYNCHRONISATION"
+    
+    local video_dir="/opt/videos"
+    
+    if [[ -d "$video_dir" ]]; then
+        print_ok "Répertoire vidéos existe"
+        
+        local video_count
+        video_count=$(find "$video_dir" -name "*.mp4" -o -name "*.avi" -o -name "*.mkv" -o -name "*.mov" 2>/dev/null | wc -l)
+        
+        if [[ $video_count -gt 0 ]]; then
+            print_ok "$video_count vidéo(s) trouvée(s)"
+            
+            # Taille totale
+            local total_size
+            total_size=$(du -sh "$video_dir" 2>/dev/null | cut -f1 || echo "0")
+            print_info "Taille totale: $total_size"
+        else
+            print_warn "Aucune vidéo trouvée"
+        fi
+    else
+        print_error "Répertoire vidéos manquant"
+    fi
+    
+    # Vérifier rclone
+    if command -v rclone >/dev/null 2>&1; then
+        print_ok "rclone installé"
+    else
+        print_error "rclone non installé"
+    fi
+    
+    echo ""
+}
+
+check_network() {
+    print_header "RÉSEAU ET CONNECTIVITÉ"
+    
+    # Test connectivité générale
+    if ping -c 1 -W 5 8.8.8.8 >/dev/null 2>&1; then
+        print_ok "Connectivité Internet"
+    else
+        print_error "Pas de connectivité Internet"
+    fi
+    
+    # Afficher les interfaces réseau
+    print_info "Interfaces réseau actives:"
+    ip addr show | grep -E "^[0-9]+:" | grep -v "lo:" | while read -r line; do
+        local interface
+        interface=$(echo "$line" | cut -d: -f2 | xargs)
+        local status
+        status=$(echo "$line" | grep -o "state [A-Z]*" | cut -d' ' -f2)
+        echo "  - $interface: $status"
+    done
+    
+    echo ""
+}
+
+check_system_resources() {
+    print_header "RESSOURCES SYSTÈME"
+    
+    # CPU et charge
+    local load
+    load=$(uptime | awk -F'load average:' '{print $2}' | xargs)
+    print_info "Charge système: $load"
+    
+    # Mémoire
+    local mem_info
+    mem_info=$(free -h | awk 'NR==2{printf "Utilisée: %s/%s (%.0f%%)", $3, $2, $3/$2*100}')
+    print_info "Mémoire: $mem_info"
+    
+    # Espace disque
+    local disk_info
+    disk_info=$(df -h / | awk 'NR==2{printf "Utilisé: %s/%s (%s)", $3, $2, $5}')
+    print_info "Espace disque: $disk_info"
+    
+    # Température
+    if [[ -f /sys/class/thermal/thermal_zone0/temp ]]; then
+        local temp
+        temp=$(cat /sys/class/thermal/thermal_zone0/temp)
+        temp=$((temp / 1000))
+        
+        if [[ $temp -lt 70 ]]; then
+            print_ok "Température CPU: ${temp}°C"
+        elif [[ $temp -lt 80 ]]; then
+            print_warn "Température CPU: ${temp}°C (élevée)"
+        else
+            print_error "Température CPU: ${temp}°C (critique)"
+        fi
+    fi
+    
+    echo ""
+}
+
+check_logs() {
+    print_header "LOGS ET ERREURS"
+    
+    # Vérifier les logs de pi-signage
+    local log_file="/var/log/pi-signage-setup.log"
+    if [[ -f "$log_file" ]]; then
+        print_ok "Fichier de logs existe"
+        
+        # Dernières erreurs
+        print_info "Dernières erreurs:"
+        tail -n 100 "$log_file" | grep -i "error\|failed\|critical" | tail -n 5 || echo "  Aucune erreur récente"
+    else
+        print_warn "Fichier de logs manquant"
+    fi
+    
+    echo ""
+}
+
+check_configuration() {
+    print_header "CONFIGURATION"
+    
+    # Vérifier le fichier de configuration principal
+    if [[ -f "$CONFIG_FILE" ]]; then
+        print_ok "Fichier de configuration existe"
+        
+        # Charger et afficher les paramètres principaux
+        source "$CONFIG_FILE"
+        print_info "Hostname configuré: ${NEW_HOSTNAME:-'Non défini'}"
+        print_info "Dossier Google Drive: ${GDRIVE_FOLDER:-'Non défini'}"
+        print_info "Version d'installation: ${SCRIPT_VERSION:-'Inconnue'}"
+        print_info "Date d'installation: ${INSTALL_DATE:-'Inconnue'}"
+    else
+        print_error "Fichier de configuration manquant"
+    fi
+    
+    echo ""
 }
 
 # =============================================================================
@@ -919,6 +1153,15 @@ systemctl list-units --type=service --state=running | grep -E "(vlc|glances|ligh
 echo -e "\nJournalctl errors récentes:"
 journalctl --since "1 hour ago" --priority=err --no-pager | tail -10
 EOF
+    
+    # Copier le script de correction Chromium si présent
+    if [[ -f "$SCRIPT_DIR/util-fix-chromium-issues.sh" ]]; then
+        cp "$SCRIPT_DIR/util-fix-chromium-issues.sh" /opt/scripts/
+        chmod +x /opt/scripts/util-fix-chromium-issues.sh
+        log_info "Script de correction Chromium copié"
+    else
+        log_warn "Script util-fix-chromium-issues.sh non trouvé dans $SCRIPT_DIR"
+    fi
     
     # Rendre les scripts exécutables
     chmod +x /opt/scripts/diag-vlc.sh
@@ -1236,9 +1479,10 @@ BANNER
     echo "10) Vérification démarrage Chromium"
     echo "11) Réparation écran noir"
     echo "12) Réparer images manquantes (logo/favicon)"
+    echo "13) Corriger problèmes Chromium (curseur/traduction/images)"
     echo "0) Quitter"
     echo ""
-    read -p "Votre choix [0-12]: " choice
+    read -p "Votre choix [0-13]: " choice
     
     case $choice in
         1)
@@ -1288,12 +1532,12 @@ BANNER
             ;;
         10)
             echo "Vérification du démarrage Chromium..."
-            /opt/pi-signage-diag.sh | grep -A 100 "VÉRIFICATION DU DÉMARRAGE CHROMIUM KIOSK"
+            /opt/pi-signage-diag.sh --verify-chromium
             read -p "Appuyez sur Entrée pour continuer..."
             ;;
         11)
             echo "Réparation écran noir..."
-            /opt/pi-signage-diag.sh | grep -A 20 "RÉPARATION ÉCRAN NOIR"
+            /opt/pi-signage-diag.sh --fix-black-screen
             read -p "Appuyez sur Entrée pour continuer..."
             ;;
         12)
@@ -1308,6 +1552,19 @@ BANNER
                 echo "Favicon: https://raw.githubusercontent.com/elkir0/Pi-Signage/main/web-interface/public/assets/images/favicon.ico"
                 echo ""
                 echo "Copiez ces fichiers dans: /var/www/pi-signage/public/assets/images/"
+            fi
+            read -p "Appuyez sur Entrée pour continuer..."
+            ;;
+        13)
+            echo "Correction des problèmes Chromium..."
+            if [[ -f /opt/scripts/util-fix-chromium-issues.sh ]]; then
+                /opt/scripts/util-fix-chromium-issues.sh
+            else
+                echo "Script de correction non trouvé !"
+                echo "Téléchargement depuis GitHub..."
+                curl -fsSL https://raw.githubusercontent.com/elkir0/Pi-Signage/main/raspberry-pi-installer/scripts/util-fix-chromium-issues.sh -o /opt/scripts/util-fix-chromium-issues.sh
+                chmod +x /opt/scripts/util-fix-chromium-issues.sh
+                /opt/scripts/util-fix-chromium-issues.sh
             fi
             read -p "Appuyez sur Entrée pour continuer..."
             ;;

@@ -307,8 +307,8 @@ if [[ "$IS_WAYLAND" == "false" ]]; then
     xset -dpms
     xset s noblank
 
-    # Masquer le curseur après 1 seconde d'inactivité
-    unclutter -idle 1 &
+    # Masquer le curseur après 0.1 seconde d'inactivité
+    unclutter -idle 0.1 -root &
 fi
 
 # Nettoyer les profils Chromium précédents
@@ -324,7 +324,8 @@ CHROMIUM_FLAGS=(
     --no-first-run
     --fast
     --fast-start
-    --disable-features=TranslateUI
+    --disable-features=TranslateUI,Translate
+    --disable-component-update
     --disk-cache-dir=/tmp/chromium-cache
     --overscroll-history-navigation=0
     --disable-pinch
@@ -334,11 +335,11 @@ CHROMIUM_FLAGS=(
     --disable-background-timer-throttling
     --disable-backgrounding-occluded-windows
     --disable-renderer-backgrounding
-    --disable-features=Translate
     --disable-ipc-flooding-protection
     --disable-background-networking
     --enable-features=OverlayScrollbar
     --user-data-dir=/var/cache/chromium-kiosk
+    --app-auto-launched
 )
 
 # Flags spécifiques selon le système d'affichage
@@ -475,6 +476,11 @@ body {
     background: #000;
     overflow: hidden;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    cursor: none !important;
+}
+
+* {
+    cursor: none !important;
 }
 
 #player-container {
