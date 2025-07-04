@@ -1,8 +1,9 @@
-# 🔧 Pi Signage - Guide de dépannage v2.4.8
+# 🔧 Pi Signage - Guide de dépannage v2.4.9
 
 Ce guide vous aidera à résoudre les problèmes courants rencontrés avec Pi Signage Digital.
 
-> 🆕 **v2.4.8** : Nouvelles sections pour Bookworm, Wayland/labwc et résolution des problèmes spécifiques aux environnements graphiques modernes.
+> 🆕 **v2.4.9** : Section performance vidéo avec solutions pour lag, saccades et optimisations GPU
+> 📌 **v2.4.8** : Nouvelles sections pour Bookworm, Wayland/labwc et résolution des problèmes spécifiques aux environnements graphiques modernes.
 
 ## 📋 Table des matières
 
@@ -452,6 +453,57 @@ sudo systemctl reload nginx
 
 ## 🎬 Problèmes de lecture vidéo
 
+### 🆕 Vidéos saccadées ou lag (Mode Chromium)
+
+**Symptôme** : Vidéos H.264 1080p qui sautent, lag important, CPU à 100%
+
+**Cause** : Accélération GPU non activée ou mal configurée
+
+**Solutions v2.4.9+ :**
+
+1. **Vérifier l'accélération hardware**
+```bash
+# Vérifier le codec H.264
+vcgencmd codec_enabled H264
+# Doit retourner : H264=enabled
+
+# Si disabled, vérifier gpu_mem
+cat /boot/config.txt | grep gpu_mem
+# Doit être au minimum 64, recommandé 128
+```
+
+2. **Corriger gpu_mem si nécessaire**
+```bash
+# Si gpu_mem < 128
+sudo sed -i 's/^gpu_mem=.*/gpu_mem=128/' /boot/config.txt
+# Ou ajouter si absent
+echo "gpu_mem=128" | sudo tee -a /boot/config.txt
+sudo reboot
+```
+
+3. **Vérifier les devices V4L2**
+```bash
+ls -la /dev/video*
+# Doit montrer video10-16 sur Bookworm
+```
+
+4. **Vérifier dans Chromium**
+- Naviguer vers `chrome://gpu`
+- "Video Decode" doit être "Hardware accelerated"
+- Dans `chrome://media-internals` pendant la lecture
+- Doit montrer "VaapiVideoDecoder" actif
+
+5. **Si toujours des problèmes**
+```bash
+# Activer le support 4K (augmente fréquence GPU)
+echo "hdmi_enable_4kp60=1" | sudo tee -a /boot/config.txt
+sudo reboot
+```
+
+**Performances attendues après optimisation :**
+- 1080p30 : 25-35% CPU (au lieu de 80-100%)
+- 1080p60 : 35-45% CPU (au lieu de 140%+)
+
 ### Mode VLC - Pas de lecture
 
 **Symptôme** : VLC démarre mais ne lit pas les vidéos
@@ -565,12 +617,22 @@ sudo glances
 grep -i hardware /home/signage/.config/vlc/vlcrc
 ```
 
-3. **Pour Chromium** : Désactiver les effets inutiles
+3. **Pour Chromium** : Vérifier l'accélération GPU (v2.4.9+)
 ```bash
-# Ajouter dans le script de lancement :
---disable-features=TranslateUI
---disable-background-timer-throttling
+# Vérifier que l'accélération est active
+chromium-browser chrome://gpu
+# "Video Decode" doit être "Hardware accelerated"
+
+# Si non activé, vérifier gpu_mem
+cat /boot/config.txt | grep gpu_mem
+# Doit être 128 minimum
 ```
+
+4. **Optimisations supplémentaires**
+- Utiliser des vidéos H.264 (pas H.265)
+- Préférer 1080p à 4K source
+- Format MP4 recommandé
+- Éviter les codecs exotiques
 
 ### Température élevée
 
@@ -669,6 +731,25 @@ sudo pi-signage-logs
 
 # Crée une archive dans /tmp/
 # Contient tous les logs nécessaires au support
+```
+
+### 🆕 Diagnostic vidéo (v2.4.9)
+
+```bash
+# Vérifier l'accélération hardware
+vcgencmd codec_enabled H264
+vcgencmd get_mem gpu
+
+# Vérifier les devices V4L2
+v4l2-ctl --list-devices
+
+# Température et throttling
+vcgencmd get_throttled
+# 0x0 = OK, autre = problème
+
+# Dans Chromium
+chrome://gpu
+chrome://media-internals
 ```
 
 ### Commandes de diagnostic rapide

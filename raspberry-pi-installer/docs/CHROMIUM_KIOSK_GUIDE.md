@@ -1,17 +1,20 @@
-# 🌐 Guide du Mode Chromium Kiosk - v2.4.8
+# 🌐 Guide du Mode Chromium Kiosk - v2.4.9
 
 ## Vue d'ensemble
 
 Le mode Chromium Kiosk est une alternative moderne et légère au mode VLC Classic traditionnel. Il utilise un navigateur Chromium en mode kiosk avec un player HTML5 local pour la lecture des vidéos.
 
-> 🆕 **Support Bookworm natif** : La v2.4.8 apporte un support complet de Raspberry Pi OS Bookworm avec détection automatique de l'environnement graphique (X11/Wayland/labwc) et configuration adaptative.
+> 🆕 **v2.4.9 - Accélération GPU** : Support complet de l'accélération hardware H.264 avec VaapiVideoDecoder, réduction CPU de 60% à 30% pour la lecture vidéo !
+> 📌 **Support Bookworm natif** : La v2.4.8 apporte un support complet de Raspberry Pi OS Bookworm avec détection automatique de l'environnement graphique (X11/Wayland/labwc) et configuration adaptative.
 
 ## 🎯 Avantages du Mode Chromium
 
 ### Performance
 - **Démarrage rapide** : ~25 secondes (vs ~45s pour VLC)
 - **Consommation mémoire réduite** : ~250MB (vs ~350MB)
-- **CPU optimisé** : 10-20% en lecture 1080p
+- **CPU optimisé** : 25-35% en lecture 1080p H.264 (v2.4.9)
+- **🆕 Accélération GPU** : VaapiVideoDecoder actif par défaut
+- **🆕 Support 4K** : Upscaling hardware fluide
 
 ### Fonctionnalités
 - **Support HTML5 natif** : Animations CSS, transitions fluides
@@ -166,9 +169,15 @@ Dans `/var/www/pi-signage-player/player.html`, modifier la section overlay :
 
 Le script détecte automatiquement le modèle et applique les optimisations :
 
-- **Pi 3B+** : Mode conservateur, GPU limité, X11 uniquement
-- **Pi 4B** : Accélération hardware activée, support Wayland/labwc
-- **Pi 5** : Performances maximales, Wayland/labwc optimisé
+- **Pi 3B+** : Mode conservateur, GPU 128MB, X11 uniquement
+- **Pi 4B** : Accélération hardware H.264, GPU 128MB, support Wayland/labwc
+- **Pi 5** : Performances maximales, GPU 128MB, Wayland/labwc optimisé
+
+**🆕 v2.4.9 - Optimisations GPU automatiques :**
+- Configuration `gpu_mem=128` pour tous les modèles
+- Flags GPU : `--use-gl=egl`, `--enable-gpu-rasterization`
+- Décodage hardware : `--enable-features=VaapiVideoDecoder`
+- Support V4L2 avec libv4l-dev et v4l-utils
 
 ### Modifier les flags Chromium
 

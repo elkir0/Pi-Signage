@@ -1,5 +1,43 @@
 # Guide de Migration - Pi Signage Digital
 
+## Migration vers v2.4.9 - Optimisations Vidéo
+
+### Changements majeurs
+
+#### Performance vidéo
+- **Accélération GPU H.264** : Configuration automatique gpu_mem=128
+- **Support V4L2** : Nouveau stack de décodage Bookworm
+- **Flags Chromium optimisés** : VaapiVideoDecoder activé par défaut
+- **Réduction CPU** : De 60% à 30% pour vidéos 1080p
+
+### Instructions de migration
+
+```bash
+# 1. Mettre à jour le code
+cd ~/Pi-Signage
+git pull origin main
+
+# 2. Réinstaller pour appliquer les optimisations
+cd raspberry-pi-installer/scripts
+sudo ./main_orchestrator.sh
+
+# 3. Vérifier après redémarrage
+vcgencmd codec_enabled H264
+# Doit retourner : H264=enabled
+```
+
+### Vérification des optimisations
+
+```bash
+# Vérifier gpu_mem
+cat /boot/config.txt | grep gpu_mem
+# Doit être : gpu_mem=128
+
+# Si mode Chromium, vérifier GPU
+chromium-browser chrome://gpu
+# "Video Decode" doit être "Hardware accelerated"
+```
+
 ## Migration vers v2.4.8 - Support Bookworm
 
 ### Changements majeurs

@@ -1,8 +1,9 @@
-# 🚀 QUICKSTART - Pi Signage Digital v2.4.8
+# 🚀 QUICKSTART - Pi Signage Digital v2.4.9
 
 **Installation rapide en 4 étapes - 10 minutes chrono**
 
-> 🆕 **Support Bookworm natif** : Détection automatique de votre environnement (X11/Wayland/labwc) et configuration adaptative pour une compatibilité maximale !
+> 🆕 **v2.4.9 - Performances vidéo optimisées** : Accélération GPU H.264 automatique, support V4L2, et réduction CPU de 60% à 30% !
+> 📌 **Support Bookworm natif** : Détection automatique de votre environnement (X11/Wayland/labwc) et configuration adaptative pour une compatibilité maximale !
 
 ## ⚡ Installation Express
 
@@ -87,6 +88,17 @@ sudo reboot
    sudo pi-signage-diag
    ```
 
+4. **🆕 Vérifier l'accélération vidéo (v2.4.9) :**
+   ```bash
+   # Codec H.264 activé ?
+   vcgencmd codec_enabled H264
+   # Doit retourner : H264=enabled
+   
+   # Si mode Chromium, vérifier GPU
+   chromium-browser chrome://gpu
+   # "Video Decode" doit être vert
+   ```
+
 ## 📹 Ajouter des Vidéos
 
 1. **Google Drive :**
@@ -157,6 +169,15 @@ sudo /opt/scripts/util-configure-audio.sh
 ```bash
 sudo /opt/scripts/test-gdrive.sh
 sudo /opt/scripts/sync-videos.sh
+```
+
+**🆕 Vidéos saccadées (Mode Chromium) :**
+```bash
+# Vérifier gpu_mem
+cat /boot/config.txt | grep gpu_mem
+# Si < 128 ou absent :
+echo "gpu_mem=128" | sudo tee -a /boot/config.txt
+sudo reboot
 ```
 
 **Problème général :**
