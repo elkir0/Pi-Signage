@@ -216,6 +216,65 @@ configure_boot_stable() {
 }
 
 # =============================================================================
+# CONFIGURATION GPU POUR VIDÉO (OPTIMISATIONS PRUDENTES)
+# =============================================================================
+
+configure_video_optimizations() {
+    log_info "Configuration des optimisations vidéo (prudentes)..."
+    
+    # Détection du chemin de boot
+    local boot_path="/boot"
+    [[ -d "/boot/firmware" ]] && boot_path="/boot/firmware"
+    
+    local config_file="$boot_path/config.txt"
+    
+    if [[ ! -f "$config_file" ]]; then
+        log_error "Fichier config.txt introuvable à $config_file"
+        return 1
+    fi
+    
+    # Vérifier si gpu_mem est déjà configuré
+    if grep -q "^gpu_mem=" "$config_file"; then
+        local current_gpu_mem
+        current_gpu_mem=$(grep "^gpu_mem=" "$config_file" | cut -d'=' -f2)
+        log_warn "gpu_mem déjà configuré à ${current_gpu_mem}MB"
+        
+        if [[ $current_gpu_mem -lt 128 ]]; then
+            log_warn "ATTENTION: gpu_mem=$current_gpu_mem est insuffisant pour l'accélération vidéo"
+            log_info "Recommandation: gpu_mem=128 pour de meilleures performances vidéo"
+            log_info "Pour modifier: sudo sed -i 's/^gpu_mem=.*/gpu_mem=128/' $config_file"
+        else
+            log_info "✓ gpu_mem=$current_gpu_mem est suffisant pour l'accélération vidéo"
+        fi
+    else
+        log_info "Configuration de gpu_mem pour l'accélération vidéo..."
+        # Ajouter gpu_mem=128 pour l'accélération hardware
+        echo "" >> "$config_file"
+        echo "# Mémoire GPU pour accélération vidéo (Pi Signage)" >> "$config_file"
+        echo "gpu_mem=128" >> "$config_file"
+        log_info "✓ gpu_mem=128 configuré pour l'accélération vidéo"
+    fi
+    
+    # Vérifier dtoverlay=vc4-kms-v3d
+    if ! grep -q "^dtoverlay=vc4-kms-v3d" "$config_file"; then
+        log_warn "dtoverlay=vc4-kms-v3d non configuré - nécessaire pour l'accélération GPU"
+        log_info "Ajout de dtoverlay=vc4-kms-v3d..."
+        echo "dtoverlay=vc4-kms-v3d" >> "$config_file"
+        echo "max_framebuffers=2" >> "$config_file"
+    else
+        log_info "✓ dtoverlay=vc4-kms-v3d déjà configuré"
+    fi
+    
+    # Vérifier le support 4K si nécessaire (optionnel)
+    if ! grep -q "^hdmi_enable_4kp60=" "$config_file"; then
+        log_info "Support 4K non configuré (optionnel)"
+        log_info "Pour activer: echo 'hdmi_enable_4kp60=1' | sudo tee -a $config_file"
+    fi
+    
+    log_info "Optimisations vidéo configurées (redémarrage requis)"
+}
+
+# =============================================================================
 # CONFIGURATION CMDLINE (OPTIMISATIONS LÉGÈRES)
 # =============================================================================
 
@@ -478,6 +537,7 @@ main() {
         "disable_unnecessary_services"
         "create_directories"
         "configure_boot_stable"
+        "configure_video_optimizations"
         "configure_cmdline"
         "configure_swap"
     )

@@ -95,6 +95,9 @@ install_chromium() {
         "chromium-browser"
         "nginx"  # Pour servir le player local
         "unclutter"  # Pour masquer le curseur de la souris
+        # Support V4L2 pour l'accélération vidéo
+        "libv4l-dev"
+        "v4l-utils"
     )
     
     # Charger la configuration pour obtenir le serveur d'affichage
@@ -260,6 +263,24 @@ trap cleanup SIGTERM SIGINT
 # Initialisation
 log_kiosk "=== Démarrage Chromium Kiosk ==="
 
+# Vérifier l'accélération hardware
+if command -v vcgencmd >/dev/null 2>&1; then
+    h264_status=$(vcgencmd codec_enabled H264 2>/dev/null | grep -o "enabled\|disabled" || echo "unknown")
+    log_kiosk "Codec H264: $h264_status"
+    
+    if [[ "$h264_status" != "enabled" ]]; then
+        log_kiosk "ATTENTION: Codec H264 non activé - performances vidéo réduites"
+        log_kiosk "Vérifiez gpu_mem dans /boot/config.txt (minimum 64MB, recommandé 128MB)"
+    fi
+    
+    # Vérifier les devices V4L2
+    if [[ -e /dev/video10 ]]; then
+        log_kiosk "✓ Device V4L2 H264 détecté (/dev/video10)"
+    else
+        log_kiosk "⚠ Device V4L2 H264 non détecté"
+    fi
+fi
+
 # Détecter le système d'affichage
 if [[ -n "${WAYLAND_DISPLAY:-}" ]]; then
     log_kiosk "Système Wayland détecté"
@@ -341,6 +362,11 @@ CHROMIUM_FLAGS=(
     --enable-features=OverlayScrollbar
     --user-data-dir=/var/cache/chromium-kiosk
     --app-auto-launched
+    # Optimisations GPU pour vidéo (prudentes)
+    --use-gl=egl
+    --enable-gpu-rasterization
+    --enable-native-gpu-memory-buffers
+    --ignore-gpu-blocklist
 )
 
 # Flags spécifiques selon le système d'affichage
@@ -352,7 +378,8 @@ if [[ "$IS_WAYLAND" == "true" ]]; then
         --start-fullscreen
         --kiosk
         --ozone-platform=wayland
-        --enable-features=UseOzonePlatform,OverlayScrollbar
+        --enable-features=UseOzonePlatform,OverlayScrollbar,VaapiVideoDecoder,CanvasOopRasterization
+        --disable-features=UseChromeOSDirectVideoDecoder
         "${CHROMIUM_FLAGS[@]}"
     )
 else
@@ -361,6 +388,8 @@ else
         --kiosk
         --start-maximized
         --window-size=1920,1080
+        --enable-features=VaapiVideoDecoder,CanvasOopRasterization
+        --disable-features=UseChromeOSDirectVideoDecoder
         "${CHROMIUM_FLAGS[@]}"
     )
 fi
