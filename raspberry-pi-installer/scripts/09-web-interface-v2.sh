@@ -286,7 +286,8 @@ server {
             fastcgi_param SCRIPT_FILENAME $request_filename;
             
             # Timeout pour les téléchargements longs
-            fastcgi_read_timeout 300;
+            fastcgi_read_timeout 600;
+            fastcgi_send_timeout 600;
         }
     }
 }
