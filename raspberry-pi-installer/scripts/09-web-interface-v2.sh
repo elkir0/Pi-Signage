@@ -182,6 +182,11 @@ php_admin_value[session.use_only_cookies] = 1
 php_admin_value[error_log] = /var/log/pi-signage/php-error.log
 php_admin_flag[log_errors] = on
 php_admin_flag[display_errors] = off
+
+; Configuration pour le streaming de sortie (verbose)
+php_admin_value[output_buffering] = Off
+php_admin_value[implicit_flush] = On
+php_admin_value[zlib.output_compression] = Off
 EOF
     
     # Créer le répertoire de sessions
@@ -254,7 +259,14 @@ server {
         include fastcgi_params;
         
         # Timeout pour les téléchargements longs
-        fastcgi_read_timeout 300;
+        fastcgi_read_timeout 600;
+        fastcgi_send_timeout 600;
+        fastcgi_buffer_size 4k;
+        fastcgi_buffers 8 4k;
+        fastcgi_busy_buffers_size 8k;
+        
+        # Désactiver le buffering pour le streaming
+        fastcgi_buffering off;
     }
     
     # Fichiers statiques
@@ -511,12 +523,28 @@ mkdir -p /var/www/.cache/yt-dlp 2>/dev/null
 chmod 755 /var/www/.cache 2>/dev/null
 chown -R www-data:www-data /var/www/.cache 2>/dev/null
 
+# Créer un fichier de progression temporaire
+PROGRESS_FILE="/tmp/pi-signage-progress/yt-dlp-$(date +%s).progress"
+mkdir -p /tmp/pi-signage-progress
+chmod 777 /tmp/pi-signage-progress
+
+# Fonction pour nettoyer en sortie
+cleanup() {
+    rm -f "$PROGRESS_FILE" 2>/dev/null
+}
+trap cleanup EXIT
+
 # Exécuter yt-dlp avec les arguments - Forcer MP4 pour Chromium
-# Sélection de la meilleure qualité en MP4
+# Afficher la progression sur stderr ET dans le fichier
 exec /usr/local/bin/yt-dlp \
     --format "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" \
     --merge-output-format mp4 \
-    "$@"
+    --progress \
+    --newline \
+    --no-color \
+    --progress-template "download:[download] %(progress._percent_str)s of %(progress._total_bytes_str)s at %(progress._speed_str)s ETA %(progress._eta_str)s" \
+    --progress-template "postprocess:[postprocess] %(progress._percent_str)s" \
+    "$@" 2>&1 | tee "$PROGRESS_FILE"
 EOF
     
     # Permissions sur le wrapper
@@ -558,6 +586,9 @@ www-data ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart glances.service
 www-data ALL=(ALL) NOPASSWD: /opt/scripts/update-playlist.sh
 www-data ALL=(ALL) NOPASSWD: /opt/scripts/util-refresh-playlist.sh
 www-data ALL=(ALL) NOPASSWD: /opt/scripts/yt-dlp-wrapper.sh
+www-data ALL=(ALL) NOPASSWD: /opt/scripts/ffmpeg-wrapper.sh
+www-data ALL=(ALL) NOPASSWD: /usr/bin/nice
+www-data ALL=(ALL) NOPASSWD: /usr/bin/ffmpeg
 EOF
     
     # Permissions sécurisées pour sudoers
@@ -878,6 +909,38 @@ echo "Les images devraient maintenant être visibles dans l'interface web."
 EOF
 
     chmod +x /opt/scripts/util-fix-missing-images.sh
+    
+    # Créer le wrapper ffmpeg optimisé
+    cat > /opt/scripts/ffmpeg-wrapper.sh << 'EOF'
+#!/bin/bash
+# Wrapper pour ffmpeg avec optimisations pour Raspberry Pi
+
+# Détecter le nombre de cores disponibles
+CORES=$(nproc)
+MAX_THREADS=$((CORES / 2))  # Utiliser la moitié des cores
+if [ $MAX_THREADS -lt 1 ]; then
+    MAX_THREADS=1
+fi
+
+# Détecter si l'accélération hardware est disponible
+HW_ACCEL=""
+if [ -e /dev/video10 ] || [ -e /dev/video11 ]; then
+    # V4L2 disponible (Bookworm)
+    HW_ACCEL="-c:v h264_v4l2m2m"
+    echo "[INFO] Utilisation de l'accélération hardware V4L2" >&2
+fi
+
+# Exécuter ffmpeg avec limitations de ressources et verbose
+exec nice -n 10 ffmpeg \
+    -threads $MAX_THREADS \
+    -thread_queue_size 512 \
+    $HW_ACCEL \
+    -progress pipe:1 \
+    -loglevel info \
+    "$@"
+EOF
+    
+    chmod +x /opt/scripts/ffmpeg-wrapper.sh
     
     # Ajouter une tâche cron pour mise à jour hebdomadaire
     cat > /etc/cron.d/pi-signage-updates << 'EOF'
