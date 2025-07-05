@@ -260,6 +260,12 @@ cleanup() {
 # Gestionnaire de signaux
 trap cleanup SIGTERM SIGINT
 
+# Créer les répertoires nécessaires avec les bonnes permissions
+mkdir -p "$(dirname "$LOG_FILE")"
+chown pi:pi "$(dirname "$LOG_FILE")"
+touch "$LOG_FILE"
+chown pi:pi "$LOG_FILE"
+
 # Initialisation
 log_kiosk "=== Démarrage Chromium Kiosk ==="
 
@@ -296,8 +302,9 @@ else
     export XAUTHORITY=/home/$USER/.Xauthority
 fi
 
-# Créer les répertoires nécessaires
+# Créer les répertoires nécessaires avec les bonnes permissions
 mkdir -p "$(dirname "$LOG_FILE")"
+chown -R $USER:$USER "$(dirname "$LOG_FILE")"
 mkdir -p /var/cache/chromium-kiosk
 chown $USER:$USER /var/cache/chromium-kiosk
 
