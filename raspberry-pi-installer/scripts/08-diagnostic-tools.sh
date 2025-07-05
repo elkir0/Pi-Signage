@@ -778,6 +778,20 @@ BANNER
 # FONCTIONS DE DIAGNOSTIC
 # =============================================================================
 
+print_header() {
+    echo ""
+    echo "=========================================="
+    echo " $1"
+    echo "=========================================="
+    echo ""
+}
+
+print_section() {
+    echo ""
+    echo "--- $1 ---"
+    echo ""
+}
+
 check_system_info() {
     print_header "INFORMATIONS SYSTÈME"
     
