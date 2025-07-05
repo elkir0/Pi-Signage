@@ -318,7 +318,7 @@ main() {
 }
 
 # Capture Ctrl+C
-trap 'echo -e "\n${RED}Interrompu par l'utilisateur${NC}"; exit 1' INT
+trap 'echo -e "\n${RED}Interrompu par utilisateur${NC}"; exit 1' INT
 
 # Lancer
 main "$@"
