@@ -3,12 +3,19 @@
 **Solution tout-en-un de digital signage pour Raspberry Pi avec interface web de gestion**
 
 [![Compatible](https://img.shields.io/badge/Compatible-Pi%203B%2B%20%7C%204B%20%7C%205-green.svg)](https://www.raspberrypi.org/)
-[![Version](https://img.shields.io/badge/Version-2.4.9-blue.svg)]()
+[![Version](https://img.shields.io/badge/Version-2.4.10-blue.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)]()
 [![Security](https://img.shields.io/badge/Security-Enhanced-brightgreen.svg)]()
 [![Bookworm](https://img.shields.io/badge/Bookworm-Ready-success.svg)]()
 
-> ✅ **Version 2.4.9** : Optimisations vidéo prudentes pour Pi 4 - Accélération GPU H.264, support V4L2, et améliorations Chromium pour des performances vidéo fluides.
+> ✅ **Version 2.4.10** : Interface web adaptative VLC/Chromium - Support complet mode VLC avec playlists M3U, gestion automatique Bookworm Desktop, et PHP flexible.
+
+### 🚀 Nouveautés v2.4.10 - Mode VLC Optimisé et Bookworm Desktop
+- **Interface web adaptative** : Gestion automatique playlists selon mode VLC (M3U) ou Chromium (JSON)
+- **Support complet Bookworm Desktop** : Détection environnement existant, préservation autologin, support Wayland natif
+- **PHP version flexible** : Détection automatique PHP 7.4/8.1/8.2/8.3 selon distribution
+- **Mode VLC amélioré** : DISPLAY=:0 par défaut, support Wayland avec --vout=gles2, permissions seat
+- **Corrections mineures** : Fix erreur playlist VLC, redémarrage service automatique, validation adaptative
 
 ## 🎯 Présentation
 
@@ -107,7 +114,16 @@ Le script d'installation `main_orchestrator.sh` s'adapte automatiquement à votr
 
 > 🎬 **Démarrage automatique garanti** : L'autologin est configuré via raspi-config et le démarrage utilise les mécanismes natifs du système (autostart X11 ou labwc/wayfire).
 
-#### Installation standard
+#### Installation ultra-rapide (recommandée)
+
+```bash
+# Une seule ligne pour tout installer
+wget https://raw.githubusercontent.com/elkir0/Pi-Signage/main/quick-install.sh
+chmod +x quick-install.sh
+sudo ./quick-install.sh
+```
+
+#### Installation standard (manuelle)
 
 ```bash
 # Cloner le dépôt
@@ -120,7 +136,7 @@ chmod +x *.sh
 # (Optionnel) Vérifier l'état de dpkg avant l'installation
 ./dpkg-health-check.sh
 
-# Lancer l'installation v2.4.0
+# Lancer l'installation v2.4.10
 sudo ./main_orchestrator.sh
 ```
 

@@ -2,7 +2,7 @@
 
 # =============================================================================
 # Pi Signage - Installation rapide
-# Version: 2.4.9
+# Version: 2.4.10
 # Description: Script d'installation simple pour Raspberry Pi OS Bookworm
 # =============================================================================
 
@@ -20,7 +20,7 @@ readonly GITHUB_REPO="https://github.com/elkir0/Pi-Signage.git"
 readonly INSTALLER_DIR="/home/pi/pi-signage-installer"
 
 echo -e "${BLUE}╔══════════════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║           Pi Signage - Installation v2.4.9           ║${NC}"
+echo -e "${BLUE}║           Pi Signage - Installation v2.4.10          ║${NC}"
 echo -e "${BLUE}╚══════════════════════════════════════════════════════╝${NC}"
 echo
 
