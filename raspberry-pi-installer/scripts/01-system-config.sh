@@ -297,7 +297,7 @@ create_directories() {
     local -A directories=(
         ["/opt/videos"]="www-data:www-data:755"
         ["/opt/scripts"]="root:root:750"
-        ["/var/log/pi-signage"]="root:root:755"
+        ["/var/log/pi-signage"]="pi:pi:755"
         ["/etc/pi-signage"]="root:root:700"
     )
     
@@ -329,6 +329,25 @@ create_directories() {
             return 1
         fi
     done
+    
+    # Créer les fichiers de log initiaux pour l'utilisateur pi
+    if [[ -d "/var/log/pi-signage" ]]; then
+        local log_files=(
+            "chromium.log"
+            "startup.log"
+            "sync.log"
+            "health.log"
+            "playlist-update.log"
+        )
+        
+        for log_file in "${log_files[@]}"; do
+            touch "/var/log/pi-signage/$log_file"
+            chown pi:pi "/var/log/pi-signage/$log_file"
+            chmod 644 "/var/log/pi-signage/$log_file"
+        done
+        
+        log_info "Fichiers de log initialisés"
+    fi
     
     # Logger l'événement de sécurité
     log_security_event "DIRECTORIES_CREATED" "Répertoires système créés avec permissions sécurisées"

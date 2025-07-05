@@ -1,0 +1,20 @@
+feat: Intégration complète des corrections v2.4.9 et nettoyage
+
+- Intégration des permissions de logs pi:pi dans 01-system-config.sh
+- Ajout création automatique des fichiers de log au démarrage
+- Ajout configuration proxy Glances dans nginx (09-web-interface-v2.sh)
+- Suppression de tous les scripts de patch temporaires
+- Suppression du répertoire patches/
+- Création de quick-install.sh pour installation simple
+- Toutes les corrections sont maintenant dans les scripts principaux:
+  * Permissions des logs corrigées
+  * Wrappers yt-dlp et ffmpeg avec verbose intégrés
+  * Configuration gpu_mem=128 présente
+  * Service Chromium avec User=pi configuré
+  * Fonction print_header présente dans diagnostics
+
+Le système est maintenant prêt pour un déploiement propre depuis zéro.
+
+🤖 Generated with [Claude Code](https://claude.ai/code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>
