@@ -98,12 +98,33 @@ install_x11_packages() {
     # Installation avec gestion des erreurs
     log_info "Installation en cours... (cela peut prendre quelques minutes)"
     
-    if apt-get install -y "${x11_packages[@]}"; then
-        log_info "Paquets X11 installés avec succès"
-    else
-        log_error "Échec de l'installation des paquets X11"
-        return 1
-    fi
+    # Mise à jour des listes d'abord
+    apt-get update || log_warn "Mise à jour des paquets échouée"
+    
+    # Essayer de réparer les paquets cassés d'abord
+    log_info "Vérification et réparation des paquets..."
+    apt-get install -f -y || true
+    dpkg --configure -a || true
+    
+    # Installation avec plusieurs tentatives
+    local attempt=1
+    while [[ $attempt -le 3 ]]; do
+        log_info "Tentative d'installation $attempt/3..."
+        
+        if apt-get install -y --fix-missing "${x11_packages[@]}" 2>/dev/null; then
+            log_info "Paquets X11 installés avec succès"
+            return 0
+        elif [[ $attempt -eq 3 ]]; then
+            log_error "Échec de l'installation des paquets X11 après 3 tentatives"
+            log_error "Vérifiez les held packages avec: apt-mark showhold"
+            return 1
+        else
+            log_warn "Tentative $attempt échouée, nouvelle tentative dans 5s..."
+            sleep 5
+        fi
+        
+        ((attempt++))
+    done
     
     # Vérification de l'installation
     if command -v lightdm >/dev/null 2>&1; then
@@ -121,8 +142,20 @@ install_x11_packages() {
 configure_lightdm() {
     log_info "Configuration de LightDM pour l'auto-login..."
     
-    # Création de l'utilisateur signage s'il n'existe pas
-    if ! id "signage" >/dev/null 2>&1; then
+    # Détecter l'utilisateur autologin existant
+    local autologin_user="signage"
+    
+    # Vérifier si un autologin est déjà configuré
+    if [[ -f "$LIGHTDM_CONFIG" ]] && grep -q "^autologin-user=" "$LIGHTDM_CONFIG"; then
+        local existing_user=$(grep "^autologin-user=" "$LIGHTDM_CONFIG" | cut -d'=' -f2)
+        if [[ -n "$existing_user" ]] && id "$existing_user" >/dev/null 2>&1; then
+            autologin_user="$existing_user"
+            log_info "Autologin existant détecté pour: $autologin_user"
+        fi
+    fi
+    
+    # Si c'est toujours signage, créer l'utilisateur s'il n'existe pas
+    if [[ "$autologin_user" == "signage" ]] && ! id "signage" >/dev/null 2>&1; then
         log_info "Création de l'utilisateur signage"
         useradd -m -s /bin/bash signage
         
@@ -134,7 +167,7 @@ configure_lightdm() {
         
         log_info "Utilisateur signage créé"
     else
-        log_info "Utilisateur signage déjà existant"
+        log_info "Utilisateur $autologin_user déjà existant"
     fi
     
     # Configuration de LightDM pour auto-login
@@ -144,10 +177,10 @@ configure_lightdm() {
     fi
     
     # Configuration LightDM
-    cat > "$LIGHTDM_CONFIG" << 'EOF'
+    cat > "$LIGHTDM_CONFIG" << EOF
 [Seat:*]
 # Auto-login configuration for digital signage
-autologin-user=signage
+autologin-user=$autologin_user
 autologin-user-timeout=0
 autologin-session=openbox
 user-session=openbox

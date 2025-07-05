@@ -208,7 +208,27 @@ install_ytdlp() {
 # =============================================================================
 
 configure_php_fpm() {
-    local php_version="$1"
+    # Détecter la version PHP ici
+    local php_version=""
+    
+    # 1. Vérifier la distribution d'abord
+    if grep -q "bookworm" /etc/os-release 2>/dev/null; then
+        php_version="8.2"
+    elif grep -q "bullseye" /etc/os-release 2>/dev/null; then
+        php_version="7.4"
+    fi
+    
+    # 2. Si pas détecté, vérifier PHP installé
+    if [[ -z "$php_version" ]] && command -v php >/dev/null 2>&1; then
+        php_version=$(php -r "echo PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;" 2>/dev/null || echo "")
+    fi
+    
+    # 3. Valeur par défaut
+    if [[ -z "$php_version" ]]; then
+        php_version="8.2"
+        log_warn "Impossible de détecter la version PHP, utilisation de 8.2 par défaut"
+    fi
+    
     log_info "Configuration de PHP-FPM pour Raspberry Pi (version $php_version)..."
     
     # Configuration optimisée pour Pi
@@ -287,8 +307,20 @@ EOF
 configure_nginx() {
     log_info "Configuration de nginx..."
     
+    # Détecter la version PHP pour nginx
+    local php_version=""
+    if grep -q "bookworm" /etc/os-release 2>/dev/null; then
+        php_version="8.2"
+    elif grep -q "bullseye" /etc/os-release 2>/dev/null; then
+        php_version="7.4"
+    elif command -v php >/dev/null 2>&1; then
+        php_version=$(php -r "echo PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;" 2>/dev/null || echo "8.2")
+    else
+        php_version="8.2"
+    fi
+    
     # Configuration du site
-    cat > "$NGINX_CONFIG" << 'EOF'
+    cat > "$NGINX_CONFIG" << EOF
 server {
     listen 80;
     listen [::]:80;

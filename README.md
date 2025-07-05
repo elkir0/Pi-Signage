@@ -3,14 +3,22 @@
 **Solution tout-en-un de digital signage pour Raspberry Pi avec interface web de gestion**
 
 [![Compatible](https://img.shields.io/badge/Compatible-Pi%203B%2B%20%7C%204B%20%7C%205-green.svg)](https://www.raspberrypi.org/)
-[![Version](https://img.shields.io/badge/Version-2.4.12-blue.svg)]()
+[![Version](https://img.shields.io/badge/Version-2.4.13-blue.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)]()
 [![Security](https://img.shields.io/badge/Security-Enhanced-brightgreen.svg)]()
 [![Bookworm](https://img.shields.io/badge/Bookworm-Ready-success.svg)]()
 
-> ✅ **Version 2.4.12** : Corrections critiques pour installation fraîche - Détection PHP robuste, adaptation utilisateur améliorée, gestion des modules corrigée.
+> ✅ **Version 2.4.13** : Interface web enfin déployée ! - Correction configure_php_fpm, déploiement web ajouté, script de réparation inclus.
 
-### 🚀 Nouveautés v2.4.12 - Stabilité Installation Fraîche
+### 🚀 Nouveautés v2.4.13 - Interface Web Fonctionnelle
+- **Configure_php_fpm fixé** : Détection PHP autonome sans paramètre $1
+- **Nginx corrigé** : Variables PHP correctement injectées dans la config
+- **Interface web déployée** : `deploy_web_files` maintenant exécutée
+- **Paquets X11 résilients** : Installation avec réparation des paquets cassés
+- **Script de réparation** : `repair-installation-v2.4.12.sh` pour corriger les installations existantes
+- **Autologin préservé** : Détection et préservation de l'utilisateur existant (pi)
+
+### 🎆 Nouveautés v2.4.12 - Stabilité Installation Fraîche
 - **Détection PHP robuste** : Priorité à la distribution (Bookworm=8.2) plutôt qu'au réseau
 - **Adaptation utilisateur fixée** : Sauvegarde persistante de l'autologin détecté dans /tmp
 - **Logique modules corrigée** : 02-display-manager ajouté seulement si nécessaire

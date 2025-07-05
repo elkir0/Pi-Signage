@@ -5,6 +5,28 @@ Toutes les modifications notables du projet Pi Signage Digital sont documentées
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/),
 et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.13] - 2025-01-05
+
+### 🌐 Interface web enfin fonctionnelle !
+
+#### Corrections majeures
+- **Configure_php_fpm fixé** : Suppression du paramètre $1 non défini, détection PHP autonome
+- **Nginx variables corrigées** : PHP version correctement injectée avec EOF au lieu de 'EOF'
+- **Deploy_web_files exécutée** : L'interface web est maintenant réellement installée
+- **Paquets X11 résilients** : Ajout de réparation dpkg et retry logic pour held packages
+- **Autologin préservé** : Détection et conservation de l'utilisateur existant (pi vs signage)
+
+#### Améliorations
+- **Script de réparation** : `repair-installation-v2.4.12.sh` pour corriger les installations échouées
+- **Messages d'erreur clairs** : Meilleure gestion des échecs d'installation
+- **Installation plus robuste** : Gestion des paquets cassés et des erreurs réseau
+
+#### Fichiers modifiés
+- `09-web-interface-v2.sh` : configure_php_fpm autonome, configure_nginx avec variables
+- `02-display-manager.sh` : Installation X11 avec retry et réparation dpkg
+- `02-display-manager.sh` : configure_lightdm préserve l'autologin existant
+- `repair-installation-v2.4.12.sh` : Nouveau script de réparation rapide
+
 ## [2.4.12] - 2025-01-05
 
 ### 🔧 Corrections critiques pour installation fraîche
