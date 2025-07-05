@@ -85,19 +85,34 @@ install_web_server() {
     log_info "Installation de nginx et PHP-FPM..."
     
     # Détection automatique de la version PHP disponible
-    local php_version="8.2"  # Défaut Bookworm
+    local php_version=""
     
-    # Méthode plus robuste : vérifier ce qui est installé/installable
-    if command -v php >/dev/null 2>&1; then
-        # PHP déjà installé, détecter la version
+    # 1. D'abord vérifier la distribution (plus fiable)
+    if grep -q "bookworm" /etc/os-release 2>/dev/null; then
+        php_version="8.2"  # Bookworm
+        log_info "Bookworm détecté, utilisation de PHP 8.2"
+    elif grep -q "bullseye" /etc/os-release 2>/dev/null; then
+        php_version="7.4"  # Bullseye
+        log_info "Bullseye détecté, utilisation de PHP 7.4"
+    elif grep -q "buster" /etc/os-release 2>/dev/null; then
+        php_version="7.3"  # Buster
+        log_info "Buster détecté, utilisation de PHP 7.3"
+    fi
+    
+    # 2. Si la détection échoue, vérifier PHP déjà installé
+    if [[ -z "$php_version" ]] && command -v php >/dev/null 2>&1; then
         local installed_version
         installed_version=$(php -r "echo PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;" 2>/dev/null || echo "")
         if [[ -n "$installed_version" ]]; then
             php_version="$installed_version"
             log_info "PHP $php_version déjà installé"
         fi
-    else
-        # Essayer de détecter selon les paquets disponibles (si les repos sont accessibles)
+    fi
+    
+    # 3. En dernier recours, utiliser PHP 8.2 (Bookworm par défaut)
+    if [[ -z "$php_version" ]]; then
+        php_version="8.2"
+        log_warn "Impossible de détecter la version, utilisation de PHP 8.2 par défaut"
         if apt-cache show php8.3-fpm >/dev/null 2>&1; then
             php_version="8.3"
         elif apt-cache show php8.1-fpm >/dev/null 2>&1; then
@@ -1133,9 +1148,27 @@ main() {
                 log_error "Échec de l'étape: $step"
                 failed_steps+=("$step")
             fi
-        elif [[ "$step" == "configure_php_fpm" ]] || [[ "$step" == "configure_sudoers" ]]; then
-            # Passer la version PHP en paramètre
-            if ! "$step" "$php_version"; then
+        elif [[ "$step" == "configure_php_fpm" ]]; then
+            # configure_php_fpm détecte sa propre version
+            if ! "$step"; then
+                log_error "Échec de l'étape: $step"
+                failed_steps+=("$step")
+            fi
+        elif [[ "$step" == "configure_sudoers" ]]; then
+            # Passer la version PHP détectée en paramètre
+            # Ré-détecter la version PHP ici pour être sûr
+            local sudoers_php_version=""
+            if grep -q "bookworm" /etc/os-release 2>/dev/null; then
+                sudoers_php_version="8.2"
+            elif grep -q "bullseye" /etc/os-release 2>/dev/null; then
+                sudoers_php_version="7.4"
+            elif command -v php >/dev/null 2>&1; then
+                sudoers_php_version=$(php -r "echo PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;" 2>/dev/null || echo "8.2")
+            else
+                sudoers_php_version="8.2"
+            fi
+            
+            if ! "$step" "$sudoers_php_version"; then
                 log_error "Échec de l'étape: $step"
                 failed_steps+=("$step")
             fi

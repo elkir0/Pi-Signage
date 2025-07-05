@@ -5,6 +5,64 @@ Toutes les modifications notables du projet Pi Signage Digital sont documentées
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/),
 et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.12] - 2025-01-05
+
+### 🔧 Corrections critiques pour installation fraîche
+
+#### Corrections
+- **Détection PHP robuste** : Priorité à la distribution (Bookworm=8.2, Bullseye=7.4) plutôt qu'aux paquets réseau
+- **Adaptation utilisateur fixée** : Sauvegarde persistante de l'autologin détecté dans /tmp/autologin-detected.conf
+- **Logique modules corrigée** : 02-display-manager ajouté seulement si pas de GUI existante
+- **Script diagnostic réparé** : Gestion des erreurs sur liens symboliques et code de sortie correct
+- **Sudoers PHP adapté** : Détection indépendante de la version PHP pour éviter les erreurs
+
+#### Améliorations
+- **Installation plus stable** : Moins de dépendance au réseau pendant l'installation
+- **Support multi-utilisateurs** : Meilleure gestion des installations avec utilisateur pi existant
+- **Messages d'erreur clarifiés** : Logs plus précis pour faciliter le dépannage
+
+#### Fichiers modifiés
+- `main_orchestrator.sh` : Logique check_module_dependencies avec détection GUI, version 2.4.12
+- `03-vlc-setup.sh` : Sauvegarde autologin dans /tmp/autologin-detected.conf, chargement dans script
+- `08-diagnostic-tools.sh` : Gestion erreurs liens symboliques, code sortie correct
+- `09-web-interface-v2.sh` : Détection PHP par distribution en priorité, configure_php_fpm autonome
+
+## [2.4.11] - 2025-01-04
+
+### 🚀 Résilience réseau et adaptation utilisateur
+
+#### Nouvelles fonctionnalités
+- **Résilience réseau** : Tentatives multiples (3x) pour installations de paquets
+- **Adaptation utilisateur avancée** : Export DETECTED_USER et DETECTED_USER_HOME pour VLC
+- **Skip display-manager intelligent** : Détection GUI améliorée dans check_module_dependencies
+- **Messages d'avertissement** : Notifications claires lors des échecs réseau
+
+#### Corrections  
+- **PHP sur réseau instable** : Fallback vers détection par distribution si apt-cache échoue
+- **Module dependencies** : Ne plus forcer 02-display-manager si GUI détectée
+- **User detection VLC** : Propagation correcte de l'utilisateur autologin détecté
+
+## [2.4.10] - 2025-01-04
+
+### 🎬 Mode VLC optimisé et support Bookworm Desktop complet
+
+#### Nouvelles fonctionnalités
+- **Interface web adaptative** : Gestion automatique des playlists selon le mode (M3U pour VLC, JSON pour Chromium)
+- **Support Bookworm Desktop natif** : Détection et préservation de l'environnement graphique existant
+- **Détection PHP améliorée** : Support automatique PHP 7.4/8.1/8.2/8.3 selon la distribution
+- **Adaptation utilisateur** : Détection et utilisation de l'autologin existant (pi, signage, etc.)
+
+#### Améliorations
+- **Mode VLC optimisé** : DISPLAY=:0 par défaut, support Wayland avec --vout=gles2
+- **Permissions Wayland** : Ajout automatique au groupe seat pour compatibilité
+- **Configuration adaptative** : config.php s'adapte au mode d'affichage choisi
+- **Service VLC flexible** : S'adapte à l'utilisateur autologin détecté
+
+#### Corrections
+- **Erreur playlist VLC** : Fix savePlaylist() pour générer M3U au lieu de JSON en mode VLC
+- **Redémarrage service** : controlService() gère correctement vlc-signage.service
+- **Validation installation** : Messages d'erreur plus précis et validation adaptative
+
 ## [2.4.9] - 2025-01-04
 
 ### 🚀 Optimisations vidéo prudentes pour performances maximales

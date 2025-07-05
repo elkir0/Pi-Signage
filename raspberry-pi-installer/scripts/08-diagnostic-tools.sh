@@ -1436,9 +1436,19 @@ create_shortcuts() {
     log_info "Création des raccourcis et alias..."
     
     # Créer des liens symboliques pour un accès facile
-    ln -sf "$DIAG_SCRIPT" /usr/local/bin/pi-signage-diag
-    ln -sf /opt/scripts/collect-logs.sh /usr/local/bin/pi-signage-logs
-    ln -sf /opt/scripts/auto-repair.sh /usr/local/bin/pi-signage-repair
+    if ln -sf "$DIAG_SCRIPT" /usr/local/bin/pi-signage-diag 2>/dev/null; then
+        log_info "Lien symbolique pi-signage-diag créé"
+    else
+        log_warn "Impossible de créer le lien symbolique pi-signage-diag"
+    fi
+    
+    if [[ -f /opt/scripts/collect-logs.sh ]]; then
+        ln -sf /opt/scripts/collect-logs.sh /usr/local/bin/pi-signage-logs 2>/dev/null || true
+    fi
+    
+    if [[ -f /opt/scripts/auto-repair.sh ]]; then
+        ln -sf /opt/scripts/auto-repair.sh /usr/local/bin/pi-signage-repair 2>/dev/null || true
+    fi
     
     # Créer un script de menu principal
     cat > "/usr/local/bin/pi-signage-tools" << 'EOF'
@@ -1678,3 +1688,6 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 main "$@"
+
+# Retourner le code de sortie de main
+exit $?

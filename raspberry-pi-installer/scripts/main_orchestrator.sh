@@ -12,7 +12,7 @@ set -euo pipefail
 # CONSTANTES GLOBALES
 # =============================================================================
 
-readonly SCRIPT_VERSION="2.4.8"
+readonly SCRIPT_VERSION="2.4.12"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly CONFIG_DIR="/etc/pi-signage"
 readonly CONFIG_FILE="$CONFIG_DIR/config.conf"
@@ -465,7 +465,12 @@ select_modules() {
                 )
                 # Ajouter display-manager seulement si pas d'interface graphique
                 if [[ $has_gui != true ]]; then
-                    selected_modules=("01-system-config" "02-display-manager" "${selected_modules[@]:1}")
+                    # Insérer 02-display-manager après 01-system-config
+                    local new_modules=("01-system-config" "02-display-manager")
+                    for module in "${selected_modules[@]:1}"; do
+                        new_modules+=("$module")
+                    done
+                    selected_modules=("${new_modules[@]}")
                 fi
             fi
             log_info "Installation complète sélectionnée (mode $DISPLAY_MODE)"
@@ -521,7 +526,12 @@ select_modules() {
                 )
                 # Ajouter display-manager seulement si pas d'interface graphique
                 if [[ $has_gui != true ]]; then
-                    selected_modules=("01-system-config" "02-display-manager" "${selected_modules[@]:1}")
+                    # Insérer 02-display-manager après 01-system-config
+                    local new_modules=("01-system-config" "02-display-manager")
+                    for module in "${selected_modules[@]:1}"; do
+                        new_modules+=("$module")
+                    done
+                    selected_modules=("${new_modules[@]}")
                 fi
             fi
             log_info "Installation web sélectionnée (mode $DISPLAY_MODE)"
@@ -634,9 +644,16 @@ select_display_mode() {
 # =============================================================================
 
 check_module_dependencies() {
-    # VLC nécessite le display manager
+    # Charger l'environnement graphique
+    local has_gui=false
+    if [[ -f /tmp/gui-environment.conf ]]; then
+        source /tmp/gui-environment.conf
+    fi
+    
+    # VLC nécessite le display manager SEULEMENT si pas de GUI
     if [[ " ${selected_modules[@]} " =~ " 03-vlc-setup " ]] && 
-       [[ ! " ${selected_modules[@]} " =~ " 02-display-manager " ]]; then
+       [[ ! " ${selected_modules[@]} " =~ " 02-display-manager " ]] &&
+       [[ $has_gui != true ]]; then
         log_warn "VLC nécessite le gestionnaire d'affichage, ajout automatique..."
         selected_modules+=("02-display-manager")
     fi

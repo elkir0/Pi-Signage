@@ -3,14 +3,21 @@
 **Solution tout-en-un de digital signage pour Raspberry Pi avec interface web de gestion**
 
 [![Compatible](https://img.shields.io/badge/Compatible-Pi%203B%2B%20%7C%204B%20%7C%205-green.svg)](https://www.raspberrypi.org/)
-[![Version](https://img.shields.io/badge/Version-2.4.10-blue.svg)]()
+[![Version](https://img.shields.io/badge/Version-2.4.12-blue.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)]()
 [![Security](https://img.shields.io/badge/Security-Enhanced-brightgreen.svg)]()
 [![Bookworm](https://img.shields.io/badge/Bookworm-Ready-success.svg)]()
 
-> ✅ **Version 2.4.10** : Interface web adaptative VLC/Chromium - Support complet mode VLC avec playlists M3U, gestion automatique Bookworm Desktop, et PHP flexible.
+> ✅ **Version 2.4.12** : Corrections critiques pour installation fraîche - Détection PHP robuste, adaptation utilisateur améliorée, gestion des modules corrigée.
 
-### 🚀 Nouveautés v2.4.10 - Mode VLC Optimisé et Bookworm Desktop
+### 🚀 Nouveautés v2.4.12 - Stabilité Installation Fraîche
+- **Détection PHP robuste** : Priorité à la distribution (Bookworm=8.2) plutôt qu'au réseau
+- **Adaptation utilisateur fixée** : Sauvegarde persistante de l'autologin détecté dans /tmp
+- **Logique modules corrigée** : 02-display-manager ajouté seulement si nécessaire
+- **Script diagnostic réparé** : Gestion des erreurs et code de sortie correct
+- **Sudoers PHP adapté** : Détection indépendante de la version PHP
+
+### 🎆 Nouveautés v2.4.10 - Mode VLC Optimisé et Bookworm Desktop
 - **Interface web adaptative** : Gestion automatique playlists selon mode VLC (M3U) ou Chromium (JSON)
 - **Support complet Bookworm Desktop** : Détection environnement existant, préservation autologin, support Wayland natif
 - **PHP version flexible** : Détection automatique PHP 7.4/8.1/8.2/8.3 selon distribution

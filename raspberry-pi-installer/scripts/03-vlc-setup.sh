@@ -201,6 +201,11 @@ VIDEO_DIR="/opt/videos"
 LOG_FILE="/var/log/pi-signage/vlc.log"
 DISPLAY="${DISPLAY:-:0}"
 
+# Charger l'utilisateur détecté si disponible
+if [[ -f /tmp/autologin-detected.conf ]]; then
+    source /tmp/autologin-detected.conf
+fi
+
 # Fonction de logging
 log_vlc() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $*" >> "$LOG_FILE"
@@ -436,6 +441,9 @@ configure_signage_autologin() {
             # Copier la config VLC pour cet utilisateur
             local user_home=$(getent passwd "$autologin_user" | cut -d: -f6)
             if [[ -n "$user_home" ]] && [[ -d "$user_home" ]]; then
+                # Sauvegarder la détection pour les autres scripts
+                echo "AUTOLOGIN_USER=$autologin_user" > /tmp/autologin-detected.conf
+                echo "AUTOLOGIN_HOME=$user_home" >> /tmp/autologin-detected.conf
                 log_info "Adaptation de la configuration pour l'utilisateur $autologin_user"
                 
                 # Copier les fichiers nécessaires
@@ -632,8 +640,19 @@ create_vlc_service() {
     fi
     
     # Utiliser l'utilisateur détecté ou signage par défaut
-    local service_user="${DETECTED_USER:-signage}"
-    local service_home="${DETECTED_USER_HOME:-/home/signage}"
+    local service_user="signage"
+    local service_home="/home/signage"
+    
+    # Si un autologin différent est détecté, l'utiliser
+    if [[ -f /tmp/autologin-detected.conf ]]; then
+        source /tmp/autologin-detected.conf
+        if [[ -n "${AUTOLOGIN_USER:-}" ]] && [[ "${AUTOLOGIN_USER}" != "signage" ]]; then
+            service_user="$AUTOLOGIN_USER"
+            service_home="$AUTOLOGIN_HOME"
+            log_info "Utilisation de l'utilisateur autologin: $service_user"
+        fi
+    fi
+    
     local service_uid
     service_uid=$(id -u "$service_user" 2>/dev/null || echo "1001")
     

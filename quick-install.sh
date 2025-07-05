@@ -20,7 +20,7 @@ readonly GITHUB_REPO="https://github.com/elkir0/Pi-Signage.git"
 readonly INSTALLER_DIR="/home/pi/pi-signage-installer"
 
 echo -e "${BLUE}╔══════════════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║           Pi Signage - Installation v2.4.10          ║${NC}"
+echo -e "${BLUE}║           Pi Signage - Installation v2.4.12          ║${NC}"
 echo -e "${BLUE}╚══════════════════════════════════════════════════════╝${NC}"
 echo
 
