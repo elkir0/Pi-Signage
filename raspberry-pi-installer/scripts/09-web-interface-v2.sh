@@ -84,16 +84,28 @@ load_config() {
 install_web_server() {
     log_info "Installation de nginx et PHP-FPM..."
     
-    # Paquets nécessaires
+    # Détection automatique de la version PHP disponible
+    local php_version="8.2"
+    if apt-cache show php8.3-fpm >/dev/null 2>&1; then
+        php_version="8.3"
+    elif apt-cache show php8.1-fpm >/dev/null 2>&1; then
+        php_version="8.1"
+    elif apt-cache show php7.4-fpm >/dev/null 2>&1; then
+        php_version="7.4"
+    fi
+    
+    log_info "Version PHP détectée : $php_version"
+    
+    # Paquets nécessaires avec version adaptative
     local packages=(
         "nginx"
-        "php8.2-fpm"
-        "php8.2-cli"
-        "php8.2-common"
-        "php8.2-curl"
-        "php8.2-xml"
-        "php8.2-mbstring"
-        "php8.2-zip"
+        "php${php_version}-fpm"
+        "php${php_version}-cli"
+        "php${php_version}-common"
+        "php${php_version}-curl"
+        "php${php_version}-xml"
+        "php${php_version}-mbstring"
+        "php${php_version}-zip"
         # python3-pip, ffmpeg et git déjà installés dans 01-system-config.sh
     )
     
@@ -141,14 +153,15 @@ install_ytdlp() {
 # =============================================================================
 
 configure_php_fpm() {
-    log_info "Configuration de PHP-FPM pour Raspberry Pi..."
+    local php_version="$1"
+    log_info "Configuration de PHP-FPM pour Raspberry Pi (version $php_version)..."
     
     # Configuration optimisée pour Pi
-    cat > /etc/php/8.2/fpm/pool.d/pi-signage.conf << 'EOF'
+    cat > /etc/php/${php_version}/fpm/pool.d/pi-signage.conf << EOF
 [pi-signage]
 user = www-data
 group = www-data
-listen = /run/php/php8.2-fpm-pi-signage.sock
+listen = /run/php/php${php_version}-fpm-pi-signage.sock
 listen.owner = www-data
 listen.group = www-data
 
@@ -207,7 +220,7 @@ EOF
     secure_dir_permissions "/var/www/.cache" "www-data" "www-data" "755"
     
     # Redémarrer PHP-FPM
-    systemctl restart php8.2-fpm
+    systemctl restart php${php_version}-fpm
     
     log_info "PHP-FPM configuré"
 }
@@ -254,7 +267,7 @@ server {
     # PHP
     location ~ \.php$ {
         include snippets/fastcgi-php.conf;
-        fastcgi_pass unix:/run/php/php8.2-fpm-pi-signage.sock;
+        fastcgi_pass unix:/run/php/php${php_version}-fpm-pi-signage.sock;
         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
         include fastcgi_params;
         
@@ -282,7 +295,7 @@ server {
         
         location ~ \.php$ {
             include snippets/fastcgi-php.conf;
-            fastcgi_pass unix:/run/php/php8.2-fpm-pi-signage.sock;
+            fastcgi_pass unix:/run/php/php${php_version}-fpm-pi-signage.sock;
             fastcgi_param SCRIPT_FILENAME $request_filename;
             
             # Timeout pour les téléchargements longs
@@ -578,10 +591,11 @@ EOF
 # =============================================================================
 
 configure_sudoers() {
+    local php_version="$1"
     log_info "Configuration des permissions sudo pour l'interface web..."
     
     # Permettre à www-data de redémarrer les services
-    cat > /etc/sudoers.d/pi-signage-web << 'EOF'
+    cat > /etc/sudoers.d/pi-signage-web << EOF
 # Permettre à l'interface web de contrôler les services
 www-data ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart vlc-signage.service
 www-data ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop vlc-signage.service
@@ -596,7 +610,7 @@ www-data ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop pi-signage-watchdog.service
 www-data ALL=(ALL) NOPASSWD: /usr/bin/systemctl start pi-signage-watchdog.service
 www-data ALL=(ALL) NOPASSWD: /usr/bin/systemctl status pi-signage-watchdog.service
 www-data ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart nginx.service
-www-data ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart php8.2-fpm.service
+www-data ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart php${php_version}-fpm.service
 www-data ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart glances.service
 www-data ALL=(ALL) NOPASSWD: /opt/scripts/update-playlist.sh
 www-data ALL=(ALL) NOPASSWD: /opt/scripts/util-refresh-playlist.sh
@@ -980,6 +994,7 @@ EOF
 # =============================================================================
 
 validate_web_installation() {
+    local php_version="$1"
     log_info "Validation de l'installation web..."
     
     local errors=0
@@ -992,7 +1007,7 @@ validate_web_installation() {
         ((errors++))
     fi
     
-    if systemctl is-active php8.2-fpm >/dev/null 2>&1; then
+    if systemctl is-active php${php_version}-fpm >/dev/null 2>&1; then
         log_info "✓ PHP-FPM actif"
     else
         log_error "✗ PHP-FPM inactif"
@@ -1055,11 +1070,41 @@ main() {
     
     local failed_steps=()
     
+    # Récupérer la version PHP de install_web_server
+    local php_version=""
+    
     for step in "${steps[@]}"; do
         log_info "Exécution: $step"
-        if ! "$step"; then
-            log_error "Échec de l'étape: $step"
-            failed_steps+=("$step")
+        
+        if [[ "$step" == "install_web_server" ]]; then
+            # Exécuter et capturer la version PHP
+            if "$step"; then
+                # Redétecter la version PHP pour les autres fonctions
+                if apt-cache show php8.3-fpm >/dev/null 2>&1; then
+                    php_version="8.3"
+                elif apt-cache show php8.1-fpm >/dev/null 2>&1; then
+                    php_version="8.1"
+                elif apt-cache show php7.4-fpm >/dev/null 2>&1; then
+                    php_version="7.4"
+                else
+                    php_version="8.2"
+                fi
+            else
+                log_error "Échec de l'étape: $step"
+                failed_steps+=("$step")
+            fi
+        elif [[ "$step" == "configure_php_fpm" ]] || [[ "$step" == "configure_sudoers" ]]; then
+            # Passer la version PHP en paramètre
+            if ! "$step" "$php_version"; then
+                log_error "Échec de l'étape: $step"
+                failed_steps+=("$step")
+            fi
+        else
+            # Étapes normales
+            if ! "$step"; then
+                log_error "Échec de l'étape: $step"
+                failed_steps+=("$step")
+            fi
         fi
     done
     
@@ -1071,7 +1116,7 @@ main() {
     fi
     
     # Validation
-    if validate_web_installation; then
+    if validate_web_installation "$php_version"; then
         log_info "Interface web installée avec succès"
         
         # Afficher les informations d'accès

@@ -15,17 +15,7 @@ setSecurityHeaders();
 $message = '';
 $messageType = '';
 
-$selectedVideos = [];
-if (file_exists(PLAYLIST_FILE)) {
-    $data = json_decode(file_get_contents(PLAYLIST_FILE), true);
-    if (!empty($data['videos'])) {
-        foreach ($data['videos'] as $v) {
-            if (isset($v['name'])) {
-                $selectedVideos[] = $v['name'];
-            }
-        }
-    }
-}
+$selectedVideos = getCurrentPlaylist();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (validateCSRFToken($_POST['csrf_token'] ?? '')) {

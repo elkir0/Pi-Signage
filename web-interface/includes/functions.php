@@ -79,7 +79,7 @@ function getSystemInfo() {
  */
 function controlService($service, $action) {
     // Validation stricte
-    $allowed_services = ['vlc-signage.service'];
+    $allowed_services = ['vlc-signage.service', 'chromium-kiosk.service'];
     $allowed_actions = ['start', 'stop', 'restart', 'status'];
     
     if (!in_array($service, $allowed_services) || !in_array($action, $allowed_actions)) {
@@ -405,7 +405,7 @@ function checkDiskSpace() {
 }
 
 /**
- * Enregistrer une playlist personnalisée
+ * Enregistrer une playlist personnalisée (adaptative VLC/Chromium)
  */
 function savePlaylist(array $filenames) {
     $videos = [];
@@ -427,30 +427,87 @@ function savePlaylist(array $filenames) {
         ];
     }
 
-    $playlist = [
-        'version' => '1.0',
-        'updated' => date('c'),
-        'videos' => $videos
-    ];
+    // Mode VLC : créer une playlist M3U ET redémarrer le service
+    if (DISPLAY_MODE === 'vlc') {
+        // Créer la playlist M3U
+        $m3u_content = "#EXTM3U\n";
+        foreach ($videos as $video) {
+            $m3u_content .= VIDEO_DIR . '/' . $video['name'] . "\n";
+        }
+        
+        // Sauvegarder la playlist M3U
+        if (file_put_contents(PLAYLIST_FILE, $m3u_content) === false) {
+            return false;
+        }
+        
+        // Redémarrer le service VLC pour prendre en compte la nouvelle playlist
+        $restart_result = controlService('vlc-signage.service', 'restart');
+        if (!$restart_result['success']) {
+            error_log("Échec du redémarrage VLC: " . ($restart_result['error'] ?? 'Unknown error'));
+            // Ne pas faire échouer la sauvegarde pour autant
+        }
+        
+        logActivity('VLC_PLAYLIST_SAVED', strval(count($videos)) . ' videos');
+        return true;
+    } 
+    
+    // Mode Chromium : créer la playlist JSON
+    else {
+        $playlist = [
+            'version' => '1.0',
+            'updated' => date('c'),
+            'videos' => $videos
+        ];
 
-    $json = json_encode($playlist, JSON_PRETTY_PRINT);
-    if ($json === false) {
-        return false;
+        $json = json_encode($playlist, JSON_PRETTY_PRINT);
+        if ($json === false) {
+            return false;
+        }
+
+        $dir = dirname(PLAYLIST_FILE);
+        if (!is_dir($dir)) {
+            mkdir($dir, 0755, true);
+        }
+
+        if (file_put_contents(PLAYLIST_FILE, $json) === false) {
+            return false;
+        }
+
+        chmod(PLAYLIST_FILE, 0644);
+        @chown(PLAYLIST_FILE, 'www-data');
+
+        logActivity('CHROMIUM_PLAYLIST_SAVED', strval(count($videos)) . ' videos');
+        return true;
     }
+}
 
-    $dir = dirname(PLAYLIST_FILE);
-    if (!is_dir($dir)) {
-        mkdir($dir, 0755, true);
+/**
+ * Lire la playlist actuelle (adaptative VLC/Chromium)
+ */
+function getCurrentPlaylist() {
+    if (DISPLAY_MODE === 'vlc') {
+        // Pour VLC, on retourne toutes les vidéos du répertoire
+        // car VLC génère sa playlist dynamiquement
+        $videos = listVideos();
+        $playlist = [];
+        foreach ($videos as $video) {
+            $playlist[] = $video['name'];
+        }
+        return $playlist;
+    } else {
+        // Mode Chromium : lire le fichier JSON
+        if (file_exists(PLAYLIST_FILE)) {
+            $data = json_decode(file_get_contents(PLAYLIST_FILE), true);
+            if (!empty($data['videos'])) {
+                $playlist = [];
+                foreach ($data['videos'] as $v) {
+                    if (isset($v['name'])) {
+                        $playlist[] = $v['name'];
+                    }
+                }
+                return $playlist;
+            }
+        }
+        return [];
     }
-
-    if (file_put_contents(PLAYLIST_FILE, $json) === false) {
-        return false;
-    }
-
-    chmod(PLAYLIST_FILE, 0644);
-    @chown(PLAYLIST_FILE, 'www-data');
-
-    logActivity('PLAYLIST_SAVED', strval(count($videos)) . ' videos');
-
-    return true;
 }

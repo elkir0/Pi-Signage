@@ -199,7 +199,7 @@ create_vlc_script() {
 # Configuration
 VIDEO_DIR="/opt/videos"
 LOG_FILE="/var/log/pi-signage/vlc.log"
-DISPLAY=:7.0
+DISPLAY="${DISPLAY:-:0}"
 
 # Fonction de logging
 log_vlc() {
@@ -218,7 +218,7 @@ trap cleanup SIGTERM SIGINT
 
 # Initialisation
 log_vlc "=== Démarrage VLC Digital Signage ==="
-export DISPLAY=:7.0
+export DISPLAY="${DISPLAY:-:0}"
 export PULSE_RUNTIME_PATH="/run/user/$(id -u)/pulse"
 
 # Vérifier la présence du répertoire vidéos
@@ -261,6 +261,13 @@ play_videos() {
     # Démarrage de VLC avec la playlist
     log_vlc "Démarrage de VLC avec playlist"
     
+    # Adapter la sortie vidéo selon l'environnement
+    if [[ -n "${WAYLAND_DISPLAY:-}" ]]; then
+        VLC_VIDEO_OUTPUT="--vout=gles2"
+    else
+        VLC_VIDEO_OUTPUT="--vout=gl"
+    fi
+    
     vlc \
         --intf dummy \
         --extraintf \
@@ -276,7 +283,7 @@ play_videos() {
         --no-stats \
         --no-disable-screensaver \
         --aout=alsa \
-        --vout=gl \
+        $VLC_VIDEO_OUTPUT \
         "$playlist_file" \
         2>>"$LOG_FILE" &
     
@@ -595,14 +602,14 @@ create_vlc_service() {
                 exec_start_pre="ExecStartPre=/bin/sleep 15"
                 ;;
             *)
-                # Pour les environnements sans GUI, on utilise le display :7.0 de LightDM
-                display_env="DISPLAY=:7.0"
+                # Pour les environnements sans GUI, on utilise le display :0 par défaut
+                display_env="DISPLAY=:0"
                 exec_start_pre="ExecStartPre=/bin/bash -c 'until systemctl is-active lightdm.service >/dev/null 2>&1; do sleep 2; done; sleep 5'"
                 ;;
         esac
     else
         # Pas de GUI détecté, on utilise la config classique avec LightDM
-        display_env="DISPLAY=:7.0"
+        display_env="DISPLAY=:0"
         exec_start_pre="ExecStartPre=/bin/bash -c 'until systemctl is-active lightdm.service >/dev/null 2>&1; do sleep 2; done; sleep 5'"
     fi
     
@@ -671,6 +678,15 @@ configure_permissions() {
             fi
         fi
     done
+    
+    # Ajout du groupe seat pour Wayland (si disponible)
+    if getent group "seat" >/dev/null 2>&1; then
+        if usermod -a -G "seat" signage; then
+            log_info "Utilisateur signage ajouté au groupe seat (Wayland)"
+        else
+            log_warn "Impossible d'ajouter signage au groupe seat"
+        fi
+    fi
     
     # Permissions sécurisées sur les répertoires
     secure_dir_permissions "/home/signage" "signage" "signage" "750"

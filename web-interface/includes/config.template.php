@@ -20,7 +20,6 @@ define('VIDEO_DIR', '/opt/videos');
 define('SCRIPTS_DIR', '/opt/scripts');
 define('LOG_DIR', '/var/log/pi-signage');
 define('PROGRESS_DIR', '/tmp/pi-signage-progress');
-define('PLAYLIST_FILE', '/var/www/pi-signage-player/api/playlist.json');
 define('WEB_ROOT', dirname(__DIR__));
 // binaire yt-dlp - utilise le wrapper pour éviter les problèmes de permissions
 define('YTDLP_BIN', 'sudo /opt/scripts/yt-dlp-wrapper.sh');
@@ -30,6 +29,14 @@ if (file_exists('/etc/pi-signage/display-mode.conf')) {
     define('DISPLAY_MODE', trim(file_get_contents('/etc/pi-signage/display-mode.conf')));
 } else {
     define('DISPLAY_MODE', 'chromium');
+}
+
+// Playlist adaptative selon le mode d'affichage
+if (DISPLAY_MODE === 'vlc') {
+    define('PLAYLIST_FILE', '/tmp/signage-playlist.m3u');
+    define('VLC_PLAYLIST_DIR', '/opt/videos');
+} else {
+    define('PLAYLIST_FILE', '/var/www/pi-signage-player/api/playlist.json');
 }
 
 // Configuration d'authentification
