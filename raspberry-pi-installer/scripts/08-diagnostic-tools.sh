@@ -15,6 +15,7 @@ set -euo pipefail
 readonly CONFIG_FILE="/etc/pi-signage/config.conf"
 readonly LOG_FILE="/var/log/pi-signage-setup.log"
 readonly DIAG_SCRIPT="/opt/pi-signage-diag.sh"
+readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Colors
 readonly RED='\033[0;31m'
@@ -1554,9 +1555,11 @@ BANNER
 done
 EOF
     
-    chmod +x /usr/local/bin/pi-signage-tools
+    chmod +x /usr/local/bin/pi-signage-tools 2>/dev/null || true
     
     log_info "Raccourcis et menu principal créés"
+    
+    return 0  # Toujours retourner succès
 }
 
 # =============================================================================

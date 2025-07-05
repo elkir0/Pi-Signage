@@ -678,8 +678,19 @@ EOF
 # =============================================================================
 
 configure_sudoers() {
-    local php_version="$1"
     log_info "Configuration des permissions sudo pour l'interface web..."
+    
+    # Détecter la version PHP
+    local php_version=""
+    if grep -q "bookworm" /etc/os-release 2>/dev/null; then
+        php_version="8.2"
+    elif grep -q "bullseye" /etc/os-release 2>/dev/null; then
+        php_version="7.4"
+    elif command -v php >/dev/null 2>&1; then
+        php_version=$(php -r "echo PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;" 2>/dev/null || echo "8.2")
+    else
+        php_version="8.2"
+    fi
     
     # Permettre à www-data de redémarrer les services
     cat > /etc/sudoers.d/pi-signage-web << EOF
@@ -1081,8 +1092,19 @@ EOF
 # =============================================================================
 
 validate_web_installation() {
-    local php_version="$1"
     log_info "Validation de l'installation web..."
+    
+    # Détecter la version PHP pour validation
+    local php_version=""
+    if grep -q "bookworm" /etc/os-release 2>/dev/null; then
+        php_version="8.2"
+    elif grep -q "bullseye" /etc/os-release 2>/dev/null; then
+        php_version="7.4"
+    elif command -v php >/dev/null 2>&1; then
+        php_version=$(php -r "echo PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;" 2>/dev/null || echo "8.2")
+    else
+        php_version="8.2"
+    fi
     
     local errors=0
     
@@ -1157,71 +1179,31 @@ main() {
     
     local failed_steps=()
     
-    # Récupérer la version PHP de install_web_server
+    # Détecter la version PHP une fois pour toutes
     local php_version=""
+    if grep -q "bookworm" /etc/os-release 2>/dev/null; then
+        php_version="8.2"
+    elif grep -q "bullseye" /etc/os-release 2>/dev/null; then
+        php_version="7.4"
+    else
+        php_version="8.2"  # Par défaut
+    fi
+    log_info "Version PHP cible: $php_version"
     
     for step in "${steps[@]}"; do
         log_info "Exécution: $step"
         
-        if [[ "$step" == "install_web_server" ]]; then
-            # Exécuter et capturer la version PHP
-            if "$step"; then
-                # Redétecter la version PHP pour les autres fonctions
-                if apt-cache show php8.3-fpm >/dev/null 2>&1; then
-                    php_version="8.3"
-                elif apt-cache show php8.1-fpm >/dev/null 2>&1; then
-                    php_version="8.1"
-                elif apt-cache show php7.4-fpm >/dev/null 2>&1; then
-                    php_version="7.4"
-                else
-                    php_version="8.2"
-                fi
-            else
-                log_error "Échec de l'étape: $step"
-                failed_steps+=("$step")
-            fi
-        elif [[ "$step" == "configure_php_fpm" ]]; then
-            # configure_php_fpm détecte sa propre version
-            if ! "$step"; then
-                log_error "Échec de l'étape: $step"
-                failed_steps+=("$step")
-            fi
-        elif [[ "$step" == "configure_sudoers" ]]; then
-            # Passer la version PHP détectée en paramètre
-            # Ré-détecter la version PHP ici pour être sûr
-            local sudoers_php_version=""
-            if grep -q "bookworm" /etc/os-release 2>/dev/null; then
-                sudoers_php_version="8.2"
-            elif grep -q "bullseye" /etc/os-release 2>/dev/null; then
-                sudoers_php_version="7.4"
-            elif command -v php >/dev/null 2>&1; then
-                sudoers_php_version=$(php -r "echo PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;" 2>/dev/null || echo "8.2")
-            else
-                sudoers_php_version="8.2"
-            fi
-            
-            if ! "$step" "$sudoers_php_version"; then
-                log_error "Échec de l'étape: $step"
-                failed_steps+=("$step")
-            fi
-        else
-            # Étapes normales
-            if ! "$step"; then
-                log_error "Échec de l'étape: $step"
-                failed_steps+=("$step")
-            fi
+        # Toutes les fonctions détectent leur propre version PHP si nécessaire
+        if ! "$step"; then
+            log_error "Échec de l'étape: $step"
+            failed_steps+=("$step")
         fi
     done
     
-    # Appliquer le patch de correction des assets si nécessaire
-    local patch_script="$SCRIPT_DIR/patches/fix-web-interface-assets.sh"
-    if [[ -f "$patch_script" ]]; then
-        log_info "Application du patch de correction des assets..."
-        bash "$patch_script" || log_warn "Patch partiellement appliqué"
-    fi
+    # Ne plus utiliser de patches
     
     # Validation
-    if validate_web_installation "$php_version"; then
+    if validate_web_installation; then
         log_info "Interface web installée avec succès"
         
         # Afficher les informations d'accès
