@@ -90,7 +90,6 @@ install_x11_packages() {
         "xterm"
         "x11-xserver-utils"
         "xinit"
-        "xorg"
         "fonts-dejavu-core"
         "unclutter"
     )

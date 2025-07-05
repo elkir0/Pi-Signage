@@ -700,19 +700,19 @@ main() {
     cat << 'BANNER'
     ____  _    ____  _                              
    |  _ \(_)  / ___|(_) __ _ _ __   __ _  __ _  ___ 
-   | |_) | |  \___ \| |/ _` | '_ \ / _` |/ _` |/ _ \
+   | |_) | |  \___ \| |/ _\` | '_ \ / _\` |/ _\` |/ _ \\
    |  __/| |   ___) | | (_| | | | | (_| | (_| |  __/
-   |_|   |_|  |____/|_|\__, |_| |_|\__,_|\__, |\___|
+   |_|   |_|  |____/|_|\\__, |_| |_|\\__,_|\\__, |\\___|
                        |___/             |___/      
 
 BANNER
     
-    echo "  Diagnostic Pi Signage - $(date '+%Y-%m-%d %H:%M:%S')"
+    echo "  Diagnostic Pi Signage - \$(date '+%Y-%m-%d %H:%M:%S')"
     echo "================================================================="
     echo ""
     
     # Rediriger également vers un fichier rapport
-    exec > >(tee "$REPORT_FILE")
+    exec > >(tee "\$REPORT_FILE")
     
     # Exécuter tous les diagnostics
     local total_checks=0
@@ -768,11 +768,11 @@ BANNER
     fi
     
     echo ""
-    echo "Rapport complet sauvegardé dans: $REPORT_FILE"
+    echo "Rapport complet sauvegardé dans: \$REPORT_FILE"
     echo ""
     
     # Code de sortie basé sur le nombre d'erreurs
-    exit $failed_checks
+    exit \$failed_checks
 }
 
 # =============================================================================
@@ -1018,7 +1018,10 @@ check_configuration() {
 # POINT D'ENTRÉE
 # =============================================================================
 
-main "$@"
+# Appeler main uniquement si le script est exécuté directement
+if [[ "\${BASH_SOURCE[0]}" == "\${0}" ]]; then
+    main "\$@"
+fi
 
 EOF
     
@@ -1462,9 +1465,9 @@ while true; do
     cat << 'BANNER'
     ____  _    ____  _                              
    |  _ \(_)  / ___|(_) __ _ _ __   __ _  __ _  ___ 
-   | |_) | |  \___ \| |/ _` | '_ \ / _` |/ _` |/ _ \
+   | |_) | |  \___ \| |/ _\` | '_ \ / _\` |/ _\` |/ _ \\
    |  __/| |   ___) | | (_| | | | | (_| | (_| |  __/
-   |_|   |_|  |____/|_|\__, |_| |_|\__,_|\__, |\___|
+   |_|   |_|  |____/|_|\\__, |_| |_|\\__,_|\\__, |\\___|
                        |___/             |___/      
 
 BANNER

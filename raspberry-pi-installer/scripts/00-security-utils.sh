@@ -47,17 +47,41 @@ check_dpkg_health() {
 repair_dpkg() {
     echo "[DPKG] Tentative de réparation du système de paquets..."
     
-    # Tuer les processus bloqués (avec prudence)
+    # Vérifier et attendre que les processus se terminent naturellement
     local dpkg_pids=$(pgrep -x dpkg || true)
     local apt_pids=$(pgrep -x apt-get || true)
     local apt_pids2=$(pgrep -x apt || true)
     
     if [[ -n "$dpkg_pids" ]] || [[ -n "$apt_pids" ]] || [[ -n "$apt_pids2" ]]; then
-        echo "[DPKG] Arrêt des processus bloqués..."
-        killall -9 dpkg 2>/dev/null || true
-        killall -9 apt-get 2>/dev/null || true
-        killall -9 apt 2>/dev/null || true
-        sleep 2
+        echo "[DPKG] Processus dpkg/apt en cours détectés, attente..."
+        
+        # Attendre jusqu'à 60 secondes que les processus se terminent
+        local wait_count=0
+        while [[ $wait_count -lt 60 ]] && ( pgrep -x dpkg >/dev/null || pgrep -x apt-get >/dev/null || pgrep -x apt >/dev/null ); do
+            sleep 1
+            ((wait_count++))
+            if [[ $((wait_count % 10)) -eq 0 ]]; then
+                echo "[DPKG] Attente des processus... ${wait_count}s"
+            fi
+        done
+        
+        # Si toujours bloqué après 60s, tenter un arrêt doux (SIGTERM)
+        if pgrep -x dpkg >/dev/null || pgrep -x apt-get >/dev/null || pgrep -x apt >/dev/null; then
+            echo "[DPKG] Processus toujours actifs après 60s, arrêt doux..."
+            pkill -TERM dpkg 2>/dev/null || true
+            pkill -TERM apt-get 2>/dev/null || true
+            pkill -TERM apt 2>/dev/null || true
+            sleep 5
+            
+            # En dernier recours seulement, forcer l'arrêt
+            if pgrep -x dpkg >/dev/null || pgrep -x apt-get >/dev/null || pgrep -x apt >/dev/null; then
+                echo "[DPKG] ATTENTION: Forçage de l'arrêt des processus bloqués"
+                pkill -9 dpkg 2>/dev/null || true
+                pkill -9 apt-get 2>/dev/null || true
+                pkill -9 apt 2>/dev/null || true
+                sleep 2
+            fi
+        fi
     fi
     
     # Supprimer les verrous si aucun processus ne les utilise
@@ -181,7 +205,7 @@ safe_execute() {
     local cmd="$1"
     local max_retries="${2:-3}"
     local retry_delay="${3:-5}"
-    local timeout="${4:-300}"  # 5 minutes par défaut
+    local timeout="${4:-600}"  # 10 minutes par défaut (augmenté pour Raspberry Pi)
     
     local attempt=1
     local temp_output
@@ -218,7 +242,10 @@ safe_execute() {
                     ;;
                 124)
                     echo "[SAFE_EXEC] Timeout détecté, possible verrou dpkg..."
-                    repair_dpkg
+                    # Ne pas réparer immédiatement en cas de timeout
+                    # La commande pourrait encore être en cours
+                    echo "[SAFE_EXEC] Attente de 30s avant nouvelle tentative..."
+                    sleep 30
                     ;;
                 1)
                     # Vérifier si c'est vraiment une erreur dpkg
@@ -632,6 +659,86 @@ init_dpkg_cleanup() {
 }
 
 # =============================================================================
+# CONNECTIVITÉ RÉSEAU
+# =============================================================================
+
+# Vérifier la connectivité DNS
+check_dns() {
+    local dns_servers=("8.8.8.8" "1.1.1.1" "208.67.222.222")
+    local test_domains=("deb.debian.org" "archive.raspberrypi.com" "github.com")
+    
+    echo "[NET] Vérification de la connectivité réseau..."
+    
+    # Test de connectivité basique
+    for dns in "${dns_servers[@]}"; do
+        if ping -c 1 -W 2 "$dns" >/dev/null 2>&1; then
+            echo "[NET] ✓ Connectivité IP OK (DNS: $dns)"
+            break
+        fi
+    done
+    
+    # Test de résolution DNS
+    local dns_ok=false
+    for domain in "${test_domains[@]}"; do
+        if host "$domain" >/dev/null 2>&1 || nslookup "$domain" >/dev/null 2>&1; then
+            echo "[NET] ✓ Résolution DNS OK ($domain)"
+            dns_ok=true
+            break
+        fi
+    done
+    
+    if [[ "$dns_ok" != "true" ]]; then
+        echo "[NET] ⚠ Problème de résolution DNS détecté"
+        echo "[NET] Tentative de redémarrage du service réseau..."
+        
+        # Redémarrer le service réseau
+        if command -v systemctl >/dev/null; then
+            systemctl restart systemd-resolved 2>/dev/null || true
+            systemctl restart NetworkManager 2>/dev/null || true
+        fi
+        
+        # Attendre un peu
+        sleep 5
+        
+        # Réessayer
+        for domain in "${test_domains[@]}"; do
+            if host "$domain" >/dev/null 2>&1; then
+                echo "[NET] ✓ Résolution DNS OK après redémarrage"
+                return 0
+            fi
+        done
+        
+        echo "[NET] ✗ Échec de la résolution DNS"
+        return 1
+    fi
+    
+    return 0
+}
+
+# Wrapper pour apt-get avec vérification réseau
+safe_apt_install() {
+    local packages=("$@")
+    
+    # Vérifier la connectivité d'abord
+    if ! check_dns; then
+        echo "[APT] Connectivité réseau non disponible, attente..."
+        local retry=0
+        while [[ $retry -lt 5 ]] && ! check_dns; do
+            sleep 10
+            ((retry++))
+        done
+        
+        if ! check_dns; then
+            echo "[APT] Impossible d'établir la connectivité réseau"
+            return 1
+        fi
+    fi
+    
+    # Installer les paquets avec safe_execute
+    safe_execute "apt-get install -y ${packages[*]}" 3 10 600
+}
+
+# =============================================================================
 # EXPORT DES FONCTIONS
 # =============================================================================
 
@@ -666,3 +773,5 @@ export -f log_security_event
 export -f check_secure_environment
 export -f get_encryption_key
 export -f init_dpkg_cleanup
+export -f check_dns
+export -f safe_apt_install
