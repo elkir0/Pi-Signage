@@ -512,7 +512,6 @@ select_modules() {
             else
                 selected_modules=(
                     "01-system-config"
-                    "02-display-manager"
                     "03-vlc-setup"
                     "05-glances-setup"
                     "07-services-setup"
@@ -520,6 +519,10 @@ select_modules() {
                     "09-web-interface-v2"
                     "10-boot-manager"
                 )
+                # Ajouter display-manager seulement si pas d'interface graphique
+                if [[ $has_gui != true ]]; then
+                    selected_modules=("01-system-config" "02-display-manager" "${selected_modules[@]:1}")
+                fi
             fi
             log_info "Installation web sélectionnée (mode $DISPLAY_MODE)"
             ;;

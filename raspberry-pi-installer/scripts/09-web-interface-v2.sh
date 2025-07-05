@@ -85,13 +85,33 @@ install_web_server() {
     log_info "Installation de nginx et PHP-FPM..."
     
     # Détection automatique de la version PHP disponible
-    local php_version="8.2"
-    if apt-cache show php8.3-fpm >/dev/null 2>&1; then
-        php_version="8.3"
-    elif apt-cache show php8.1-fpm >/dev/null 2>&1; then
-        php_version="8.1"
-    elif apt-cache show php7.4-fpm >/dev/null 2>&1; then
-        php_version="7.4"
+    local php_version="8.2"  # Défaut Bookworm
+    
+    # Méthode plus robuste : vérifier ce qui est installé/installable
+    if command -v php >/dev/null 2>&1; then
+        # PHP déjà installé, détecter la version
+        local installed_version
+        installed_version=$(php -r "echo PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;" 2>/dev/null || echo "")
+        if [[ -n "$installed_version" ]]; then
+            php_version="$installed_version"
+            log_info "PHP $php_version déjà installé"
+        fi
+    else
+        # Essayer de détecter selon les paquets disponibles (si les repos sont accessibles)
+        if apt-cache show php8.3-fpm >/dev/null 2>&1; then
+            php_version="8.3"
+        elif apt-cache show php8.1-fpm >/dev/null 2>&1; then
+            php_version="8.1"
+        elif apt-cache show php7.4-fpm >/dev/null 2>&1; then
+            php_version="7.4"
+        else
+            # Fallback selon la distribution
+            if grep -q "bookworm" /etc/os-release 2>/dev/null; then
+                php_version="8.2"  # Bookworm
+            elif grep -q "bullseye" /etc/os-release 2>/dev/null; then
+                php_version="7.4"  # Bullseye
+            fi
+        fi
     fi
     
     log_info "Version PHP détectée : $php_version"
@@ -109,13 +129,33 @@ install_web_server() {
         # python3-pip, ffmpeg et git déjà installés dans 01-system-config.sh
     )
     
-    # Installation
-    if safe_execute "apt-get update && apt-get install -y ${packages[*]}" 3 10; then
-        log_info "Paquets web installés avec succès"
-    else
-        log_error "Échec de l'installation des paquets web"
-        return 1
+    # Installation avec gestion des échecs réseau
+    log_info "Tentative d'installation avec ${#packages[@]} paquets"
+    
+    # Essayer d'abord update (peut échouer à cause du réseau)
+    if ! apt-get update >/dev/null 2>&1; then
+        log_warn "Échec de la mise à jour des paquets, utilisation du cache local"
     fi
+    
+    # Installation avec plusieurs tentatives
+    local attempt=1
+    while [[ $attempt -le 3 ]]; do
+        log_info "Tentative d'installation $attempt/3..."
+        
+        if apt-get install -y "${packages[@]}" 2>/dev/null; then
+            log_info "Paquets web installés avec succès"
+            break
+        elif [[ $attempt -eq 3 ]]; then
+            log_error "Échec de l'installation des paquets web après 3 tentatives"
+            log_error "Vérifiez votre connexion internet et les dépôts"
+            return 1
+        else
+            log_warn "Tentative $attempt échouée, nouvelle tentative dans 5s..."
+            sleep 5
+        fi
+        
+        ((attempt++))
+    done
     
     # Vérification
     if command -v nginx >/dev/null 2>&1 && command -v php >/dev/null 2>&1; then

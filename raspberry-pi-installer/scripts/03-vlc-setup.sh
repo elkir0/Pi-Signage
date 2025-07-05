@@ -445,12 +445,30 @@ configure_signage_autologin() {
                     chown -R "$autologin_user:$autologin_user" "$user_home/.config/vlc"
                 fi
                 
-                # Mettre à jour le service VLC pour utiliser cet utilisateur
-                if [[ -f "$VLC_SERVICE" ]]; then
-                    sed -i "s/User=signage/User=$autologin_user/g" "$VLC_SERVICE"
-                    sed -i "s|Environment=HOME=/home/signage|Environment=HOME=$user_home|g" "$VLC_SERVICE"
+                # Créer une variable globale pour usage dans create_vlc_service
+                export DETECTED_USER="$autologin_user"
+                export DETECTED_USER_HOME="$user_home"
+                
+                # Ajouter l'utilisateur détecté aux groupes nécessaires
+                local groups=(video audio input render gpio dialout)
+                for group in "${groups[@]}"; do
+                    if getent group "$group" >/dev/null 2>&1; then
+                        if usermod -a -G "$group" "$autologin_user" 2>/dev/null; then
+                            log_info "Utilisateur $autologin_user ajouté au groupe $group"
+                        fi
+                    fi
+                done
+                
+                # Ajout du groupe seat pour Wayland
+                if getent group "seat" >/dev/null 2>&1; then
+                    if usermod -a -G "seat" "$autologin_user" 2>/dev/null; then
+                        log_info "Utilisateur $autologin_user ajouté au groupe seat (Wayland)"
+                    fi
                 fi
             fi
+        else
+            export DETECTED_USER="signage"
+            export DETECTED_USER_HOME="/home/signage"
         fi
     else
         # Seulement si AUCUN autologin n'existe
@@ -613,6 +631,14 @@ create_vlc_service() {
         exec_start_pre="ExecStartPre=/bin/bash -c 'until systemctl is-active lightdm.service >/dev/null 2>&1; do sleep 2; done; sleep 5'"
     fi
     
+    # Utiliser l'utilisateur détecté ou signage par défaut
+    local service_user="${DETECTED_USER:-signage}"
+    local service_home="${DETECTED_USER_HOME:-/home/signage}"
+    local service_uid
+    service_uid=$(id -u "$service_user" 2>/dev/null || echo "1001")
+    
+    log_info "Configuration du service pour l'utilisateur: $service_user"
+    
     cat > "$VLC_SERVICE" << EOF
 [Unit]
 Description=VLC Digital Signage
@@ -621,11 +647,11 @@ Wants=network.target sound.target
 
 [Service]
 Type=simple
-User=signage
-Group=signage
+User=$service_user
+Group=$service_user
 Environment=$display_env
-Environment=HOME=/home/signage
-Environment=XDG_RUNTIME_DIR=/run/user/1001
+Environment=HOME=$service_home
+Environment=XDG_RUNTIME_DIR=/run/user/$service_uid
 $exec_start_pre
 ExecStart=/opt/scripts/vlc-signage.sh
 Restart=always
