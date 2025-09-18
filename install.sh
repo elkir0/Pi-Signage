@@ -1,14 +1,16 @@
 #!/bin/bash
 # =============================================================================
-# install.sh - Installation complète PiSignage Desktop v3.0
+# PiSignage Desktop v3.0 - Script d'installation principal
+# Pour Raspberry Pi OS Desktop (Bookworm/Bullseye)
 # =============================================================================
 
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MODULES_DIR="$SCRIPT_DIR/modules"
-LOG_FILE="/var/log/pisignage-setup.log"
-VERBOSE=${VERBOSE:-false}
+# Configuration
+VERSION="3.0.1"
+INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MODULES_DIR="$INSTALL_DIR/modules"
+LOG_FILE="/tmp/pisignage-install.log"
 
 # Couleurs
 RED='\033[0;31m'
@@ -17,127 +19,187 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
+# Fonctions utilitaires
 log() {
-    local level="$1"
-    shift
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$level] $*" | tee -a "$LOG_FILE"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
 }
 
-print_header() {
+info() {
+    echo -e "${GREEN}[INFO]${NC} $1"
+    log "[INFO] $1"
+}
+
+error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+    log "[ERROR] $1"
+    exit 1
+}
+
+warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+    log "[WARNING] $1"
+}
+
+print_banner() {
     echo -e "${BLUE}"
-    echo "==================================================================="
-    echo "             PiSignage Desktop v3.0 - Installation"
-    echo "==================================================================="
+    cat << "EOF"
+╔════════════════════════════════════════════════════╗
+║     PiSignage Desktop v3.0.1                       ║
+║     Installation Simplifiée                        ║
+╚════════════════════════════════════════════════════╝
+EOF
     echo -e "${NC}"
-    echo "Installation modulaire pour Raspberry Pi OS Desktop"
-    echo ""
 }
 
+# Vérifications préliminaires
 check_requirements() {
-    log "INFO" "Vérification des prérequis"
+    info "Vérification des prérequis..."
     
-    if [[ $EUID -eq 0 ]]; then
-        echo -e "${RED}ERREUR: N'exécutez pas ce script en tant que root${NC}"
-        exit 1
+    # Vérifier Raspberry Pi OS Desktop
+    if ! command -v startx &>/dev/null && ! command -v wayfire &>/dev/null; then
+        error "Raspberry Pi OS Desktop est requis. Version Lite détectée."
     fi
     
-    if ! sudo -v; then
-        echo -e "${RED}ERREUR: Privilèges sudo requis${NC}"
-        exit 1
+    # Vérifier l'espace disque (minimum 1GB)
+    available_space=$(df / | awk 'NR==2 {print $4}')
+    if [[ $available_space -lt 1048576 ]]; then
+        error "Espace disque insuffisant. Minimum 1GB requis."
     fi
     
-    log "INFO" "Prérequis validés"
+    # Vérifier les privilèges sudo
+    if ! sudo -v &>/dev/null; then
+        error "Privilèges sudo requis. Exécutez avec un utilisateur ayant les droits sudo."
+    fi
+    
+    info "Prérequis validés ✓"
 }
 
-execute_module() {
-    local num="$1"
-    local file="$2"
-    local name="$3"
+# Installation des modules
+install_modules() {
+    info "Installation des modules..."
     
-    echo ""
-    echo -e "${GREEN}[$num/5] $name${NC}"
-    echo "-------------------------------------------------------------------"
-    
-    if [[ ! -f "$MODULES_DIR/$file" ]]; then
-        echo -e "${RED}ERREUR: Module $file non trouvé${NC}"
-        return 1
+    # Module 1: Configuration de base
+    if [[ -f "$MODULES_DIR/01-base-config.sh" ]]; then
+        info "Module 1/5: Configuration de base"
+        sudo bash "$MODULES_DIR/01-base-config.sh"
     fi
     
-    log "INFO" "Exécution du module: $file"
+    # Module 2: Interface web
+    if [[ -f "$MODULES_DIR/02-web-interface.sh" ]]; then
+        info "Module 2/5: Interface web"
+        sudo bash "$MODULES_DIR/02-web-interface.sh"
+    fi
     
-    if VERBOSE="$VERBOSE" bash "$MODULES_DIR/$file"; then
-        echo -e "${GREEN}✓ Module $name terminé${NC}"
-        return 0
+    # Module 3: Media player
+    if [[ -f "$MODULES_DIR/03-media-player.sh" ]]; then
+        info "Module 3/5: Media player"
+        sudo bash "$MODULES_DIR/03-media-player.sh"
+    fi
+    
+    # Module 5: Services
+    if [[ -f "$MODULES_DIR/05-services.sh" ]]; then
+        info "Module 5/5: Services système"
+        sudo bash "$MODULES_DIR/05-services.sh"
+    fi
+}
+
+# Tests post-installation
+post_install_tests() {
+    info "Vérification de l'installation..."
+    
+    # Test Nginx
+    if systemctl is-active --quiet nginx; then
+        info "✓ Nginx actif"
     else
-        echo -e "${RED}✗ Échec du module $name${NC}"
-        return 1
+        warning "Nginx non actif"
+    fi
+    
+    # Test PHP
+    if systemctl is-active --quiet php*-fpm; then
+        info "✓ PHP-FPM actif"
+    else
+        warning "PHP-FPM non actif"
+    fi
+    
+    # Test interface web
+    if curl -s -o /dev/null -w "%{http_code}" http://localhost/ | grep -q "200\|403"; then
+        info "✓ Interface web accessible"
+    else
+        warning "Interface web non accessible"
+    fi
+    
+    # Test Chromium
+    if command -v chromium-browser &>/dev/null || command -v chromium &>/dev/null; then
+        info "✓ Chromium détecté"
+    else
+        warning "Chromium non détecté"
     fi
 }
 
+# Affichage des informations finales
 show_summary() {
-    echo ""
-    echo -e "${GREEN}"
-    echo "==================================================================="
-    echo "             Installation PiSignage Desktop v3.0 Terminée!"
-    echo "==================================================================="
-    echo -e "${NC}"
+    local ip=$(hostname -I | awk '{print $1}')
     
-    local ip_address=$(hostname -I | cut -d' ' -f1)
-    
-    echo "🎯 Accès au système:"
-    echo "   Player:  http://$ip_address/"
-    echo "   Admin:   http://$ip_address/admin.html"
     echo ""
-    echo "📂 Dossiers:"
-    echo "   Vidéos:  /opt/pisignage/videos/"
-    echo "   Config:  /opt/pisignage/config/"
+    echo -e "${GREEN}════════════════════════════════════════════════════${NC}"
+    echo -e "${GREEN}   Installation terminée avec succès! 🎉${NC}"
+    echo -e "${GREEN}════════════════════════════════════════════════════${NC}"
     echo ""
-    echo "🛠 Commandes:"
-    echo "   pisignage {play|pause|stop|restart|status}"
-    echo "   pisignage-admin {start|stop|restart|status}"
+    echo "📍 Interface web : http://${ip}/"
     echo ""
-    echo "🔄 Redémarrez maintenant: sudo reboot"
+    echo "📋 Commandes disponibles :"
+    echo "   pisignage-player start    # Démarrer le lecteur"
+    echo "   pisignage-player stop     # Arrêter le lecteur"
+    echo "   pisignage-player status   # Voir le status"
+    echo ""
+    echo "📁 Dossiers importants :"
+    echo "   /opt/pisignage/videos/    # Vidéos"
+    echo "   /var/www/pisignage/       # Interface web"
+    echo ""
+    echo "📝 Logs : $LOG_FILE"
     echo ""
 }
 
+# Programme principal
 main() {
-    print_header
+    # Initialisation
+    print_banner
+    
+    # Créer le fichier de log
+    touch "$LOG_FILE"
+    chmod 666 "$LOG_FILE"
+    
+    log "Début installation PiSignage Desktop v${VERSION}"
+    
+    # Vérifications
     check_requirements
     
-    # Créer le log
-    sudo mkdir -p "$(dirname "$LOG_FILE")"
-    sudo touch "$LOG_FILE"
-    sudo chown "$(whoami):$(whoami)" "$LOG_FILE"
+    # Installation
+    install_modules
     
-    log "INFO" "Début installation PiSignage Desktop v3.0"
+    # Tests
+    post_install_tests
     
-    # Modules
-    local modules=(
-        "1:01-base-config.sh:Configuration de base"
-        "2:02-web-interface.sh:Interface web"
-        "3:03-media-player.sh:Media Player"
-        "4:04-sync-optional.sh:Synchronisation cloud"
-        "5:05-services.sh:Services systemd"
-    )
-    
-    for module_def in "${modules[@]}"; do
-        IFS=':' read -r num file name <<< "$module_def"
-        
-        if ! execute_module "$num" "$file" "$name"; then
-            echo ""
-            echo -e "${RED}Échec du module $num. Continuer ? (y/N)${NC}"
-            read -r continue_install
-            
-            if [[ ! "$continue_install" =~ ^[yY] ]]; then
-                echo "Installation interrompue"
-                exit 1
-            fi
-        fi
-    done
-    
+    # Résumé
     show_summary
+    
+    log "Installation terminée"
 }
 
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    main "$@"
-fi
+# Options de ligne de commande
+case "${1:-}" in
+    --help|-h)
+        echo "Usage: $0 [OPTIONS]"
+        echo "Options:"
+        echo "  --help, -h     Afficher cette aide"
+        echo "  --version, -v  Afficher la version"
+        exit 0
+        ;;
+    --version|-v)
+        echo "PiSignage Desktop v${VERSION}"
+        exit 0
+        ;;
+esac
+
+# Lancement
+main "$@"

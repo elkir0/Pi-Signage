@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# Module 01: Configuration de base - PiSignage Desktop v3.0
+# Module 01: Configuration de base - PiSignage Desktop v3.0.1
 # =============================================================================
 
 set -e
@@ -29,26 +29,15 @@ create_user() {
     
     if ! id -u "$USER" &>/dev/null; then
         log "Création utilisateur $USER"
-        sudo useradd -m -s /bin/bash -G video,audio,gpio "$USER"
-        echo "$USER:pisignage" | sudo chpasswd
+        useradd -m -s /bin/bash -G video,audio,gpio "$USER" || true
+        echo "$USER:pisignage" | chpasswd
         echo -e "${GREEN}✓ Utilisateur $USER créé${NC}"
     else
         log "Utilisateur $USER existe déjà"
         # Ajouter aux groupes nécessaires
-        sudo usermod -a -G video,audio,gpio "$USER" 2>/dev/null || true
+        usermod -a -G video,audio,gpio "$USER" 2>/dev/null || true
     fi
-}
-
-# Configuration hostname (optionnel)
-configure_hostname() {
-    if [[ -n "${1:-}" ]]; then
-        local new_hostname="$1"
-        log "Configuration hostname: $new_hostname"
-        
-        echo "$new_hostname" | sudo tee /etc/hostname > /dev/null
-        sudo sed -i "s/127.0.1.1.*/127.0.1.1\t$new_hostname/" /etc/hosts
-        echo -e "${GREEN}✓ Hostname configuré: $new_hostname${NC}"
-    fi
+    echo -e "${GREEN}✓ Utilisateur configuré${NC}"
 }
 
 # Installation paquets essentiels
@@ -72,13 +61,13 @@ install_packages() {
     )
     
     # Mise à jour des sources
-    sudo apt-get update -qq
+    apt-get update -qq
     
     # Installation
     for pkg in "${packages[@]}"; do
         if ! dpkg -l | grep -q "^ii  $pkg"; then
             log "Installation de $pkg..."
-            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$pkg"
+            DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$pkg"
         fi
     done
     
@@ -96,18 +85,18 @@ configure_gpu() {
     
     if [[ -f "$config_file" ]]; then
         # Sauvegarder la config
-        sudo cp "$config_file" "${config_file}.backup.$(date +%Y%m%d)"
+        cp "$config_file" "${config_file}.backup.$(date +%Y%m%d)" 2>/dev/null || true
         
         # GPU memory
         if ! grep -q "^gpu_mem=" "$config_file"; then
-            echo "gpu_mem=128" | sudo tee -a "$config_file" > /dev/null
+            echo "gpu_mem=128" >> "$config_file"
         else
-            sudo sed -i 's/^gpu_mem=.*/gpu_mem=128/' "$config_file"
+            sed -i 's/^gpu_mem=.*/gpu_mem=128/' "$config_file"
         fi
         
         # HDMI settings
         if ! grep -q "^hdmi_force_hotplug=" "$config_file"; then
-            echo "hdmi_force_hotplug=1" | sudo tee -a "$config_file" > /dev/null
+            echo "hdmi_force_hotplug=1" >> "$config_file"
         fi
         
         echo -e "${GREEN}✓ Configuration GPU optimisée${NC}"
@@ -130,14 +119,15 @@ create_directories() {
     )
     
     for dir in "${dirs[@]}"; do
-        sudo mkdir -p "$dir"
-        sudo chown -R "$USER:$USER" "$dir"
+        mkdir -p "$dir"
+        if [[ "$dir" == "/var/www/pisignage" ]]; then
+            chown -R www-data:www-data "$dir"
+            chmod -R 755 "$dir"
+        else
+            chown -R "$USER:$USER" "$dir" 2>/dev/null || true
+        fi
         log "Créé: $dir"
     done
-    
-    # Permissions spéciales pour www
-    sudo chown -R www-data:www-data /var/www/pisignage
-    sudo chmod -R 755 /var/www/pisignage
     
     echo -e "${GREEN}✓ Structure de dossiers créée${NC}"
 }
@@ -150,10 +140,10 @@ set_permissions() {
     find "$SCRIPT_DIR/.." -name "*.sh" -type f -exec chmod +x {} \;
     
     # Permissions pisignage
-    sudo chown -R "$USER:$USER" "$BASE_DIR"
+    chown -R "$USER:$USER" "$BASE_DIR" 2>/dev/null || true
     
     # Sudo pour contrôle services
-    echo "$USER ALL=(ALL) NOPASSWD: /usr/bin/systemctl" | sudo tee /etc/sudoers.d/pisignage > /dev/null
+    echo "$USER ALL=(ALL) NOPASSWD: /usr/bin/systemctl" > /etc/sudoers.d/pisignage
     
     echo -e "${GREEN}✓ Permissions configurées${NC}"
 }
@@ -164,7 +154,6 @@ main() {
     echo "================================"
     
     create_user
-    configure_hostname "${1:-}"
     install_packages
     configure_gpu
     create_directories

@@ -7,7 +7,7 @@
 set -e
 
 # Configuration
-REPO_URL="https://github.com/elkir0/pisignage-desktop.git"
+REPO_URL="https://github.com/elkir0/Pi-Signage.git"
 INSTALL_DIR="/opt/pisignage/pisignage-desktop"
 
 # Couleurs
@@ -20,10 +20,10 @@ NC='\033[0m'
 # Banner
 echo -e "${BLUE}"
 cat << "BANNER"
-╔═══════════════════════════════════════════╗
-║     PiSignage Desktop v3.0                ║
-║     Installation Rapide                    ║
-╚═══════════════════════════════════════════╝
+╔═══════════════════════════════════════════════════╗
+║     PiSignage Desktop v3.0.1                      ║
+║     Installation Rapide Automatique               ║
+╚═══════════════════════════════════════════════════╝
 BANNER
 echo -e "${NC}"
 
@@ -52,10 +52,18 @@ echo "Téléchargement de PiSignage Desktop..."
 if [[ -d "$INSTALL_DIR" ]]; then
     echo "Mise à jour de l'installation existante..."
     cd "$INSTALL_DIR"
-    git pull
+    git pull || true
 else
     echo "Clonage du repository..."
-    git clone "$REPO_URL" "$INSTALL_DIR"
+    # Utiliser --depth 1 pour un clone plus rapide et éviter les problèmes
+    git clone --depth 1 "$REPO_URL" "$INSTALL_DIR" 2>/dev/null || {
+        # Si git échoue, essayer avec wget
+        echo "Téléchargement alternatif..."
+        wget -q -O /tmp/pisignage.tar.gz https://github.com/elkir0/Pi-Signage/archive/main.tar.gz
+        mkdir -p "$INSTALL_DIR"
+        tar -xzf /tmp/pisignage.tar.gz -C "$INSTALL_DIR" --strip-components=1
+        rm /tmp/pisignage.tar.gz
+    }
     cd "$INSTALL_DIR"
 fi
 
@@ -68,7 +76,8 @@ echo ""
 echo -e "${GREEN}Lancement de l'installation...${NC}"
 echo ""
 
-./install.sh --quiet
+# Lancer l'installation directe (sans interactivité)
+./install.sh
 
 # Finalisation
 IP=$(hostname -I | cut -d' ' -f1)
