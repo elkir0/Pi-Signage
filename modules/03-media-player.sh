@@ -1,6 +1,7 @@
 #!/bin/bash
 # =============================================================================
-# Module 03: Media Player - PiSignage Desktop v3.0
+# Module 03: Media Player - PiSignage Desktop v3.0.2
+# Fixed for X11 display with software rendering
 # =============================================================================
 
 set -e
@@ -102,7 +103,9 @@ start_player() {
         TARGET="http://localhost/"
     fi
     
-    # Lancer Chromium en mode kiosk
+    # Lancer Chromium en mode kiosk avec software rendering
+    # Software rendering évite les problèmes GPU/DMA buffer sur certains Pi
+    export LIBGL_ALWAYS_SOFTWARE=1
     $CHROMIUM_BIN \
         --kiosk \
         --noerrdialogs \
@@ -111,10 +114,9 @@ start_player() {
         --disable-features=TranslateUI \
         --disable-component-update \
         --autoplay-policy=no-user-gesture-required \
-        --enable-features=OverlayScrollbar \
-        --enable-gpu-rasterization \
-        --enable-accelerated-video-decode \
-        --ignore-gpu-blocklist \
+        --disable-gpu \
+        --disable-software-rasterizer \
+        --disable-gpu-compositing \
         "$TARGET" &
     
     echo $! > "$PID_FILE"
@@ -189,8 +191,11 @@ EOF
 configure_autostart() {
     log "Configuration de l'autostart..."
     
+    # Configurer X11 au lieu de Wayland
+    sudo raspi-config nonint do_wayland W1 2>/dev/null || true
+    
     # Déterminer l'utilisateur avec session graphique
-    DESKTOP_USER="${SUDO_USER:-$USER}"
+    DESKTOP_USER="${SUDO_USER:-pi}"
     AUTOSTART_DIR="/home/$DESKTOP_USER/.config/autostart"
     
     # Créer le répertoire autostart
@@ -202,7 +207,7 @@ configure_autostart() {
 Type=Application
 Name=PiSignage Player
 Comment=Démarre le lecteur PiSignage au démarrage
-Exec=$BASE_DIR/scripts/player-control.sh start
+Exec=$BASE_DIR/scripts/start-display.sh
 Hidden=false
 NoDisplay=false
 X-GNOME-Autostart-enabled=true
