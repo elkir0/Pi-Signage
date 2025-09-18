@@ -1,0 +1,19 @@
+[Unit]
+Description=PiSignage Desktop Player Service
+After=graphical-session.target
+Wants=graphical-session.target
+
+[Service]
+Type=simple
+User=pisignage
+Group=pisignage
+Environment=DISPLAY=:0
+Environment=HOME=/home/pisignage
+ExecStart=/opt/pisignage/pisignage-desktop/scripts/control/player.sh
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=graphical-session.target
