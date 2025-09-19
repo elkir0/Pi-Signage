@@ -1,0 +1,159 @@
+#!/usr/bin/expect -f
+
+# Emergency deployment script for PiSignage
+set timeout 300
+set host "192.168.1.103"
+set user "pi"
+set password "palmer00"
+
+puts "========================================="
+puts "PiSignage Emergency Deployment"
+puts "Target: $user@$host"
+puts "========================================="
+
+# Connect to Pi
+spawn ssh $user@$host
+
+expect {
+    "password:" {
+        send "$password\r"
+    }
+    "yes/no" {
+        send "yes\r"
+        expect "password:"
+        send "$password\r"
+    }
+}
+
+expect "$ "
+
+# Step 1: Install required packages
+puts "\n==> Installing web server packages..."
+send "sudo apt-get update\r"
+expect "$ "
+send "sudo apt-get install -y nginx php-fpm php-json php-curl php-mbstring php-cli\r"
+expect "$ "
+
+# Step 2: Create directory structure
+puts "\n==> Creating directory structure..."
+send "sudo mkdir -p /var/www/pisignage\r"
+expect "$ "
+send "sudo mkdir -p /opt/pisignage/{media,logs,scripts,config}\r"
+expect "$ "
+send "sudo chown -R www-data:www-data /var/www/pisignage\r"
+expect "$ "
+send "sudo chown -R pi:pi /opt/pisignage\r"
+expect "$ "
+
+# Step 3: Create VLC control script
+puts "\n==> Creating VLC control script..."
+send "cat > /tmp/vlc-control.sh << 'SCRIPT_END'\r"
+send "#!/bin/bash\n\r"
+send "ACTION=\$1\n\r"
+send "VIDEO_PATH=\$2\n\r"
+send "\n\r"
+send "case \$ACTION in\n\r"
+send "    play)\n\r"
+send "        pkill vlc 2>/dev/null\n\r"
+send "        sleep 1\n\r"
+send "        VIDEO=\${VIDEO_PATH:-/home/pi/Big_Buck_Bunny_720_10s_30MB.mp4}\n\r"
+send "        DISPLAY=:0 cvlc --fullscreen --loop --no-video-title-show \"\$VIDEO\" &\n\r"
+send "        echo \"Playing: \$VIDEO\"\n\r"
+send "        ;;\n\r"
+send "    stop)\n\r"
+send "        pkill vlc\n\r"
+send "        echo \"Playback stopped\"\n\r"
+send "        ;;\n\r"
+send "    status)\n\r"
+send "        if pgrep vlc > /dev/null; then\n\r"
+send "            echo \"VLC is running\"\n\r"
+send "        else\n\r"
+send "            echo \"VLC is not running\"\n\r"
+send "        fi\n\r"
+send "        ;;\n\r"
+send "    *)\n\r"
+send "        echo \"Usage: \$0 {play|stop|status}\"\n\r"
+send "        ;;\n\r"
+send "esac\n\r"
+send "SCRIPT_END\r"
+expect "$ "
+send "sudo mv /tmp/vlc-control.sh /opt/pisignage/scripts/vlc-control.sh\r"
+expect "$ "
+send "sudo chmod +x /opt/pisignage/scripts/vlc-control.sh\r"
+expect "$ "
+
+# Step 4: Configure nginx
+puts "\n==> Configuring nginx..."
+send "sudo tee /etc/nginx/sites-available/pisignage > /dev/null << 'NGINX_END'\r"
+send "server {\n\r"
+send "    listen 80;\n\r"
+send "    server_name _;\n\r"
+send "    root /var/www/pisignage;\n\r"
+send "    index index.php index.html;\n\r"
+send "\n\r"
+send "    client_max_body_size 500M;\n\r"
+send "\n\r"
+send "    location / {\n\r"
+send "        try_files \\\$uri \\\$uri/ /index.php?\\\$query_string;\n\r"
+send "    }\n\r"
+send "\n\r"
+send "    location ~ \\.php\\\$ {\n\r"
+send "        include snippets/fastcgi-php.conf;\n\r"
+send "        fastcgi_pass unix:/var/run/php/php-fpm.sock;\n\r"
+send "    }\n\r"
+send "\n\r"
+send "    location /media {\n\r"
+send "        alias /opt/pisignage/media;\n\r"
+send "        autoindex on;\n\r"
+send "    }\n\r"
+send "}\n\r"
+send "NGINX_END\r"
+expect "$ "
+
+# Step 5: Enable nginx site
+puts "\n==> Enabling site..."
+send "sudo ln -sf /etc/nginx/sites-available/pisignage /etc/nginx/sites-enabled/\r"
+expect "$ "
+send "sudo rm -f /etc/nginx/sites-enabled/default\r"
+expect "$ "
+
+# Step 6: Setup permissions
+puts "\n==> Setting up permissions..."
+send "echo 'www-data ALL=(pi) NOPASSWD: /opt/pisignage/scripts/vlc-control.sh' | sudo tee /etc/sudoers.d/pisignage\r"
+expect "$ "
+send "sudo chmod 440 /etc/sudoers.d/pisignage\r"
+expect "$ "
+
+# Step 7: Copy sample video to media
+puts "\n==> Setting up media..."
+send "if \[ -f /home/pi/Big_Buck_Bunny_720_10s_30MB.mp4 \]; then cp /home/pi/Big_Buck_Bunny_720_10s_30MB.mp4 /opt/pisignage/media/; fi\r"
+expect "$ "
+
+# Step 8: Restart services
+puts "\n==> Restarting services..."
+send "sudo systemctl restart nginx\r"
+expect "$ "
+send "sudo systemctl restart php*-fpm\r"
+expect "$ "
+send "sudo systemctl enable nginx\r"
+expect "$ "
+send "sudo systemctl enable php*-fpm\r"
+expect "$ "
+
+# Step 9: Test services
+puts "\n==> Testing services..."
+send "sudo systemctl status nginx --no-pager\r"
+expect "$ "
+send "sudo systemctl status php*-fpm --no-pager\r"
+expect "$ "
+
+# Step 10: Check web root
+send "ls -la /var/www/pisignage/\r"
+expect "$ "
+
+puts "\n========================================="
+puts "Deployment script completed!"
+puts "========================================="
+
+send "exit\r"
+expect eof
