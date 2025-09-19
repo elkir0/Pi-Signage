@@ -1,0 +1,14 @@
+#!/usr/bin/expect -f
+set timeout 30
+spawn ssh -o StrictHostKeyChecking=no pi@192.168.1.106
+expect "password:"
+send "palmer00\r"
+expect "$ "
+send "ps aux | grep -E '(vlc|chromium|install)' | grep -v grep\r"
+expect "$ "
+send "ls -la /opt/videos/ 2>/dev/null || echo 'Videos dir not created yet'\r"
+expect "$ "
+send "systemctl status chromium-kiosk --no-pager 2>/dev/null || systemctl status vlc-signage --no-pager 2>/dev/null || echo 'Services not installed yet'\r"
+expect "$ "
+send "exit\r"
+expect eof

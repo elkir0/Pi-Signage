@@ -1,0 +1,17 @@
+#!/usr/bin/expect -f
+
+set timeout 10
+spawn ssh -o StrictHostKeyChecking=no pi@192.168.1.103 "cat > /home/pi/start_video_loop.sh << 'EOF'
+#!/bin/bash
+sleep 10
+DISPLAY=:0 cvlc --fullscreen --loop --no-video-title-show /home/pi/Big_Buck_Bunny_720_10s_30MB.mp4
+EOF
+"
+
+expect {
+    "password:" {
+        send "raspberry\r"
+        exp_continue
+    }
+    eof
+}

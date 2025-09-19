@@ -1,0 +1,67 @@
+#!/usr/bin/expect -f
+set timeout 60
+spawn ssh -o StrictHostKeyChecking=no pi@192.168.1.106
+expect "password:"
+send "palmer00\r"
+expect "$ "
+
+# Login to the graphical session locally
+send "echo '=== FORCING VIDEO DISPLAY ==='\r"
+expect "$ "
+
+# Create a simple script to run locally on the Pi
+send "cat > /tmp/start-video-now.sh << 'EOF'\n"
+send "#!/bin/bash\n"
+send "# Kill any existing chromium\n"
+send "pkill -f chromium\n"
+send "sleep 2\n"
+send "# Set display\n"
+send "export DISPLAY=:0\n"
+send "export XAUTHORITY=/home/pi/.Xauthority\n"
+send "# Disable screensaver\n"
+send "xset s off 2>/dev/null\n"
+send "xset -dpms 2>/dev/null\n"
+send "xset s noblank 2>/dev/null\n"
+send "# Launch in kiosk mode\n"
+send "chromium-browser --kiosk --start-fullscreen --window-position=0,0 --display=:0 --no-sandbox --disable-dev-shm-usage --disable-infobars --noerrdialogs --disable-translate --autoplay-policy=no-user-gesture-required file:///opt/videos/player.html &\n"
+send "EOF\n"
+expect "$ "
+
+send "chmod +x /tmp/start-video-now.sh\r"
+expect "$ "
+
+# Execute on the local display (tty1)
+send "sudo chvt 7\r"
+expect "$ "
+send "sudo -u pi DISPLAY=:0 /tmp/start-video-now.sh\r"
+expect "$ "
+
+# Alternative: Use loginctl to switch to graphical session
+send "echo '\nSwitching to graphical session...'\r"
+expect "$ "
+send "loginctl list-sessions\r"
+expect "$ "
+
+# Check status
+send "sleep 5\r"
+expect "$ "
+send "ps aux | grep chromium | grep -v grep | head -1\r"
+expect "$ "
+
+send "echo '\n=== INSTRUCTIONS ==='\r"
+expect "$ "
+send "echo 'Si vous voyez encore l écran de login sur la TV:'\r"
+expect "$ "
+send "echo '1. Tapez: pi'\r"
+expect "$ "
+send "echo '2. Mot de passe: palmer00'\r"
+expect "$ "
+send "echo '3. La vidéo devrait se lancer automatiquement'\r"
+expect "$ "
+send "echo ''\r"
+expect "$ "
+send "echo 'Au prochain redémarrage, plus besoin de se connecter!'\r"
+expect "$ "
+
+send "exit\r"
+expect eof

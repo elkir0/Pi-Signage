@@ -1,0 +1,87 @@
+#!/usr/bin/expect -f
+set timeout 120
+spawn ssh -o StrictHostKeyChecking=no pi@192.168.1.106
+expect "password:"
+send "palmer00\r"
+expect "$ "
+
+# Enable GPU memory split for video performance
+send "sudo bash -c 'grep -q gpu_mem /boot/config.txt || echo gpu_mem=128 >> /boot/config.txt'\r"
+expect "$ "
+
+# Create optimized VLC service
+send "sudo tee /etc/systemd/system/pi-signage.service << 'EOF'\n"
+send "\[Unit\]\n"
+send "Description=Pi Signage Video Player\n"
+send "After=multi-user.target graphical.target\n"
+send "\n"
+send "\[Service\]\n"
+send "Type=simple\n"
+send "User=pi\n"
+send "Environment=\"DISPLAY=:0\"\n"
+send "Environment=\"XAUTHORITY=/home/pi/.Xauthority\"\n"
+send "ExecStartPre=/bin/sleep 10\n"
+send "ExecStart=/usr/bin/cvlc --fullscreen --loop --no-video-title --intf dummy --vout=gles2 --avcodec-hw=any /opt/videos/test.mp4\n"
+send "Restart=always\n"
+send "RestartSec=5\n"
+send "\n"
+send "\[Install\]\n"
+send "WantedBy=graphical.target\n"
+send "EOF\n"
+expect "$ "
+
+# Create chromium kiosk alternative
+send "sudo tee /usr/local/bin/chromium-kiosk.sh << 'EOF'\n"
+send "#!/bin/bash\n"
+send "unclutter -idle 0.5 -root &\n"
+send "sed -i 's/\"exited_cleanly\":false/\"exited_cleanly\":true/' /home/pi/.config/chromium/Default/Preferences\n"
+send "sed -i 's/\"exit_type\":\"Crashed\"/\"exit_type\":\"Normal\"/' /home/pi/.config/chromium/Default/Preferences\n"
+send "chromium-browser --kiosk --noerrdialogs --disable-infobars --enable-features=VaapiVideoDecoder --use-gl=egl --enable-gpu-rasterization --disable-gpu-sandbox --autoplay-policy=no-user-gesture-required file:///opt/videos/player.html &\n"
+send "EOF\n"
+expect "$ "
+
+# Create HTML5 video player
+send "sudo tee /opt/videos/player.html << 'EOF'\n"
+send "<!DOCTYPE html>\n"
+send "<html>\n"
+send "<head>\n"
+send "    <style>\n"
+send "        body { margin: 0; background: black; overflow: hidden; }\n"
+send "        video { width: 100%; height: 100vh; object-fit: cover; }\n"
+send "    </style>\n"
+send "</head>\n"
+send "<body>\n"
+send "    <video id=\"player\" autoplay loop muted>\n"
+send "        <source src=\"test.mp4\" type=\"video/mp4\">\n"
+send "    </video>\n"
+send "    <script>\n"
+send "        document.getElementById('player').play();\n"
+send "    </script>\n"
+send "</body>\n"
+send "</html>\n"
+send "EOF\n"
+expect "$ "
+
+send "sudo chmod +x /usr/local/bin/chromium-kiosk.sh\r"
+expect "$ "
+
+# Enable autologin for pi user
+send "sudo raspi-config nonint do_boot_behaviour B2\r"
+expect "$ "
+
+# Enable and start service
+send "sudo systemctl daemon-reload\r"
+expect "$ "
+send "sudo systemctl enable pi-signage.service\r"
+expect "$ "
+send "sudo systemctl start pi-signage.service\r"
+expect "$ "
+send "sleep 3\r"
+expect "$ "
+send "sudo systemctl status pi-signage.service --no-pager\r"
+expect "$ "
+
+send "echo 'System configured and service started'\r"
+expect "$ "
+send "exit\r"
+expect eof

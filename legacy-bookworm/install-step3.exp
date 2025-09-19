@@ -1,0 +1,60 @@
+#!/usr/bin/expect -f
+set timeout 600
+spawn ssh -o StrictHostKeyChecking=no pi@192.168.1.106
+expect "password:"
+send "palmer00\r"
+expect "$ "
+
+# Create installation script on Pi
+send "cat > /tmp/pi-install.sh << 'EOF'\n"
+send "#!/bin/bash\n"
+send "cd /home/pi/Pi-Signage/raspberry-pi-installer/scripts\n"
+send "export DEBIAN_FRONTEND=noninteractive\n"
+send "# Choose Chromium mode\n"
+send "echo '2' | sudo ./main_orchestrator.sh\n"
+send "EOF\n"
+expect "$ "
+
+send "chmod +x /tmp/pi-install.sh\n"
+expect "$ "
+
+send "sudo /tmp/pi-install.sh\n"
+expect {
+    "Select display mode" {
+        send "2\r"
+        exp_continue
+    }
+    "Select installation type" {
+        send "1\r"
+        exp_continue  
+    }
+    "Enter web interface password" {
+        send "admin123\r"
+        exp_continue
+    }
+    "Enter Glances password" {
+        send "admin123\r"
+        exp_continue
+    }
+    "Google Drive folder name" {
+        send "Signage\r"
+        exp_continue
+    }
+    "Enter hostname" {
+        send "pi-display\r"
+        exp_continue
+    }
+    "Installation complete" {
+        send "\r"
+    }
+    timeout {
+        send "\r"
+    }
+    "$ " {
+        send "echo 'Installation finished'\r"
+    }
+}
+
+expect "$ "
+send "exit\r"
+expect eof

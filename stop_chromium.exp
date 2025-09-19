@@ -1,0 +1,12 @@
+#!/usr/bin/expect -f
+
+set timeout 10
+spawn ssh -o StrictHostKeyChecking=no pi@192.168.1.103 "pkill chromium; pkill chrome"
+
+expect {
+    "password:" {
+        send "raspberry\r"
+        exp_continue
+    }
+    eof
+}

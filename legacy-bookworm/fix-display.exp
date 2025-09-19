@@ -1,0 +1,97 @@
+#!/usr/bin/expect -f
+set timeout 60
+spawn ssh -o StrictHostKeyChecking=no pi@192.168.1.106
+expect "password:"
+send "palmer00\r"
+expect "$ "
+
+# Stop current service
+send "sudo systemctl stop pi-signage.service\r"
+expect "$ "
+
+# Install X server and display manager if not present
+send "sudo apt install -y xserver-xorg xinit lightdm unclutter\r"
+expect "$ "
+
+# Create proper VLC launcher script
+send "sudo tee /usr/local/bin/pi-signage-launcher.sh << 'EOF'\n"
+send "#!/bin/bash\n"
+send "export DISPLAY=:0\n"
+send "export XDG_RUNTIME_DIR=/run/user/1000\n"
+send "xset -dpms\n"
+send "xset s off\n"
+send "xset s noblank\n"
+send "unclutter -idle 0.5 &\n"
+send "# Try VLC first\n"
+send "if command -v vlc &> /dev/null; then\n"
+send "    cvlc --fullscreen --loop --no-video-title --intf dummy /opt/videos/test.mp4\n"
+send "# Fall back to Chromium\n"
+send "elif command -v chromium-browser &> /dev/null; then\n"
+send "    chromium-browser --kiosk --noerrdialogs --disable-infobars \\\n"
+send "        --enable-features=VaapiVideoDecoder --use-gl=egl \\\n"
+send "        --enable-gpu-rasterization --disable-gpu-sandbox \\\n"
+send "        --autoplay-policy=no-user-gesture-required \\\n"
+send "        file:///opt/videos/player.html\n"
+send "fi\n"
+send "EOF\n"
+expect "$ "
+
+send "sudo chmod +x /usr/local/bin/pi-signage-launcher.sh\r"
+expect "$ "
+
+# Update service to use new launcher
+send "sudo tee /etc/systemd/system/pi-signage.service << 'EOF'\n"
+send "\[Unit\]\n"
+send "Description=Pi Signage Video Player\n"
+send "After=multi-user.target graphical.target\n"
+send "Wants=graphical.target\n"
+send "\n"
+send "\[Service\]\n"
+send "Type=simple\n"
+send "User=pi\n"
+send "Group=video\n"
+send "Environment=\"HOME=/home/pi\"\n"
+send "Environment=\"DISPLAY=:0\"\n"
+send "Environment=\"XDG_RUNTIME_DIR=/run/user/1000\"\n"
+send "ExecStartPre=/bin/bash -c 'until pgrep -x Xorg; do sleep 2; done'\n"
+send "ExecStart=/usr/local/bin/pi-signage-launcher.sh\n"
+send "Restart=always\n"
+send "RestartSec=10\n"
+send "\n"
+send "\[Install\]\n"
+send "WantedBy=graphical.target\n"
+send "EOF\n"
+expect "$ "
+
+# Create autostart for desktop session
+send "mkdir -p /home/pi/.config/autostart\r"
+expect "$ "
+send "tee /home/pi/.config/autostart/pi-signage.desktop << 'EOF'\n"
+send "\[Desktop Entry\]\n"
+send "Type=Application\n"
+send "Name=Pi Signage\n"
+send "Exec=/usr/local/bin/pi-signage-launcher.sh\n"
+send "Hidden=false\n"
+send "NoDisplay=false\n"
+send "X-GNOME-Autostart-enabled=true\n"
+send "EOF\n"
+expect "$ "
+
+# Reload and restart
+send "sudo systemctl daemon-reload\r"
+expect "$ "
+send "sudo systemctl restart lightdm\r"
+expect "$ "
+send "sleep 5\r"
+expect "$ "
+send "sudo systemctl start pi-signage.service\r"
+expect "$ "
+send "sleep 3\r"
+expect "$ "
+send "ps aux | grep -E '(vlc|chromium)' | grep -v grep\r"
+expect "$ "
+
+send "echo 'Display fixed and service restarted'\r"
+expect "$ "
+send "exit\r"
+expect eof

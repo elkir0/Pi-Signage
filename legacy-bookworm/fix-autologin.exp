@@ -1,0 +1,65 @@
+#!/usr/bin/expect -f
+set timeout 60
+spawn ssh -o StrictHostKeyChecking=no pi@192.168.1.106
+expect "password:"
+send "palmer00\r"
+expect "$ "
+
+# Configure autologin for pi user
+send "echo '=== CONFIGURING AUTOLOGIN ==='\r"
+expect "$ "
+send "sudo raspi-config nonint do_boot_behaviour B4\r"
+expect "$ "
+
+# Configure LightDM for autologin
+send "sudo tee /etc/lightdm/lightdm.conf << 'EOF'\n"
+send "\[Seat:*\]\n"
+send "autologin-user=pi\n"
+send "autologin-user-timeout=0\n"
+send "user-session=LXDE-pi\n"
+send "xserver-command=X -nocursor\n"
+send "EOF\n"
+expect "$ "
+
+# Kill current session and restart lightdm with autologin
+send "echo '\n=== RESTARTING WITH AUTOLOGIN ==='\r"
+expect "$ "
+send "sudo systemctl restart lightdm\r"
+expect "$ "
+
+# Wait for autologin
+send "sleep 10\r"
+expect "$ "
+
+# Launch video directly on the display
+send "echo '\n=== LAUNCHING VIDEO ==='\r"
+expect "$ "
+send "export DISPLAY=:0\r"
+expect "$ "
+send "export XAUTHORITY=/home/pi/.Xauthority\r"
+expect "$ "
+
+# Kill any screensaver
+send "DISPLAY=:0 xset s off\r"
+expect "$ "
+send "DISPLAY=:0 xset -dpms\r"
+expect "$ "
+send "DISPLAY=:0 xset s noblank\r"
+expect "$ "
+
+# Launch chromium with video
+send "DISPLAY=:0 chromium-browser --kiosk --noerrdialogs --disable-infobars --no-first-run --disable-translate --no-default-browser-check --no-sandbox --disable-dev-shm-usage --autoplay-policy=no-user-gesture-required file:///opt/videos/player.html &\r"
+expect "$ "
+
+send "echo '\n=== STATUS ==='\r"
+expect "$ "
+send "ps aux | grep chromium | grep -v grep | head -2\r"
+expect "$ "
+
+send "echo '\nLa vidéo devrait maintenant être visible sur la TV!'\r"
+expect "$ "
+send "echo 'Sans écran de login.'\r"
+expect "$ "
+
+send "exit\r"
+expect eof

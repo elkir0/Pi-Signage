@@ -1,0 +1,91 @@
+# Fichiers système
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Fichiers temporaires
+*.tmp
+*.temp
+*.cache
+/tmp/
+
+# Fichiers de configuration locaux
+*.local
+.env
+.env.local
+.env.*.local
+
+# Vidéos de test (trop lourdes pour Git)
+*.mp4
+*.avi
+*.mkv
+*.webm
+/videos/
+
+# Sauvegardes
+*.backup
+*.bak
+*.old
+
+# Fichiers SSH
+*.pem
+*.key
+id_rsa*
+known_hosts
+
+# Fichiers spécifiques au Pi
+/home/pi/
+*.img
+*.zip
+
+# IDE
+.vscode/
+.idea/
+*.sublime-*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+env/
+venv/
+
+# Node.js (si utilisé)
+node_modules/
+package-lock.json
+
+# Fichiers de build
+build/
+dist/
+*.deb
+
+# Archives
+*.tar.gz
+*.rar
+*.7z
+
+# Fichiers spécifiques au projet
+pisignage-desktop/
+Pi-Signage/
+pi-signage.tar.gz
+deployment.log
+vnc-setup.log
+fix-display.log
+install.log
+
+# Anciens scripts de test (legacy)
+test-*.sh
+fix-*.sh
+deploy-*.sh
+setup-*.sh
+!fullpageos/*.sh  # Garder les scripts FullPageOS

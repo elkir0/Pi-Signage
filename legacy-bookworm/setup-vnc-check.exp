@@ -1,0 +1,123 @@
+#!/usr/bin/expect -f
+set timeout 180
+spawn ssh -o StrictHostKeyChecking=no pi@192.168.1.106
+expect "password:"
+send "palmer00\r"
+expect "$ "
+
+# Install VNC server
+send "echo '=== Installing VNC Server ==='\r"
+expect "$ "
+send "sudo apt update && sudo apt install -y realvnc-vnc-server x11vnc\r"
+expect "$ "
+
+# Enable VNC via raspi-config
+send "sudo raspi-config nonint do_vnc 0\r"
+expect "$ "
+
+# Set VNC resolution for headless mode
+send "sudo raspi-config nonint do_vnc_resolution 1920x1080\r"
+expect "$ "
+
+# Create virtual display for headless mode
+send "sudo tee /etc/systemd/system/create-virtual-display.service << 'EOF'\n"
+send "\[Unit\]\n"
+send "Description=Create virtual display for headless operation\n"
+send "After=multi-user.target\n"
+send "\n"
+send "\[Service\]\n"
+send "Type=oneshot\n"
+send "ExecStart=/bin/bash -c 'export DISPLAY=:0; /usr/bin/xrandr --fb 1920x1080'\n"
+send "RemainAfterExit=yes\n"
+send "\n"
+send "\[Install\]\n"
+send "WantedBy=multi-user.target\n"
+send "EOF\n"
+expect "$ "
+
+# Enable the virtual display
+send "sudo systemctl enable create-virtual-display.service\r"
+expect "$ "
+
+# Check current video playback performance
+send "echo '=== Checking Video Performance ==='\r"
+expect "$ "
+send "sudo journalctl -u video-player.service -n 100 | grep -E '(fps|FPS|frame|dropped|performance)'\r"
+expect "$ "
+
+# Install performance monitoring tools
+send "sudo apt install -y htop iotop glances\r"
+expect "$ "
+
+# Create FPS monitoring script
+send "sudo tee /usr/local/bin/check-video-fps.sh << 'EOF'\n"
+send "#!/bin/bash\n"
+send "echo \"=== Video Performance Check ===\"\n"
+send "echo \"Date: $(date)\"\n"
+send "echo \"\"\n"
+send "\n"
+send "# Check if chromium is running\n"
+send "if pgrep -x chromium > /dev/null; then\n"
+send "    echo \"Chromium is running\"\n"
+send "    # Get chromium GPU info\n"
+send "    chromium-browser --version\n"
+send "    echo \"\"\n"
+send "    echo \"GPU Process Info:\"\n"
+send "    ps aux | grep -E '(gpu-process|chromium)' | head -5\n"
+send "    echo \"\"\n"
+send "fi\n"
+send "\n"
+send "# Check if VLC is running\n"
+send "if pgrep -x vlc > /dev/null; then\n"
+send "    echo \"VLC is running\"\n"
+send "    # VLC verbose output shows FPS\n"
+send "    timeout 5 cvlc --intf dummy --vout dummy --verbose 2 /opt/videos/test.mp4 2>&1 | grep -E '(fps|decoded)' | head -10\n"
+send "fi\n"
+send "\n"
+send "# System performance\n"
+send "echo \"CPU Usage:\"\n"
+send "top -bn1 | head -10\n"
+send "echo \"\"\n"
+send "echo \"GPU Memory:\"\n"
+send "vcgencmd get_mem gpu\n"
+send "echo \"\"\n"
+send "echo \"Temperature:\"\n"
+send "vcgencmd measure_temp\n"
+send "echo \"\"\n"
+send "echo \"Video decode stats:\"\n"
+send "vcgencmd codec_enabled H264\n"
+send "vcgencmd get_throttled\n"
+send "\n"
+send "# Check hardware acceleration\n"
+send "echo \"\"\n"
+send "echo \"Hardware acceleration status:\"\n"
+send "ls -la /dev/dri/ 2>/dev/null || echo \"No DRI devices found\"\n"
+send "lsmod | grep -E '(v4l2|bcm2835|vc4)' || echo \"No video modules loaded\"\n"
+send "EOF\n"
+expect "$ "
+
+send "sudo chmod +x /usr/local/bin/check-video-fps.sh\r"
+expect "$ "
+
+# Run the performance check
+send "sudo /usr/local/bin/check-video-fps.sh\r"
+expect "$ "
+
+# Get VNC connection info
+send "echo '=== VNC Connection Info ==='\r"
+expect "$ "
+send "hostname -I | cut -d' ' -f1\r"
+expect "$ "
+send "sudo systemctl status vncserver-x11-serviced --no-pager | head -5 || echo 'VNC not yet active'\r"
+expect "$ "
+
+# Restart services
+send "sudo systemctl restart lightdm\r"
+expect "$ "
+send "sudo systemctl restart vncserver-x11-serviced 2>/dev/null || true\r"
+expect "$ "
+
+send "echo 'VNC setup complete. Connect to 192.168.1.106:5900'\r"
+expect "$ "
+send "exit\r"
+expect eof

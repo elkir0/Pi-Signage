@@ -1,0 +1,120 @@
+#!/usr/bin/expect -f
+
+set timeout 120
+set PI_HOST "192.168.1.103"
+set PI_USER "pi"
+set PI_PASS "palmer00"
+
+puts "\n=== DÉPLOIEMENT CHROMIUM + GPU SUR RASPBERRY PI ===\n"
+
+# Connexion SSH
+spawn ssh $PI_USER@$PI_HOST
+expect {
+    "yes/no" { send "yes\r"; exp_continue }
+    "password:" { send "$PI_PASS\r" }
+}
+expect "$ "
+
+puts "\nÉtape 1: Mise à jour du système..."
+send "sudo apt update\r"
+expect {
+    "password" { send "$PI_PASS\r"; exp_continue }
+    "$ " { }
+}
+
+send "sudo apt upgrade -y\r"
+expect "$ "
+
+puts "\nÉtape 2: Installation de Chromium et dépendances GPU..."
+send "sudo apt install -y chromium-browser xserver-xorg xinit x11-xserver-utils unclutter\r"
+expect "$ "
+
+puts "\nÉtape 3: Configuration de l'autologin..."
+send "sudo raspi-config nonint do_boot_behaviour B4\r"
+expect "$ "
+
+puts "\nÉtape 4: Création du script de lancement..."
+send "cat > /home/pi/kiosk.sh << 'EOF'
+#!/bin/bash
+# Désactive l'économiseur d'écran
+xset s off
+xset -dpms
+xset s noblank
+
+# Cache le curseur après 0.5 secondes
+unclutter -idle 0.5 -root &
+
+# Lance Chromium avec accélération GPU
+chromium-browser \\
+    --kiosk \\
+    --noerrdialogs \\
+    --disable-infobars \\
+    --check-for-update-interval=31536000 \\
+    --disable-pinch \\
+    --overscroll-history-navigation=0 \\
+    --enable-gpu-rasterization \\
+    --enable-accelerated-2d-canvas \\
+    --enable-accelerated-video-decode \\
+    --ignore-gpu-blocklist \\
+    --disable-gpu-sandbox \\
+    --enable-features=VaapiVideoDecoder \\
+    --use-gl=egl \\
+    --disable-features=UseChromeOSDirectVideoDecoder \\
+    --autoplay-policy=no-user-gesture-required \\
+    'https://www.youtube.com/watch?v=LXb3EKWsInQ&autoplay=1&loop=1&playlist=LXb3EKWsInQ'
+EOF\r"
+expect "$ "
+
+send "chmod +x /home/pi/kiosk.sh\r"
+expect "$ "
+
+puts "\nÉtape 5: Configuration du démarrage automatique..."
+send "mkdir -p /home/pi/.config/autostart\r"
+expect "$ "
+
+send "cat > /home/pi/.config/autostart/kiosk.desktop << 'EOF'
+\[Desktop Entry\]
+Type=Application
+Name=Kiosk
+Exec=/home/pi/kiosk.sh
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+EOF\r"
+expect "$ "
+
+puts "\nÉtape 6: Configuration alternative avec .bashrc..."
+send "echo '' >> /home/pi/.bashrc\r"
+expect "$ "
+send "echo '# Auto-start kiosk mode' >> /home/pi/.bashrc\r"
+expect "$ "
+send "echo 'if \[ -z \"\$SSH_CLIENT\" \] && \[ -z \"\$SSH_TTY\" \]; then' >> /home/pi/.bashrc\r"
+expect "$ "
+send "echo '    \[ -z \"\$DISPLAY\" \] && export DISPLAY=:0' >> /home/pi/.bashrc\r"
+expect "$ "
+send "echo '    /home/pi/kiosk.sh' >> /home/pi/.bashrc\r"
+expect "$ "
+send "echo 'fi' >> /home/pi/.bashrc\r"
+expect "$ "
+
+puts "\nÉtape 7: Test de configuration GPU..."
+send "chromium-browser --version\r"
+expect "$ "
+
+send "vcgencmd version\r"
+expect "$ "
+
+send "vcgencmd get_mem gpu\r"
+expect "$ "
+
+puts "\n=== Configuration terminée! ==="
+puts "Le Raspberry Pi va redémarrer..."
+
+send "sudo reboot\r"
+expect eof
+
+puts "\n✓ Déploiement terminé!"
+puts "✓ Le Pi redémarre avec Chromium en mode kiosk"
+puts "✓ La vidéo YouTube devrait se lancer automatiquement"
+puts "\nPour se reconnecter après redémarrage:"
+puts "  ssh pi@192.168.1.103"
