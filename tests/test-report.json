@@ -1,0 +1,116 @@
+{
+  "timestamp": "2025-09-19T13:16:04.046Z",
+  "passed": 3,
+  "failed": 6,
+  "tests": [
+    {
+      "name": "Page Load",
+      "status": "passed",
+      "startTime": 1758287764350,
+      "errors": [
+        {
+          "text": "Error updating download queue: JSHandle@error",
+          "location": {
+            "url": "http://192.168.1.103/",
+            "lineNumber": 1725,
+            "columnNumber": 24
+          }
+        }
+      ],
+      "duration": 3396
+    },
+    {
+      "name": "Dashboard Tab",
+      "status": "passed",
+      "startTime": 1758287767746,
+      "errors": [
+        {
+          "text": "Error updating download queue: JSHandle@error",
+          "location": {
+            "url": "http://192.168.1.103/",
+            "lineNumber": 1725,
+            "columnNumber": 24
+          }
+        }
+      ],
+      "duration": 211
+    },
+    {
+      "name": "Media Tab",
+      "status": "failed",
+      "startTime": 1758287767958,
+      "errors": [],
+      "error": "Cannot read properties of undefined (reading 'target')",
+      "duration": 2,
+      "screenshot": "/opt/pisignage/tests/screenshots/Media Tab-error-1758287767960.png"
+    },
+    {
+      "name": "Playlists Tab",
+      "status": "failed",
+      "startTime": 1758287768153,
+      "errors": [],
+      "error": "Cannot read properties of undefined (reading 'target')",
+      "duration": 1,
+      "screenshot": "/opt/pisignage/tests/screenshots/Playlists Tab-error-1758287768154.png"
+    },
+    {
+      "name": "YouTube Tab",
+      "status": "failed",
+      "startTime": 1758287768316,
+      "errors": [],
+      "error": "Cannot read properties of undefined (reading 'target')",
+      "duration": 2,
+      "screenshot": "/opt/pisignage/tests/screenshots/YouTube Tab-error-1758287768318.png"
+    },
+    {
+      "name": "Schedule Tab",
+      "status": "failed",
+      "startTime": 1758287768488,
+      "errors": [],
+      "error": "Cannot read properties of undefined (reading 'target')",
+      "duration": 2,
+      "screenshot": "/opt/pisignage/tests/screenshots/Schedule Tab-error-1758287768490.png"
+    },
+    {
+      "name": "Display Tab",
+      "status": "failed",
+      "startTime": 1758287768650,
+      "errors": [],
+      "error": "Cannot read properties of undefined (reading 'target')",
+      "duration": 2,
+      "screenshot": "/opt/pisignage/tests/screenshots/Display Tab-error-1758287768652.png"
+    },
+    {
+      "name": "Settings Tab",
+      "status": "failed",
+      "startTime": 1758287768787,
+      "errors": [],
+      "error": "Cannot read properties of undefined (reading 'target')",
+      "duration": 2,
+      "screenshot": "/opt/pisignage/tests/screenshots/Settings Tab-error-1758287768789.png"
+    },
+    {
+      "name": "API Endpoints",
+      "status": "warning",
+      "startTime": 1758287768992,
+      "errors": [
+        {
+          "text": "Error updating download queue: JSHandle@error",
+          "location": {
+            "url": "http://192.168.1.103/",
+            "lineNumber": 1725,
+            "columnNumber": 24
+          }
+        }
+      ],
+      "duration": 6544
+    },
+    {
+      "name": "Console Errors",
+      "status": "passed",
+      "startTime": 1758287775536,
+      "errors": [],
+      "duration": 2002
+    }
+  ]
+}

@@ -1,0 +1,134 @@
+{
+  "playlists": [
+    {
+      "id": "playlist_default_demo",
+      "name": "Démonstration PiSignage",
+      "description": "Playlist de démonstration avec des vidéos de test et des exemples de configuration",
+      "items": [],
+      "settings": {
+        "loop": true,
+        "shuffle": false,
+        "transition": "fade",
+        "transition_duration": 1000
+      },
+      "schedule": null,
+      "created": "2025-09-19 00:00:00",
+      "modified": "2025-09-19 00:00:00"
+    }
+  ],
+  "active_playlist": null,
+  "global_settings": {
+    "default_item_duration": 10,
+    "default_transition": "fade",
+    "default_transition_duration": 1000,
+    "auto_loop": true,
+    "schedule_enabled": true,
+    "volume": 80,
+    "fullscreen": true
+  },
+  "display_zones": [
+    {
+      "id": "zone_main",
+      "name": "Zone principale",
+      "x": 0,
+      "y": 0,
+      "width": 1920,
+      "height": 1080,
+      "z_index": 1,
+      "active": true
+    }
+  ],
+  "schedules": {
+    "templates": [
+      {
+        "name": "Horaires bureaux",
+        "description": "Du lundi au vendredi, 9h-17h",
+        "rules": [
+          {
+            "days": ["monday", "tuesday", "wednesday", "thursday", "friday"],
+            "start_time": "09:00",
+            "end_time": "17:00"
+          }
+        ]
+      },
+      {
+        "name": "Week-end",
+        "description": "Samedi et dimanche, toute la journée",
+        "rules": [
+          {
+            "days": ["saturday", "sunday"],
+            "start_time": "00:00",
+            "end_time": "23:59"
+          }
+        ]
+      },
+      {
+        "name": "24/7",
+        "description": "Fonctionnement continu",
+        "rules": [
+          {
+            "days": ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"],
+            "start_time": "00:00",
+            "end_time": "23:59"
+          }
+        ]
+      }
+    ]
+  },
+  "transitions": [
+    {
+      "name": "fade",
+      "label": "Fondu",
+      "description": "Transition en fondu entre les médias",
+      "default_duration": 1000
+    },
+    {
+      "name": "slide_left",
+      "label": "Glissement gauche",
+      "description": "Le nouveau média glisse depuis la droite",
+      "default_duration": 800
+    },
+    {
+      "name": "slide_right",
+      "label": "Glissement droite", 
+      "description": "Le nouveau média glisse depuis la gauche",
+      "default_duration": 800
+    },
+    {
+      "name": "slide_up",
+      "label": "Glissement haut",
+      "description": "Le nouveau média glisse depuis le bas",
+      "default_duration": 800
+    },
+    {
+      "name": "slide_down",
+      "label": "Glissement bas",
+      "description": "Le nouveau média glisse depuis le haut",
+      "default_duration": 800
+    },
+    {
+      "name": "zoom_in",
+      "label": "Zoom avant",
+      "description": "Le nouveau média apparaît avec un effet de zoom",
+      "default_duration": 600
+    },
+    {
+      "name": "zoom_out",
+      "label": "Zoom arrière",
+      "description": "L'ancien média disparaît avec un zoom arrière",
+      "default_duration": 600
+    },
+    {
+      "name": "none",
+      "label": "Aucune",
+      "description": "Changement instantané sans transition",
+      "default_duration": 0
+    }
+  ],
+  "metadata": {
+    "version": "3.1.0",
+    "created": "2025-09-19 00:00:00",
+    "last_modified": "2025-09-19 00:00:00",
+    "schema_version": 1
+  }
+}

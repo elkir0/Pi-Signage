@@ -1644,7 +1644,7 @@ $mediaFiles = getMediaFiles();
             
             placeholder.innerHTML = '<div class="loading"></div><div>Capture en cours...</div>';
             
-            fetch('/api/screenshot.php', {
+            fetch('?action=screenshot', {
                 method: 'POST'
             })
             .then(response => response.json())
@@ -1743,7 +1743,7 @@ $mediaFiles = getMediaFiles();
                 showAlert('Upload failed', 'error');
             });
 
-            xhr.open('POST', '/api/upload.php');
+            xhr.open('POST', '?action=upload');
             xhr.send(formData);
         }
 

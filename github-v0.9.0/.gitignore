@@ -1,0 +1,43 @@
+# Logs
+*.log
+logs/
+
+# Media files
+media/*.mp4
+media/*.avi
+media/*.mkv
+media/*.mov
+media/*.webm
+!media/README.md
+
+# Config files with secrets
+config/credentials.json
+config/playlists.json
+
+# System files
+.DS_Store
+Thumbs.db
+*.swp
+*.bak
+*~
+
+# PHP
+vendor/
+composer.lock
+
+# Node
+node_modules/
+package-lock.json
+
+# IDE
+.vscode/
+.idea/
+
+# Build
+dist/
+build/
+
+# Temporary
+tmp/
+temp/
+*.tmp
