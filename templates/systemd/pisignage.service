@@ -1,0 +1,42 @@
+[Unit]
+Description=PiSignage Desktop Digital Signage Player
+Documentation=https://github.com/elkir0/pisignage-desktop
+After=graphical-session.target
+Wants=graphical-session.target
+Requires=multi-user.target
+
+[Service]
+Type=forking
+User=pi
+Group=pi
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/pi/.Xauthority
+WorkingDirectory=/opt/pisignage/pisignage-desktop
+ExecStartPre=/bin/sleep 10
+ExecStart=/opt/pisignage/pisignage-desktop/scripts/control/start.sh
+ExecStop=/opt/pisignage/pisignage-desktop/scripts/control/stop.sh
+ExecReload=/opt/pisignage/pisignage-desktop/scripts/control/restart.sh
+PIDFile=/tmp/pisignage.pid
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Sécurité
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/opt/pisignage/pisignage-desktop
+ReadWritePaths=/tmp
+ReadWritePaths=/home/pi
+
+# Limites de ressources
+MemoryLimit=512M
+CPUQuota=80%
+
+# Timeout
+TimeoutStartSec=30
+TimeoutStopSec=15
+
+[Install]
+WantedBy=graphical-session.target

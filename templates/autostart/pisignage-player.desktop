@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=PiSignage Player
+Comment=PiSignage Desktop Media Player
+Exec=/opt/pisignage/pisignage-desktop/scripts/control/player.sh
+Icon=/opt/pisignage/pisignage-desktop/web/assets/logo.png
+Terminal=false
+Hidden=false
+X-GNOME-Autostart-enabled=true
+Categories=AudioVideo;Player;

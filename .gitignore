@@ -1,17 +1,55 @@
+<<<<<<< HEAD
 # Fichiers système
 .DS_Store
 Thumbs.db
+=======
+# PiSignage Desktop v3.0 - Gitignore
+# Generated files and logs
+logs/*.log
+logs/*.txt
+videos/*
+!videos/.gitkeep
+
+# Temporary files
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# User configurations
+config/local.conf
+config/user.conf
+
+# System files
+.directory
+>>>>>>> e3d23eed5cb67ecaebb350b4b797596c74b65e7a
 *.swp
 *.swo
 *~
 
+<<<<<<< HEAD
 # Logs
 *.log
 logs/
+=======
+# Build artifacts
+*.o
+*.so
+*.a
+
+# IDE files
+.vscode/
+.idea/
+*.code-workspace
+
+# Node modules (if any web components)
+node_modules/
+>>>>>>> e3d23eed5cb67ecaebb350b4b797596c74b65e7a
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+<<<<<<< HEAD
 # Fichiers temporaires
 *.tmp
 *.temp
@@ -89,3 +127,9 @@ fix-*.sh
 deploy-*.sh
 setup-*.sh
 !fullpageos/*.sh  # Garder les scripts FullPageOS
+=======
+# Backup files
+*.bak
+*.backup
+config/*.bak
+>>>>>>> e3d23eed5cb67ecaebb350b4b797596c74b65e7a
