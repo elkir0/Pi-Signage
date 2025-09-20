@@ -137,9 +137,31 @@ function getDownloadStatus() {
             // Vérifier si le processus est toujours actif
             if (isset($item['pid'])) {
                 $output = shell_exec("ps -p {$item['pid']} 2>/dev/null");
-                if (!$output || strpos($output, $item['pid']) === false) {
-                    $item['status'] = 'failed';
-                    $item['error'] = 'Processus interrompu';
+                if (!$output || strpos($output, (string)$item['pid']) === false) {
+                    // Processus terminé, vérifier si c'est un succès ou un échec
+                    $logFile = "/tmp/youtube_dl_{$item['id']}.log";
+                    if (file_exists($logFile)) {
+                        $logContent = file_get_contents($logFile);
+                        // Chercher un fichier de sortie dans les logs
+                        if (preg_match('/\/opt\/pisignage\/media\/[^\s]+\.mp4/', $logContent, $matches)) {
+                            $outputFile = $matches[0];
+                            if (file_exists($outputFile)) {
+                                $item['status'] = 'completed';
+                                $item['progress'] = 100;
+                                $item['message'] = 'Téléchargement terminé';
+                                $item['output_file'] = basename($outputFile);
+                            } else {
+                                $item['status'] = 'failed';
+                                $item['error'] = 'Fichier de sortie introuvable';
+                            }
+                        } else {
+                            $item['status'] = 'failed';
+                            $item['error'] = 'Téléchargement échoué';
+                        }
+                    } else {
+                        $item['status'] = 'failed';
+                        $item['error'] = 'Processus interrompu sans log';
+                    }
                     $item['finished_at'] = date('Y-m-d H:i:s');
                 }
             }
@@ -198,29 +220,32 @@ function startDownload($url, $quality = '720p', $customName = null) {
     $queue[] = $downloadItem;
     saveDownloadQueue($queue);
     
-    // Démarrer le téléchargement en arrière-plan
+    // Démarrer le téléchargement directement en arrière-plan
     $scriptCmd = YOUTUBE_SCRIPT . ' ' . escapeshellarg($url) . ' ' . escapeshellarg($quality);
     if ($customName) {
         $scriptCmd .= ' ' . escapeshellarg($customName);
     }
     
-    $cmd = "nohup $scriptCmd > /tmp/youtube_dl_$downloadId.log 2>&1 & echo $!";
-    $pid = intval(shell_exec($cmd));
+    // Exécuter en arrière-plan avec redirection vers un fichier log spécifique
+    $logFile = "/tmp/youtube_dl_{$downloadId}.log";
+    $cmd = "nohup $scriptCmd > $logFile 2>&1 & echo $!";
+    $pid = trim(shell_exec($cmd));
     
-    if ($pid > 0) {
+    if (!empty($pid) && is_numeric($pid)) {
         // Mettre à jour le statut
         foreach ($queue as &$item) {
             if ($item['id'] === $downloadId) {
                 $item['status'] = 'downloading';
                 $item['started_at'] = date('Y-m-d H:i:s');
-                $item['pid'] = $pid;
+                $item['pid'] = intval($pid);
                 break;
             }
         }
         saveDownloadQueue($queue);
+        writeLog("Téléchargement démarré: $url (ID: $downloadId, PID: $pid)");
+    } else {
+        throw new Exception('Échec du démarrage du téléchargement');
     }
-    
-    writeLog("Téléchargement démarré: $url (ID: $downloadId, PID: $pid)");
     
     return $downloadId;
 }
