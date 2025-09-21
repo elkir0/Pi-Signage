@@ -1,0 +1,1277 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestionnaire de Playlists Avancé - Pi-Signage</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --success-color: #059669;
+            --warning-color: #d97706;
+            --danger-color: #dc2626;
+            --dark-color: #1f2937;
+            --light-color: #f8fafc;
+        }
+
+        body {
+            background-color: var(--light-color);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .navbar {
+            background: linear-gradient(135deg, var(--primary-color), #1e40af);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .navbar-brand {
+            font-weight: 700;
+            font-size: 1.5rem;
+        }
+
+        .card {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+        }
+
+        .media-library {
+            max-height: 600px;
+            overflow-y: auto;
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 1rem;
+        }
+
+        .media-item {
+            background: #ffffff;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 10px;
+            margin: 5px 0;
+            cursor: grab;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .media-item:hover {
+            border-color: var(--primary-color);
+            background: #f0f7ff;
+            transform: scale(1.02);
+        }
+
+        .media-item.dragging {
+            opacity: 0.5;
+            transform: rotate(5deg);
+        }
+
+        .media-thumbnail {
+            width: 60px;
+            height: 45px;
+            object-fit: cover;
+            border-radius: 6px;
+            background: #f3f4f6;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            color: #6b7280;
+        }
+
+        .media-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .media-name {
+            font-weight: 600;
+            color: var(--dark-color);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .media-details {
+            font-size: 0.85rem;
+            color: #6b7280;
+            display: flex;
+            gap: 10px;
+        }
+
+        .playlist-builder {
+            min-height: 400px;
+            background: #ffffff;
+            border: 2px dashed #d1d5db;
+            border-radius: 12px;
+            padding: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .playlist-builder.dragover {
+            border-color: var(--primary-color);
+            background: #f0f7ff;
+        }
+
+        .playlist-item {
+            background: linear-gradient(135deg, #ffffff, #f8fafc);
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 8px 0;
+            cursor: move;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .playlist-item:hover {
+            border-color: var(--primary-color);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);
+        }
+
+        .playlist-item.sortable-ghost {
+            opacity: 0.3;
+        }
+
+        .playlist-item.sortable-chosen {
+            transform: scale(1.05);
+            z-index: 1000;
+        }
+
+        .playlist-controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .duration-control {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            background: #f3f4f6;
+            border-radius: 20px;
+            padding: 4px 8px;
+        }
+
+        .duration-input {
+            width: 60px;
+            border: none;
+            background: transparent;
+            text-align: center;
+            font-weight: 600;
+        }
+
+        .btn-duration {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+
+        .playlist-stats {
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            color: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: 700;
+            display: block;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .btn-custom {
+            border-radius: 8px;
+            font-weight: 600;
+            padding: 8px 16px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-custom:hover {
+            transform: translateY(-2px);
+        }
+
+        .modal-content {
+            border-radius: 15px;
+            border: none;
+        }
+
+        .modal-header {
+            background: linear-gradient(135deg, var(--primary-color), #1e40af);
+            color: white;
+            border-radius: 15px 15px 0 0;
+        }
+
+        .form-control, .form-select {
+            border-radius: 8px;
+            border: 2px solid #e5e7eb;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-control:focus, .form-select:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .alert {
+            border-radius: 10px;
+            border: none;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .spinner-border {
+            width: 3rem;
+            height: 3rem;
+        }
+
+        .playlist-preview {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 400px;
+            max-height: 500px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            z-index: 1050;
+            display: none;
+        }
+
+        .preview-header {
+            background: var(--primary-color);
+            color: white;
+            padding: 1rem;
+            border-radius: 15px 15px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .preview-content {
+            padding: 1rem;
+            max-height: 350px;
+            overflow-y: auto;
+        }
+
+        @media (max-width: 768px) {
+            .container-fluid {
+                padding: 0.5rem;
+            }
+            
+            .media-library, .playlist-builder {
+                max-height: 300px;
+            }
+            
+            .media-item, .playlist-item {
+                padding: 8px;
+            }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .slide-up {
+            animation: slideUp 0.3s ease-out;
+        }
+
+        @keyframes slideUp {
+            from { transform: translateY(100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-dark">
+        <div class="container-fluid">
+            <span class="navbar-brand">
+                <i class="bi bi-music-note-list me-2"></i>
+                Gestionnaire de Playlists Avancé
+            </span>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-light btn-sm" onclick="refreshData()">
+                    <i class="bi bi-arrow-clockwise"></i> Actualiser
+                </button>
+                <button class="btn btn-light btn-sm" onclick="showStatistics()">
+                    <i class="bi bi-graph-up"></i> Stats
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-4">
+        <!-- Messages d'alerte -->
+        <div id="alertContainer"></div>
+
+        <!-- Actions principales -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+                            <div class="d-flex flex-wrap gap-2">
+                                <button class="btn btn-primary btn-custom" onclick="createNewPlaylist()">
+                                    <i class="bi bi-plus-circle"></i> Nouvelle Playlist
+                                </button>
+                                <button class="btn btn-success btn-custom" onclick="loadTemplates()">
+                                    <i class="bi bi-file-earmark-text"></i> Templates
+                                </button>
+                                <button class="btn btn-info btn-custom" onclick="importPlaylist()">
+                                    <i class="bi bi-upload"></i> Importer
+                                </button>
+                                <button class="btn btn-warning btn-custom" onclick="refreshMediaLibrary()">
+                                    <i class="bi bi-collection"></i> Actualiser Médias
+                                </button>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <select id="currentPlaylistSelect" class="form-select" style="width: auto;" onchange="loadPlaylist(this.value)">
+                                    <option value="">Sélectionner une playlist...</option>
+                                </select>
+                                <button class="btn btn-outline-primary" onclick="playCurrentPlaylist()">
+                                    <i class="bi bi-play-fill"></i> Lire
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Bibliothèque de médias -->
+            <div class="col-md-4 mb-4">
+                <div class="card h-100">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">
+                            <i class="bi bi-collection-play"></i> 
+                            Bibliothèque de Médias
+                            <span id="mediaCount" class="badge bg-white text-primary ms-2">0</span>
+                        </h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="p-3">
+                            <div class="input-group mb-3">
+                                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                                <input type="text" class="form-control" id="mediaSearch" placeholder="Rechercher un média..." onkeyup="filterMedia()">
+                            </div>
+                            <div class="d-flex gap-2 mb-3">
+                                <button class="btn btn-outline-primary btn-sm" onclick="filterMediaType('all')">Tous</button>
+                                <button class="btn btn-outline-success btn-sm" onclick="filterMediaType('video')">Vidéos</button>
+                                <button class="btn btn-outline-info btn-sm" onclick="filterMediaType('image')">Images</button>
+                            </div>
+                        </div>
+                        <div id="mediaLibrary" class="media-library">
+                            <div class="loading">
+                                <div class="spinner-border text-primary" role="status"></div>
+                                <p class="mt-2">Chargement des médias...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Constructeur de playlist -->
+            <div class="col-md-8 mb-4">
+                <div class="card h-100">
+                    <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="bi bi-music-note-beamed"></i> 
+                            Constructeur de Playlist
+                        </h5>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-light btn-sm" onclick="clearPlaylist()">
+                                <i class="bi bi-trash"></i> Vider
+                            </button>
+                            <button class="btn btn-light btn-sm" onclick="previewPlaylist()">
+                                <i class="bi bi-eye"></i> Aperçu
+                            </button>
+                            <button class="btn btn-light btn-sm" onclick="saveCurrentPlaylist()">
+                                <i class="bi bi-save"></i> Sauvegarder
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <!-- Informations playlist -->
+                        <div id="playlistInfo" class="mb-3" style="display: none;">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <input type="text" id="playlistName" class="form-control mb-2" placeholder="Nom de la playlist">
+                                    <textarea id="playlistDescription" class="form-control" rows="2" placeholder="Description (optionnelle)"></textarea>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="playlist-stats">
+                                        <div class="row text-center">
+                                            <div class="col-4">
+                                                <div class="stat-item">
+                                                    <span id="statItems" class="stat-number">0</span>
+                                                    <span class="stat-label">Éléments</span>
+                                                </div>
+                                            </div>
+                                            <div class="col-4">
+                                                <div class="stat-item">
+                                                    <span id="statDuration" class="stat-number">0</span>
+                                                    <span class="stat-label">Minutes</span>
+                                                </div>
+                                            </div>
+                                            <div class="col-4">
+                                                <div class="stat-item">
+                                                    <span id="statVideos" class="stat-number">0</span>
+                                                    <span class="stat-label">Vidéos</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Zone de construction -->
+                        <div id="playlistBuilder" class="playlist-builder">
+                            <div class="text-center text-muted py-5">
+                                <i class="bi bi-music-note-list" style="font-size: 3rem;"></i>
+                                <h4>Glissez-déposez vos médias ici</h4>
+                                <p>Ou sélectionnez une playlist existante pour l'éditer</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Nouvelle Playlist -->
+    <div class="modal fade" id="newPlaylistModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-plus-circle"></i> Nouvelle Playlist
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="newPlaylistForm">
+                        <div class="mb-3">
+                            <label for="newPlaylistName" class="form-label">Nom de la playlist *</label>
+                            <input type="text" class="form-control" id="newPlaylistName" required maxlength="100">
+                        </div>
+                        <div class="mb-3">
+                            <label for="newPlaylistDescription" class="form-label">Description</label>
+                            <textarea class="form-control" id="newPlaylistDescription" rows="3"></textarea>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="defaultImageDuration" class="form-label">Durée images par défaut (secondes)</label>
+                                    <input type="number" class="form-control" id="defaultImageDuration" value="10" min="1" max="300">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="playlistTransition" class="form-label">Transition</label>
+                                    <select class="form-select" id="playlistTransition">
+                                        <option value="fade">Fondu</option>
+                                        <option value="slide_left">Glissement gauche</option>
+                                        <option value="slide_right">Glissement droite</option>
+                                        <option value="none">Aucune</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="playlistLoop" checked>
+                                    <label class="form-check-label" for="playlistLoop">
+                                        Lecture en boucle
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="playlistShuffle">
+                                    <label class="form-check-label" for="playlistShuffle">
+                                        Lecture aléatoire
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                    <button type="button" class="btn btn-primary" onclick="createPlaylist()">
+                        <i class="bi bi-plus-circle"></i> Créer
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Import -->
+    <div class="modal fade" id="importModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-upload"></i> Importer une Playlist
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="importFile" class="form-label">Fichier JSON de playlist</label>
+                        <input type="file" class="form-control" id="importFile" accept=".json">
+                    </div>
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        Sélectionnez un fichier JSON exporté depuis ce gestionnaire.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                    <button type="button" class="btn btn-primary" onclick="processImport()">
+                        <i class="bi bi-upload"></i> Importer
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Templates -->
+    <div class="modal fade" id="templatesModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-file-earmark-text"></i> Templates de Playlists
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="templatesList"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Aperçu Playlist -->
+    <div id="playlistPreview" class="playlist-preview">
+        <div class="preview-header">
+            <h6 class="mb-0">Aperçu de la Playlist</h6>
+            <button class="btn btn-sm btn-light" onclick="closePreview()">
+                <i class="bi bi-x"></i>
+            </button>
+        </div>
+        <div class="preview-content" id="previewContent">
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    
+    <script>
+        // Variables globales
+        let currentPlaylist = null;
+        let mediaLibraryData = [];
+        let playlistsData = [];
+        let playlistSortable = null;
+
+        // Configuration
+        const API_BASE = '/api/playlist-advanced.php';
+
+        // Initialisation
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeApp();
+        });
+
+        async function initializeApp() {
+            showLoading('Chargement...');
+            try {
+                await loadMediaLibrary();
+                await loadPlaylists();
+                initializeSortable();
+                setupDragAndDrop();
+                hideLoading();
+                showSuccess('Application initialisée avec succès');
+            } catch (error) {
+                hideLoading();
+                showError('Erreur lors de l\'initialisation: ' + error.message);
+            }
+        }
+
+        // Gestion des médias
+        async function loadMediaLibrary() {
+            try {
+                const response = await fetch(`${API_BASE}?action=get-media-library`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    mediaLibraryData = data.media;
+                    renderMediaLibrary();
+                    updateMediaCount();
+                } else {
+                    throw new Error(data.error);
+                }
+            } catch (error) {
+                showError('Erreur lors du chargement des médias: ' + error.message);
+            }
+        }
+
+        function renderMediaLibrary(filter = '') {
+            const container = document.getElementById('mediaLibrary');
+            
+            if (mediaLibraryData.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-folder2-open" style="font-size: 2rem;"></i>
+                        <p class="mt-2">Aucun média trouvé</p>
+                    </div>
+                `;
+                return;
+            }
+
+            let filteredMedia = mediaLibraryData;
+            
+            if (filter) {
+                filteredMedia = mediaLibraryData.filter(media => 
+                    media.name.toLowerCase().includes(filter.toLowerCase())
+                );
+            }
+
+            const html = filteredMedia.map(media => `
+                <div class="media-item" draggable="true" data-media='${JSON.stringify(media)}'>
+                    <div class="media-thumbnail">
+                        ${media.thumbnail ? 
+                            `<img src="${media.thumbnail}" alt="${media.name}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 6px;">` :
+                            `<i class="bi bi-${media.type === 'video' ? 'play-circle' : 'image'}"></i>`
+                        }
+                    </div>
+                    <div class="media-info">
+                        <div class="media-name">${media.name}</div>
+                        <div class="media-details">
+                            <span><i class="bi bi-${media.type === 'video' ? 'camera-video' : 'image'}"></i> ${media.type}</span>
+                            <span><i class="bi bi-hdd"></i> ${media.size_human}</span>
+                            ${media.duration ? `<span><i class="bi bi-clock"></i> ${formatDuration(media.duration)}</span>` : ''}
+                            ${media.resolution ? `<span><i class="bi bi-aspect-ratio"></i> ${media.resolution}</span>` : ''}
+                        </div>
+                    </div>
+                    <div class="media-actions">
+                        <button class="btn btn-sm btn-primary" onclick="addMediaToPlaylist('${media.name}')">
+                            <i class="bi bi-plus"></i>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+
+            container.innerHTML = html;
+            setupMediaDragHandlers();
+        }
+
+        function setupMediaDragHandlers() {
+            document.querySelectorAll('.media-item').forEach(item => {
+                item.addEventListener('dragstart', function(e) {
+                    const mediaData = JSON.parse(this.dataset.media);
+                    e.dataTransfer.setData('text/plain', JSON.stringify(mediaData));
+                    this.classList.add('dragging');
+                });
+
+                item.addEventListener('dragend', function(e) {
+                    this.classList.remove('dragging');
+                });
+            });
+        }
+
+        function setupDragAndDrop() {
+            const playlistBuilder = document.getElementById('playlistBuilder');
+
+            playlistBuilder.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                this.classList.add('dragover');
+            });
+
+            playlistBuilder.addEventListener('dragleave', function(e) {
+                this.classList.remove('dragover');
+            });
+
+            playlistBuilder.addEventListener('drop', function(e) {
+                e.preventDefault();
+                this.classList.remove('dragover');
+                
+                try {
+                    const mediaData = JSON.parse(e.dataTransfer.getData('text/plain'));
+                    addMediaToCurrentPlaylist(mediaData);
+                } catch (error) {
+                    showError('Erreur lors de l\'ajout du média');
+                }
+            });
+        }
+
+        // Gestion des playlists
+        async function loadPlaylists() {
+            try {
+                const response = await fetch(`${API_BASE}?action=list`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    playlistsData = data.playlists;
+                    updatePlaylistSelect();
+                } else {
+                    throw new Error(data.error);
+                }
+            } catch (error) {
+                showError('Erreur lors du chargement des playlists: ' + error.message);
+            }
+        }
+
+        function updatePlaylistSelect() {
+            const select = document.getElementById('currentPlaylistSelect');
+            select.innerHTML = '<option value="">Sélectionner une playlist...</option>';
+            
+            playlistsData.forEach(playlist => {
+                const option = document.createElement('option');
+                option.value = playlist.id;
+                option.textContent = `${playlist.name} (${playlist.statistics?.total_items || 0} éléments)`;
+                select.appendChild(option);
+            });
+        }
+
+        async function loadPlaylist(playlistId) {
+            if (!playlistId) {
+                clearPlaylistBuilder();
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}?action=get&id=${playlistId}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentPlaylist = data.playlist;
+                    renderPlaylistBuilder();
+                    showPlaylistInfo();
+                } else {
+                    throw new Error(data.error);
+                }
+            } catch (error) {
+                showError('Erreur lors du chargement de la playlist: ' + error.message);
+            }
+        }
+
+        function renderPlaylistBuilder() {
+            const container = document.getElementById('playlistBuilder');
+            
+            if (!currentPlaylist || !currentPlaylist.items || currentPlaylist.items.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center text-muted py-5">
+                        <i class="bi bi-music-note-list" style="font-size: 3rem;"></i>
+                        <h4>Playlist vide</h4>
+                        <p>Glissez-déposez vos médias ici pour commencer</p>
+                    </div>
+                `;
+                updatePlaylistStats();
+                return;
+            }
+
+            const html = currentPlaylist.items.map((item, index) => `
+                <div class="playlist-item" data-index="${index}">
+                    <div class="d-flex align-items-center">
+                        <div class="me-3">
+                            <i class="bi bi-grip-vertical text-muted" style="cursor: move;"></i>
+                        </div>
+                        <div class="media-thumbnail me-3">
+                            ${item.thumbnail ? 
+                                `<img src="${item.thumbnail}" alt="${item.path}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 6px;">` :
+                                `<i class="bi bi-${item.type === 'video' ? 'play-circle' : 'image'}"></i>`
+                            }
+                        </div>
+                        <div class="flex-grow-1">
+                            <div class="fw-bold">${item.path}</div>
+                            <div class="text-muted small">
+                                <i class="bi bi-${item.type === 'video' ? 'camera-video' : 'image'}"></i> ${item.type}
+                                ${item.media_info?.resolution ? ` • ${item.media_info.resolution}` : ''}
+                                ${item.media_info?.size_human ? ` • ${item.media_info.size_human}` : ''}
+                            </div>
+                        </div>
+                        <div class="playlist-controls">
+                            ${item.type === 'image' ? `
+                                <div class="duration-control">
+                                    <button class="btn btn-sm btn-outline-secondary btn-duration" onclick="adjustDuration(${index}, -1)">-</button>
+                                    <input type="number" class="duration-input" value="${item.duration || 10}" min="1" max="300" 
+                                           onchange="updateItemDuration(${index}, this.value)">
+                                    <span class="small text-muted">s</span>
+                                    <button class="btn btn-sm btn-outline-secondary btn-duration" onclick="adjustDuration(${index}, 1)">+</button>
+                                </div>
+                            ` : `
+                                <span class="badge bg-primary">${formatDuration(item.media_info?.duration || 0)}</span>
+                            `}
+                            <button class="btn btn-sm btn-outline-danger" onclick="removePlaylistItem(${index})">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+            container.innerHTML = html;
+            updatePlaylistStats();
+            
+            // Réinitialiser Sortable
+            if (playlistSortable) {
+                playlistSortable.destroy();
+            }
+            initializeSortable();
+        }
+
+        function initializeSortable() {
+            const container = document.getElementById('playlistBuilder');
+            playlistSortable = Sortable.create(container, {
+                animation: 200,
+                ghostClass: 'sortable-ghost',
+                chosenClass: 'sortable-chosen',
+                dragClass: 'sortable-drag',
+                handle: '.bi-grip-vertical',
+                onEnd: function(evt) {
+                    if (currentPlaylist && evt.oldIndex !== evt.newIndex) {
+                        // Réorganiser les éléments
+                        const item = currentPlaylist.items.splice(evt.oldIndex, 1)[0];
+                        currentPlaylist.items.splice(evt.newIndex, 0, item);
+                        renderPlaylistBuilder();
+                    }
+                }
+            });
+        }
+
+        function showPlaylistInfo() {
+            const infoDiv = document.getElementById('playlistInfo');
+            if (currentPlaylist) {
+                document.getElementById('playlistName').value = currentPlaylist.name || '';
+                document.getElementById('playlistDescription').value = currentPlaylist.description || '';
+                infoDiv.style.display = 'block';
+            } else {
+                infoDiv.style.display = 'none';
+            }
+        }
+
+        function updatePlaylistStats() {
+            if (!currentPlaylist) {
+                document.getElementById('statItems').textContent = '0';
+                document.getElementById('statDuration').textContent = '0';
+                document.getElementById('statVideos').textContent = '0';
+                return;
+            }
+
+            const items = currentPlaylist.items || [];
+            let totalDuration = 0;
+            let videoCount = 0;
+
+            items.forEach(item => {
+                if (item.type === 'video') {
+                    videoCount++;
+                    totalDuration += item.media_info?.duration || 0;
+                } else {
+                    totalDuration += item.duration || 10;
+                }
+            });
+
+            document.getElementById('statItems').textContent = items.length;
+            document.getElementById('statDuration').textContent = Math.round(totalDuration / 60);
+            document.getElementById('statVideos').textContent = videoCount;
+        }
+
+        // Actions sur les playlists
+        function addMediaToCurrentPlaylist(mediaData) {
+            if (!currentPlaylist) {
+                createNewPlaylistWithMedia(mediaData);
+                return;
+            }
+
+            const newItem = {
+                path: mediaData.name,
+                type: mediaData.type,
+                media_info: mediaData,
+                added: new Date().toISOString()
+            };
+
+            if (mediaData.type === 'image') {
+                newItem.duration = 10; // Durée par défaut
+            }
+
+            currentPlaylist.items = currentPlaylist.items || [];
+            currentPlaylist.items.push(newItem);
+            renderPlaylistBuilder();
+        }
+
+        async function addMediaToPlaylist(mediaName) {
+            const mediaData = mediaLibraryData.find(m => m.name === mediaName);
+            if (mediaData) {
+                addMediaToCurrentPlaylist(mediaData);
+            }
+        }
+
+        function removePlaylistItem(index) {
+            if (currentPlaylist && currentPlaylist.items) {
+                currentPlaylist.items.splice(index, 1);
+                renderPlaylistBuilder();
+            }
+        }
+
+        function adjustDuration(index, delta) {
+            if (currentPlaylist && currentPlaylist.items[index]) {
+                const item = currentPlaylist.items[index];
+                if (item.type === 'image') {
+                    const newDuration = Math.max(1, Math.min(300, (item.duration || 10) + delta));
+                    item.duration = newDuration;
+                    renderPlaylistBuilder();
+                }
+            }
+        }
+
+        function updateItemDuration(index, duration) {
+            if (currentPlaylist && currentPlaylist.items[index]) {
+                const item = currentPlaylist.items[index];
+                if (item.type === 'image') {
+                    item.duration = Math.max(1, Math.min(300, parseInt(duration) || 10));
+                    updatePlaylistStats();
+                }
+            }
+        }
+
+        // Création et sauvegarde
+        function createNewPlaylist() {
+            const modal = new bootstrap.Modal(document.getElementById('newPlaylistModal'));
+            document.getElementById('newPlaylistForm').reset();
+            modal.show();
+        }
+
+        async function createPlaylist() {
+            const name = document.getElementById('newPlaylistName').value.trim();
+            const description = document.getElementById('newPlaylistDescription').value.trim();
+            const defaultImageDuration = parseInt(document.getElementById('defaultImageDuration').value) || 10;
+            const transition = document.getElementById('playlistTransition').value;
+            const loop = document.getElementById('playlistLoop').checked;
+            const shuffle = document.getElementById('playlistShuffle').checked;
+
+            if (!name) {
+                showError('Le nom de la playlist est requis');
+                return;
+            }
+
+            try {
+                const response = await fetch(API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'create',
+                        name: name,
+                        description: description,
+                        settings: {
+                            default_image_duration: defaultImageDuration,
+                            transition: transition,
+                            loop: loop,
+                            shuffle: shuffle
+                        }
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentPlaylist = data.playlist;
+                    await loadPlaylists();
+                    document.getElementById('currentPlaylistSelect').value = currentPlaylist.id;
+                    renderPlaylistBuilder();
+                    showPlaylistInfo();
+                    
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('newPlaylistModal'));
+                    modal.hide();
+                    
+                    showSuccess('Playlist créée avec succès');
+                } else {
+                    throw new Error(data.error);
+                }
+            } catch (error) {
+                showError('Erreur lors de la création: ' + error.message);
+            }
+        }
+
+        async function saveCurrentPlaylist() {
+            if (!currentPlaylist) {
+                showError('Aucune playlist à sauvegarder');
+                return;
+            }
+
+            // Mettre à jour les informations de base
+            currentPlaylist.name = document.getElementById('playlistName').value.trim();
+            currentPlaylist.description = document.getElementById('playlistDescription').value.trim();
+
+            if (!currentPlaylist.name) {
+                showError('Le nom de la playlist est requis');
+                return;
+            }
+
+            try {
+                const response = await fetch(API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'update',
+                        id: currentPlaylist.id,
+                        name: currentPlaylist.name,
+                        description: currentPlaylist.description,
+                        items: currentPlaylist.items || []
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    await loadPlaylists();
+                    showSuccess('Playlist sauvegardée avec succès');
+                } else {
+                    throw new Error(data.error);
+                }
+            } catch (error) {
+                showError('Erreur lors de la sauvegarde: ' + error.message);
+            }
+        }
+
+        // Fonctionnalités avancées
+        function previewPlaylist() {
+            if (!currentPlaylist || !currentPlaylist.items || currentPlaylist.items.length === 0) {
+                showError('Playlist vide');
+                return;
+            }
+
+            const content = document.getElementById('previewContent');
+            let totalDuration = 0;
+
+            const html = currentPlaylist.items.map((item, index) => {
+                const duration = item.type === 'video' ? (item.media_info?.duration || 0) : (item.duration || 10);
+                totalDuration += duration;
+                
+                return `
+                    <div class="d-flex align-items-center mb-2 p-2 border rounded">
+                        <span class="badge bg-primary me-2">${index + 1}</span>
+                        <div class="flex-grow-1">
+                            <div class="fw-bold">${item.path}</div>
+                            <small class="text-muted">${formatDuration(duration)}</small>
+                        </div>
+                        <i class="bi bi-${item.type === 'video' ? 'camera-video' : 'image'} text-muted"></i>
+                    </div>
+                `;
+            }).join('');
+
+            content.innerHTML = `
+                <div class="mb-3">
+                    <h6>${currentPlaylist.name}</h6>
+                    <div class="text-muted">
+                        ${currentPlaylist.items.length} éléments • Durée totale: ${formatDuration(totalDuration)}
+                    </div>
+                </div>
+                <div class="border-top pt-3">
+                    ${html}
+                </div>
+            `;
+
+            document.getElementById('playlistPreview').style.display = 'block';
+        }
+
+        function closePreview() {
+            document.getElementById('playlistPreview').style.display = 'none';
+        }
+
+        async function refreshData() {
+            showLoading('Actualisation...');
+            try {
+                await loadMediaLibrary();
+                await loadPlaylists();
+                showSuccess('Données actualisées');
+            } catch (error) {
+                showError('Erreur lors de l\'actualisation: ' + error.message);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // Utilitaires
+        function formatDuration(seconds) {
+            if (!seconds || seconds === 0) return '0s';
+            if (seconds < 60) return `${seconds}s`;
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            return remainingSeconds > 0 ? `${minutes}m ${remainingSeconds}s` : `${minutes}m`;
+        }
+
+        function updateMediaCount() {
+            document.getElementById('mediaCount').textContent = mediaLibraryData.length;
+        }
+
+        function filterMedia() {
+            const searchTerm = document.getElementById('mediaSearch').value;
+            renderMediaLibrary(searchTerm);
+        }
+
+        function filterMediaType(type) {
+            const filtered = type === 'all' ? mediaLibraryData : 
+                           mediaLibraryData.filter(media => media.type === type);
+            renderMediaLibrary();
+            
+            // Mettre à jour les boutons actifs
+            document.querySelectorAll('[onclick^="filterMediaType"]').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+        }
+
+        function clearPlaylist() {
+            if (currentPlaylist) {
+                currentPlaylist.items = [];
+                renderPlaylistBuilder();
+            }
+        }
+
+        function clearPlaylistBuilder() {
+            currentPlaylist = null;
+            document.getElementById('playlistBuilder').innerHTML = `
+                <div class="text-center text-muted py-5">
+                    <i class="bi bi-music-note-list" style="font-size: 3rem;"></i>
+                    <h4>Glissez-déposez vos médias ici</h4>
+                    <p>Ou sélectionnez une playlist existante pour l'éditer</p>
+                </div>
+            `;
+            document.getElementById('playlistInfo').style.display = 'none';
+        }
+
+        // Fonctions d'affichage
+        function showSuccess(message) {
+            showAlert(message, 'success');
+        }
+
+        function showError(message) {
+            showAlert(message, 'danger');
+        }
+
+        function showAlert(message, type) {
+            const alertsContainer = document.getElementById('alertContainer');
+            const alertId = 'alert-' + Date.now();
+            
+            const alertHtml = `
+                <div id="${alertId}" class="alert alert-${type} alert-dismissible fade show" role="alert">
+                    <i class="bi bi-${type === 'success' ? 'check-circle' : 'exclamation-triangle'}"></i>
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+            
+            alertsContainer.insertAdjacentHTML('beforeend', alertHtml);
+            
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                const alert = document.getElementById(alertId);
+                if (alert) {
+                    const bsAlert = bootstrap.Alert.getOrCreateInstance(alert);
+                    bsAlert.close();
+                }
+            }, 5000);
+        }
+
+        function showLoading(message = 'Chargement...') {
+            // Implémentation simple - pourrait être améliorée
+            console.log('Loading:', message);
+        }
+
+        function hideLoading() {
+            console.log('Loading finished');
+        }
+
+        // Fonctionnalités à implémenter
+        function refreshMediaLibrary() {
+            refreshData();
+        }
+
+        function importPlaylist() {
+            const modal = new bootstrap.Modal(document.getElementById('importModal'));
+            modal.show();
+        }
+
+        function loadTemplates() {
+            // À implémenter
+            showError('Fonctionnalité en cours de développement');
+        }
+
+        function showStatistics() {
+            // À implémenter
+            showError('Fonctionnalité en cours de développement');
+        }
+
+        function playCurrentPlaylist() {
+            if (!currentPlaylist) {
+                showError('Aucune playlist sélectionnée');
+                return;
+            }
+            // À implémenter
+            showError('Fonctionnalité en cours de développement');
+        }
+
+        function createNewPlaylistWithMedia(mediaData) {
+            currentPlaylist = {
+                name: 'Nouvelle Playlist',
+                description: '',
+                items: [{
+                    path: mediaData.name,
+                    type: mediaData.type,
+                    media_info: mediaData,
+                    duration: mediaData.type === 'image' ? 10 : undefined,
+                    added: new Date().toISOString()
+                }],
+                settings: {
+                    loop: true,
+                    shuffle: false,
+                    default_image_duration: 10
+                }
+            };
+            renderPlaylistBuilder();
+            showPlaylistInfo();
+        }
+    </script>
+</body>
+</html>

@@ -1,11 +1,36 @@
-# 📺 Mémoire de Contexte - Pi-Signage v0.9.3
+# 📺 Mémoire de Contexte - Pi-Signage v0.9.4
 
-## 🏆 État Actuel : ✅ v0.9.3 REFACTORING PROFOND COMPLET
+## 🏆 État Actuel : ✅ v0.9.4 SYSTÈME PLAYLIST AVANCÉ
 
-**Mise à jour : 21/09/2025 - VERSION 0.9.3 100% FONCTIONNELLE**
-**Version : 0.9.3 - Système entièrement vérifié et corrigé**
-**Status : ✅ PRODUCTION-READY - Toutes fonctions opérationnelles**
+**Mise à jour : 21/09/2025 - VERSION 0.9.4 AVEC DÉPLOIEMENT AUTOMATIQUE**
+**Version : 0.9.4 - Système playlist avancé avec drag & drop**
+**Status : ✅ PRODUCTION-READY - Interface playlist manager déployée**
 **GitHub : https://github.com/elkir0/Pi-Signage**
+
+### 🔐 ACCÈS SERVEUR PRODUCTION
+**IP Production : 192.168.1.103**
+**Login SSH : pi**
+**Password : raspberry**
+**IP Développement : 192.168.1.142**
+
+## ⚠️ RÈGLES DE DÉPLOIEMENT OBLIGATOIRES
+
+### TOUJOURS utiliser le script de déploiement automatique :
+```bash
+chmod +x /opt/pisignage/deploy-production.sh
+./deploy-production.sh
+```
+
+### NE JAMAIS :
+- Dire qu'un déploiement est fait sans utiliser le script
+- Prétendre qu'une fonction est déployée sans vérification SSH
+- Ignorer les erreurs de déploiement
+
+### TOUJOURS :
+1. Commiter sur GitHub AVANT de dire "déployé"
+2. Utiliser deploy-production.sh pour TOUT déploiement
+3. Vérifier avec sshpass que les fichiers sont sur le Raspberry
+4. Tester 2 fois minimum avec Puppeteer APRÈS déploiement
 
 ---
 
@@ -42,9 +67,11 @@
 │   └── youtube-dl.sh          # Téléchargement YouTube
 ├── web/
 │   ├── index.php              # Interface 7 onglets (100% fonctionnelle)
+│   ├── playlist-manager.html  # ✅ NOUVEAU Interface drag & drop avancée
 │   └── api/
 │       ├── control.php        # ✅ SÉCURISÉ - Contrôle VLC
 │       ├── playlist.php       # ✅ REFAIT - Gestion playlists réelles
+│       ├── playlist-advanced.php # ✅ NOUVEAU - API playlists avancée 20+ endpoints
 │       ├── upload.php         # ✅ SÉCURISÉ - Upload avec MIME check
 │       ├── youtube.php        # API YouTube complète
 │       ├── settings.php       # ✅ NOUVEAU - Paramètres système

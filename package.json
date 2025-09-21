@@ -16,5 +16,13 @@
   "dependencies": {
     "fetch": "^1.1.0",
     "puppeteer": "^24.22.0"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/elkir0/Pi-Signage.git"
+  },
+  "bugs": {
+    "url": "https://github.com/elkir0/Pi-Signage/issues"
+  },
+  "homepage": "https://github.com/elkir0/Pi-Signage#readme"
 }

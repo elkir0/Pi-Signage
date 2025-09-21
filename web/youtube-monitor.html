@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Download Monitor - Pi-Signage v4.0</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .header h1 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+            font-size: 2.2em;
+        }
+
+        .header .subtitle {
+            color: #7f8c8d;
+            font-size: 1.1em;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-number {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            color: #7f8c8d;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .downloading { color: #3498db; }
+        .completed { color: #27ae60; }
+        .failed { color: #e74c3c; }
+        .pending { color: #f39c12; }
+
+        .download-form {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr auto auto auto;
+            gap: 15px;
+            align-items: end;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group label {
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .form-group input, .form-group select {
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+
+        .btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.4);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #95a5a6, #7f8c8d);
+            color: white;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+            color: white;
+        }
+
+        .downloads-section {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .downloads-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .downloads-header h2 {
+            color: #2c3e50;
+        }
+
+        .download-item {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 15px;
+            border-left: 4px solid #e0e0e0;
+            transition: all 0.3s ease;
+        }
+
+        .download-item.downloading {
+            border-left-color: #3498db;
+            background: linear-gradient(90deg, rgba(52, 152, 219, 0.1) 0%, rgba(52, 152, 219, 0.05) 100%);
+        }
+
+        .download-item.completed {
+            border-left-color: #27ae60;
+            background: linear-gradient(90deg, rgba(39, 174, 96, 0.1) 0%, rgba(39, 174, 96, 0.05) 100%);
+        }
+
+        .download-item.failed {
+            border-left-color: #e74c3c;
+            background: linear-gradient(90deg, rgba(231, 76, 60, 0.1) 0%, rgba(231, 76, 60, 0.05) 100%);
+        }
+
+        .download-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 15px;
+        }
+
+        .download-title {
+            font-size: 1.2em;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+
+        .download-url {
+            color: #7f8c8d;
+            font-size: 0.9em;
+            word-break: break-all;
+        }
+
+        .download-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 0.8em;
+        }
+
+        .progress-container {
+            margin: 15px 0;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 12px;
+            background: #e0e0e0;
+            border-radius: 6px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3498db, #2980b9);
+            border-radius: 6px;
+            transition: width 0.5s ease;
+            position: relative;
+        }
+
+        .progress-fill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(45deg, transparent 33%, rgba(255,255,255,0.3) 33%, rgba(255,255,255,0.3) 66%, transparent 66%);
+            background-size: 20px 20px;
+            animation: progress-animation 1s linear infinite;
+        }
+
+        @keyframes progress-animation {
+            0% { background-position: 0 0; }
+            100% { background-position: 20px 0; }
+        }
+
+        .progress-text {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 8px;
+            font-size: 0.9em;
+            color: #7f8c8d;
+        }
+
+        .download-meta {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 10px;
+            padding-top: 15px;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .meta-item {
+            text-align: center;
+        }
+
+        .meta-label {
+            font-size: 0.8em;
+            color: #7f8c8d;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .meta-value {
+            font-weight: 600;
+            color: #2c3e50;
+            margin-top: 2px;
+        }
+
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .status-downloading {
+            background: rgba(52, 152, 219, 0.2);
+            color: #2980b9;
+        }
+
+        .status-completed {
+            background: rgba(39, 174, 96, 0.2);
+            color: #27ae60;
+        }
+
+        .status-failed {
+            background: rgba(231, 76, 60, 0.2);
+            color: #c0392b;
+        }
+
+        .status-pending {
+            background: rgba(243, 156, 18, 0.2);
+            color: #e67e22;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #7f8c8d;
+        }
+
+        .empty-state i {
+            font-size: 3em;
+            margin-bottom: 15px;
+            color: #bdc3c7;
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        .alert-success {
+            background: rgba(39, 174, 96, 0.1);
+            color: #27ae60;
+            border: 1px solid rgba(39, 174, 96, 0.3);
+        }
+
+        .alert-error {
+            background: rgba(231, 76, 60, 0.1);
+            color: #e74c3c;
+            border: 1px solid rgba(231, 76, 60, 0.3);
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+            
+            .download-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            
+            .download-actions {
+                margin-top: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎬 YouTube Download Monitor</h1>
+            <div class="subtitle">Pi-Signage v4.0 - Système de téléchargement YouTube avancé</div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number downloading" id="stat-downloading">0</div>
+                <div class="stat-label">En cours</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number pending" id="stat-pending">0</div>
+                <div class="stat-label">En attente</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number completed" id="stat-completed">0</div>
+                <div class="stat-label">Terminés</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number failed" id="stat-failed">0</div>
+                <div class="stat-label">Échecs</div>
+            </div>
+        </div>
+
+        <div class="download-form">
+            <form id="download-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="youtube-url">URL YouTube</label>
+                        <input type="url" id="youtube-url" placeholder="https://www.youtube.com/watch?v=..." required>
+                    </div>
+                    <div class="form-group">
+                        <label for="quality">Qualité</label>
+                        <select id="quality">
+                            <option value="best">Meilleure</option>
+                            <option value="1080p">1080p</option>
+                            <option value="720p" selected>720p</option>
+                            <option value="480p">480p</option>
+                            <option value="360p">360p</option>
+                            <option value="worst">Minimale</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="custom-name">Nom (optionnel)</label>
+                        <input type="text" id="custom-name" placeholder="mon-video">
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <span id="download-btn-text">Télécharger</span>
+                        <div id="download-btn-loading" class="loading" style="display: none;"></div>
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <div id="alert-container"></div>
+
+        <div class="downloads-section">
+            <div class="downloads-header">
+                <h2>📋 File de téléchargement</h2>
+                <div>
+                    <button class="btn btn-secondary btn-small" onclick="refreshDownloads()">🔄 Actualiser</button>
+                    <button class="btn btn-danger btn-small" onclick="cleanupHistory()">🧹 Nettoyer</button>
+                </div>
+            </div>
+            <div id="downloads-list">
+                <div class="empty-state">
+                    <div>📥</div>
+                    <div>Aucun téléchargement en cours</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api/youtube-enhanced.php';
+        let refreshInterval;
+
+        // Fonction pour afficher une alerte
+        function showAlert(message, type = 'success') {
+            const alertContainer = document.getElementById('alert-container');
+            const alertClass = type === 'error' ? 'alert-error' : 'alert-success';
+            
+            alertContainer.innerHTML = `
+                <div class="alert ${alertClass}">
+                    ${message}
+                </div>
+            `;
+            
+            setTimeout(() => {
+                alertContainer.innerHTML = '';
+            }, 5000);
+        }
+
+        // Fonction pour formater la durée
+        function formatDuration(seconds) {
+            if (!seconds) return '--';
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = seconds % 60;
+            
+            if (hours > 0) {
+                return `${hours}h ${minutes}m ${secs}s`;
+            } else {
+                return `${minutes}m ${secs}s`;
+            }
+        }
+
+        // Fonction pour formater la date
+        function formatDate(dateString) {
+            if (!dateString) return '--';
+            const date = new Date(dateString);
+            return date.toLocaleString('fr-FR');
+        }
+
+        // Fonction pour obtenir l'icône de statut
+        function getStatusIcon(status) {
+            const icons = {
+                downloading: '⬇️',
+                completed: '✅',
+                failed: '❌',
+                pending: '⏳',
+                cancelled: '🚫',
+                timeout: '⏰'
+            };
+            return icons[status] || '❓';
+        }
+
+        // Fonction pour rafraîchir les téléchargements
+        async function refreshDownloads() {
+            try {
+                const response = await fetch(`${API_BASE}?action=queue`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    updateStats(data.stats);
+                    updateDownloadsList(data.queue);
+                } else {
+                    showAlert('Erreur lors du rafraîchissement: ' + data.error, 'error');
+                }
+            } catch (error) {
+                showAlert('Erreur de connexion: ' + error.message, 'error');
+            }
+        }
+
+        // Fonction pour mettre à jour les statistiques
+        function updateStats(stats) {
+            document.getElementById('stat-downloading').textContent = stats.downloading || 0;
+            document.getElementById('stat-pending').textContent = stats.pending || 0;
+            document.getElementById('stat-completed').textContent = stats.completed || 0;
+            document.getElementById('stat-failed').textContent = stats.failed || 0;
+        }
+
+        // Fonction pour mettre à jour la liste des téléchargements
+        function updateDownloadsList(downloads) {
+            const container = document.getElementById('downloads-list');
+            
+            if (!downloads || downloads.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div>📥</div>
+                        <div>Aucun téléchargement en cours</div>
+                    </div>
+                `;
+                return;
+            }
+
+            // Trier par date de création (plus récent en premier)
+            downloads.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+            container.innerHTML = downloads.map(download => `
+                <div class="download-item ${download.status}">
+                    <div class="download-header">
+                        <div>
+                            <div class="download-title">
+                                ${getStatusIcon(download.status)} ${download.video_title || 'Titre en cours de récupération...'}
+                            </div>
+                            <div class="download-url">${download.url}</div>
+                        </div>
+                        <div class="download-actions">
+                            <span class="status-badge status-${download.status}">${download.status}</span>
+                            ${download.status === 'downloading' || download.status === 'pending' 
+                                ? `<button class="btn btn-danger btn-small" onclick="cancelDownload('${download.id}')">Annuler</button>`
+                                : ''
+                            }
+                        </div>
+                    </div>
+                    
+                    ${download.status === 'downloading' ? `
+                        <div class="progress-container">
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: ${download.progress}%"></div>
+                            </div>
+                            <div class="progress-text">
+                                <span>${download.message}</span>
+                                <span>${download.progress}% ${download.eta ? '(ETA: ' + download.eta + ')' : ''}</span>
+                            </div>
+                        </div>
+                    ` : ''}
+                    
+                    ${download.error ? `
+                        <div class="alert alert-error" style="margin-top: 10px;">
+                            <strong>Erreur:</strong> ${download.error}
+                        </div>
+                    ` : ''}
+                    
+                    <div class="download-meta">
+                        <div class="meta-item">
+                            <div class="meta-label">Qualité</div>
+                            <div class="meta-value">${download.quality}</div>
+                        </div>
+                        <div class="meta-item">
+                            <div class="meta-label">Durée</div>
+                            <div class="meta-value">${formatDuration(download.video_duration)}</div>
+                        </div>
+                        <div class="meta-item">
+                            <div class="meta-label">Créé le</div>
+                            <div class="meta-value">${formatDate(download.created_at)}</div>
+                        </div>
+                        ${download.finished_at ? `
+                            <div class="meta-item">
+                                <div class="meta-label">Terminé le</div>
+                                <div class="meta-value">${formatDate(download.finished_at)}</div>
+                            </div>
+                        ` : ''}
+                        ${download.output_file ? `
+                            <div class="meta-item">
+                                <div class="meta-label">Fichier</div>
+                                <div class="meta-value">${download.output_file}</div>
+                            </div>
+                        ` : ''}
+                        ${download.file_size ? `
+                            <div class="meta-item">
+                                <div class="meta-label">Taille</div>
+                                <div class="meta-value">${download.file_size}</div>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Fonction pour démarrer un téléchargement
+        async function startDownload(url, quality, customName) {
+            const btn = document.getElementById('download-btn-text');
+            const loading = document.getElementById('download-btn-loading');
+            
+            btn.style.display = 'none';
+            loading.style.display = 'inline-block';
+            
+            try {
+                const response = await fetch(`${API_BASE}?action=download`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        url: url,
+                        quality: quality,
+                        name: customName
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert(`✅ Téléchargement démarré avec succès! ID: ${data.download_id}`);
+                    document.getElementById('download-form').reset();
+                    document.getElementById('quality').value = '720p'; // Reset à la valeur par défaut
+                    refreshDownloads();
+                } else {
+                    showAlert('❌ Erreur: ' + data.error, 'error');
+                }
+            } catch (error) {
+                showAlert('❌ Erreur de connexion: ' + error.message, 'error');
+            } finally {
+                btn.style.display = 'inline';
+                loading.style.display = 'none';
+            }
+        }
+
+        // Fonction pour annuler un téléchargement
+        async function cancelDownload(downloadId) {
+            if (!confirm('Êtes-vous sûr de vouloir annuler ce téléchargement?')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}?action=cancel`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        id: downloadId
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert('🚫 Téléchargement annulé');
+                    refreshDownloads();
+                } else {
+                    showAlert('❌ Erreur lors de l\'annulation: ' + data.error, 'error');
+                }
+            } catch (error) {
+                showAlert('❌ Erreur de connexion: ' + error.message, 'error');
+            }
+        }
+
+        // Fonction pour nettoyer l'historique
+        async function cleanupHistory() {
+            if (!confirm('Êtes-vous sûr de vouloir nettoyer l\'historique des téléchargements terminés?')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}?action=cleanup`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({})
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert('🧹 ' + data.message);
+                    refreshDownloads();
+                } else {
+                    showAlert('❌ Erreur lors du nettoyage: ' + data.error, 'error');
+                }
+            } catch (error) {
+                showAlert('❌ Erreur de connexion: ' + error.message, 'error');
+            }
+        }
+
+        // Gestionnaire de soumission du formulaire
+        document.getElementById('download-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const url = document.getElementById('youtube-url').value.trim();
+            const quality = document.getElementById('quality').value;
+            const customName = document.getElementById('custom-name').value.trim();
+            
+            if (!url) {
+                showAlert('❌ Veuillez saisir une URL YouTube', 'error');
+                return;
+            }
+            
+            startDownload(url, quality, customName || null);
+        });
+
+        // Démarrer le rafraîchissement automatique
+        function startAutoRefresh() {
+            refreshDownloads(); // Rafraîchissement initial
+            
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+            
+            refreshInterval = setInterval(refreshDownloads, 2000); // Toutes les 2 secondes
+        }
+
+        // Arrêter le rafraîchissement automatique
+        function stopAutoRefresh() {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+                refreshInterval = null;
+            }
+        }
+
+        // Gestion de la visibilité de la page
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                stopAutoRefresh();
+            } else {
+                startAutoRefresh();
+            }
+        });
+
+        // Initialisation
+        document.addEventListener('DOMContentLoaded', function() {
+            startAutoRefresh();
+            
+            // Test de connexion API
+            fetch(`${API_BASE}?action=requirements`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.ready) {
+                        showAlert('✅ Système YouTube prêt - Version ' + (data.version || '4.0.0'));
+                    } else {
+                        showAlert('⚠️ Système YouTube non prêt - Vérifiez les prérequis', 'error');
+                    }
+                })
+                .catch(error => {
+                    showAlert('❌ Impossible de se connecter à l\'API: ' + error.message, 'error');
+                });
+        });
+
+        // Nettoyage à la fermeture
+        window.addEventListener('beforeunload', function() {
+            stopAutoRefresh();
+        });
+    </script>
+</body>
+</html>
