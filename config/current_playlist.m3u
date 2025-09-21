@@ -1,0 +1,4 @@
+#EXTM3U
+#PLAYLIST:Défaut
+#EXTINF:887,sintel.mp4
+file:///opt/pisignage/media/sintel.mp4

@@ -1423,83 +1423,75 @@ $mediaFiles = getMediaFiles();
 
         <!-- Display Tab -->
         <div id="display-tab" class="tab-content">
-            <div class="grid-3">
-                <!-- Display Settings -->
+            <div class="grid-2">
+                <!-- Display Settings FONCTIONNELS -->
                 <div class="card">
                     <h2>🖥️ Configuration affichage</h2>
+                    
                     <div class="form-group">
-                        <label class="form-label">Résolution</label>
-                        <select class="form-select" id="displayResolution">
-                            <option value="1920x1080">1920x1080 (Full HD)</option>
-                            <option value="1366x768">1366x768 (HD)</option>
-                            <option value="1280x720">1280x720 (HD 720p)</option>
-                            <option value="auto">Automatique</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Orientation</label>
-                        <select class="form-select" id="displayOrientation">
-                            <option value="landscape">Paysage</option>
-                            <option value="portrait">Portrait</option>
-                            <option value="landscape-flipped">Paysage inversé</option>
-                            <option value="portrait-flipped">Portrait inversé</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Volume (%)</label>
-                        <input type="range" class="form-input" id="displayVolume" min="0" max="100" value="80">
+                        <label class="form-label">Volume audio (%)</label>
+                        <input type="range" class="form-input" id="displayVolume" min="0" max="100" value="80" onchange="updateVolume(this.value)">
                         <div style="text-align: center; margin-top: 0.5rem;">
                             <span id="volumeValue">80</span>%
                         </div>
                     </div>
-                </div>
-
-                <!-- Transitions -->
-                <div class="card">
-                    <h2>🔄 Effets de transition</h2>
+                    
                     <div class="form-group">
-                        <label class="form-label">Type de transition</label>
-                        <select class="form-select" id="transitionType">
-                            <option value="fade">Fondu</option>
-                            <option value="slide_left">Glissement gauche</option>
-                            <option value="slide_right">Glissement droite</option>
-                            <option value="slide_up">Glissement haut</option>
-                            <option value="slide_down">Glissement bas</option>
-                            <option value="zoom_in">Zoom avant</option>
-                            <option value="zoom_out">Zoom arrière</option>
-                            <option value="none">Aucune</option>
+                        <label class="form-label">Durée d'affichage des images (secondes)</label>
+                        <input type="number" class="form-input" id="imageDuration" value="10" min="1" max="300" step="1">
+                        <small style="color: #666;">Temps d'affichage par défaut pour les images dans les playlists</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Mode de lecture</label>
+                        <select class="form-select" id="playbackMode">
+                            <option value="loop">Boucle infinie</option>
+                            <option value="once">Une fois</option>
+                            <option value="random">Aléatoire</option>
                         </select>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">Durée (ms)</label>
-                        <input type="number" class="form-input" id="transitionDuration" value="1000" min="0" max="5000" step="100">
-                    </div>
-                    <button class="btn btn-info" onclick="previewTransition()">
-                        👁️ Aperçu
+                    
+                    <button class="btn btn-primary btn-full" onclick="saveDisplaySettings()">
+                        💾 Sauvegarder les paramètres
                     </button>
                 </div>
 
-                <!-- Multi-zones -->
+                <!-- Playlist Active -->
                 <div class="card">
-                    <h2>🔲 Multi-zones</h2>
-                    <div class="btn-group">
-                        <button class="btn btn-primary" onclick="addZone()">
-                            ➕ Ajouter zone
-                        </button>
-                        <button class="btn btn-info" onclick="previewZones()">
-                            👁️ Aperçu
-                        </button>
-                        <button class="btn btn-secondary" onclick="resetZones()">
-                            🔄 Reset
-                        </button>
-                    </div>
-                    <div id="zonesList" style="margin-top: 1rem;">
+                    <h2>📋 Playlist Active</h2>
+                    <div id="activePlaylistInfo">
                         <div class="empty-state">
-                            <div class="icon">🔲</div>
-                            <p>Zone principale uniquement</p>
+                            <div class="icon">📁</div>
+                            <p>Playlist par défaut (tous les médias)</p>
                         </div>
                     </div>
+                    
+                    <div class="form-group" style="margin-top: 1rem;">
+                        <label class="form-label">Changer de playlist</label>
+                        <select class="form-select" id="activePlaylistSelect" onchange="changeActivePlaylist(this.value)">
+                            <option value="default">Playlist par défaut</option>
+                        </select>
+                    </div>
+                    
+                    <div class="btn-group" style="margin-top: 1rem;">
+                        <button class="btn btn-success" onclick="restartPlaylist()">
+                            🔄 Redémarrer playlist
+                        </button>
+                        <button class="btn btn-info" onclick="refreshPlaylistInfo()">
+                            🔃 Actualiser infos
+                        </button>
+                    </div>
                 </div>
+            </div>
+            
+            <div class="card" style="margin-top: 1rem;">
+                <h2>ℹ️ Informations système</h2>
+                <div id="displayInfo" style="font-family: monospace; padding: 1rem; background: #f5f5f5; border-radius: 4px;">
+                    <div>Chargement des informations...</div>
+                </div>
+                <button class="btn btn-secondary" onclick="getPlaylistStatus()" style="margin-top: 1rem;">
+                    📊 Statut du lecteur
+                </button>
             </div>
         </div>
 
@@ -2673,247 +2665,160 @@ $mediaFiles = getMediaFiles();
             loadActiveSchedules();
         }
 
-        function addZone() {
-            const zonesList = document.getElementById('zonesList');
-            const zoneCount = zonesList.querySelectorAll('.zone-item').length;
-            
-            if (zoneCount >= 4) {
-                showAlert('⚠️ Maximum 4 zones autorisées', 'warning');
-                return;
-            }
-            
-            const zoneId = `zone_${Date.now()}`;
-            const zoneDiv = document.createElement('div');
-            zoneDiv.className = 'zone-item';
-            zoneDiv.innerHTML = `
-                <div class="form-group">
-                    <label>Zone ${zoneCount + 1}</label>
-                    <div class="zone-controls">
-                        <input type="number" placeholder="X" value="${zoneCount * 25}" min="0" max="100" style="width: 60px;">
-                        <input type="number" placeholder="Y" value="0" min="0" max="100" style="width: 60px;">
-                        <input type="number" placeholder="W" value="25" min="10" max="100" style="width: 60px;">
-                        <input type="number" placeholder="H" value="100" min="10" max="100" style="width: 60px;">
-                        <select style="width: 100px;">
-                            <option value="video">Vidéo</option>
-                            <option value="image">Image</option>
-                            <option value="text">Texte</option>
-                        </select>
-                        <button type="button" onclick="removeZone(this)" class="btn btn-sm btn-danger">❌</button>
-                    </div>
-                </div>
-            `;
-            
-            // Enlever l'empty state s'il existe
-            const emptyState = zonesList.querySelector('.empty-state');
-            if (emptyState) {
-                emptyState.remove();
-            }
-            
-            zonesList.appendChild(zoneDiv);
-            showAlert('✅ Zone ajoutée', 'success');
+        // Fonction pour mettre à jour le volume
+        function updateVolume(value) {
+            document.getElementById('volumeValue').textContent = value;
+            // Appliquer le volume via amixer
+            fetch('/api/settings.php', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    action: 'save-settings',
+                    settings: {display_volume: value}
+                })
+            });
         }
 
-        function previewZones() {
-            const zones = document.querySelectorAll('.zone-item');
-            if (zones.length === 0) {
-                showAlert('⚠️ Aucune zone à prévisualiser', 'warning');
-                return;
-            }
+        // Fonction pour sauvegarder les paramètres d'affichage
+        function saveDisplaySettings() {
+            const settings = {
+                display_volume: document.getElementById('displayVolume').value,
+                image_duration: document.getElementById('imageDuration').value,
+                playback_mode: document.getElementById('playbackMode').value
+            };
             
-            // Créer un overlay de prévisualisation
-            const overlay = document.createElement('div');
-            overlay.id = 'zone-preview-overlay';
-            overlay.style.cssText = `
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: rgba(0,0,0,0.8);
-                z-index: 10000;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            `;
+            fetch('/api/settings.php', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({action: 'save-settings', settings: settings})
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert('Paramètres sauvegardés', 'success');
+                    // Mettre à jour la config de la playlist
+                    updatePlaylistConfig();
+                } else {
+                    showAlert('Erreur: ' + data.error, 'error');
+                }
+            });
+        }
+
+        // Fonction pour changer la playlist active
+        function changeActivePlaylist(playlistId) {
+            if (!playlistId) return;
             
-            const previewContainer = document.createElement('div');
-            previewContainer.style.cssText = `
-                position: relative;
-                width: 80vmin;
-                height: 45vmin;
-                background: #000;
-                border: 2px solid #fff;
-            `;
-            
-            zones.forEach((zone, index) => {
-                const inputs = zone.querySelectorAll('input');
-                const select = zone.querySelector('select');
-                
-                const zonePreview = document.createElement('div');
-                zonePreview.style.cssText = `
-                    position: absolute;
-                    left: ${inputs[0].value}%;
-                    top: ${inputs[1].value}%;
-                    width: ${inputs[2].value}%;
-                    height: ${inputs[3].value}%;
-                    border: 2px solid #ff0000;
-                    background: rgba(255,0,0,0.1);
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    color: white;
-                    font-weight: bold;
-                `;
-                zonePreview.textContent = `Zone ${index + 1} (${select.value})`;
-                previewContainer.appendChild(zonePreview);
+            fetch(`/api/playlist.php?action=play&id=${playlistId}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert(`Playlist "${data.playing}" activée`, 'success');
+                    refreshPlaylistInfo();
+                } else {
+                    showAlert('Erreur: ' + data.error, 'error');
+                }
+            });
+        }
+
+        // Fonction pour redémarrer la playlist
+        function restartPlaylist() {
+            fetch('/api/control.php?action=stop')
+            .then(() => {
+                setTimeout(() => {
+                    fetch('/api/control.php?action=start')
+                    .then(() => {
+                        showAlert('Playlist redémarrée', 'success');
+                        refreshPlaylistInfo();
+                    });
+                }, 1000);
+            });
+        }
+
+        // Fonction pour rafraîchir les infos de la playlist
+        function refreshPlaylistInfo() {
+            fetch('/api/control.php?action=status')
+            .then(response => response.json())
+            .then(data => {
+                const info = document.getElementById('activePlaylistInfo');
+                if (data.status && data.status.includes('En lecture')) {
+                    info.innerHTML = `
+                        <div style="padding: 1rem; background: #e8f5e9; border-radius: 4px;">
+                            <div style="color: #2e7d32; font-weight: bold;">▶️ ${data.status}</div>
+                        </div>
+                    `;
+                } else {
+                    info.innerHTML = `
+                        <div class="empty-state">
+                            <div class="icon">⏸️</div>
+                            <p>Lecteur arrêté</p>
+                        </div>
+                    `;
+                }
             });
             
-            const closeBtn = document.createElement('button');
-            closeBtn.textContent = '❌ Fermer';
-            closeBtn.style.cssText = `
-                position: absolute;
-                top: 10px;
-                right: 10px;
-                background: #fff;
-                border: none;
-                padding: 10px;
-                cursor: pointer;
-            `;
-            closeBtn.onclick = () => overlay.remove();
-            
-            overlay.appendChild(previewContainer);
-            overlay.appendChild(closeBtn);
-            document.body.appendChild(overlay);
-            
-            showAlert('👁️ Aperçu des zones activé', 'info');
+            // Rafraîchir la liste des playlists
+            loadPlaylistsForSelect();
         }
 
-        function resetZones() {
-            if (!confirm('Réinitialiser toutes les zones ?')) return;
+        // Fonction pour obtenir le statut détaillé
+        function getPlaylistStatus() {
+            const bash = '/opt/pisignage/scripts/playlist-engine.sh status';
             
-            const zonesList = document.getElementById('zonesList');
-            zonesList.innerHTML = `
-                <div class="empty-state">
-                    <div class="icon">🔲</div>
-                    <p>Zone principale uniquement</p>
-                </div>
-            `;
-            
-            showAlert('✅ Zones réinitialisées', 'info');
+            fetch('/api/control.php', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({action: 'exec', command: bash})
+            })
+            .then(response => response.text())
+            .then(output => {
+                document.getElementById('displayInfo').innerHTML = `<pre>${output}</pre>`;
+            })
+            .catch(() => {
+                // Fallback : utiliser l'ancien système
+                fetch('/api/control.php?action=status')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('displayInfo').innerHTML = `<pre>Status: ${data.status}</pre>`;
+                });
+            });
         }
 
-        function previewTransition() {
-            const transitionType = document.getElementById('transitionType').value;
-            const duration = document.getElementById('transitionDuration').value;
-            
-            // Créer un demo simple de transition
-            const demoContainer = document.createElement('div');
-            demoContainer.style.cssText = `
-                position: fixed;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                width: 400px;
-                height: 300px;
-                background: #000;
-                border: 2px solid #fff;
-                z-index: 10000;
-                overflow: hidden;
-            `;
-            
-            const slide1 = document.createElement('div');
-            slide1.style.cssText = `
-                position: absolute;
-                width: 100%;
-                height: 100%;
-                background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                color: white;
-                font-size: 24px;
-                font-weight: bold;
-            `;
-            slide1.textContent = 'Vidéo 1';
-            
-            const slide2 = document.createElement('div');
-            slide2.style.cssText = `
-                position: absolute;
-                width: 100%;
-                height: 100%;
-                background: linear-gradient(45deg, #45b7d1, #96ceb4);
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                color: white;
-                font-size: 24px;
-                font-weight: bold;
-            `;
-            slide2.textContent = 'Vidéo 2';
-            
-            // Appliquer la transition selon le type
-            switch(transitionType) {
-                case 'fade':
-                    slide2.style.opacity = '0';
-                    slide2.style.transition = `opacity ${duration}ms ease`;
-                    break;
-                case 'slide-left':
-                    slide2.style.transform = 'translateX(100%)';
-                    slide2.style.transition = `transform ${duration}ms ease`;
-                    break;
-                case 'slide-up':
-                    slide2.style.transform = 'translateY(100%)';
-                    slide2.style.transition = `transform ${duration}ms ease`;
-                    break;
-                case 'zoom':
-                    slide2.style.transform = 'scale(0)';
-                    slide2.style.transition = `transform ${duration}ms ease`;
-                    break;
-                default:
-                    slide2.style.opacity = '0';
-                    slide2.style.transition = `opacity ${duration}ms ease`;
-            }
-            
-            demoContainer.appendChild(slide1);
-            demoContainer.appendChild(slide2);
-            
-            const closeBtn = document.createElement('button');
-            closeBtn.textContent = '❌';
-            closeBtn.style.cssText = `
-                position: absolute;
-                top: 10px;
-                right: 10px;
-                background: rgba(255,255,255,0.8);
-                border: none;
-                width: 30px;
-                height: 30px;
-                cursor: pointer;
-                border-radius: 50%;
-            `;
-            closeBtn.onclick = () => demoContainer.remove();
-            demoContainer.appendChild(closeBtn);
-            
-            document.body.appendChild(demoContainer);
-            
-            // Démarrer la transition après un court délai
-            setTimeout(() => {
-                switch(transitionType) {
-                    case 'fade':
-                        slide2.style.opacity = '1';
-                        break;
-                    case 'slide-left':
-                    case 'slide-up':
-                        slide2.style.transform = 'translate(0, 0)';
-                        break;
-                    case 'zoom':
-                        slide2.style.transform = 'scale(1)';
-                        break;
-                    default:
-                        slide2.style.opacity = '1';
+        // Fonction pour charger les playlists dans le select
+        function loadPlaylistsForSelect() {
+            fetch('/api/playlist.php?action=list')
+            .then(response => response.json())
+            .then(data => {
+                const select = document.getElementById('activePlaylistSelect');
+                select.innerHTML = '<option value="default">Playlist par défaut</option>';
+                
+                if (data.playlists && data.playlists.length > 0) {
+                    data.playlists.forEach(playlist => {
+                        const option = document.createElement('option');
+                        option.value = playlist.id;
+                        option.textContent = playlist.name;
+                        select.appendChild(option);
+                    });
                 }
-            }, 500);
+            });
+        }
+
+        // Fonction pour mettre à jour la configuration de la playlist
+        function updatePlaylistConfig() {
+            const imageDuration = document.getElementById('imageDuration').value;
+            const playbackMode = document.getElementById('playbackMode').value;
             
-            showAlert(`🎥 Aperçu transition: ${transitionType} (${duration}ms)`, 'info');
+            // Sauvegarder dans le JSON de configuration
+            fetch('/api/playlist.php', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    action: 'update-config',
+                    config: {
+                        default_item_duration: imageDuration,
+                        playback_mode: playbackMode
+                    }
+                })
+            });
         }
 
         function saveSystemSettings() {
@@ -3398,24 +3303,6 @@ $mediaFiles = getMediaFiles();
             loadActiveSchedules();
         }
         
-        function removeZone(button) {
-            const zoneItem = button.closest('.zone-item');
-            if (zoneItem) {
-                zoneItem.remove();
-                showAlert('✅ Zone supprimée', 'success');
-                
-                // Si c'était la dernière zone, remettre l'empty state
-                const zonesList = document.getElementById('zonesList');
-                if (zonesList.querySelectorAll('.zone-item').length === 0) {
-                    zonesList.innerHTML = `
-                        <div class="empty-state">
-                            <div class="icon">🔲</div>
-                            <p>Zone principale uniquement</p>
-                        </div>
-                    `;
-                }
-            }
-        }
     </script>
 </body>
 </html>

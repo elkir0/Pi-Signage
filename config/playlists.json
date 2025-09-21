@@ -16,7 +16,7 @@
       "modified": "2025-09-19 00:00:00"
     }
   ],
-  "active_playlist": null,
+  "active_playlist": "default",
   "global_settings": {
     "default_item_duration": 10,
     "default_transition": "fade",
@@ -45,7 +45,13 @@
         "description": "Du lundi au vendredi, 9h-17h",
         "rules": [
           {
-            "days": ["monday", "tuesday", "wednesday", "thursday", "friday"],
+            "days": [
+              "monday",
+              "tuesday",
+              "wednesday",
+              "thursday",
+              "friday"
+            ],
             "start_time": "09:00",
             "end_time": "17:00"
           }
@@ -56,7 +62,10 @@
         "description": "Samedi et dimanche, toute la journée",
         "rules": [
           {
-            "days": ["saturday", "sunday"],
+            "days": [
+              "saturday",
+              "sunday"
+            ],
             "start_time": "00:00",
             "end_time": "23:59"
           }
@@ -67,7 +76,15 @@
         "description": "Fonctionnement continu",
         "rules": [
           {
-            "days": ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"],
+            "days": [
+              "monday",
+              "tuesday",
+              "wednesday",
+              "thursday",
+              "friday",
+              "saturday",
+              "sunday"
+            ],
             "start_time": "00:00",
             "end_time": "23:59"
           }
@@ -90,7 +107,7 @@
     },
     {
       "name": "slide_right",
-      "label": "Glissement droite", 
+      "label": "Glissement droite",
       "description": "Le nouveau média glisse depuis la gauche",
       "default_duration": 800
     },
