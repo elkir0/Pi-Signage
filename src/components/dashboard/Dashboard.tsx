@@ -72,186 +72,358 @@ export default function Dashboard() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="animate-pulse text-red-600">Chargement...</div>
+        <div className="ps-card flex items-center space-x-3 px-6 py-4">
+          <div className="ps-animate-pulse-crimson w-6 h-6 bg-crimson-500 rounded-full" />
+          <span className="ps-gradient-text text-lg font-medium">Chargement du tableau de bord...</span>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="text-center mb-8">
-        <h1 className="text-4xl font-bold text-gradient-free mb-2">
-          PiSignage Control Center
+    <div className="space-y-8">
+      {/* Hero Header */}
+      <div className="text-center mb-12 ps-animate-fade-in">
+        <h1 className="text-5xl lg:text-6xl font-bold ps-gradient-text mb-4 ps-animate-shimmer">
+          Control Center
         </h1>
-        <p className="text-gray-400">Système de signalisation numérique</p>
+        <p className="text-xl text-white/70 font-light tracking-wide">
+          Système de signalisation numérique haute performance
+        </p>
+        <div className="mt-6 flex justify-center">
+          <div className="ps-glass px-6 py-2 rounded-full border border-crimson-500/30">
+            <span className="text-emerald-400 font-medium">🟢 Système opérationnel</span>
+          </div>
+        </div>
       </div>
 
       {/* VLC Control Panel */}
-      <div className="card-free glow-red p-6">
-        <h2 className="text-xl font-bold text-red-500 mb-4 flex items-center gap-2">
-          <Monitor className="w-6 h-6" />
-          Contrôle VLC
-        </h2>
+      <div className="ps-card-elevated ps-glow-crimson p-8 ps-animate-slide-in-right">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold ps-gradient-text flex items-center gap-3">
+            <div className="p-2 ps-surface rounded-lg">
+              <Monitor className="w-6 h-6 text-crimson-400" />
+            </div>
+            Contrôle Multimédia VLC
+          </h2>
+          <div className={`px-4 py-2 rounded-full text-sm font-medium ${
+            systemInfo?.vlcStatus === 'playing' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+            systemInfo?.vlcStatus === 'paused' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
+            'bg-red-500/20 text-red-400 border border-red-500/30'
+          }`}>
+            {systemInfo?.vlcStatus === 'playing' ? '🟢 Lecture' :
+             systemInfo?.vlcStatus === 'paused' ? '🟡 Pause' : '🔴 Arrêté'}
+          </div>
+        </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <div className="flex gap-2 mb-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-2 space-y-6">
+            {/* Control Buttons */}
+            <div className="flex flex-wrap gap-3">
               <button
                 onClick={() => handleVLCControl('play')}
-                className="btn-free flex items-center gap-2"
+                className="ps-btn-primary flex items-center gap-2 transition-smooth"
               >
-                <Play className="w-4 h-4" /> Play
+                <Play className="w-5 h-5" /> 
+                <span>Lecture</span>
               </button>
               <button
                 onClick={() => handleVLCControl('pause')}
-                className="btn-free flex items-center gap-2"
+                className="ps-btn-secondary flex items-center gap-2"
               >
-                <Pause className="w-4 h-4" /> Pause
+                <Pause className="w-5 h-5" /> 
+                <span>Pause</span>
               </button>
               <button
                 onClick={() => handleVLCControl('stop')}
-                className="btn-free flex items-center gap-2"
+                className="ps-btn-ghost flex items-center gap-2"
               >
-                <Square className="w-4 h-4" /> Stop
+                <Square className="w-5 h-5" /> 
+                <span>Arrêt</span>
               </button>
             </div>
             
-            <div className="mb-4">
-              <label className="flex items-center gap-2 text-sm text-gray-400 mb-2">
-                <Volume2 className="w-4 h-4" /> Volume: {volume}%
+            {/* Volume Control */}
+            <div className="ps-surface p-4 rounded-xl">
+              <label className="flex items-center gap-3 text-white/80 mb-3">
+                <Volume2 className="w-5 h-5 text-crimson-400" /> 
+                <span className="font-medium">Volume: </span>
+                <span className="ps-gradient-text font-bold">{volume}%</span>
               </label>
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={volume}
-                onChange={(e) => handleVolumeChange(Number(e.target.value))}
-                className="w-full accent-red-600"
-              />
+              <div className="relative">
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={volume}
+                  onChange={(e) => handleVolumeChange(Number(e.target.value))}
+                  className="w-full h-3 bg-ps-obsidian rounded-full appearance-none cursor-pointer slider"
+                />
+                <style jsx>{`
+                  .slider::-webkit-slider-thumb {
+                    appearance: none;
+                    width: 20px;
+                    height: 20px;
+                    border-radius: 50%;
+                    background: linear-gradient(135deg, hsl(var(--ps-crimson)), hsl(var(--ps-ruby)));
+                    cursor: pointer;
+                    box-shadow: 0 0 10px hsl(var(--ps-crimson) / 0.5);
+                  }
+                `}</style>
+              </div>
             </div>
             
+            {/* Current Media */}
             {systemInfo?.currentMedia && (
-              <div className="text-sm">
-                <span className="text-gray-400">Média actuel:</span>
-                <p className="text-white truncate">{systemInfo.currentMedia}</p>
+              <div className="ps-surface p-4 rounded-xl">
+                <span className="text-white/60 text-sm font-medium">Média en cours:</span>
+                <p className="text-white font-mono text-sm mt-1 truncate bg-ps-obsidian/50 px-3 py-2 rounded-lg">
+                  {systemInfo.currentMedia}
+                </p>
               </div>
             )}
           </div>
           
-          <div className="flex items-center justify-center">
-            <div className={`text-6xl ${
-              systemInfo?.vlcStatus === 'playing' ? 'text-green-500 animate-pulse' :
-              systemInfo?.vlcStatus === 'paused' ? 'text-yellow-500' :
-              'text-red-500'
+          {/* Status Visualization */}
+          <div className="flex flex-col items-center justify-center space-y-4">
+            <div className={`text-8xl transition-all duration-500 transform ${
+              systemInfo?.vlcStatus === 'playing' ? 'text-emerald-400 ps-animate-glow scale-110' :
+              systemInfo?.vlcStatus === 'paused' ? 'text-amber-400 scale-105' :
+              'text-red-400 scale-100'
             }`}>
               {systemInfo?.vlcStatus === 'playing' ? '▶' :
                systemInfo?.vlcStatus === 'paused' ? '⏸' : '⏹'}
+            </div>
+            <div className="text-center">
+              <p className="text-white/60 text-sm">État du lecteur</p>
+              <p className="text-white font-semibold capitalize">
+                {systemInfo?.vlcStatus === 'playing' ? 'En lecture' :
+                 systemInfo?.vlcStatus === 'paused' ? 'En pause' : 'Arrêté'}
+              </p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* System Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="card-free">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-gray-400 text-sm">CPU</span>
-            <Cpu className="w-4 h-4 text-red-500" />
+      {/* System Performance Stats */}
+      <div className="space-y-6">
+        <h2 className="text-2xl font-bold ps-gradient-text flex items-center gap-3">
+          <div className="p-2 ps-surface rounded-lg">
+            <Cpu className="w-6 h-6 text-crimson-400" />
           </div>
-          <div className="text-2xl font-bold text-white">
-            {systemInfo?.cpu.toFixed(1)}%
+          Performances Système
+        </h2>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+          {/* CPU Card */}
+          <div className="ps-card ps-animate-scale-in group hover:scale-105 transition-transform">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 ps-surface rounded-xl group-hover:ps-glow-crimson transition-all">
+                  <Cpu className="w-6 h-6 text-crimson-400" />
+                </div>
+                <div>
+                  <p className="text-white/60 text-sm font-medium">Processeur</p>
+                  <p className="text-white/40 text-xs">Utilisation</p>
+                </div>
+              </div>
+            </div>
+            <div className="text-3xl font-bold ps-gradient-text mb-3">
+              {systemInfo?.cpu.toFixed(1)}%
+            </div>
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs text-white/60">
+                <span>Charge</span>
+                <span>{systemInfo?.cpu.toFixed(0)}%</span>
+              </div>
+              <div className="h-2 ps-surface rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-crimson-500 to-ruby-500 transition-all duration-1000 ease-out"
+                  style={{ width: `${systemInfo?.cpu}%` }}
+                />
+              </div>
+            </div>
           </div>
-          <div className="mt-2 h-2 bg-gray-800 rounded-full overflow-hidden">
-            <div 
-              className="h-full bg-gradient-to-r from-red-600 to-red-400 transition-all"
-              style={{ width: `${systemInfo?.cpu}%` }}
-            />
-          </div>
-        </div>
 
-        <div className="card-free">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-gray-400 text-sm">Mémoire</span>
-            <HardDrive className="w-4 h-4 text-red-500" />
+          {/* Memory Card */}
+          <div className="ps-card ps-animate-scale-in group hover:scale-105 transition-transform animation-delay-200">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 ps-surface rounded-xl group-hover:ps-glow-crimson transition-all">
+                  <HardDrive className="w-6 h-6 text-amber-400" />
+                </div>
+                <div>
+                  <p className="text-white/60 text-sm font-medium">Mémoire</p>
+                  <p className="text-white/40 text-xs">RAM Système</p>
+                </div>
+              </div>
+            </div>
+            <div className="text-3xl font-bold ps-gradient-text mb-3">
+              {systemInfo?.memory.percentage.toFixed(1)}%
+            </div>
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs text-white/60">
+                <span>{formatBytes(systemInfo?.memory.used || 0)}</span>
+                <span>{formatBytes(systemInfo?.memory.total || 0)}</span>
+              </div>
+              <div className="h-2 ps-surface rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-amber-500 to-orange-500 transition-all duration-1000 ease-out"
+                  style={{ width: `${systemInfo?.memory.percentage}%` }}
+                />
+              </div>
+            </div>
           </div>
-          <div className="text-2xl font-bold text-white">
-            {systemInfo?.memory.percentage.toFixed(1)}%
-          </div>
-          <div className="text-xs text-gray-400">
-            {formatBytes(systemInfo?.memory.used || 0)} / {formatBytes(systemInfo?.memory.total || 0)}
-          </div>
-        </div>
 
-        <div className="card-free">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-gray-400 text-sm">Disque</span>
-            <HardDrive className="w-4 h-4 text-red-500" />
+          {/* Disk Card */}
+          <div className="ps-card ps-animate-scale-in group hover:scale-105 transition-transform animation-delay-400">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 ps-surface rounded-xl group-hover:ps-glow-crimson transition-all">
+                  <HardDrive className="w-6 h-6 text-blue-400" />
+                </div>
+                <div>
+                  <p className="text-white/60 text-sm font-medium">Stockage</p>
+                  <p className="text-white/40 text-xs">Disque Dur</p>
+                </div>
+              </div>
+            </div>
+            <div className="text-3xl font-bold ps-gradient-text mb-3">
+              {systemInfo?.disk.percentage.toFixed(1)}%
+            </div>
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs text-white/60">
+                <span>{formatBytes(systemInfo?.disk.used || 0)}</span>
+                <span>{formatBytes(systemInfo?.disk.total || 0)}</span>
+              </div>
+              <div className="h-2 ps-surface rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-blue-500 to-cyan-500 transition-all duration-1000 ease-out"
+                  style={{ width: `${systemInfo?.disk.percentage}%` }}
+                />
+              </div>
+            </div>
           </div>
-          <div className="text-2xl font-bold text-white">
-            {systemInfo?.disk.percentage.toFixed(1)}%
-          </div>
-          <div className="text-xs text-gray-400">
-            {formatBytes(systemInfo?.disk.used || 0)} / {formatBytes(systemInfo?.disk.total || 0)}
-          </div>
-        </div>
 
-        <div className="card-free">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-gray-400 text-sm">Température</span>
-            <Thermometer className="w-4 h-4 text-red-500" />
-          </div>
-          <div className="text-2xl font-bold text-white">
-            {systemInfo?.temperature.toFixed(1)}°C
-          </div>
-          <div className={`text-xs ${
-            (systemInfo?.temperature || 0) > 70 ? 'text-red-400' : 
-            (systemInfo?.temperature || 0) > 50 ? 'text-yellow-400' : 
-            'text-green-400'
-          }`}>
-            {(systemInfo?.temperature || 0) > 70 ? 'Chaud' : 
-             (systemInfo?.temperature || 0) > 50 ? 'Normal' : 'Froid'}
+          {/* Temperature Card */}
+          <div className="ps-card ps-animate-scale-in group hover:scale-105 transition-transform animation-delay-600">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 ps-surface rounded-xl group-hover:ps-glow-crimson transition-all">
+                  <Thermometer className={`w-6 h-6 ${
+                    (systemInfo?.temperature || 0) > 70 ? 'text-red-400' : 
+                    (systemInfo?.temperature || 0) > 50 ? 'text-orange-400' : 
+                    'text-emerald-400'
+                  }`} />
+                </div>
+                <div>
+                  <p className="text-white/60 text-sm font-medium">Température</p>
+                  <p className="text-white/40 text-xs">CPU Core</p>
+                </div>
+              </div>
+            </div>
+            <div className="text-3xl font-bold ps-gradient-text mb-3">
+              {systemInfo?.temperature.toFixed(1)}°C
+            </div>
+            <div className="space-y-2">
+              <div className={`text-sm font-medium ${
+                (systemInfo?.temperature || 0) > 70 ? 'text-red-400' : 
+                (systemInfo?.temperature || 0) > 50 ? 'text-orange-400' : 
+                'text-emerald-400'
+              }`}>
+                {(systemInfo?.temperature || 0) > 70 ? '🔥 Attention - Chaud' : 
+                 (systemInfo?.temperature || 0) > 50 ? '⚠️ Normal - Tiède' : 
+                 '❄️ Optimal - Froid'}
+              </div>
+              <div className="h-2 ps-surface rounded-full overflow-hidden">
+                <div 
+                  className={`h-full transition-all duration-1000 ease-out ${
+                    (systemInfo?.temperature || 0) > 70 ? 'bg-gradient-to-r from-red-500 to-red-600' : 
+                    (systemInfo?.temperature || 0) > 50 ? 'bg-gradient-to-r from-orange-500 to-orange-600' : 
+                    'bg-gradient-to-r from-emerald-500 to-emerald-600'
+                  }`}
+                  style={{ width: `${Math.min((systemInfo?.temperature || 0) / 80 * 100, 100)}%` }}
+                />
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Network Info */}
-      <div className="card-free p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Wifi className="w-5 h-5 text-red-500" />
-          <h3 className="text-lg font-semibold text-white">Réseau</h3>
+      {/* Network Information */}
+      <div className="ps-card-elevated p-6">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="p-2 ps-surface rounded-lg">
+            <Wifi className="w-6 h-6 text-emerald-400" />
+          </div>
+          <h3 className="text-2xl font-bold ps-gradient-text">Informations Réseau</h3>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-          <div>
-            <span className="text-gray-400">Adresse IP:</span>
-            <p className="text-white font-mono">{systemInfo?.network.ip || 'N/A'}</p>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="ps-surface p-4 rounded-xl space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+              <span className="text-white/60 text-sm font-medium">Adresse IP</span>
+            </div>
+            <p className="text-white font-mono text-lg bg-ps-obsidian/50 px-3 py-2 rounded-lg">
+              {systemInfo?.network.ip || 'N/A'}
+            </p>
           </div>
-          <div>
-            <span className="text-gray-400">Hostname:</span>
-            <p className="text-white font-mono">{systemInfo?.network.hostname || 'N/A'}</p>
+          
+          <div className="ps-surface p-4 rounded-xl space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+              <span className="text-white/60 text-sm font-medium">Nom d'hôte</span>
+            </div>
+            <p className="text-white font-mono text-lg bg-ps-obsidian/50 px-3 py-2 rounded-lg">
+              {systemInfo?.network.hostname || 'N/A'}
+            </p>
           </div>
-          <div>
-            <span className="text-gray-400">Uptime:</span>
-            <p className="text-white">{systemInfo?.uptime || 'N/A'}</p>
+          
+          <div className="ps-surface p-4 rounded-xl space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
+              <span className="text-white/60 text-sm font-medium">Temps de fonctionnement</span>
+            </div>
+            <p className="text-white text-lg bg-ps-obsidian/50 px-3 py-2 rounded-lg">
+              {systemInfo?.uptime || 'N/A'}
+            </p>
           </div>
         </div>
       </div>
 
       {/* Screenshot Section */}
-      <div className="card-free p-6">
-        <h3 className="text-xl font-bold text-red-500 mb-4">Capture d'écran</h3>
-        <Screenshot />
+      <div className="ps-card-elevated p-6">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className="p-2 ps-surface rounded-lg">
+              <Monitor className="w-6 h-6 text-purple-400" />
+            </div>
+            <h3 className="text-2xl font-bold ps-gradient-text">Capture d'Écran en Temps Réel</h3>
+          </div>
+          <div className="px-3 py-1 bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded-full text-sm">
+            Live Preview
+          </div>
+        </div>
+        <div className="ps-surface p-4 rounded-xl">
+          <Screenshot />
+        </div>
       </div>
 
-      {/* Refresh Button */}
-      <div className="flex justify-center">
+      {/* Refresh Controls */}
+      <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
         <button
           onClick={fetchSystemInfo}
-          className="btn-free flex items-center gap-2"
+          className="ps-btn-primary flex items-center gap-3 px-8 py-3"
         >
-          <RefreshCw className="w-4 h-4" />
-          Actualiser les informations
+          <RefreshCw className="w-5 h-5" />
+          <span className="font-medium">Actualiser les Données</span>
         </button>
+        
+        <div className="flex items-center gap-2 text-white/60 text-sm">
+          <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+          <span>Mise à jour automatique toutes les 5 secondes</span>
+        </div>
       </div>
     </div>
   );

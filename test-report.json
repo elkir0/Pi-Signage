@@ -1,0 +1,70 @@
+{
+  "global": {
+    "errors": [
+      "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ],
+    "warnings": [],
+    "logs": [
+      "%cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold"
+    ]
+  },
+  "tabs": {
+    "dashboard": {
+      "errors": [],
+      "warnings": [],
+      "logs": [],
+      "content": null,
+      "screenshot": null,
+      "error": "Waiting for selector `[value=\"dashboard\"]` failed"
+    },
+    "playlist": {
+      "errors": [],
+      "warnings": [],
+      "logs": [],
+      "content": null,
+      "screenshot": null,
+      "error": "Waiting for selector `[value=\"playlist\"]` failed"
+    },
+    "media": {
+      "errors": [],
+      "warnings": [],
+      "logs": [],
+      "content": null,
+      "screenshot": null,
+      "error": "Waiting for selector `[value=\"media\"]` failed"
+    },
+    "youtube": {
+      "errors": [],
+      "warnings": [],
+      "logs": [],
+      "content": null,
+      "screenshot": null,
+      "error": "Waiting for selector `[value=\"youtube\"]` failed"
+    },
+    "schedule": {
+      "errors": [],
+      "warnings": [],
+      "logs": [],
+      "content": null,
+      "screenshot": null,
+      "error": "Waiting for selector `[value=\"schedule\"]` failed"
+    },
+    "monitor": {
+      "errors": [],
+      "warnings": [],
+      "logs": [],
+      "content": null,
+      "screenshot": null,
+      "error": "Waiting for selector `[value=\"monitor\"]` failed"
+    },
+    "settings": {
+      "errors": [],
+      "warnings": [],
+      "logs": [],
+      "content": null,
+      "screenshot": null,
+      "error": "Waiting for selector `[value=\"settings\"]` failed"
+    }
+  }
+}
