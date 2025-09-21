@@ -2,17 +2,18 @@
 
 ## 🚀 État Actuel : MIGRATION COMPLÈTE VERS NEXT.JS/REACT
 
-**Mise à jour : 21/09/2025 - REFACTORING COMPLET v2.0**
+**Mise à jour : 21/09/2025 - 17:45 - INTERFACE DARK MODE FREE.FR DÉPLOYÉE**
 **Version : 2.0.0 - Migration totale PHP → Next.js/React/TypeScript**
-**Status : ✅ DÉPLOYÉ EN PRODUCTION - Interface moderne Next.js**
+**Status : ✅ EN PRODUCTION - http://192.168.1.103 (port 80 direct)**
 **GitHub : https://github.com/elkir0/Pi-Signage**
 **Branche : master (production validée)**
 
 ### 🔐 ACCÈS SERVEUR PRODUCTION
 **IP Production : 192.168.1.103**
+**URL Production : http://192.168.1.103**
 **Login SSH : pi**
 **Password : raspberry**
-**IP Développement : 192.168.1.142**
+**Process Manager : PM2 (pisignage-web sur port 80)**
 
 ## ⚠️ RÈGLES DE DÉPLOIEMENT OBLIGATOIRES
 
