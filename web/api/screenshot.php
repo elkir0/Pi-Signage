@@ -14,11 +14,11 @@ if (!is_dir($screenshot_dir)) {
     mkdir($screenshot_dir, 0755, true);
 }
 
-// Utiliser le script intelligent qui extrait une frame
+// Utiliser le script dynamique qui extrait une frame ALÉATOIRE
 $output = [];
 $return_code = 0;
 
-exec('sudo /opt/pisignage/scripts/screenshot-smart.sh ' . escapeshellarg($screenshot_file) . ' 2>&1', $output, $return_code);
+exec('sudo /opt/pisignage/scripts/screenshot-dynamic.sh ' . escapeshellarg($screenshot_file) . ' 2>&1', $output, $return_code);
 
 if ($return_code === 0 && file_exists($screenshot_file)) {
     $size = filesize($screenshot_file);
@@ -26,7 +26,7 @@ if ($return_code === 0 && file_exists($screenshot_file)) {
     // Accepter toutes les tailles car on génère une image info même sans vidéo
     $response['success'] = true;
     $response['screenshot'] = $screenshot_url . '?t=' . time();
-    $response['method'] = 'frame-extraction';
+    $response['method'] = 'dynamic-frame-extraction';
     $response['size'] = $size;
     
     // Ajouter des infos sur la vidéo si disponible
