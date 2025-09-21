@@ -15,10 +15,10 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState('dashboard')
 
   return (
-    <div className="min-h-screen bg-black">
+    <div className="min-h-screen bg-black text-white">
       <Header />
       
-      <main className="container mx-auto px-4 py-6">
+      <main className="container mx-auto px-4 py-6 bg-black">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <TabsList className="flex flex-wrap justify-center gap-2">
             <TabsTrigger value="dashboard">

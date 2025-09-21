@@ -1,83 +1,180 @@
 const puppeteer = require('puppeteer');
+const fs = require('fs');
+const path = require('path');
 
-async function testComplet() {
-    const browser = await puppeteer.launch({ 
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
-    });
+async function testComplete() {
+  console.log('🔍 === DÉBUT DU TEST COMPLET PISIGNAGE ===\n');
+  
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  });
+
+  try {
+    const page = await browser.newPage();
     
-    try {
-        const page = await browser.newPage();
-        console.log('🧪 TEST COMPLET DE PI-SIGNAGE PRODUCTION\n');
-        console.log('==========================================\n');
+    // Capture des erreurs console
+    const consoleErrors = [];
+    const consoleWarnings = [];
+    const consoleLogs = [];
+    
+    page.on('console', msg => {
+      const type = msg.type();
+      const text = msg.text();
+      
+      if (type === 'error') {
+        consoleErrors.push(text);
+        console.log(`❌ ERREUR Console: ${text}`);
+      } else if (type === 'warning') {
+        consoleWarnings.push(text);
+        console.log(`⚠️  WARNING Console: ${text}`);
+      } else {
+        consoleLogs.push(text);
+      }
+    });
+
+    page.on('pageerror', error => {
+      consoleErrors.push(error.toString());
+      console.log(`💥 ERREUR Page: ${error}`);
+    });
+
+    // Test de la page principale
+    console.log('\n📡 Chargement de http://192.168.1.103...');
+    const response = await page.goto('http://192.168.1.103', {
+      waitUntil: 'networkidle2',
+      timeout: 30000
+    });
+
+    console.log(`✅ Page chargée: Status ${response.status()}\n`);
+
+    // Attendre que le contenu soit chargé
+    await new Promise(resolve => setTimeout(resolve, 3000));
+
+    // Prendre un screenshot
+    const screenshotPath = path.join(__dirname, 'test-screenshot.png');
+    await page.screenshot({ 
+      path: screenshotPath,
+      fullPage: true 
+    });
+    console.log(`📸 Screenshot sauvegardé: ${screenshotPath}\n`);
+
+    // Analyser le style
+    console.log('🎨 === ANALYSE DU STYLE ===');
+    
+    const styleAnalysis = await page.evaluate(() => {
+      const body = document.body;
+      const bodyStyle = window.getComputedStyle(body);
+      
+      // Chercher les éléments avec bordure rouge
+      const redBorderElements = document.querySelectorAll('[class*="border-red"]');
+      
+      // Chercher le logo
+      const logos = document.querySelectorAll('img[src*="logo"], img[src*="Pi"], img[alt*="Pi"]');
+      
+      // Analyser le fond
+      const bgColor = bodyStyle.backgroundColor;
+      const textColor = bodyStyle.color;
+      
+      // Chercher les tabs
+      const tabs = document.querySelectorAll('[role="tablist"]');
+      
+      return {
+        backgroundColor: bgColor,
+        textColor: textColor,
+        hasBlackBg: bgColor === 'rgb(0, 0, 0)' || bgColor === 'black',
+        hasWhiteText: textColor === 'rgb(255, 255, 255)' || textColor === 'white',
+        redBorderCount: redBorderElements.length,
+        logoCount: logos.length,
+        tabsCount: tabs.length,
+        title: document.title,
+        // Analyse plus détaillée
+        mainContent: document.querySelector('main') ? 'présent' : 'absent',
+        darkModeApplied: document.body.classList.contains('dark') || 
+                         document.documentElement.classList.contains('dark')
+      };
+    });
+
+    console.log(`🖤 Fond noir: ${styleAnalysis.hasBlackBg ? '✅' : '❌'} (${styleAnalysis.backgroundColor})`);
+    console.log(`⚪ Texte blanc: ${styleAnalysis.hasWhiteText ? '✅' : '❌'} (${styleAnalysis.textColor})`);
+    console.log(`🔴 Éléments avec bordure rouge: ${styleAnalysis.redBorderCount}`);
+    console.log(`🖼️  Logos trouvés: ${styleAnalysis.logoCount}`);
+    console.log(`📑 Tabs trouvés: ${styleAnalysis.tabsCount}`);
+    console.log(`🌙 Dark mode actif: ${styleAnalysis.darkModeApplied ? '✅' : '❌'}`);
+    console.log(`📄 Titre: ${styleAnalysis.title}`);
+    console.log(`📦 Main content: ${styleAnalysis.mainContent}`);
+
+    // Test des APIs
+    console.log('\n🔌 === TEST DES APIs ===');
+    
+    const apis = [
+      '/api/system',
+      '/api/system/screenshot',
+      '/api/media',
+      '/api/playlist',
+      '/api/settings'
+    ];
+
+    for (const api of apis) {
+      try {
+        const apiResponse = await page.evaluate(async (apiPath) => {
+          const res = await fetch(apiPath, {
+            method: apiPath.includes('screenshot') ? 'POST' : 'GET',
+            headers: { 'Content-Type': 'application/json' },
+            body: apiPath.includes('screenshot') ? JSON.stringify({}) : undefined
+          });
+          return {
+            status: res.status,
+            ok: res.ok,
+            statusText: res.statusText
+          };
+        }, api);
         
-        // 1. Test interface principale
-        console.log('1️⃣ Interface principale:');
-        await page.goto('http://192.168.1.103', { waitUntil: 'networkidle2' });
-        
-        // Vérifier les onglets
-        const tabs = await page.evaluate(() => {
-            const tabElements = document.querySelectorAll('.nav-link');
-            return Array.from(tabElements).map(tab => tab.textContent.trim());
-        });
-        console.log('   Onglets trouvés:', tabs.length > 0 ? tabs.join(', ') : '❌ AUCUN');
-        
-        // Vérifier le titre
-        const title = await page.title();
-        console.log('   Titre:', title);
-        console.log('   ✅ Interface principale OK\n');
-        
-        // 2. Test API Playlist
-        console.log('2️⃣ API Playlist:');
-        const playlistResponse = await page.goto('http://192.168.1.103/api/playlist.php?action=list');
-        const playlistData = await page.evaluate(() => document.body.textContent);
-        console.log('   Status:', playlistResponse.status());
-        console.log('   Réponse:', playlistData.includes('error') ? '❌ Erreur' : '✅ OK');
-        
-        // 3. Test API Control
-        console.log('\n3️⃣ API Control:');
-        const controlResponse = await page.goto('http://192.168.1.103/api/control.php?action=status');
-        const controlData = await page.evaluate(() => document.body.textContent);
-        console.log('   Status:', controlResponse.status());
-        console.log('   Réponse:', controlData.includes('error') ? '❌ Erreur' : '✅ OK');
-        
-        // 4. Test playlist-manager.html
-        console.log('\n4️⃣ Playlist Manager:');
-        const managerResponse = await page.goto('http://192.168.1.103/playlist-manager.html');
-        if (managerResponse.status() === 200) {
-            const managerTitle = await page.title();
-            console.log('   Status:', managerResponse.status());
-            console.log('   Titre:', managerTitle);
-            console.log('   ✅ Playlist Manager OK');
-        } else {
-            console.log('   ❌ Status:', managerResponse.status());
-        }
-        
-        // 5. Test playlist-advanced API
-        console.log('\n5️⃣ API Playlist Advanced:');
-        const advancedResponse = await page.goto('http://192.168.1.103/api/playlist-advanced.php?action=list');
-        if (advancedResponse.status() === 200) {
-            const advancedData = await page.evaluate(() => document.body.textContent);
-            console.log('   Status:', advancedResponse.status());
-            console.log('   Réponse:', advancedData.includes('error') ? '❌ Erreur' : '✅ OK');
-        } else {
-            console.log('   ❌ Status:', advancedResponse.status());
-        }
-        
-        // Screenshot final
-        await page.goto('http://192.168.1.103');
-        await page.screenshot({ path: 'test-final.png', fullPage: true });
-        console.log('\n📸 Screenshot complet: test-final.png');
-        
-        console.log('\n==========================================');
-        console.log('✅ TOUS LES TESTS RÉUSSIS!');
-        console.log('Interface disponible sur: http://192.168.1.103');
-        
-    } catch (error) {
-        console.error('❌ ERREUR:', error.message);
-    } finally {
-        await browser.close();
+        console.log(`${apiResponse.ok ? '✅' : '❌'} ${api}: ${apiResponse.status} ${apiResponse.statusText}`);
+      } catch (error) {
+        console.log(`❌ ${api}: Erreur - ${error.message}`);
+      }
     }
+
+    // Résumé final
+    console.log('\n📊 === RÉSUMÉ DU TEST ===');
+    console.log(`Erreurs console: ${consoleErrors.length}`);
+    console.log(`Warnings console: ${consoleWarnings.length}`);
+    
+    const problems = [];
+    
+    if (!styleAnalysis.hasBlackBg) problems.push('Fond pas noir');
+    if (!styleAnalysis.hasWhiteText) problems.push('Texte pas blanc');
+    if (styleAnalysis.redBorderCount === 0) problems.push('Aucune bordure rouge');
+    if (styleAnalysis.logoCount === 0) problems.push('Logo manquant');
+    if (consoleErrors.length > 0) problems.push(`${consoleErrors.length} erreurs console`);
+    if (consoleWarnings.length > 0) problems.push(`${consoleWarnings.length} warnings`);
+
+    if (problems.length === 0) {
+      console.log('\n✅ TOUS LES TESTS PASSENT!');
+    } else {
+      console.log('\n❌ PROBLÈMES DÉTECTÉS:');
+      problems.forEach(p => console.log(`  - ${p}`));
+    }
+
+    // Afficher les erreurs console détaillées
+    if (consoleErrors.length > 0) {
+      console.log('\n🔴 DÉTAIL DES ERREURS:');
+      consoleErrors.forEach(e => console.log(`  ${e}`));
+    }
+
+    if (consoleWarnings.length > 0) {
+      console.log('\n⚠️  DÉTAIL DES WARNINGS:');
+      consoleWarnings.forEach(w => console.log(`  ${w}`));
+    }
+
+  } catch (error) {
+    console.error('💥 Erreur pendant le test:', error);
+  } finally {
+    await browser.close();
+  }
+
+  console.log('\n🏁 === FIN DU TEST ===');
 }
 
-testComplet();
+// Lancer le test
+testComplete().catch(console.error);

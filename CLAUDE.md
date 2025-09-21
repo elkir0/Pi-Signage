@@ -1,323 +1,183 @@
-# 📺 Mémoire de Contexte - PiSignage 2.0 - REFACTORING NEXT.JS
+# 📺 Mémoire de Contexte - PiSignage 2.0 - ÉTAT CRITIQUE
 
-## 🚀 État Actuel : MIGRATION COMPLÈTE VERS NEXT.JS/REACT
+## ⚠️ ÉTAT ACTUEL : INTERFACE PARTIELLEMENT FONCTIONNELLE
 
-**Mise à jour : 21/09/2025 - 17:45 - INTERFACE DARK MODE FREE.FR DÉPLOYÉE**
-**Version : 2.0.0 - Migration totale PHP → Next.js/React/TypeScript**
-**Status : ✅ EN PRODUCTION - http://192.168.1.103 (port 80 direct)**
-**GitHub : https://github.com/elkir0/Pi-Signage**
-**Branche : master (production validée)**
-
-### 🔐 ACCÈS SERVEUR PRODUCTION
-**IP Production : 192.168.1.103**
+**Mise à jour : 21/09/2025 - 18:30**
+**Version : 2.0.0-broken**
+**Status : ⚠️ PARTIELLEMENT FONCTIONNEL - Nombreuses erreurs**
 **URL Production : http://192.168.1.103**
-**Login SSH : pi**
-**Password : raspberry**
-**Process Manager : PM2 (pisignage-web sur port 80)**
+**GitHub : https://github.com/elkir0/Pi-Signage**
 
-## ⚠️ RÈGLES DE DÉPLOIEMENT OBLIGATOIRES
+## 🚨 PROBLÈMES CRITIQUES ACTUELS
 
-### TOUJOURS utiliser le script de déploiement automatique :
-```bash
-chmod +x /opt/pisignage/deploy-production.sh
-./deploy-production.sh
-```
+### Erreurs Console Identifiées
+1. **Warning data-kantu** : Extra attributes from the server
+2. **API Screenshot 400** : `/api/system/screenshot` retourne Bad Request
+3. **Interface "TRES TRES MOCHE"** : Le thème dark mode ne s'applique pas correctement
+4. **Composants non stylés** : Les tabs et boutons n'ont pas le style FREE.FR
 
-### NE JAMAIS :
-- Dire qu'un déploiement est fait sans utiliser le script
-- Prétendre qu'une fonction est déployée sans vérification SSH
-- Ignorer les erreurs de déploiement
+### Ce qui fonctionne ✅
+- Next.js démarre sur le port 80
+- Page se charge (HTTP 200)
+- API `/api/system` retourne des données
+- PM2 maintient le process actif
 
-### TOUJOURS :
-1. Commiter sur GitHub AVANT de dire "déployé"
-2. Utiliser deploy-production.sh pour TOUT déploiement
-3. Vérifier avec sshpass que les fichiers sont sur le Raspberry
-4. Tester 2 fois minimum avec Puppeteer APRÈS déploiement
+### Ce qui ne fonctionne PAS ❌
+- Thème Dark Mode FREE.FR non appliqué correctement
+- API Screenshot retourne 400
+- Style général "moche" - pas uniforme
+- Logo du projet non intégré
+- Erreurs console multiples
+- Composants mal alignés
 
----
+## 📋 TODO IMMÉDIAT
 
-## 🎉 REFACTORING COMPLET v2.0 - MIGRATION NEXT.JS
-
-### Historique du Refactoring
-**v0.9.x (Ancien)** : Système PHP/HTML avec JavaScript vanilla, problèmes multiples
-**v2.0.0 (Nouveau)** : Migration complète vers Next.js 14, React 18, TypeScript
-
-### Raison du Refactoring
-L'utilisateur a demandé : "on passe a un Refactoring COMPLET moderne et efficace! on va TOUT reprendre (frontend) pour tout basculer sur du NEXTJS et REACT"
-- Ancien système PHP était "foireux" avec 47% de fonctions factices
-- Besoin d'une stack moderne et maintenable
-- Déploiement sur Raspberry Pi frais avec Bookworm Lite
-
-### Technologies Nouvelles (v2.0)
-- **Next.js 14.2** - Framework React avec App Router
-- **React 18.3** - Bibliothèque UI moderne
-- **TypeScript 5.3** - Type safety
-- **Tailwind CSS 3.4** - Utility-first CSS
-- **Radix UI** - Composants accessibles
-- **React Query** - Gestion state serveur
-- **Zustand** - State management
-- **Socket.io** - Temps réel
-- **Chart.js** - Visualisations
-- **PM2** - Process management
-- **Node.js v20** - Runtime JavaScript
-
----
-
-## 🏗️ Nouvelle Architecture (Next.js)
-
-```
-/opt/pisignage/
-├── src/
-│   ├── app/                    # Next.js App Router
-│   │   ├── api/                # API Routes
-│   │   │   ├── system/         # Monitoring système
-│   │   │   ├── playlist/       # Gestion playlists
-│   │   │   ├── media/          # Gestion médias
-│   │   │   └── youtube/        # Download YouTube
-│   │   ├── layout.tsx          # Layout principal
-│   │   └── page.tsx           # Dashboard 7 onglets
-│   ├── components/            # Composants React
-│   │   ├── ui/               # Composants base (Button, Card, etc.)
-│   │   ├── dashboard/        # Composants dashboard
-│   │   ├── playlist/         # Composants playlist
-│   │   └── media/            # Composants média
-│   ├── hooks/                # Custom React hooks
-│   ├── lib/                  # Utilitaires
-│   ├── services/             # Services API
-│   └── types/                # Types TypeScript
-├── public/                   # Assets statiques
-├── simple-server.js          # ✅ SERVEUR SIMPLIFIÉ FONCTIONNEL
-├── package.json              # Dependencies Next.js
-├── next.config.js            # Configuration Next.js
-├── tsconfig.json             # Configuration TypeScript
-├── tailwind.config.ts        # Configuration Tailwind
-└── media/                    # Stockage médias
-    └── demo_video.mp4        # Vidéo de démo (YouTube failed)
-```
-
----
-
-## 💻 Déploiement Production Actuel
-
-### Serveur Simplifié (simple-server.js)
-Suite aux problèmes avec le serveur Next.js complexe, un serveur simplifié a été créé :
-
+### 1. VALIDATION PUPPETEER OBLIGATOIRE
 ```javascript
-// simple-server.js - SERVEUR FONCTIONNEL EN PRODUCTION
-const http = require('http');
-const fs = require('fs');
-const path = require('path');
-const { exec } = require('child_process');
-
-const server = http.createServer((req, res) => {
-  // Routes API simples
-  if (req.url === '/api/play') {
-    exec('cvlc --fullscreen --loop /opt/pisignage/media/demo_video.mp4 &');
-    res.writeHead(200);
-    res.end('Playing');
-  }
-  // Interface HTML
-  else if (req.url === '/') {
-    res.writeHead(200, {'Content-Type': 'text/html'});
-    res.end(htmlContent);
-  }
-});
-
-server.listen(3000);
+// Test COMPLET avec :
+- Screenshot analysé visuellement
+- Capture de TOUTES les erreurs console
+- Vérification du style (fond noir, texte blanc, bordures rouges)
+- Validation des APIs
 ```
 
-### État du Déploiement
-✅ **Interface web** : Accessible sur http://192.168.1.103:3000
-✅ **Serveur Node.js** : Fonctionnel avec PM2
-✅ **API de base** : /api/play fonctionne
-✅ **Vidéo de démo** : demo_video.mp4 téléchargée et fonctionnelle
-⚠️ **YouTube Download** : Échec (403 Forbidden) - utilisation fallback
-❌ **Build Next.js complet** : Problèmes de dépendances sur Pi
+### 2. INTÉGRER LE LOGO
+- URL : https://github.com/elkir0/Pi-Signage/blob/main/Pi%20signeage.png
+- Doit apparaître dans le header
+- Remplacer l'icône Monitor actuelle
 
----
+### 3. RÉPARER LE STYLE
+- Forcer `bg-black` sur TOUT
+- Texte `text-white` partout
+- Bordures `border-red-600`
+- Utiliser les classes FREE.FR créées
 
-## 🔧 APIs Next.js Créées
-
-### `/api/system/route.ts`
-- Monitoring CPU, mémoire, température
-- État VLC
-- Informations système
-
-### `/api/playlist/route.ts`
-- CRUD playlists
-- Activation/désactivation
-- Import/export JSON
-
-### `/api/media/route.ts`
-- Upload fichiers
-- Liste médias
-- Suppression
-- Optimisation vidéo
-
-### `/api/youtube/route.ts`
-- Download YouTube (yt-dlp)
-- Sélection qualité
-- Conversion format
-
----
-
-## 📦 Installation & Commandes
-
-### Installation sur Raspberry Pi
-```bash
-# Cloner le repo
-git clone https://github.com/elkir0/Pi-Signage.git
-cd Pi-Signage
-
-# Installer Node.js 20
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt-get install -y nodejs
-
-# Installer dépendances
-npm install
-
-# Démarrer avec PM2
-npm install -g pm2
-pm2 start simple-server.js --name pisignage
-pm2 save
-pm2 startup
+### 4. CORRIGER LES APIs
+```typescript
+// /api/system/screenshot doit :
+- Accepter POST sans body
+- Retourner {success: true, url: string}
+- Gérer les erreurs gracieusement
 ```
 
-### Commandes Utiles
+## 🔧 ACCÈS SERVEUR
+
 ```bash
-# Développement
+# SSH
+ssh pi@192.168.1.103
+password: raspberry
+
+# Logs PM2
+sudo pm2 logs pisignage-web --lines 50
+
+# Restart
+sudo pm2 restart pisignage-web
+
+# Pull GitHub
+cd /opt/pisignage
+git pull origin master
+```
+
+## 🏗️ Structure Actuelle
+
+### Composants Créés (mais mal stylés)
+- `/src/components/dashboard/Dashboard.tsx`
+- `/src/components/media/MediaLibrary.tsx`
+- `/src/components/youtube/YouTubeDownloader.tsx`
+- `/src/components/playlist/PlaylistManager.tsx`
+- `/src/components/settings/Settings.tsx`
+- `/src/components/schedule/Schedule.tsx`
+- `/src/components/monitor/SystemMonitor.tsx`
+- `/src/components/ui/custom-tabs.tsx` ← DOIT ÊTRE AMÉLIORÉ
+
+### APIs Créées
+- `/api/system` ✅ Fonctionne
+- `/api/system/screenshot` ❌ Retourne 400
+- `/api/media` ❓ Non testé
+- `/api/playlist` ❓ Non testé
+- `/api/youtube/download` ❓ Non testé
+- `/api/settings` ✅ Corrigé (backupFile)
+
+## 🎨 STYLE ATTENDU (FREE.FR)
+
+### Couleurs OBLIGATOIRES
+```css
+/* FOND */
+background: #000000 (noir pur)
+
+/* TEXTE */
+color: #FFFFFF (blanc)
+
+/* ACCENTS */
+primary: #DC2626 (rouge FREE.FR)
+border: #DC2626 (rouge)
+
+/* HOVER */
+hover: #EF4444 (rouge plus clair)
+```
+
+### Classes à utiliser
+```css
+.bg-black
+.text-white
+.border-red-600
+.bg-red-600
+.hover:bg-red-700
+.shadow-red-600/50
+```
+
+## 📊 MÉTRIQUES DE VALIDATION
+
+### Test Puppeteer DOIT vérifier :
+1. **Screenshot** : Fond noir visible
+2. **Console** : 0 erreurs, 0 warnings
+3. **APIs** : Toutes retournent 200
+4. **Style** : 
+   - `body.backgroundColor === 'rgb(0, 0, 0)'`
+   - Au moins 5 éléments avec `border-red-600`
+   - Tous les textes en blanc
+5. **Logo** : Présent et visible
+
+## ⚡ COMMANDES RAPIDES
+
+```bash
+# Test local
 npm run dev
 
-# Production (build Next.js)
-npm run build
-npm run start
+# Test Puppeteer
+node test-complet.js
 
-# Serveur simplifié
-node simple-server.js
+# Commit et deploy
+git add -A && git commit -m "fix: ..." && git push
+ssh pi@192.168.1.103 "cd /opt/pisignage && git pull && sudo pm2 restart pisignage-web"
 
-# PM2
-pm2 status
-pm2 logs pisignage
-pm2 restart pisignage
+# Vérifier production
+curl -I http://192.168.1.103
 ```
 
----
+## 🚫 RÈGLES STRICTES
 
-## 🐛 Problèmes Rencontrés & Solutions
+### NE JAMAIS :
+- Dire "ça marche" sans test Puppeteer
+- Ignorer les erreurs console
+- Déployer sans tester localement d'abord
 
-### 1. YouTube Download Failed (403)
-**Problème** : yt-dlp bloqué par YouTube
-**Solution** : Utilisation vidéo de démo fallback de samplelib.com
+### TOUJOURS :
+- Faire un screenshot Puppeteer
+- Analyser TOUTES les erreurs console
+- Vérifier le style visuellement
+- Tester les APIs une par une
 
-### 2. Build Next.js sur Pi
-**Problème** : Mémoire insuffisante, dépendances manquantes
-**Solution** : Serveur simplifié simple-server.js sans build
+## 📝 PROCHAINES ÉTAPES
 
-### 3. Nginx 502 Bad Gateway
-**Problème** : Serveur Node.js ne démarrait pas
-**Solution** : Correction syntaxe et utilisation PM2
-
-### 4. SSH Host Key Changed
-**Problème** : Raspberry Pi réinstallé
-**Solution** : `ssh-keygen -R 192.168.1.103`
-
----
-
-## 📈 Comparaison v0.9.x vs v2.0
-
-| Aspect | v0.9.x (PHP) | v2.0 (Next.js) |
-|--------|--------------|----------------|
-| Frontend | HTML/JS vanilla | React/TypeScript |
-| Backend | PHP scripts | Next.js API Routes |
-| State | localStorage | Zustand/React Query |
-| Styling | CSS inline | Tailwind CSS |
-| Build | Aucun | Webpack/Next.js |
-| Types | Aucun | TypeScript complet |
-| Components | jQuery plugins | React components |
-| Routing | PHP files | App Router |
-| Testing | Aucun | Jest/React Testing |
-| Performance | Lent | Optimisé SSR/SSG |
+1. **URGENT** : Créer `test-complet.js` avec analyse screenshot + console
+2. **URGENT** : Télécharger et intégrer le logo
+3. **URGENT** : Réparer l'API screenshot
+4. **URGENT** : Forcer le style dark sur TOUS les composants
+5. Tester avec Puppeteer
+6. Déployer SEULEMENT si tests OK
 
 ---
 
-## ✅ Fonctionnalités Implémentées v2.0
-
-### Interface Moderne
-- Dashboard 7 onglets (Tabs Radix UI)
-- Thème clair/sombre
-- Responsive design
-- Animations Framer Motion
-
-### Gestion Médias
-- Upload drag & drop
-- Preview temps réel
-- Conversion automatique
-- Métadonnées extraction
-
-### Playlists Avancées
-- Drag & drop réorganisation
-- Import/export JSON
-- Scheduling cron
-- Templates prédéfinis
-
-### Monitoring
-- Charts temps réel (Chart.js)
-- Métriques système
-- Logs centralisés
-- Alertes configurables
-
----
-
-## 🚀 Prochaines Étapes
-
-### Urgent
-1. Résoudre build Next.js sur Pi (swap file?)
-2. Implémenter WebSocket pour temps réel
-3. Ajouter authentification JWT
-
-### Moyen Terme
-1. Migration base de données (SQLite/PostgreSQL)
-2. Docker containerization
-3. CI/CD avec GitHub Actions
-4. Tests E2E avec Playwright
-
-### Long Terme
-1. Application mobile React Native
-2. Cloud sync avec API REST
-3. Multi-tenant support
-4. Analytics dashboard avancé
-
----
-
-## 🎯 Conclusion v2.0
-
-Le refactoring complet vers Next.js/React a été réalisé avec succès :
-- ✅ Architecture moderne et scalable
-- ✅ Code TypeScript type-safe
-- ✅ Composants réutilisables
-- ✅ API RESTful structurée
-- ✅ Déployé en production (version simplifiée)
-- ⚠️ Build complet Next.js à optimiser pour Pi
-
-**Le système est FONCTIONNEL en production** avec le serveur simplifié, l'architecture Next.js complète est prête pour un déploiement sur serveur plus puissant.
-
----
-
-## 📝 Notes Importantes pour Reprise
-
-1. **Serveur actuel** : `simple-server.js` sur port 3000 avec PM2
-2. **Vidéo test** : `/opt/pisignage/media/demo_video.mp4`
-3. **GitHub** : Tout est commité sur master
-4. **Validation** : Toujours utiliser Puppeteer avant de confirmer
-5. **Déploiement** : Script `deploy-production.sh` obligatoire
-
----
-
-*Dernière mise à jour : 21/09/2025 - 16:00*
-*Refactoring Next.js par : Claude + Happy Engineering*
-
-Generated with [Claude Code](https://claude.ai/code)
-via [Happy](https://happy.engineering)
-
-Co-Authored-By: Claude <noreply@anthropic.com>
-Co-Authored-By: Happy <yesreply@happy.engineering>
+*Dernière mise à jour : 21/09/2025 - 18:30*
+*État : CRITIQUE - Interface moche et erreurs multiples*

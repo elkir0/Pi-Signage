@@ -37,7 +37,7 @@ export function TabsList({
   className?: string;
 }) {
   return (
-    <div className={`flex flex-wrap gap-2 p-2 bg-gray-900 border-2 border-red-600 rounded-lg ${className}`}>
+    <div className={`flex flex-wrap gap-2 p-2 bg-black border-2 border-red-600 rounded-lg shadow-lg shadow-red-600/30 ${className}`}>
       {children}
     </div>
   );
@@ -61,8 +61,8 @@ export function TabsTrigger({
       className={`
         flex items-center justify-center px-4 py-2 rounded transition-all font-medium text-sm
         ${isActive 
-          ? 'bg-red-600 text-white shadow-lg shadow-red-600/50' 
-          : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white border border-gray-700'
+          ? 'bg-red-600 text-white shadow-lg shadow-red-600/50 border-2 border-red-400' 
+          : 'bg-black text-gray-400 hover:bg-gray-900 hover:text-white border border-gray-700 hover:border-red-600'
         }
       `}
     >
@@ -86,7 +86,7 @@ export function TabsContent({
   if (context.value !== value) return null;
   
   return (
-    <div className={`mt-6 animate-fade-in ${className}`}>
+    <div className={`mt-6 animate-fade-in bg-black ${className}`}>
       {children}
     </div>
   );

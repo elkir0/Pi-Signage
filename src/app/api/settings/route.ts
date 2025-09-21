@@ -174,10 +174,10 @@ function mergeWithDefaults(settings: any, defaults: PiSignageSettings): PiSignag
   const merged = { ...defaults }
   
   for (const [category, categorySettings] of Object.entries(settings)) {
-    if (merged[category as keyof PiSignageSettings]) {
+    if (merged[category as keyof PiSignageSettings] && typeof categorySettings === 'object' && categorySettings !== null) {
       merged[category as keyof PiSignageSettings] = {
         ...merged[category as keyof PiSignageSettings],
-        ...categorySettings
+        ...(categorySettings as any)
       }
     }
   }

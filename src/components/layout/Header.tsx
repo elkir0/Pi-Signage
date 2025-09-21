@@ -1,7 +1,8 @@
 'use client';
 
 import React from 'react';
-import { Monitor, Activity } from 'lucide-react';
+import { Activity } from 'lucide-react';
+import Image from 'next/image';
 
 export default function Header() {
   return (
@@ -9,8 +10,15 @@ export default function Header() {
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="p-2 bg-red-600 rounded-lg animate-pulse-red">
-              <Monitor className="w-8 h-8 text-white" />
+            <div className="relative w-12 h-12">
+              <Image 
+                src="/pisignage-logo.png" 
+                alt="PiSignage Logo" 
+                width={48}
+                height={48}
+                className="object-contain"
+                priority
+              />
             </div>
             <div>
               <h1 className="text-2xl font-bold text-gradient-free">
