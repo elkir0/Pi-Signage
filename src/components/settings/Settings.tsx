@@ -66,7 +66,32 @@ export default function Settings() {
       const response = await fetch('/api/settings');
       if (response.ok) {
         const data = await response.json();
-        setSettings(data);
+        // Merge with default settings to ensure all properties exist
+        const mergedSettings = {
+          display: {
+            resolution: data?.display?.resolution || '1920x1080',
+            orientation: data?.display?.orientation || 'landscape',
+            brightness: data?.display?.brightness ?? 100
+          },
+          network: {
+            wifi: {
+              ssid: data?.network?.wifi?.ssid || '',
+              password: data?.network?.wifi?.password || ''
+            }
+          },
+          system: {
+            autoStart: data?.system?.autoStart ?? true,
+            defaultVolume: data?.system?.defaultVolume ?? 50,
+            screensaverTimeout: data?.system?.screensaverTimeout ?? 0,
+            debugMode: data?.system?.debugMode ?? false
+          },
+          media: {
+            defaultImageDuration: data?.media?.defaultImageDuration ?? 10,
+            videoQuality: data?.media?.videoQuality || '720p',
+            cacheEnabled: data?.media?.cacheEnabled ?? true
+          }
+        };
+        setSettings(mergedSettings);
       }
     } catch (error) {
       console.error('Failed to load settings:', error);
@@ -112,7 +137,32 @@ export default function Settings() {
       reader.onload = (e) => {
         try {
           const imported = JSON.parse(e.target?.result as string);
-          setSettings(imported);
+          // Merge with default settings to ensure all properties exist
+          const mergedSettings = {
+            display: {
+              resolution: imported?.display?.resolution || '1920x1080',
+              orientation: imported?.display?.orientation || 'landscape',
+              brightness: imported?.display?.brightness ?? 100
+            },
+            network: {
+              wifi: {
+                ssid: imported?.network?.wifi?.ssid || '',
+                password: imported?.network?.wifi?.password || ''
+              }
+            },
+            system: {
+              autoStart: imported?.system?.autoStart ?? true,
+              defaultVolume: imported?.system?.defaultVolume ?? 50,
+              screensaverTimeout: imported?.system?.screensaverTimeout ?? 0,
+              debugMode: imported?.system?.debugMode ?? false
+            },
+            media: {
+              defaultImageDuration: imported?.media?.defaultImageDuration ?? 10,
+              videoQuality: imported?.media?.videoQuality || '720p',
+              cacheEnabled: imported?.media?.cacheEnabled ?? true
+            }
+          };
+          setSettings(mergedSettings);
           setSaveStatus('success');
           setTimeout(() => setSaveStatus('idle'), 3000);
         } catch (error) {
