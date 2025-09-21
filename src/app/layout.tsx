@@ -1,16 +1,13 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
-import { Providers } from './providers'
+import Providers from './providers'
 
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'PiSignage 2.0 - Modern Digital Signage',
-  description: 'Next-generation digital signage system built with Next.js and React',
-  icons: {
-    icon: '/favicon.ico',
-  },
+  title: 'PiSignage v2.0',
+  description: 'Digital Signage System - Dark Mode FREE.FR',
 }
 
 export default function RootLayout({
@@ -19,8 +16,8 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="fr" suppressHydrationWarning>
-      <body className={inter.className}>
+    <html lang="fr">
+      <body className={`${inter.className} bg-black text-white min-h-screen`}>
         <Providers>
           {children}
         </Providers>

@@ -409,15 +409,15 @@ export async function POST(request: NextRequest) {
         })
       
       case 'restore':
-        const { backupFile } = body
-        if (!backupFile) {
+        const { backupFile: restoreFile } = body
+        if (!restoreFile) {
           return NextResponse.json(
             { success: false, error: 'Backup file name is required for restore action' },
             { status: 400 }
           )
         }
         
-        const backupPath = path.join(BACKUP_DIR, backupFile)
+        const backupPath = path.join(BACKUP_DIR, restoreFile)
         
         try {
           const backupData = await fs.readFile(backupPath, 'utf-8')
