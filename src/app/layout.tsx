@@ -8,6 +8,9 @@ const inter = Inter({ subsets: ['latin'] })
 export const metadata: Metadata = {
   title: 'PiSignage v2.0',
   description: 'Digital Signage System - Dark Mode FREE.FR',
+  icons: {
+    icon: '/favicon.ico',
+  },
 }
 
 export default function RootLayout({
