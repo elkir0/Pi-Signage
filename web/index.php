@@ -1724,45 +1724,117 @@ $mediaFiles = getMediaFiles();
 
         async function uploadFile(file) {
             console.log('📤 Uploading file:', file.name, 'Size:', file.size);
-            const formData = new FormData();
-            formData.append('video', file);
-
+            
+            const CHUNK_SIZE = 2 * 1024 * 1024; // 2MB par chunk
+            const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+            const fileId = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            
             const progressBar = document.getElementById('progressBar');
             const progressFill = document.getElementById('progressFill');
-
+            let progressText = document.getElementById('progressText');
+            
+            // Créer l'élément de texte de progression s'il n'existe pas
+            if (!progressText) {
+                progressText = document.createElement('div');
+                progressText.id = 'progressText';
+                progressText.style.cssText = 'text-align:center;margin-top:5px;font-size:12px;color:#666;';
+                if (progressBar && progressBar.parentNode) {
+                    progressBar.parentNode.insertBefore(progressText, progressBar.nextSibling);
+                }
+            }
+            
             progressBar.style.display = 'block';
             progressFill.style.width = '0%';
-
+            
+            // Vérifier s'il y a déjà des chunks uploadés (reprise après interruption)
+            let uploadedChunks = [];
             try {
-                const response = await fetch('/api/control.php?action=upload', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                progressFill.style.width = '100%';
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                const checkResponse = await fetch(`/api/upload-chunked.php?action=check&fileId=${fileId}`);
+                const checkData = await checkResponse.json();
+                if (checkData.success && checkData.uploadedChunks) {
+                    uploadedChunks = checkData.uploadedChunks;
                 }
-                
-                const result = await response.json();
-                console.log('📥 Upload response:', result);
-                
-                if (result.status === 'success') {
-                    refreshMediaList();
-                    setTimeout(() => {
-                        progressBar.style.display = 'none';
-                    }, 1000);
-                } else {
-                    throw new Error(result.message || 'Upload failed');
+            } catch (e) {
+                console.log('Nouvel upload, pas de chunks existants');
+            }
+            
+            try {
+                // Upload par chunks
+                for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+                    // Passer les chunks déjà uploadés
+                    if (uploadedChunks.includes(chunkIndex)) {
+                        continue;
+                    }
+                    
+                    const start = chunkIndex * CHUNK_SIZE;
+                    const end = Math.min(start + CHUNK_SIZE, file.size);
+                    const chunk = file.slice(start, end);
+                    
+                    const response = await fetch('/api/upload-chunked.php?action=upload', {
+                        method: 'POST',
+                        headers: {
+                            'X-File-Name': file.name,
+                            'X-Chunk-Index': chunkIndex,
+                            'X-Total-Chunks': totalChunks,
+                            'X-File-Id': fileId
+                        },
+                        body: chunk
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    
+                    const result = await response.json();
+                    
+                    if (!result.success) {
+                        throw new Error(result.error || 'Upload échoué');
+                    }
+                    
+                    // Mettre à jour la progression
+                    const progress = ((chunkIndex + 1) / totalChunks) * 100;
+                    progressFill.style.width = progress + '%';
+                    
+                    // Afficher le texte de progression
+                    const uploaded = (chunkIndex + 1) * CHUNK_SIZE;
+                    const uploadedMB = Math.min(uploaded, file.size) / (1024 * 1024);
+                    const totalMB = file.size / (1024 * 1024);
+                    progressText.textContent = `${uploadedMB.toFixed(1)} MB / ${totalMB.toFixed(1)} MB (${Math.round(progress)}%)`;
+                    
+                    // Si upload complet
+                    if (result.complete) {
+                        console.log('✅ Upload terminé:', result);
+                        progressFill.style.width = '100%';
+                        progressText.textContent = 'Upload terminé !';
+                        
+                        // Rafraîchir la liste des médias
+                        if (result.files) {
+                            updateMediaList(result.files);
+                        } else {
+                            refreshMediaList();
+                        }
+                        
+                        setTimeout(() => {
+                            progressBar.style.display = 'none';
+                            if (progressText) progressText.textContent = '';
+                        }, 2000);
+                        
+                        showAlert(`✅ ${file.name} uploadé avec succès`, 'success');
+                    }
                 }
             } catch (error) {
                 console.error('❌ Upload error:', error);
                 progressFill.style.backgroundColor = '#e74c3c';
+                progressText.textContent = 'Erreur : ' + error.message;
+                
+                // Permettre la reprise
+                showAlert(`❌ Erreur: ${error.message}. Réessayez pour reprendre l'upload.`, 'error');
+                
                 setTimeout(() => {
                     progressBar.style.display = 'none';
                     progressFill.style.backgroundColor = '#3498db';
-                }, 2000);
+                    if (progressText) progressText.textContent = '';
+                }, 3000);
             }
         }
 
