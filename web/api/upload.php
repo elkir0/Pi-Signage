@@ -21,7 +21,8 @@ function formatBytes($size) {
 
 function getMediaDuration($file) {
     if (getFileType($file) !== 'video') return 0;
-    $cmd = 'ffprobe -v quiet -select_streams v:0 -show_entries stream=duration -of csv=p=0 "' . $file . '" 2>/dev/null';
+    // Sécurité: utiliser escapeshellarg pour éviter l'injection
+    $cmd = 'ffprobe -v quiet -select_streams v:0 -show_entries stream=duration -of csv=p=0 ' . escapeshellarg($file) . ' 2>/dev/null';
     $duration = trim(shell_exec($cmd));
     return $duration ? round((float)$duration) : 0;
 }
@@ -64,9 +65,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $allowedExt = ['mp4', 'avi', 'mkv', 'webm', 'mov', 'jpg', 'jpeg', 'png', 'gif'];
         $ext = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
         
+        // Vérifier le type MIME réel du fichier
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $mimeType = finfo_file($finfo, $file['tmp_name']);
+        finfo_close($finfo);
+        
+        $allowedMimeTypes = [
+            'video/mp4', 'video/x-msvideo', 'video/x-matroska', 'video/webm', 'video/quicktime',
+            'image/jpeg', 'image/png', 'image/gif'
+        ];
+        
         if (!in_array($ext, $allowedExt)) {
             $response['error'] = 'Format non supporté. Utilisez: ' . implode(', ', $allowedExt);
             log_upload('ERROR: Unsupported format: ' . $ext);
+        } elseif (!in_array($mimeType, $allowedMimeTypes)) {
+            $response['error'] = 'Type MIME non autorisé: ' . $mimeType;
+            log_upload('ERROR: Invalid MIME type: ' . $mimeType);
         } elseif ($file['size'] > 500 * 1024 * 1024) { // 500MB max
             $response['error'] = 'Fichier trop gros (max 500MB)';
             log_upload('ERROR: File too large: ' . $file['size']);

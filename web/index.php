@@ -1757,7 +1757,7 @@ $mediaFiles = getMediaFiles();
                 console.log('📥 Upload response:', result);
                 
                 if (result.status === 'success') {
-                    loadMediaList();
+                    refreshMediaList();
                     setTimeout(() => {
                         progressBar.style.display = 'none';
                     }, 1000);
@@ -2225,6 +2225,236 @@ $mediaFiles = getMediaFiles();
                 }
             });
         }
+        
+        // Fonction pour éditer une playlist
+        function editPlaylist(playlistId) {
+            const playlist = playlists.find(p => p.id === playlistId);
+            if (!playlist) {
+                showAlert('Playlist introuvable', 'error');
+                return;
+            }
+            
+            // Pré-remplir le formulaire avec les données de la playlist
+            document.getElementById('playlist-name').value = playlist.name || '';
+            document.getElementById('playlist-loop').checked = playlist.loop || false;
+            document.getElementById('playlist-random').checked = playlist.random || false;
+            document.getElementById('playlist-transition').value = playlist.transition || 'none';
+            
+            // Afficher les vidéos de la playlist
+            const container = document.getElementById('playlist-videos');
+            container.innerHTML = '';
+            
+            if (playlist.videos && playlist.videos.length > 0) {
+                playlist.videos.forEach(video => {
+                    const videoItem = document.createElement('div');
+                    videoItem.className = 'playlist-item';
+                    videoItem.innerHTML = `
+                        <span>${video}</span>
+                        <button class="btn btn-danger btn-sm" onclick="removeFromPlaylist('${video}')">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    `;
+                    container.appendChild(videoItem);
+                });
+            }
+            
+            // Mettre à jour le bouton pour sauvegarder au lieu de créer
+            const saveBtn = document.querySelector('#playlist-form button[onclick="createPlaylist()"]');
+            if (saveBtn) {
+                saveBtn.setAttribute('onclick', `updatePlaylist('${playlistId}')`);
+                saveBtn.innerHTML = '<i class="fas fa-save"></i> Mettre à jour';
+            }
+            
+            showAlert('Mode édition activé', 'info');
+        }
+        
+        // Fonction pour mettre à jour une playlist
+        function updatePlaylist(playlistId) {
+            const name = document.getElementById('playlist-name').value;
+            const videos = Array.from(document.querySelectorAll('#playlist-videos .playlist-item span'))
+                .map(span => span.textContent);
+            
+            if (!name) {
+                showAlert('Nom requis', 'error');
+                return;
+            }
+            
+            const playlist = {
+                id: playlistId,
+                name: name,
+                videos: videos,
+                loop: document.getElementById('playlist-loop').checked,
+                random: document.getElementById('playlist-random').checked,
+                transition: document.getElementById('playlist-transition').value
+            };
+            
+            fetch('/api/playlist.php', {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({action: 'update', playlist: playlist})
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert('Playlist mise à jour', 'success');
+                    loadPlaylists();
+                    clearPlaylistForm();
+                    
+                    // Réinitialiser le bouton
+                    const saveBtn = document.querySelector('#playlist-form button[onclick*="updatePlaylist"]');
+                    if (saveBtn) {
+                        saveBtn.setAttribute('onclick', 'createPlaylist()');
+                        saveBtn.innerHTML = '<i class="fas fa-save"></i> Créer Playlist';
+                    }
+                } else {
+                    showAlert('Erreur: ' + (data.error || 'Mise à jour échouée'), 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Update error:', error);
+                showAlert('Erreur de mise à jour', 'error');
+            });
+        }
+        
+        // Fonction pour importer une playlist
+        function importPlaylist() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            
+            input.onchange = function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    try {
+                        const playlist = JSON.parse(event.target.result);
+                        
+                        // Valider la structure
+                        if (!playlist.name || !Array.isArray(playlist.videos)) {
+                            throw new Error('Format de playlist invalide');
+                        }
+                        
+                        // Créer la playlist importée
+                        fetch('/api/playlist.php', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({action: 'create', playlist: playlist})
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                showAlert(`Playlist "${playlist.name}" importée`, 'success');
+                                loadPlaylists();
+                            } else {
+                                showAlert('Erreur d\'import: ' + data.error, 'error');
+                            }
+                        });
+                        
+                    } catch (error) {
+                        showAlert('Fichier invalide: ' + error.message, 'error');
+                    }
+                };
+                
+                reader.readAsText(file);
+            };
+            
+            input.click();
+        }
+        
+        // Fonction pour exporter une playlist
+        function exportPlaylist() {
+            if (playlists.length === 0) {
+                showAlert('Aucune playlist à exporter', 'warning');
+                return;
+            }
+            
+            // Si une seule playlist, l'exporter directement
+            if (playlists.length === 1) {
+                downloadPlaylistAsJSON(playlists[0]);
+                return;
+            }
+            
+            // Si plusieurs playlists, demander laquelle exporter
+            const select = document.createElement('select');
+            select.className = 'form-control';
+            select.innerHTML = '<option value="">Choisir une playlist...</option>';
+            
+            playlists.forEach(playlist => {
+                const option = document.createElement('option');
+                option.value = playlist.id;
+                option.textContent = playlist.name;
+                select.appendChild(option);
+            });
+            
+            // Créer un modal simple
+            const modal = document.createElement('div');
+            modal.className = 'modal';
+            modal.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;padding:20px;border-radius:5px;box-shadow:0 2px 10px rgba(0,0,0,0.2);z-index:10000';
+            modal.innerHTML = `
+                <h4>Exporter une playlist</h4>
+                <div style="margin: 15px 0"></div>
+                <div style="display:flex;gap:10px;margin-top:15px">
+                    <button class="btn btn-primary" id="export-confirm">Exporter</button>
+                    <button class="btn btn-secondary" id="export-cancel">Annuler</button>
+                </div>
+            `;
+            modal.querySelector('div').appendChild(select);
+            
+            // Ajouter un fond sombre
+            const overlay = document.createElement('div');
+            overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999';
+            
+            document.body.appendChild(overlay);
+            document.body.appendChild(modal);
+            
+            // Gérer les événements
+            document.getElementById('export-confirm').onclick = () => {
+                const selectedId = select.value;
+                if (selectedId) {
+                    const playlist = playlists.find(p => p.id === selectedId);
+                    if (playlist) {
+                        downloadPlaylistAsJSON(playlist);
+                    }
+                }
+                document.body.removeChild(modal);
+                document.body.removeChild(overlay);
+            };
+            
+            document.getElementById('export-cancel').onclick = () => {
+                document.body.removeChild(modal);
+                document.body.removeChild(overlay);
+            };
+        }
+        
+        // Fonction helper pour télécharger une playlist en JSON
+        function downloadPlaylistAsJSON(playlist) {
+            const dataStr = JSON.stringify(playlist, null, 2);
+            const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+            
+            const exportFileDefaultName = `playlist_${playlist.name.replace(/\s+/g, '_')}_${Date.now()}.json`;
+            
+            const linkElement = document.createElement('a');
+            linkElement.setAttribute('href', dataUri);
+            linkElement.setAttribute('download', exportFileDefaultName);
+            linkElement.click();
+            
+            showAlert(`Playlist "${playlist.name}" exportée`, 'success');
+        }
+        
+        // Fonction pour retirer une vidéo de la playlist en cours d'édition
+        function removeFromPlaylist(video) {
+            const container = document.getElementById('playlist-videos');
+            const items = container.querySelectorAll('.playlist-item');
+            
+            items.forEach(item => {
+                const videoName = item.querySelector('span').textContent;
+                if (videoName === video) {
+                    item.remove();
+                }
+            });
+        }
 
         // Utility functions
         function setupVolumeSlider() {
@@ -2294,17 +2524,103 @@ $mediaFiles = getMediaFiles();
         // Placeholder functions for advanced features
         function downloadTestVideos() {
             showAlert('Téléchargement des vidéos de test en cours...', 'info');
-            // Would call the download-test-videos.sh script
+            
+            fetch('/api/media.php?action=download-test-videos', {
+                method: 'GET'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert(`✅ ${data.message}. ${data.files.length} fichiers téléchargés`, 'success');
+                    // Rafraîchir la liste des médias
+                    loadMediaLibrary();
+                } else {
+                    showAlert('❌ Erreur: ' + (data.error || 'Téléchargement échoué'), 'error');
+                }
+            })
+            .catch(error => {
+                showAlert('❌ Erreur réseau: ' + error.message, 'error');
+            });
         }
 
         function optimizeMedia() {
-            showAlert('Optimisation des médias en cours...', 'info');
-            // Would run media optimization scripts
+            const files = document.querySelectorAll('.media-item input[type="checkbox"]:checked');
+            if (files.length === 0) {
+                showAlert('⚠️ Veuillez sélectionner au moins un fichier à optimiser', 'warning');
+                return;
+            }
+            
+            const file = files[0].closest('.media-item').dataset.filename;
+            showAlert('🔧 Optimisation en cours...', 'info');
+            
+            const formData = new FormData();
+            formData.append('action', 'optimize');
+            formData.append('file', file);
+            
+            fetch('/api/media.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert(`✅ Optimisation démarrée pour ${data.input}`, 'success');
+                    // Optionnel: polling pour vérifier la progression
+                    setTimeout(() => {
+                        loadMediaLibrary();
+                    }, 5000);
+                } else {
+                    showAlert('❌ Erreur: ' + (data.error || 'Optimisation échouée'), 'error');
+                }
+            })
+            .catch(error => {
+                showAlert('❌ Erreur réseau: ' + error.message, 'error');
+            });
         }
 
         function cleanupMedia() {
-            if (!confirm('Supprimer les fichiers inutilisés ?')) return;
-            showAlert('Nettoyage en cours...', 'info');
+            if (!confirm('Supprimer les fichiers inutilisés ? Cette action est irréversible.')) return;
+            
+            showAlert('🔍 Analyse des fichiers inutilisés...', 'info');
+            
+            // Première requête : simulation (dry run)
+            fetch('/api/media.php?action=cleanup&dry_run=true', {
+                method: 'GET'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const message = `📊 ${data.totalUnused} fichiers inutilisés trouvés (${data.freedSpaceFormatted} à libérer)`;
+                    if (data.totalUnused > 0 && confirm(message + '\n\nConfirmer la suppression ?')) {
+                        // Vraie suppression
+                        return fetch('/api/media.php?action=cleanup&dry_run=false');
+                    } else {
+                        showAlert('ℹ️ Aucun fichier à supprimer ou suppression annulée', 'info');
+                        return null;
+                    }
+                } else {
+                    throw new Error(data.error || 'Erreur lors de l\'analyse');
+                }
+            })
+            .then(response => {
+                if (response) {
+                    return response.json();
+                }
+                return null;
+            })
+            .then(data => {
+                if (data) {
+                    if (data.success) {
+                        showAlert(`✅ ${data.deletedFiles.length} fichiers supprimés. ${data.freedSpaceFormatted} libérés`, 'success');
+                        loadMediaLibrary();
+                    } else {
+                        showAlert('❌ Erreur: ' + (data.error || 'Suppression échouée'), 'error');
+                    }
+                }
+            })
+            .catch(error => {
+                showAlert('❌ Erreur: ' + error.message, 'error');
+            });
         }
 
         function addToPlaylist(filename) {
@@ -2320,44 +2636,480 @@ $mediaFiles = getMediaFiles();
         }
 
         function saveSchedule() {
-            showAlert('Programmation sauvegardée', 'success');
+            const schedule = {
+                days: [],
+                playlist: document.getElementById('schedulePlaylist').value,
+                startTime: document.getElementById('scheduleStartTime').value,
+                endTime: document.getElementById('scheduleEndTime').value,
+                enabled: true,
+                created: new Date().toISOString()
+            };
+            
+            // Récupérer les jours sélectionnés
+            const dayCheckboxes = document.querySelectorAll('input[name="scheduleDays"]:checked');
+            dayCheckboxes.forEach(cb => schedule.days.push(cb.value));
+            
+            if (!schedule.playlist || schedule.days.length === 0 || !schedule.startTime || !schedule.endTime) {
+                showAlert('⚠️ Veuillez remplir tous les champs obligatoires', 'warning');
+                return;
+            }
+            
+            // Sauvegarder dans localStorage pour l'instant
+            let schedules = JSON.parse(localStorage.getItem('pisignage_schedules') || '[]');
+            schedule.id = Date.now().toString();
+            schedules.push(schedule);
+            
+            localStorage.setItem('pisignage_schedules', JSON.stringify(schedules));
+            
+            showAlert('✅ Programmation sauvegardeé avec succès', 'success');
+            
+            // Réinitialiser le formulaire
+            document.getElementById('schedulePlaylist').value = '';
+            document.getElementById('scheduleStartTime').value = '';
+            document.getElementById('scheduleEndTime').value = '';
+            dayCheckboxes.forEach(cb => cb.checked = false);
+            
+            // Recharger la liste des programmations actives
+            loadActiveSchedules();
         }
 
         function addZone() {
-            showAlert('Zone ajoutée', 'success');
+            const zonesList = document.getElementById('zonesList');
+            const zoneCount = zonesList.querySelectorAll('.zone-item').length;
+            
+            if (zoneCount >= 4) {
+                showAlert('⚠️ Maximum 4 zones autorisées', 'warning');
+                return;
+            }
+            
+            const zoneId = `zone_${Date.now()}`;
+            const zoneDiv = document.createElement('div');
+            zoneDiv.className = 'zone-item';
+            zoneDiv.innerHTML = `
+                <div class="form-group">
+                    <label>Zone ${zoneCount + 1}</label>
+                    <div class="zone-controls">
+                        <input type="number" placeholder="X" value="${zoneCount * 25}" min="0" max="100" style="width: 60px;">
+                        <input type="number" placeholder="Y" value="0" min="0" max="100" style="width: 60px;">
+                        <input type="number" placeholder="W" value="25" min="10" max="100" style="width: 60px;">
+                        <input type="number" placeholder="H" value="100" min="10" max="100" style="width: 60px;">
+                        <select style="width: 100px;">
+                            <option value="video">Vidéo</option>
+                            <option value="image">Image</option>
+                            <option value="text">Texte</option>
+                        </select>
+                        <button type="button" onclick="removeZone(this)" class="btn btn-sm btn-danger">❌</button>
+                    </div>
+                </div>
+            `;
+            
+            // Enlever l'empty state s'il existe
+            const emptyState = zonesList.querySelector('.empty-state');
+            if (emptyState) {
+                emptyState.remove();
+            }
+            
+            zonesList.appendChild(zoneDiv);
+            showAlert('✅ Zone ajoutée', 'success');
         }
 
         function previewZones() {
-            showAlert('Aperçu des zones activé', 'info');
+            const zones = document.querySelectorAll('.zone-item');
+            if (zones.length === 0) {
+                showAlert('⚠️ Aucune zone à prévisualiser', 'warning');
+                return;
+            }
+            
+            // Créer un overlay de prévisualisation
+            const overlay = document.createElement('div');
+            overlay.id = 'zone-preview-overlay';
+            overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0,0,0,0.8);
+                z-index: 10000;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            `;
+            
+            const previewContainer = document.createElement('div');
+            previewContainer.style.cssText = `
+                position: relative;
+                width: 80vmin;
+                height: 45vmin;
+                background: #000;
+                border: 2px solid #fff;
+            `;
+            
+            zones.forEach((zone, index) => {
+                const inputs = zone.querySelectorAll('input');
+                const select = zone.querySelector('select');
+                
+                const zonePreview = document.createElement('div');
+                zonePreview.style.cssText = `
+                    position: absolute;
+                    left: ${inputs[0].value}%;
+                    top: ${inputs[1].value}%;
+                    width: ${inputs[2].value}%;
+                    height: ${inputs[3].value}%;
+                    border: 2px solid #ff0000;
+                    background: rgba(255,0,0,0.1);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: white;
+                    font-weight: bold;
+                `;
+                zonePreview.textContent = `Zone ${index + 1} (${select.value})`;
+                previewContainer.appendChild(zonePreview);
+            });
+            
+            const closeBtn = document.createElement('button');
+            closeBtn.textContent = '❌ Fermer';
+            closeBtn.style.cssText = `
+                position: absolute;
+                top: 10px;
+                right: 10px;
+                background: #fff;
+                border: none;
+                padding: 10px;
+                cursor: pointer;
+            `;
+            closeBtn.onclick = () => overlay.remove();
+            
+            overlay.appendChild(previewContainer);
+            overlay.appendChild(closeBtn);
+            document.body.appendChild(overlay);
+            
+            showAlert('👁️ Aperçu des zones activé', 'info');
         }
 
         function resetZones() {
-            showAlert('Zones réinitialisées', 'info');
+            if (!confirm('Réinitialiser toutes les zones ?')) return;
+            
+            const zonesList = document.getElementById('zonesList');
+            zonesList.innerHTML = `
+                <div class="empty-state">
+                    <div class="icon">🔲</div>
+                    <p>Zone principale uniquement</p>
+                </div>
+            `;
+            
+            showAlert('✅ Zones réinitialisées', 'info');
         }
 
         function previewTransition() {
-            showAlert('Aperçu de la transition', 'info');
+            const transitionType = document.getElementById('transitionType').value;
+            const duration = document.getElementById('transitionDuration').value;
+            
+            // Créer un demo simple de transition
+            const demoContainer = document.createElement('div');
+            demoContainer.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                width: 400px;
+                height: 300px;
+                background: #000;
+                border: 2px solid #fff;
+                z-index: 10000;
+                overflow: hidden;
+            `;
+            
+            const slide1 = document.createElement('div');
+            slide1.style.cssText = `
+                position: absolute;
+                width: 100%;
+                height: 100%;
+                background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: white;
+                font-size: 24px;
+                font-weight: bold;
+            `;
+            slide1.textContent = 'Vidéo 1';
+            
+            const slide2 = document.createElement('div');
+            slide2.style.cssText = `
+                position: absolute;
+                width: 100%;
+                height: 100%;
+                background: linear-gradient(45deg, #45b7d1, #96ceb4);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: white;
+                font-size: 24px;
+                font-weight: bold;
+            `;
+            slide2.textContent = 'Vidéo 2';
+            
+            // Appliquer la transition selon le type
+            switch(transitionType) {
+                case 'fade':
+                    slide2.style.opacity = '0';
+                    slide2.style.transition = `opacity ${duration}ms ease`;
+                    break;
+                case 'slide-left':
+                    slide2.style.transform = 'translateX(100%)';
+                    slide2.style.transition = `transform ${duration}ms ease`;
+                    break;
+                case 'slide-up':
+                    slide2.style.transform = 'translateY(100%)';
+                    slide2.style.transition = `transform ${duration}ms ease`;
+                    break;
+                case 'zoom':
+                    slide2.style.transform = 'scale(0)';
+                    slide2.style.transition = `transform ${duration}ms ease`;
+                    break;
+                default:
+                    slide2.style.opacity = '0';
+                    slide2.style.transition = `opacity ${duration}ms ease`;
+            }
+            
+            demoContainer.appendChild(slide1);
+            demoContainer.appendChild(slide2);
+            
+            const closeBtn = document.createElement('button');
+            closeBtn.textContent = '❌';
+            closeBtn.style.cssText = `
+                position: absolute;
+                top: 10px;
+                right: 10px;
+                background: rgba(255,255,255,0.8);
+                border: none;
+                width: 30px;
+                height: 30px;
+                cursor: pointer;
+                border-radius: 50%;
+            `;
+            closeBtn.onclick = () => demoContainer.remove();
+            demoContainer.appendChild(closeBtn);
+            
+            document.body.appendChild(demoContainer);
+            
+            // Démarrer la transition après un court délai
+            setTimeout(() => {
+                switch(transitionType) {
+                    case 'fade':
+                        slide2.style.opacity = '1';
+                        break;
+                    case 'slide-left':
+                    case 'slide-up':
+                        slide2.style.transform = 'translate(0, 0)';
+                        break;
+                    case 'zoom':
+                        slide2.style.transform = 'scale(1)';
+                        break;
+                    default:
+                        slide2.style.opacity = '1';
+                }
+            }, 500);
+            
+            showAlert(`🎥 Aperçu transition: ${transitionType} (${duration}ms)`, 'info');
         }
 
         function saveSystemSettings() {
-            showAlert('Configuration système sauvegardée', 'success');
+            const settings = {
+                display_resolution: document.getElementById('displayResolution').value,
+                display_orientation: document.getElementById('displayOrientation').value,
+                display_volume: document.getElementById('displayVolume').value,
+                auto_start: document.getElementById('autoStart').checked ? 'true' : 'false',
+                debug_mode: document.getElementById('debugMode').checked ? 'true' : 'false'
+            };
+            
+            showAlert('💾 Sauvegarde en cours...', 'info');
+            
+            const formData = new FormData();
+            formData.append('action', 'save-settings');
+            
+            Object.keys(settings).forEach(key => {
+                formData.append(`settings[${key}]`, settings[key]);
+            });
+            
+            fetch('/api/settings.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert('✅ Configuration système sauvegardée', 'success');
+                    // Mettre à jour l'interface si nécessaire
+                    if (settings.display_volume) {
+                        updateVolumeDisplay(settings.display_volume);
+                    }
+                } else {
+                    showAlert('❌ Erreur: ' + (data.error || 'Sauvegarde échouée'), 'error');
+                }
+            })
+            .catch(error => {
+                showAlert('❌ Erreur réseau: ' + error.message, 'error');
+            });
         }
 
         function scanWiFi() {
-            showAlert('Scan WiFi en cours...', 'info');
+            showAlert('📶 Scan WiFi en cours...', 'info');
+            
+            fetch('/api/settings.php?action=scan-wifi', {
+                method: 'GET'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const networks = data.networks;
+                    if (networks.length === 0) {
+                        showAlert('⚠️ Aucun réseau WiFi détecté', 'warning');
+                        return;
+                    }
+                    
+                    // Créer une liste des réseaux
+                    let networkList = '📶 Réseaux détectés:\n\n';
+                    networks.forEach(network => {
+                        const signalBars = '█'.repeat(Math.ceil(network.signal / 25));
+                        networkList += `${network.ssid} ${signalBars} (${network.signal}%)\n`;
+                    });
+                    
+                    // Afficher dans une boîte de dialogue ou mise à jour de l'interface
+                    showAlert('✅ ' + networks.length + ' réseaux trouvés', 'success');
+                    
+                    // Optionnel: populer un select avec les réseaux
+                    const ssidSelect = document.getElementById('networkSSID');
+                    if (ssidSelect) {
+                        // Vider les options existantes sauf la première
+                        while (ssidSelect.options.length > 1) {
+                            ssidSelect.remove(1);
+                        }
+                        
+                        // Ajouter les nouveaux réseaux
+                        networks.forEach(network => {
+                            const option = document.createElement('option');
+                            option.value = network.ssid;
+                            option.textContent = `${network.ssid} (${network.signal}%)`;
+                            ssidSelect.appendChild(option);
+                        });
+                    }
+                    
+                    console.log('Réseaux WiFi:', networks);
+                } else {
+                    showAlert('❌ Erreur: ' + (data.error || 'Scan WiFi échoué'), 'error');
+                }
+            })
+            .catch(error => {
+                showAlert('❌ Erreur réseau: ' + error.message, 'error');
+            });
         }
 
         function resetNetwork() {
-            if (!confirm('Réinitialiser la configuration réseau ?')) return;
-            showAlert('Configuration réseau réinitialisée', 'warning');
+            if (!confirm('Réinitialiser la configuration réseau ? Cette action peut interrompre la connexion.')) return;
+            
+            showAlert('🔄 Réinitialisation du réseau...', 'warning');
+            
+            fetch('/api/settings.php?action=reset-network', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert('✅ Configuration réseau réinitialisée', 'success');
+                    showAlert('⚠️ La connexion peut être interrompue. Veuillez patienter...', 'warning');
+                    
+                    // Tentative de reconnexion après 10 secondes
+                    setTimeout(() => {
+                        showAlert('🔄 Tentative de reconnexion...', 'info');
+                        // Test de connectivité
+                        fetch('/api/settings.php?action=ping', { method: 'GET' })
+                        .then(() => {
+                            showAlert('✅ Connexion rétablie', 'success');
+                        })
+                        .catch(() => {
+                            showAlert('⚠️ Connexion non rétablie. Vérifiez la configuration.', 'warning');
+                        });
+                    }, 10000);
+                } else {
+                    showAlert('❌ Erreur: ' + (data.error || 'Réinitialisation échouée'), 'error');
+                }
+            })
+            .catch(error => {
+                showAlert('❌ Erreur réseau: ' + error.message, 'error');
+            });
         }
 
         function createBackup() {
-            showAlert('Création de la sauvegarde...', 'info');
+            showAlert('💾 Création de la sauvegarde...', 'info');
+            
+            fetch('/api/settings.php?action=backup', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const sizeFormatted = formatBytes(data.size);
+                    showAlert(`✅ Sauvegarde créée: ${data.filename} (${sizeFormatted})`, 'success');
+                    
+                    // Optionnel: proposer le téléchargement
+                    if (confirm('Voulez-vous télécharger la sauvegarde ?')) {
+                        const link = document.createElement('a');
+                        link.href = `/backups/${data.filename}`;
+                        link.download = data.filename;
+                        link.click();
+                    }
+                    
+                    // Rafraîchir la liste des sauvegardes
+                    loadBackupsList();
+                } else {
+                    showAlert('❌ Erreur: ' + (data.error || 'Création de sauvegarde échouée'), 'error');
+                    if (data.details) {
+                        console.error('Détails:', data.details);
+                    }
+                }
+            })
+            .catch(error => {
+                showAlert('❌ Erreur réseau: ' + error.message, 'error');
+            });
         }
 
         function restoreBackup() {
-            showAlert('Restauration en cours...', 'warning');
+            // D'abord, charger la liste des sauvegardes disponibles
+            fetch('/api/settings.php?action=list-backups', {
+                method: 'GET'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.backups.length > 0) {
+                    // Créer une boîte de dialogue de sélection
+                    let backupOptions = 'Sélectionnez une sauvegarde à restaurer:\n\n';
+                    data.backups.forEach((backup, index) => {
+                        const sizeFormatted = formatBytes(backup.size);
+                        backupOptions += `${index + 1}. ${backup.name} (${backup.date}) - ${sizeFormatted}\n`;
+                    });
+                    
+                    const selection = prompt(backupOptions + '\nEntrez le numéro (1-' + data.backups.length + '):');
+                    const backupIndex = parseInt(selection) - 1;
+                    
+                    if (backupIndex >= 0 && backupIndex < data.backups.length) {
+                        const selectedBackup = data.backups[backupIndex];
+                        
+                        if (confirm(`Restaurer ${selectedBackup.name} ? Cette action remplacera la configuration actuelle.`)) {
+                            performRestore(selectedBackup.name);
+                        }
+                    } else {
+                        showAlert('⚠️ Sélection annulée', 'info');
+                    }
+                } else {
+                    showAlert('⚠️ Aucune sauvegarde disponible', 'warning');
+                }
+            })
+            .catch(error => {
+                showAlert('❌ Erreur: ' + error.message, 'error');
+            });
         }
 
         function restartSystem() {
@@ -2405,12 +3157,264 @@ $mediaFiles = getMediaFiles();
         }
 
         function viewLogs() {
-            showAlert('Ouverture des logs...', 'info');
+            const logType = prompt('Type de log à consulter:\n\n1. PiSignage (pisignage)\n2. VLC (vlc)\n3. Nginx (nginx)\n4. PHP (php)\n\nEntrez le nom ou numéro:', 'pisignage');
+            
+            if (!logType) return;
+            
+            // Mapper les numéros aux noms
+            const logTypeMap = {
+                '1': 'pisignage',
+                '2': 'vlc', 
+                '3': 'nginx',
+                '4': 'php'
+            };
+            
+            const actualLogType = logTypeMap[logType] || logType;
+            const lines = prompt('Nombre de lignes à afficher (10-1000):', '100');
+            
+            if (!lines || isNaN(lines)) return;
+            
+            showAlert('📜 Chargement des logs...', 'info');
+            
+            fetch(`/api/settings.php?action=view-logs&type=${actualLogType}&lines=${lines}`, {
+                method: 'GET'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Créer une fenêtre modale pour afficher les logs
+                    const modal = document.createElement('div');
+                    modal.style.cssText = `
+                        position: fixed;
+                        top: 0;
+                        left: 0;
+                        width: 100%;
+                        height: 100%;
+                        background: rgba(0,0,0,0.8);
+                        z-index: 10000;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        padding: 20px;
+                    `;
+                    
+                    const logContainer = document.createElement('div');
+                    logContainer.style.cssText = `
+                        background: #1a1a1a;
+                        color: #00ff00;
+                        font-family: 'Courier New', monospace;
+                        font-size: 12px;
+                        padding: 20px;
+                        border-radius: 8px;
+                        width: 90%;
+                        height: 80%;
+                        overflow: auto;
+                        position: relative;
+                    `;
+                    
+                    const header = document.createElement('div');
+                    header.style.cssText = `
+                        position: sticky;
+                        top: 0;
+                        background: #1a1a1a;
+                        padding-bottom: 10px;
+                        border-bottom: 1px solid #333;
+                        margin-bottom: 10px;
+                    `;
+                    header.innerHTML = `
+                        <h3 style="margin: 0; color: #fff;">📜 Logs ${data.type} (${data.lines} dernières lignes)</h3>
+                        <button onclick="this.closest('.modal').remove()" style="position: absolute; top: 0; right: 0; background: #ff4444; color: white; border: none; padding: 5px 10px; cursor: pointer;">❌ Fermer</button>
+                    `;
+                    
+                    const logContent = document.createElement('pre');
+                    logContent.style.cssText = `
+                        margin: 0;
+                        white-space: pre-wrap;
+                        word-wrap: break-word;
+                    `;
+                    logContent.textContent = data.content || 'Aucun contenu';
+                    
+                    logContainer.appendChild(header);
+                    logContainer.appendChild(logContent);
+                    modal.appendChild(logContainer);
+                    modal.className = 'modal';
+                    
+                    document.body.appendChild(modal);
+                    
+                    showAlert(`✅ Logs ${data.type} chargés`, 'success');
+                } else {
+                    showAlert('❌ Erreur: ' + (data.error || 'Chargement des logs échoué'), 'error');
+                }
+            })
+            .catch(error => {
+                showAlert('❌ Erreur réseau: ' + error.message, 'error');
+            });
         }
 
         function clearLogs() {
-            if (!confirm('Vider les logs ?')) return;
-            showAlert('Logs vidés', 'info');
+            const logType = prompt('Type de log à vider:\n\n1. Tous les logs (all)\n2. PiSignage (pisignage)\n3. VLC (vlc)\n\nEntrez le nom ou numéro:', 'all');
+            
+            if (!logType) return;
+            
+            // Mapper les numéros aux noms
+            const logTypeMap = {
+                '1': 'all',
+                '2': 'pisignage',
+                '3': 'vlc'
+            };
+            
+            const actualLogType = logTypeMap[logType] || logType;
+            
+            if (!confirm(`Vider les logs ${actualLogType} ? Cette action est irréversible.`)) return;
+            
+            showAlert('🗑️ Nettoyage des logs...', 'info');
+            
+            const formData = new FormData();
+            formData.append('action', 'clear-logs');
+            formData.append('type', actualLogType);
+            
+            fetch('/api/settings.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert(`✅ ${data.message}`, 'success');
+                } else {
+                    showAlert('❌ Erreur: ' + (data.error || 'Nettoyage échoué'), 'error');
+                }
+            })
+            .catch(error => {
+                showAlert('❌ Erreur réseau: ' + error.message, 'error');
+            });
+        }
+        
+        // Helper functions
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        function performRestore(backupName) {
+            showAlert('📥 Restauration en cours...', 'warning');
+            
+            const formData = new FormData();
+            formData.append('action', 'restore');
+            formData.append('backup', backupName);
+            
+            fetch('/api/settings.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert('✅ Restauration terminée avec succès', 'success');
+                    showAlert('🔄 Redémarrage recommandé pour appliquer tous les changements', 'info');
+                } else {
+                    showAlert('❌ Erreur: ' + (data.error || 'Restauration échouée'), 'error');
+                }
+            })
+            .catch(error => {
+                showAlert('❌ Erreur réseau: ' + error.message, 'error');
+            });
+        }
+        
+        function loadBackupsList() {
+            // Cette fonction pourrait être implémentée pour rafraîchir une liste de sauvegardes
+            // dans l'interface si nécessaire
+            console.log('📋 Liste des sauvegardes à rafraîchir');
+        }
+        
+        function updateVolumeDisplay(volume) {
+            // Mettre à jour l'affichage du volume dans l'interface
+            const volumeDisplays = document.querySelectorAll('.volume-display');
+            volumeDisplays.forEach(display => {
+                display.textContent = volume + '%';
+            });
+            
+            // Mettre à jour les sliders de volume
+            const volumeSliders = document.querySelectorAll('input[type="range"][id*="volume"]');
+            volumeSliders.forEach(slider => {
+                slider.value = volume;
+            });
+        }
+        
+        function loadActiveSchedules() {
+            // Charger et afficher les programmations actives depuis localStorage
+            const schedules = JSON.parse(localStorage.getItem('pisignage_schedules') || '[]');
+            const container = document.getElementById('activeSchedules');
+            
+            if (!container) return;
+            
+            if (schedules.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">📅</div>
+                        <p>Aucune programmation active</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = '';
+            schedules.forEach(schedule => {
+                const scheduleDiv = document.createElement('div');
+                scheduleDiv.className = 'schedule-item';
+                scheduleDiv.style.cssText = `
+                    background: #f5f5f5;
+                    padding: 10px;
+                    margin: 5px 0;
+                    border-radius: 4px;
+                    border-left: 4px solid #007bff;
+                `;
+                
+                scheduleDiv.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <strong>${schedule.playlist}</strong><br>
+                            <small>${schedule.days.join(', ')} | ${schedule.startTime} - ${schedule.endTime}</small>
+                        </div>
+                        <button onclick="deleteSchedule('${schedule.id}')" class="btn btn-sm btn-danger">🗑️</button>
+                    </div>
+                `;
+                
+                container.appendChild(scheduleDiv);
+            });
+        }
+        
+        function deleteSchedule(scheduleId) {
+            if (!confirm('Supprimer cette programmation ?')) return;
+            
+            let schedules = JSON.parse(localStorage.getItem('pisignage_schedules') || '[]');
+            schedules = schedules.filter(s => s.id !== scheduleId);
+            localStorage.setItem('pisignage_schedules', JSON.stringify(schedules));
+            
+            showAlert('✅ Programmation supprimée', 'success');
+            loadActiveSchedules();
+        }
+        
+        function removeZone(button) {
+            const zoneItem = button.closest('.zone-item');
+            if (zoneItem) {
+                zoneItem.remove();
+                showAlert('✅ Zone supprimée', 'success');
+                
+                // Si c'était la dernière zone, remettre l'empty state
+                const zonesList = document.getElementById('zonesList');
+                if (zonesList.querySelectorAll('.zone-item').length === 0) {
+                    zonesList.innerHTML = `
+                        <div class="empty-state">
+                            <div class="icon">🔲</div>
+                            <p>Zone principale uniquement</p>
+                        </div>
+                    `;
+                }
+            }
         }
     </script>
 </body>

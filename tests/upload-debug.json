@@ -1,0 +1,16 @@
+{
+  "consoleLogs": [],
+  "networkRequests": [
+    {
+      "method": "POST",
+      "url": "http://192.168.1.103/api/upload.php",
+      "headers": {
+        "referer": "http://192.168.1.103/",
+        "accept-language": "fr-FR,fr;q=0.9",
+        "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/140.0.0.0 Safari/537.36",
+        "content-type": "multipart/form-data; boundary=----WebKitFormBoundaryoDMeULhflIWzQn4c"
+      }
+    }
+  ],
+  "timestamp": "2025-09-21T01:03:58.086Z"
+}

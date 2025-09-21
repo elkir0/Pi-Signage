@@ -2,21 +2,30 @@
 header("Content-Type: application/json");
 header('Access-Control-Allow-Origin: *');
 
+// Liste blanche des actions autorisées
+$allowedActions = ['status', 'start', 'stop', 'delete', 'upload'];
 $action = $_GET["action"] ?? $_POST["action"] ?? "status";
+
+// Validation de l'action
+if (!in_array($action, $allowedActions)) {
+    http_response_code(400);
+    echo json_encode(["error" => "Action non autorisée"]);
+    exit;
+}
 
 switch($action) {
     case "status":
-        $status = shell_exec("/opt/pisignage/scripts/vlc-control.sh status");
+        $status = shell_exec(escapeshellcmd("/opt/pisignage/scripts/vlc-control.sh") . " status");
         echo json_encode(["status" => trim($status)]);
         break;
         
     case "start":
-        shell_exec("/opt/pisignage/scripts/vlc-control.sh start");
+        shell_exec(escapeshellcmd("/opt/pisignage/scripts/vlc-control.sh") . " start");
         echo json_encode(["status" => "started"]);
         break;
         
     case "stop":
-        shell_exec("/opt/pisignage/scripts/vlc-control.sh stop");
+        shell_exec(escapeshellcmd("/opt/pisignage/scripts/vlc-control.sh") . " stop");
         echo json_encode(["status" => "stopped"]);
         break;
         
@@ -33,9 +42,28 @@ switch($action) {
             break;
         }
         
-        // Sécurité : nettoyer le nom de fichier
+        // Sécurité : validation stricte du nom de fichier
         $filename = basename($filename);
+        // Validation : caractères autorisés seulement
+        if (!preg_match('/^[a-zA-Z0-9._-]+$/', $filename)) {
+            echo json_encode([
+                "success" => false,
+                "error" => "Nom de fichier invalide"
+            ]);
+            break;
+        }
         $filepath = "/opt/pisignage/media/" . $filename;
+        
+        // Vérification supplémentaire : s'assurer qu'on reste dans le bon dossier
+        $realpath = realpath($filepath);
+        $mediaDir = realpath("/opt/pisignage/media/");
+        if ($realpath === false || strpos($realpath, $mediaDir) !== 0) {
+            echo json_encode([
+                "success" => false,
+                "error" => "Chemin de fichier invalide"
+            ]);
+            break;
+        }
         
         // Vérifier que le fichier existe
         if (!file_exists($filepath)) {
@@ -61,8 +89,7 @@ switch($action) {
             echo json_encode([
                 "success" => false,
                 "error" => "Impossible de supprimer le fichier",
-                "file" => $filename,
-                "path" => $filepath
+                "file" => $filename
             ]);
         }
         break;
@@ -80,7 +107,41 @@ switch($action) {
         
         $uploadDir = "/opt/pisignage/media/";
         $uploadedFile = $_FILES["video"];
+        
+        // Validation du nom de fichier
         $fileName = basename($uploadedFile["name"]);
+        // Remplacer les caractères non autorisés
+        $fileName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $fileName);
+        
+        // Vérification de l'extension
+        $allowedExtensions = ['mp4', 'avi', 'mkv', 'webm', 'mov', 'jpg', 'jpeg', 'png', 'gif'];
+        $fileExtension = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+        if (!in_array($fileExtension, $allowedExtensions)) {
+            echo json_encode([
+                "status" => "error",
+                "message" => "Type de fichier non autorisé"
+            ]);
+            exit;
+        }
+        
+        // Vérification du type MIME
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $mimeType = finfo_file($finfo, $uploadedFile["tmp_name"]);
+        finfo_close($finfo);
+        
+        $allowedMimeTypes = [
+            'video/mp4', 'video/x-msvideo', 'video/x-matroska', 'video/webm', 'video/quicktime',
+            'image/jpeg', 'image/png', 'image/gif'
+        ];
+        
+        if (!in_array($mimeType, $allowedMimeTypes)) {
+            echo json_encode([
+                "status" => "error",
+                "message" => "Type MIME non autorisé: " . $mimeType
+            ]);
+            exit;
+        }
+        
         $targetPath = $uploadDir . $fileName;
         
         // Vérifier les erreurs d'upload
@@ -108,19 +169,12 @@ switch($action) {
                 "status" => "success",
                 "message" => "Fichier uploadé avec succès",
                 "filename" => $fileName,
-                "size" => $uploadedFile["size"],
-                "path" => $targetPath
+                "size" => $uploadedFile["size"]
             ]);
         } else {
             echo json_encode([
                 "status" => "error",
-                "message" => "Impossible de déplacer le fichier",
-                "details" => [
-                    "tmp_name" => $uploadedFile["tmp_name"],
-                    "target" => $targetPath,
-                    "upload_dir_writable" => is_writable($uploadDir),
-                    "upload_dir_exists" => is_dir($uploadDir)
-                ]
+                "message" => "Impossible de déplacer le fichier"
             ]);
         }
         break;
