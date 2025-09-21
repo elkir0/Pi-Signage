@@ -67,6 +67,64 @@ switch($action) {
         }
         break;
         
+    case "upload":
+        header("Access-Control-Allow-Origin: *");
+        
+        if (!isset($_FILES["video"])) {
+            echo json_encode([
+                "status" => "error",
+                "message" => "Aucun fichier reçu"
+            ]);
+            exit;
+        }
+        
+        $uploadDir = "/opt/pisignage/media/";
+        $uploadedFile = $_FILES["video"];
+        $fileName = basename($uploadedFile["name"]);
+        $targetPath = $uploadDir . $fileName;
+        
+        // Vérifier les erreurs d'upload
+        if ($uploadedFile["error"] !== UPLOAD_ERR_OK) {
+            echo json_encode([
+                "status" => "error",
+                "message" => "Erreur d'upload: " . $uploadedFile["error"],
+                "details" => [
+                    "error_code" => $uploadedFile["error"],
+                    "max_upload_size" => ini_get("upload_max_filesize"),
+                    "max_post_size" => ini_get("post_max_size")
+                ]
+            ]);
+            exit;
+        }
+        
+        // Déplacer le fichier uploadé
+        if (move_uploaded_file($uploadedFile["tmp_name"], $targetPath)) {
+            // Donner les bonnes permissions
+            chmod($targetPath, 0666);
+            chown($targetPath, "www-data");
+            chgrp($targetPath, "www-data");
+            
+            echo json_encode([
+                "status" => "success",
+                "message" => "Fichier uploadé avec succès",
+                "filename" => $fileName,
+                "size" => $uploadedFile["size"],
+                "path" => $targetPath
+            ]);
+        } else {
+            echo json_encode([
+                "status" => "error",
+                "message" => "Impossible de déplacer le fichier",
+                "details" => [
+                    "tmp_name" => $uploadedFile["tmp_name"],
+                    "target" => $targetPath,
+                    "upload_dir_writable" => is_writable($uploadDir),
+                    "upload_dir_exists" => is_dir($uploadDir)
+                ]
+            ]);
+        }
+        break;
+
     default:
         echo json_encode(["error" => "Action invalide: " . $action]);
 }

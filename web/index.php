@@ -1699,6 +1699,9 @@ $mediaFiles = getMediaFiles();
             const zone = document.getElementById('uploadZone');
             const input = document.getElementById('fileInput');
 
+            // Attacher l'event listener à l'input file
+            input.addEventListener('change', (e) => handleFiles(e.target.files));
+
             zone.addEventListener('click', () => input.click());
 
             zone.addEventListener('dragover', (e) => {
@@ -1727,7 +1730,8 @@ $mediaFiles = getMediaFiles();
             }
         }
 
-        function uploadFile(file) {
+        async function uploadFile(file) {
+            console.log('📤 Uploading file:', file.name, 'Size:', file.size);
             const formData = new FormData();
             formData.append('video', file);
 
@@ -1737,38 +1741,37 @@ $mediaFiles = getMediaFiles();
             progressBar.style.display = 'block';
             progressFill.style.width = '0%';
 
-            const xhr = new XMLHttpRequest();
+            try {
+                const response = await fetch('/api/control.php?action=upload', {
+                    method: 'POST',
+                    body: formData
+                });
 
-            xhr.upload.addEventListener('progress', (e) => {
-                if (e.lengthComputable) {
-                    const percentComplete = (e.loaded / e.total) * 100;
-                    progressFill.style.width = percentComplete + '%';
+                progressFill.style.width = '100%';
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
                 }
-            });
-
-            xhr.addEventListener('load', () => {
-                progressBar.style.display = 'none';
-                if (xhr.status === 200) {
-                    const response = JSON.parse(xhr.responseText);
-                    showAlert(response.message || 'Upload terminé', response.success ? 'success' : 'error');
-                    if (response.success && response.files) {
-                        // Utiliser directement les fichiers de la réponse upload
-                        updateMediaList(response.files);
-                        document.getElementById('media-count').textContent = response.files.length;
-                    } else if (response.success) {
-                        // Fallback: rafraîchir via API si pas de liste dans la réponse
-                        refreshMediaList();
-                    }
+                
+                const result = await response.json();
+                console.log('📥 Upload response:', result);
+                
+                if (result.status === 'success') {
+                    loadMediaList();
+                    setTimeout(() => {
+                        progressBar.style.display = 'none';
+                    }, 1000);
+                } else {
+                    throw new Error(result.message || 'Upload failed');
                 }
-            });
-
-            xhr.addEventListener('error', () => {
-                progressBar.style.display = 'none';
-                showAlert('Upload failed', 'error');
-            });
-
-            xhr.open('POST', '/api/upload.php');
-            xhr.send(formData);
+            } catch (error) {
+                console.error('❌ Upload error:', error);
+                progressFill.style.backgroundColor = '#e74c3c';
+                setTimeout(() => {
+                    progressBar.style.display = 'none';
+                    progressFill.style.backgroundColor = '#3498db';
+                }, 2000);
+            }
         }
 
         // Player controls
