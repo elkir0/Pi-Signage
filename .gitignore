@@ -133,3 +133,4 @@ setup-*.sh
 *.backup
 config/*.bak
 >>>>>>> e3d23eed5cb67ecaebb350b4b797596c74b65e7a
+.next/

@@ -4,48 +4,27 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 262.1 83.3% 57.8%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 262.1 83.3% 57.8%;
-    --radius: 0.5rem;
-  }
-
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 263.4 70% 50.4%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 263.4 70% 50.4%;
+    /* Style FREE.FR - Dark theme par défaut */
+    --background: 0 0% 0%;           /* Noir pur */
+    --foreground: 0 0% 100%;         /* Blanc */
+    --card: 0 0% 5%;                 /* Noir carte */
+    --card-foreground: 0 0% 100%;    /* Blanc */
+    --popover: 0 0% 8%;              /* Gris très foncé */
+    --popover-foreground: 0 0% 100%; /* Blanc */
+    --primary: 0 85% 55%;            /* Rouge FREE.FR */
+    --primary-foreground: 0 0% 100%; /* Blanc */
+    --secondary: 0 0% 15%;           /* Gris foncé */
+    --secondary-foreground: 0 0% 100%; /* Blanc */
+    --muted: 0 0% 20%;               /* Gris */
+    --muted-foreground: 0 0% 70%;    /* Gris clair */
+    --accent: 0 100% 45%;            /* Rouge accent */
+    --accent-foreground: 0 0% 100%;  /* Blanc */
+    --destructive: 0 100% 60%;       /* Rouge erreur */
+    --destructive-foreground: 0 0% 100%; /* Blanc */
+    --border: 0 85% 55%;             /* Bordures rouges */
+    --input: 0 0% 10%;               /* Input noir */
+    --ring: 0 85% 55%;               /* Focus rouge */
+    --radius: 0.25rem;
   }
 }
 
@@ -55,29 +34,90 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   }
 }
 
-/* Custom scrollbar */
+/* Custom scrollbar style FREE.FR */
 @layer utilities {
   .scrollbar-thin {
     scrollbar-width: thin;
   }
   
   .scrollbar-thin::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 10px;
+    height: 10px;
   }
   
   .scrollbar-thin::-webkit-scrollbar-track {
-    @apply bg-muted;
+    @apply bg-gray-900;
   }
   
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    @apply bg-muted-foreground/20 rounded-full;
+    @apply bg-red-600 rounded-sm;
   }
   
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    @apply bg-muted-foreground/30;
+    @apply bg-red-500;
   }
+}
+
+/* Style FREE.FR additionnel */
+@layer components {
+  .btn-free {
+    @apply bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-sm transition-colors;
+  }
+  
+  .card-free {
+    @apply bg-gray-900 border border-red-600 rounded-sm p-4;
+  }
+  
+  .input-free {
+    @apply bg-gray-900 border border-red-600 text-white placeholder-gray-500 focus:border-red-400 focus:ring-1 focus:ring-red-400;
+  }
+  
+  .gradient-free {
+    @apply bg-gradient-to-br from-black via-gray-900 to-black;
+  }
+  
+  .text-gradient-free {
+    @apply bg-gradient-to-r from-red-600 to-red-400 bg-clip-text text-transparent;
+  }
+  
+  .glow-red {
+    @apply shadow-[0_0_10px_rgba(239,68,68,0.5)];
+  }
+  
+  .border-glow {
+    @apply border-red-600 shadow-[0_0_5px_rgba(239,68,68,0.3)];
+  }
+}
+
+/* Animations */
+@keyframes pulse-red {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+  }
+}
+
+.animate-pulse-red {
+  animation: pulse-red 2s infinite;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
 }

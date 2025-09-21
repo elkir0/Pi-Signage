@@ -2,25 +2,25 @@
 
 import { useState } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Dashboard } from '@/components/dashboard/Dashboard'
-import { PlaylistManager } from '@/components/playlist/PlaylistManager'
-import { MediaLibrary } from '@/components/media/MediaLibrary'
-import { YouTubeDownloader } from '@/components/youtube/YouTubeDownloader'
-import { Settings } from '@/components/settings/Settings'
-import { Schedule } from '@/components/schedule/Schedule'
-import { SystemMonitor } from '@/components/monitor/SystemMonitor'
-import { Header } from '@/components/layout/Header'
+import Dashboard from '@/components/dashboard/Dashboard'
+import PlaylistManager from '@/components/playlist/PlaylistManager'
+import MediaLibrary from '@/components/media/MediaLibrary'
+import YouTubeDownloader from '@/components/youtube/YouTubeDownloader'
+import Settings from '@/components/settings/Settings'
+import Schedule from '@/components/schedule/Schedule'
+import SystemMonitor from '@/components/monitor/SystemMonitor'
+import Header from '@/components/layout/Header'
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState('dashboard')
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
+    <div className="min-h-screen gradient-free">
       <Header />
       
       <main className="container mx-auto px-4 py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="grid w-full grid-cols-7 lg:w-auto lg:inline-flex">
+          <TabsList className="grid w-full grid-cols-7 lg:w-auto lg:inline-flex bg-gray-900 border border-red-600">
             <TabsTrigger value="dashboard">
               <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
