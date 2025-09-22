@@ -98,7 +98,7 @@ export default function HomePremium() {
               } 0%, transparent 70%)`,
               left: position.left,
               top: position.top,
-              animation: `float ${10 + i * 2}s ease-in-out infinite`,
+              animation: `float-enhanced ${10 + i * 2}s ease-in-out infinite`,
               animationDelay: `${i * 2}s`
             }}
           />
