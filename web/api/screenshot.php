@@ -1,53 +1,42 @@
 <?php
 header('Content-Type: application/json');
-header('Access-Control-Allow-Origin: *');
 
-$response = ['success' => false];
+if ($_SERVER['REQUEST_METHOD'] === 'GET' || $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $output_file = '/opt/pisignage/media/screenshot-' . date('YmdHis') . '.png';
 
-// Chemins
-$screenshot_dir = '/opt/pisignage/web/assets/screenshots/';
-$screenshot_file = $screenshot_dir . 'current.png';
-$screenshot_url = '/assets/screenshots/current.png';
+    // Try different screenshot methods
+    $methods = [
+        "scrot '$output_file'",
+        "import -window root '$output_file'",
+        "raspi2png -p '$output_file'"
+    ];
 
-// Créer le répertoire si nécessaire
-if (!is_dir($screenshot_dir)) {
-    mkdir($screenshot_dir, 0755, true);
-}
+    $success = false;
+    $error = '';
 
-// Utiliser le script dynamique qui extrait une frame ALÉATOIRE
-$output = [];
-$return_code = 0;
-
-exec('sudo /opt/pisignage/scripts/screenshot-dynamic.sh ' . escapeshellarg($screenshot_file) . ' 2>&1', $output, $return_code);
-
-if ($return_code === 0 && file_exists($screenshot_file)) {
-    $size = filesize($screenshot_file);
-    
-    // Accepter toutes les tailles car on génère une image info même sans vidéo
-    $response['success'] = true;
-    $response['screenshot'] = $screenshot_url . '?t=' . time();
-    $response['method'] = 'dynamic-frame-extraction';
-    $response['size'] = $size;
-    
-    // Ajouter des infos sur la vidéo si disponible
-    foreach ($output as $line) {
-        if (strpos($line, 'Extracting frame from:') !== false) {
-            preg_match('/from: (.+)$/', $line, $matches);
-            if (isset($matches[1])) {
-                $response['video'] = basename($matches[1]);
-            }
+    foreach ($methods as $method) {
+        exec($method . ' 2>&1', $output, $return);
+        if ($return === 0 && file_exists($output_file)) {
+            $success = true;
+            break;
         }
-        if (strpos($line, 'Frame extracted at') !== false) {
-            preg_match('/at (\d+:\d+:\d+)/', $line, $matches);
-            if (isset($matches[1])) {
-                $response['position'] = $matches[1];
-            }
-        }
+        $error = implode(' ', $output);
+    }
+
+    if ($success) {
+        echo json_encode([
+            'success' => true,
+            'path' => $output_file,
+            'url' => '/media/' . basename($output_file)
+        ]);
+    } else {
+        echo json_encode([
+            'success' => false,
+            'error' => 'No screenshot tool available',
+            'tried' => $methods
+        ]);
     }
 } else {
-    $response['error'] = 'Extraction échouée';
-    $response['return_code'] = $return_code;
-    $response['debug'] = $output;
+    echo json_encode(['error' => 'Method not allowed']);
 }
-
-echo json_encode($response, JSON_PRETTY_PRINT);
+?>

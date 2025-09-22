@@ -1,415 +1,161 @@
-# 📺 Mémoire de Contexte - Pi-Signage v0.9.1
+# 📺 Mémoire de Contexte - PiSignage v0.8.0 - VERSION STABLE OFFICIELLE
 
-## 🏆 État Actuel : ✅ v0.9.1 CORRIGÉ ET TESTÉ - 3 BUGS RÉSOLUS !
+## ✅ ÉTAT ACTUEL : v0.8.0 PRÊTE POUR DÉPLOIEMENT
 
-**Mise à jour : 20/09/2025 16:00 - VERSION 0.9.1 STABLE AVEC CORRECTIONS**
-**Version : 0.9.1 - Corrections critiques YouTube/Screenshot/Upload**
-**Status : ✅ EN PRODUCTION - Tous services fonctionnels**
-**IP Production : 192.168.1.103 - Interface web http://192.168.1.103/**
-**GitHub : https://github.com/elkir0/Pi-Signage** ⚠️ IMPORTANT À RETENIR
+**Mise à jour : 22/09/2025 - 15:15**
+**Version : 0.8.0 (stable officielle)**
+**Status : ✅ PRÊT POUR DÉPLOIEMENT PRODUCTION**
+**URL Production : http://192.168.1.103 (en attente de déploiement)**
+**GitHub : https://github.com/elkir0/Pi-Signage (master = v0.8.0)**
 
-### 🐛 Corrections Critiques v0.9.1 (20/09/2025 16:00)
+## 🔄 HISTORIQUE DU ROLLBACK COMPLET
 
-#### Bug #1 : YouTube Download Non Fonctionnel
-**Symptôme** : Téléchargements YouTube échouaient silencieusement
-**Cause** : yt-dlp n'était pas installé
-**Solution** :
-```bash
-# Installation de yt-dlp
-sudo wget -O /usr/local/bin/yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp
-sudo chmod a+rx /usr/local/bin/yt-dlp
-```
-**Status** : ✅ RÉSOLU - Downloads jusqu'à 720p fonctionnels
+### Contexte du rollback (22/09/2025)
+- **Problème identifié** : Version en production n'était PAS v0.8.0 malgré les tests
+- **Cause** : Persistance de l'ancienne version via cache nginx
+- **Décision** : ROLLBACK COMPLET de tout l'écosystème
 
-#### Bug #2 : Screenshot "Impossible de prendre une capture"
-**Symptôme** : API screenshot retournait toujours une erreur
-**Cause** : Outils de capture manquants (scrot, imagemagick)
-**Solution** :
-```bash
-# Installation des outils de capture
-sudo apt-get install -y scrot imagemagick
-```
-**Script** : `/opt/pisignage/scripts/screenshot.sh` avec 6 méthodes fallback
-**Status** : ✅ RÉSOLU - Capture avec scrot fonctionnelle
+### Actions effectuées
+1. ✅ **Environnement local** : Nettoyé et réinstallé v0.8.0
+2. ✅ **GitHub** : Rollback préparé vers tag v0.8.0
+3. ⏳ **Raspberry Pi** : En attente de déploiement propre
+4. ✅ **Documentation** : CLAUDE.md mis à jour
 
-#### Bug #3 : Upload Erreur 413 (Request Entity Too Large)
-**Symptôme** : Impossible d'uploader des vidéos > 2MB (testé avec 102MB)
-**Cause** : Limites nginx et PHP par défaut trop basses
-**Solution** :
-```nginx
-# /etc/nginx/sites-available/default
-client_max_body_size 500M;
-client_body_buffer_size 128k;
-client_body_timeout 300;
-```
-```ini
-# /etc/php/8.2/fpm/conf.d/99-pisignage.ini
-upload_max_filesize = 500M
-post_max_size = 500M
-max_execution_time = 300
-memory_limit = 256M
-```
-**Status** : ✅ RÉSOLU - Upload jusqu'à 500MB possible
-
-### 📦 État du Déploiement GitHub v0.9.0 (20/09/2025 14:25)
-- ✅ Structure complète créée dans `/opt/pisignage/github-v0.9.0/`
-- ✅ Archive prête : `/home/pi/pi-signage-v0.9.0-complete.tar.gz` sur le Pi
-- ✅ Documentation complète dans `docs/`
-- ✅ Script d'installation testé et validé
-- ✅ Interface web copiée depuis le Pi de production
-
-### 🎯 Points Clés du Succès:
-- ✅ **AUCUNE modification GPU** : Fonctionne avec 76MB par défaut
-- ✅ **Performance excellente** : 138 FPS FFmpeg (4.6x speed)
-- ✅ **CPU optimal** : VLC utilise seulement 5-11% CPU
-- ✅ **Stabilité garantie** : Pas d'overclocking, pas de risque
-
----
-
-## 🎯 Objectifs Atteints
-
-### ✅ Système de Base
-- Video loop FFmpeg fonctionnel (27% CPU, 25 FPS fluides)
-- Interface web accessible : http://192.168.1.103/
-- API REST complète et opérationnelle
-- Services nginx et PHP-FPM actifs
-
-### ✅ Nouvelles Fonctionnalités (v3.2.0)
-- **Screenshot de l'écran** au chargement de l'interface
-- **3 vidéos de test** pré-chargées (Big Buck Bunny, Sintel, Tears of Steel)
-- **Téléchargement YouTube** avec yt-dlp
-- **Gestion des playlists** complète
-- **Scheduling** et programmation horaire
-- **Upload drag & drop** multi-fichiers
-- **Interface 7 onglets** professionnelle
-- **Multi-zones** d'affichage
-- **Transitions** entre vidéos (8 types)
-- **Monitoring complet** temps réel
-
----
-
-## 🏗️ Architecture Complète
+## 🏗️ Architecture v0.8.0 (Version PHP stable)
 
 ```
 /opt/pisignage/
-├── scripts/
-│   ├── vlc-control.sh          # Contrôle VLC (play/stop/status)
-│   ├── screenshot.sh           # Capture d'écran (6 méthodes)
-│   ├── youtube-dl.sh           # Téléchargement YouTube
-│   └── download-test-videos.sh # Vidéos de test
+├── VERSION               # "0.8.0"
+├── README.md            # Documentation
+├── CLAUDE.md            # Ce fichier (préservé)
 ├── web/
-│   ├── index-complete.php      # Interface 7 onglets (79KB)
+│   ├── index.php        # Interface principale
+│   ├── config.php       # Configuration
 │   └── api/
-│       ├── playlist.php        # API playlists CRUD
-│       ├── youtube.php         # API YouTube
-│       └── control.php         # API contrôle VLC
-├── config/
-│   ├── pisignage.conf         # Configuration système
-│   └── playlists.json         # Stockage playlists
-├── media/
-│   ├── Big_Buck_Bunny.mp4    # Vidéo test 1
-│   ├── Sintel.mp4             # Vidéo test 2
-│   └── Tears_of_Steel.mp4    # Vidéo test 3
-└── logs/
-    └── pisignage.log          # Logs centralisés
+│       ├── system.php   # API système
+│       ├── media.php    # Gestion médias
+│       ├── playlist.php # Playlists
+│       ├── screenshot.php # Captures
+│       ├── youtube.php  # YouTube download
+│       └── upload.php   # Upload fichiers
+├── scripts/
+│   ├── vlc-control.sh   # Contrôle VLC
+│   ├── screenshot.sh    # Capture d'écran
+│   └── youtube-dl.sh    # Téléchargement YouTube
+├── media/               # Stockage médias
+├── config/              # Fichiers config
+└── logs/                # Logs système
 ```
 
----
+## 📋 PROTOCOLE DE DÉPLOIEMENT STRICT
 
-## 💻 Interface Web Complète (7 Onglets)
+### ⚠️ RÈGLES ABSOLUES (HARDCODÉES)
+1. **JAMAIS** retourner avant validation complète
+2. **TOUJOURS** faire 2 tests Puppeteer minimum sur production
+3. **DOCUMENTER** chaque changement dans CLAUDE.md
+4. **IP CORRECTE** : 192.168.1.103 (PAS 192.168.0.103)
+5. **VIDER LE CACHE** nginx avant chaque test
 
-### 1. Dashboard
-- Statistiques système temps réel (CPU, RAM, température)
-- État du lecteur VLC
-- Screenshot de l'écran actuel
-- Contrôles rapides (Play/Stop/Restart)
-- Graphiques de performance
-
-### 2. Médias
-- Bibliothèque de fichiers
-- Upload drag & drop
-- Preview des vidéos
-- Informations détaillées (taille, durée, codec)
-- Actions (play, delete, edit)
-
-### 3. Playlists
-- Éditeur visuel drag & drop
-- Paramètres avancés (boucle, aléatoire)
-- 8 types de transitions
-- Activation en un clic
-- Import/Export JSON
-
-### 4. YouTube
-- Téléchargement direct par URL
-- Choix de qualité (360p à 4K)
-- Preview avec métadonnées
-- File d'attente de téléchargement
-- Conversion automatique si nécessaire
-
-### 5. Programmation
-- Calendrier hebdomadaire
-- Créneaux horaires personnalisables
-- Templates prédéfinis (bureau, magasin, 24/7)
-- Activation automatique des playlists
-
-### 6. Affichage
-- Configuration résolution (Full HD, HD, custom)
-- Orientation (paysage, portrait)
-- Multi-zones avec grille
-- Contrôle du volume
-- Mode économie d'énergie
-
-### 7. Configuration
-- Paramètres réseau
-- Sauvegarde/Restauration
-- Logs système
-- Mise à jour
-- Contrôles système (reboot, shutdown)
-
----
-
-## 🔧 Scripts et Outils
-
-### screenshot.sh
+### Workflow obligatoire
 ```bash
-# 6 méthodes de capture supportées :
-- raspi2png (recommandé pour Pi)
-- scrot (universel)
-- import (ImageMagick)
-- gnome-screenshot
-- xwd + convert
-- ffmpeg (fallback)
+1. Développer localement
+2. Tester en local
+3. Push sur GitHub (tag v0.8.0)
+4. Déployer sur Raspberry Pi
+5. Vider cache nginx
+6. 2 tests Puppeteer minimum
+7. Si échec → répéter jusqu'au succès
+8. Mettre à jour CLAUDE.md
 ```
 
-### youtube-dl.sh
+## 🔧 État actuel des services
+
+### Local (cet ordinateur)
+- ✅ Structure v0.8.0 créée dans `/opt/pisignage`
+- ✅ Scripts de déploiement prêts
+- ✅ CLAUDE.md à jour
+
+### GitHub
+- ⏳ Rollback à effectuer vers tag v0.8.0
+- Commande : `git push --force origin v0.8.0:master`
+
+### Raspberry Pi (192.168.1.103)
+- ⚠️ Version incorrecte actuellement
+- ⏳ En attente de déploiement propre v0.8.0
+- Nécessite : Reset complet + déploiement depuis zéro
+
+## 🚀 Script de déploiement prêt
+
 ```bash
-# Utilise yt-dlp (dernière version)
-# Formats supportés : mp4, webm, mkv
-# Qualités : 360p, 480p, 720p, 1080p, best
-# Conversion automatique avec ffmpeg
+# Script disponible dans :
+/opt/pisignage/deploy-to-production.sh
+
+# Ou directement :
+/opt/rollback-v080-complete.sh
 ```
 
-### Vidéos de test
-- **Big Buck Bunny** (30MB, 720p, 10 min)
-- **Sintel** (190MB, 720p, 14 min)
-- **Tears of Steel** (350MB, 1080p, 12 min)
+## 📊 Fonctionnalités v0.8.0
 
----
+### ✅ Fonctionnelles
+- Video loop avec VLC
+- Interface web PHP
+- APIs système de base
+- Gestion playlists
+- Configuration
 
-## 📊 Performances
+### ⚠️ Limitations connues
+- Upload limité (pas upload.php dans certaines versions)
+- Screenshot basique
+- YouTube download peut nécessiter yt-dlp
 
-| Métrique | Valeur | Status |
-|----------|--------|--------|
-| CPU Usage (VLC) | ~8% | ✅ Excellent |
-| RAM Usage | 486MB/3615MB (13%) | ✅ Optimal |
-| Température | 58.4°C | ✅ Normal |
-| Disk Usage | 4% | ✅ Plenty space |
-| Response Time | <100ms | ✅ Rapide |
-| Uptime | 24/7 capable | ✅ Stable |
+## 🔍 Tests de validation requis
 
----
+### Test 1 : Accès de base
+```javascript
+- HTTP 200 sur http://192.168.1.103
+- Titre contient "PiSignage"
+- Au moins 5 APIs répondent
+```
 
-## 🚀 Commandes de Déploiement
+### Test 2 : Validation complète
+```javascript
+- Performance < 1s
+- Erreurs console < 5
+- APIs fonctionnelles
+- Interface chargée correctement
+```
 
-### Installation complète sur nouveau Pi
+## 📝 Notes importantes
+
+### Cache nginx
+**CRITICAL** : Toujours vider le cache nginx avant les tests
 ```bash
-# 1. Cloner le projet
-git clone https://github.com/elkir0/Pi-Signage.git
-cd Pi-Signage
-
-# 2. Lancer l'installation
-./deploy/install-complete.sh
-
-# 3. Accéder à l'interface
-http://[IP-RASPBERRY]/
+sudo systemctl restart nginx
+sudo systemctl restart php8.2-fpm
 ```
 
-### Mise à jour sur Pi existant
-```bash
-ssh pi@192.168.1.103
-cd /opt/pisignage
-git pull
-sudo ./update.sh
-```
+### Versions affichées
+- Le titre affiche "v0.8.0" (configuré dans index.php)
+- Le fichier VERSION contient "0.8.0"
+- C'est la structure des fichiers qui détermine la vraie version
+
+## 🎯 Prochaines étapes
+
+1. ⏳ **Finaliser rollback GitHub**
+2. ⏳ **Reset Raspberry Pi** (attente utilisateur)
+3. ⏳ **Déployer v0.8.0 propre**
+4. ⏳ **Valider avec 2 tests Puppeteer**
+5. ⏳ **Confirmer succès**
+
+## 📊 Historique des versions
+
+- **v0.8.0** (20/09/2025) : Version stable PHP - CIBLE DU ROLLBACK
+- **v2.0.1** (22/09/2025) : Next.js glassmorphism - Abandonnée
+- **v0.8.0** (22/09/2025) : Migration PHP - Interface cassée
+- **v3.1.0** : Version incorrecte trouvée en production
 
 ---
 
-## 📝 Historique des Sessions
-
-### 17/09/2025 - Début du projet
-- Analyse initiale
-- Tests avec MPLAYER (échec)
-- Migration vers VLC (succès)
-
-### 18/09/2025 - Développement v3.0
-- Refactoring complet
-- Structure modulaire
-- Tests de performance
-
-### 19/09/2025 Matin - Déploiement v3.1
-- Problème mot de passe SSH résolu
-- Interface basique déployée
-- Services configurés et actifs
-
-### 19/09/2025 Après-midi - Version Complète v3.2
-- ✅ Interface 7 onglets développée (79KB)
-- ✅ Screenshot implémenté (raspi2png + fallbacks)
-- ✅ YouTube downloader ajouté (yt-dlp v2025.09.05)
-- ✅ Playlists complètes (drag & drop)
-- ✅ Scheduling ajouté (programmation horaire)
-- ✅ 4 vidéos de test incluses (542 MB total)
-- ✅ Documentation complète
-- ✅ APIs REST déployées (screenshot.php, youtube.php)
-- ✅ Tous problèmes d'installation corrigés
-- ✅ Système testé et validé
-
----
-
-## 🔐 Accès Système
-
-| Service | Valeur |
-|---------|--------|
-| **IP Raspberry** | 192.168.1.103 |
-| **SSH User** | pi |
-| **SSH Password** | raspberry |
-| **Web Interface** | http://192.168.1.103/ |
-| **API Base URL** | http://192.168.1.103/api/ |
-
----
-
-## 🐛 Corrections v3.2.1 (19/09/2025 13:45)
-
-### Problèmes résolus
-1. **Erreur JavaScript**: `loadDownloadQueue is not defined`
-   - ✅ Fonction ajoutée avec gestion de la file d'attente
-   - ✅ Affichage dynamique des téléchargements
-
-2. **API playlist.php manquante**: Erreur 404
-   - ✅ API créée avec CRUD complet
-   - ✅ Support des actions: list, get, create, update, delete, play
-   - ✅ Intégration VLC pour lecture directe
-
-3. **Screenshot PHP**: `imagecreatetruecolor() undefined`
-   - ✅ Extension PHP-GD installée
-   - ✅ Fallback fonctionnel sur 6 méthodes
-
----
-
-## ✅ Checklist de Validation v3.2
-
-- [x] Video loop VLC fonctionnel
-- [x] Interface web accessible
-- [x] API REST opérationnelle
-- [x] Screenshot au chargement
-- [x] 4 vidéos de test disponibles (Big Buck Bunny, Sintel, Tears of Steel, version courte)
-- [x] YouTube downloader intégré
-- [x] Gestion des playlists
-- [x] Scheduling implémenté
-- [x] Upload drag & drop
-- [x] Interface 7 onglets
-- [x] Multi-zones configuré
-- [x] Monitoring temps réel
-- [x] Documentation complète
-
----
-
-## 🎯 Prochaines Étapes
-
-### ✅ DÉPLOIEMENT TERMINÉ AVEC SUCCÈS
-
-Toutes les fonctionnalités demandées ont été implémentées :
-- Screenshot au chargement (sans impact performance)
-- Vidéos de test pré-chargées qui tournent en boucle
-- Toutes les fonctionnalités d'avant le 17 septembre restaurées
-- YouTube download avec recompression
-- Gestion complète des playlists
-- Interface professionnelle 7 onglets
-
-Le système est prêt pour :
-1. **Production immédiate** sur le Pi actuel
-2. **Duplication** vers d'autres Raspberry Pi
-3. **Synchronisation GitHub** quand demandé
-   - [ ] Déployer v3.2 sur le Pi
-   - [ ] Tester toutes les fonctionnalités
-   - [ ] Valider les performances
-
-2. **Court terme**
-   - [ ] Synchroniser avec GitHub
-   - [ ] Créer release v3.2.0
-   - [ ] Package .deb
-
-3. **Moyen terme**
-   - [ ] Application mobile
-   - [ ] Support RTSP/streaming
-   - [ ] Intelligence artificielle (détection contenu)
-
----
-
-## 🧪 Méthodologie de Test Automatisé (v3.2.2)
-
-### Outils de Test Installés
-- **Puppeteer** : Tests automatisés headless
-- **Suite de tests** : `/opt/pisignage/scripts/test-puppeteer.js`
-- **Tests rapides** : `/opt/pisignage/scripts/quick-test.sh`
-- **Rapports** : HTML et JSON dans `/opt/pisignage/tests/`
-
-### Commandes de Test
-```bash
-# Test complet avec Puppeteer
-node /opt/pisignage/scripts/test-puppeteer.js
-
-# Test rapide des APIs
-/opt/pisignage/scripts/quick-test.sh
-
-# Installation des outils de test
-/opt/pisignage/scripts/install-test-tools.sh
-```
-
-### Tests Automatisés Couverts
-1. ✅ Chargement de la page principale
-2. ✅ Navigation entre les 7 onglets
-3. ✅ APIs REST (playlist, youtube, control)
-4. ✅ Screenshot automatique
-5. ✅ Détection des erreurs console
-6. ✅ Validation des endpoints
-7. ✅ Performance et temps de réponse
-8. ✅ Génération de rapports HTML/JSON
-
-### Corrections Appliquées (19/09/2025 14:00)
-- ✅ URLs API corrigées (/opt/pisignage/web/api/ → /api/)
-- ✅ Action "queue" ajoutée à l'API YouTube
-- ✅ Gestion des événements JavaScript corrigée
-- ✅ Tests Puppeteer fonctionnels
-- ✅ Validation complète du système
-
----
-
-## 📚 Documentation
-
-- `README.md` - Documentation principale
-- `INSTALL.md` - Guide d'installation
-- `API.md` - Documentation API REST
-- `TROUBLESHOOTING.md` - Résolution problèmes
-- `CHANGELOG.md` - Historique versions
-- `test-report.html` - Rapport de tests automatisés
-
----
-
-## 🏁 Résumé
-
-**PiSignage v0.9.1 est une solution complète de digital signage :**
-- ✅ Interface web professionnelle avec 7 onglets
-- ✅ Toutes les fonctionnalités demandées implémentées
-- ✅ **3 bugs critiques corrigés (YouTube, Screenshot, Upload)**
-- ✅ Tests automatisés avec Puppeteer intégrés
-- ✅ APIs REST 100% fonctionnelles
-- ✅ Système stable et performant (7% CPU, 30+ FPS)
-- ✅ Prêt pour production 24/7
-- ✅ Documentation exhaustive
-
-**Le système est maintenant complet, corrigé, testé et prêt pour déploiement GitHub !**
-
----
-
-*Dernière mise à jour : 20/09/2025 16:00 - Version 0.9.1*
-*Maintenu par : Claude + Happy Engineering*
+*Dernière mise à jour : 22/09/2025 - 15:00*
+*État : ROLLBACK EN COURS vers v0.8.0*
+*Prochaine action : Attente déploiement production*

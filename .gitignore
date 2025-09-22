@@ -1,135 +1,86 @@
-<<<<<<< HEAD
-# Fichiers système
-.DS_Store
-Thumbs.db
-=======
-# PiSignage Desktop v3.0 - Gitignore
-# Generated files and logs
-logs/*.log
-logs/*.txt
-videos/*
-!videos/.gitkeep
-
-# Temporary files
-*.tmp
-*.temp
-.DS_Store
-Thumbs.db
-
-# User configurations
-config/local.conf
-config/user.conf
-
-# System files
-.directory
->>>>>>> e3d23eed5cb67ecaebb350b4b797596c74b65e7a
-*.swp
-*.swo
-*~
-
-<<<<<<< HEAD
 # Logs
 *.log
 logs/
-=======
-# Build artifacts
-*.o
-*.so
-*.a
-
-# IDE files
-.vscode/
-.idea/
-*.code-workspace
-
-# Node modules (if any web components)
-node_modules/
->>>>>>> e3d23eed5cb67ecaebb350b4b797596c74b65e7a
 npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
 
-<<<<<<< HEAD
-# Fichiers temporaires
-*.tmp
-*.temp
-*.cache
-/tmp/
-
-# Fichiers de configuration locaux
-*.local
-.env
-.env.local
-.env.*.local
-
-# Vidéos de test (trop lourdes pour Git)
-*.mp4
-*.avi
-*.mkv
-*.webm
-/videos/
-
-# Sauvegardes
-*.backup
-*.bak
-*.old
-
-# Fichiers SSH
-*.pem
-*.key
-id_rsa*
-known_hosts
-
-# Fichiers spécifiques au Pi
-/home/pi/
-*.img
-*.zip
+# Dependencies
+node_modules/
+vendor/
 
 # IDE
 .vscode/
 .idea/
-*.sublime-*
+*.swp
+*.swo
+.DS_Store
 
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-.Python
-env/
-venv/
-
-# Node.js (si utilisé)
-node_modules/
-package-lock.json
-
-# Fichiers de build
-build/
+# Build
 dist/
-*.deb
+build/
 
-# Archives
-*.tar.gz
-*.rar
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Directory for instrumented libs
+lib-cov
+
+# Coverage directory
+coverage/
+*.lcov
+
+# Grunt intermediate storage
+.grunt
+
+# Bower dependency directory
+bower_components
+
+# Compiled files
+*.com
+*.class
+*.dll
+*.exe
+*.o
+*.so
+
+# Packages
 *.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.zip
 
-# Fichiers spécifiques au projet
-pisignage-desktop/
-Pi-Signage/
-pi-signage.tar.gz
-deployment.log
-vnc-setup.log
-fix-display.log
-install.log
+# OS generated
+Thumbs.db
+.DS_Store
+desktop.ini
 
-# Anciens scripts de test (legacy)
-test-*.sh
-fix-*.sh
-deploy-*.sh
-setup-*.sh
-!fullpageos/*.sh  # Garder les scripts FullPageOS
-=======
+# Temporary
+*.tmp
+*.temp
+.cache/
+
+# Config files with secrets
+config.local.php
+secrets.php
+
+# Media files (too large)
+media/*.mp4
+media/*.avi
+media/*.mkv
+media/*.mov
+
 # Backup files
-*.bak
 *.backup
-config/*.bak
->>>>>>> e3d23eed5cb67ecaebb350b4b797596c74b65e7a
+*.bak
+*~
+
+# Deploy scripts (local only)
+deploy-*.sh
+rollback-*.sh
+github-*.sh
