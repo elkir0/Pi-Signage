@@ -9,8 +9,8 @@ define('PISIGNAGE_VERSION', '0.8.0');
 define('PISIGNAGE_TITLE', 'PiSignage v0.8.0');
 
 // Error reporting
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
+error_reporting(0);
+ini_set("display_errors", 0);
 
 // Paths
 define('BASE_PATH', dirname(__DIR__));
