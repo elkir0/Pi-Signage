@@ -10,3 +10,7 @@
 [2025-09-22 20:36:03] [ERROR] Database initialization failed: could not find driver
 [2025-09-22 20:36:46] [ERROR] Database initialization failed: could not find driver
 [2025-09-22 20:36:46] [ERROR] Database initialization failed: could not find driver
+[2025-09-22 23:21:26] [ERROR] Database initialization failed: could not find driver
+[2025-09-23 01:21:26] [INFO] Méthodes de capture détectées: scrot, import
+[2025-09-22 23:21:38] [ERROR] Database initialization failed: could not find driver
+[2025-09-23 01:21:38] [INFO] Méthodes de capture détectées: scrot, import
