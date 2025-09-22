@@ -46,6 +46,20 @@ Cela évite les conflits entre différents projets !
 - JAMAIS dire "c'est OK" sans ces 2 tests validés
 - Obligatoire pour toute page web/interface
 
+#### 3. DÉPLOIEMENT RASPBERRY PI PRODUCTION (NOUVELLE RÈGLE)
+**RASPBERRY PI 4 DE PRODUCTION : 192.168.1.103**
+- Login : pi
+- Password : raspberry
+- Accès : SSH obligatoire
+- Validation : Tests Puppeteer sur production après déploiement
+
+#### 4. UTILISATION AGENTS IA SPÉCIALISÉS (RÈGLE CRITIQUE)
+**TOUJOURS UTILISER UN AGENT SPÉCIALISÉ SI DISPONIBLE**
+- Pour déploiement : Agent DevOps
+- Pour analyse : Agent general-purpose
+- Pour configs : Agent spécialisé selon domaine
+- Règle permanente pour tous futurs projets
+
 ## 🔄 HISTORIQUE COMPLET DU PROJET (22/09/2025)
 
 ### Phase 1 : Tentative Next.js v2.0.1 (Matin)
