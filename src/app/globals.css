@@ -323,6 +323,72 @@
   .tab-premium.active {
     @apply ps-tab-trigger-active;
   }
+  
+  /* ADDITIONAL RED ACCENT UTILITIES */
+  .ps-card-accent {
+    @apply ps-card border-red-600;
+  }
+  
+  .ps-card-accent:hover {
+    border-color: var(--ps-accent);
+    box-shadow: 0 0 20px rgba(220, 38, 38, 0.4);
+  }
+  
+  .ps-btn-ghost {
+    @apply ps-btn;
+    background-color: transparent;
+    color: var(--ps-text-muted);
+    border-color: var(--ps-border-light);
+  }
+  
+  .ps-btn-ghost:hover {
+    background-color: rgba(220, 38, 38, 0.1);
+    color: var(--ps-accent);
+    border-color: var(--ps-accent);
+  }
+  
+  /* Fix for incorrect crimson color references */
+  .text-crimson-400,
+  .text-crimson-500 {
+    color: var(--ps-accent) !important;
+  }
+  
+  .bg-crimson-500,
+  .from-crimson-500,
+  .to-crimson-500 {
+    background-color: var(--ps-accent) !important;
+  }
+  
+  .border-crimson-500 {
+    border-color: var(--ps-accent) !important;
+  }
+  
+  .ps-glow-crimson,
+  .ps-animate-glow-crimson {
+    box-shadow: 0 0 20px rgba(220, 38, 38, 0.5) !important;
+  }
+  
+  /* Enhanced red accents for glass cards */
+  .glass-card {
+    @apply ps-card border-red-600;
+    background: rgba(26, 26, 36, 0.6);
+    backdrop-filter: blur(10px);
+  }
+
+  .glass-morphism {
+    @apply ps-glass border-red-600;
+  }
+  
+  .ps-card-enhanced {
+    @apply ps-card border-red-600;
+    background: linear-gradient(135deg, rgba(26, 26, 36, 0.8) 0%, rgba(220, 38, 38, 0.05) 100%);
+  }
+  
+  .ps-card-enhanced:hover {
+    border-color: var(--ps-accent);
+    box-shadow: 0 0 25px rgba(220, 38, 38, 0.6);
+    transform: translateY(-3px);
+  }
 }
 
 /* ========================================

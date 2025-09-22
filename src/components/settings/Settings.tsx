@@ -198,14 +198,14 @@ export default function Settings() {
     <div className="space-y-6 max-w-4xl mx-auto">
       {/* Header */}
       <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold text-gradient-free mb-2">
+        <h1 className="text-3xl font-bold ps-gradient-text mb-2">
           Paramètres Système
         </h1>
         <p className="text-gray-400">Configuration de PiSignage</p>
       </div>
 
       {/* Display Settings */}
-      <div className="card-free">
+      <div className="ps-card-accent p-6 rounded-lg">
         <h2 className="text-xl font-semibold text-red-500 mb-4 flex items-center gap-2">
           <Monitor className="w-5 h-5" />
           Affichage
@@ -222,7 +222,7 @@ export default function Settings() {
                 ...settings,
                 display: { ...settings.display, resolution: e.target.value }
               })}
-              className="input-free w-full px-3 py-2 rounded"
+              className="ps-input w-full px-3 py-2 rounded"
             >
               <option value="1920x1080">1920x1080 (Full HD)</option>
               <option value="1280x720">1280x720 (HD)</option>
@@ -241,7 +241,7 @@ export default function Settings() {
                 ...settings,
                 display: { ...settings.display, orientation: e.target.value as 'landscape' | 'portrait' }
               })}
-              className="input-free w-full px-3 py-2 rounded"
+              className="ps-input w-full px-3 py-2 rounded"
             >
               <option value="landscape">Paysage</option>
               <option value="portrait">Portrait</option>
@@ -268,7 +268,7 @@ export default function Settings() {
       </div>
 
       {/* Network Settings */}
-      <div className="card-free">
+      <div className="ps-card-accent p-6 rounded-lg">
         <h2 className="text-xl font-semibold text-red-500 mb-4 flex items-center gap-2">
           <Wifi className="w-5 h-5" />
           Réseau
@@ -291,11 +291,11 @@ export default function Settings() {
                   }
                 })}
                 placeholder="SSID"
-                className="input-free flex-1 px-3 py-2 rounded"
+                className="ps-input flex-1 px-3 py-2 rounded"
               />
               <button
                 onClick={scanWifiNetworks}
-                className="btn-free"
+                className="ps-btn-secondary"
               >
                 Scanner
               </button>
@@ -310,7 +310,7 @@ export default function Settings() {
                     wifi: { ...settings.network.wifi, ssid: e.target.value }
                   }
                 })}
-                className="input-free w-full px-3 py-2 rounded mt-2"
+                className="ps-input w-full px-3 py-2 rounded mt-2"
               >
                 <option value="">Sélectionner un réseau</option>
                 {wifiNetworks.map(network => (
@@ -335,14 +335,14 @@ export default function Settings() {
                 }
               })}
               placeholder="Mot de passe"
-              className="input-free w-full px-3 py-2 rounded"
+              className="ps-input w-full px-3 py-2 rounded"
             />
           </div>
         </div>
       </div>
 
       {/* System Settings */}
-      <div className="card-free">
+      <div className="ps-card-accent p-6 rounded-lg">
         <h2 className="text-xl font-semibold text-red-500 mb-4 flex items-center gap-2">
           <Clock className="w-5 h-5" />
           Système
@@ -394,7 +394,7 @@ export default function Settings() {
                 ...settings,
                 system: { ...settings.system, screensaverTimeout: Number(e.target.value) }
               })}
-              className="input-free w-full px-3 py-2 rounded"
+              className="ps-input w-full px-3 py-2 rounded"
             />
           </div>
           
@@ -416,7 +416,7 @@ export default function Settings() {
       </div>
 
       {/* Media Settings */}
-      <div className="card-free">
+      <div className="ps-card-accent p-6 rounded-lg">
         <h2 className="text-xl font-semibold text-red-500 mb-4 flex items-center gap-2">
           <Volume2 className="w-5 h-5" />
           Médias
@@ -436,7 +436,7 @@ export default function Settings() {
                 ...settings,
                 media: { ...settings.media, defaultImageDuration: Number(e.target.value) }
               })}
-              className="input-free w-full px-3 py-2 rounded"
+              className="ps-input w-full px-3 py-2 rounded"
             />
           </div>
           
@@ -450,7 +450,7 @@ export default function Settings() {
                 ...settings,
                 media: { ...settings.media, videoQuality: e.target.value }
               })}
-              className="input-free w-full px-3 py-2 rounded"
+              className="ps-input w-full px-3 py-2 rounded"
             >
               <option value="best">Meilleure</option>
               <option value="1080p">1080p</option>
@@ -481,7 +481,7 @@ export default function Settings() {
       <div className="flex flex-wrap gap-3 justify-center">
         <button
           onClick={saveSettings}
-          className="btn-free flex items-center gap-2"
+          className="ps-btn-primary flex items-center gap-2"
           disabled={saveStatus === 'saving'}
         >
           {saveStatus === 'saving' ? (
@@ -501,13 +501,13 @@ export default function Settings() {
         
         <button
           onClick={exportSettings}
-          className="btn-free flex items-center gap-2"
+          className="ps-btn-secondary flex items-center gap-2"
         >
           <Download className="w-4 h-4" />
           Exporter
         </button>
         
-        <label className="btn-free flex items-center gap-2 cursor-pointer">
+        <label className="ps-btn-secondary flex items-center gap-2 cursor-pointer">
           <Upload className="w-4 h-4" />
           Importer
           <input
@@ -520,7 +520,7 @@ export default function Settings() {
         
         <button
           onClick={restartSystem}
-          className="btn-free bg-orange-600 hover:bg-orange-700 flex items-center gap-2"
+          className="ps-btn-secondary bg-orange-600 hover:bg-orange-700 flex items-center gap-2"
         >
           <RefreshCw className="w-4 h-4" />
           Redémarrer

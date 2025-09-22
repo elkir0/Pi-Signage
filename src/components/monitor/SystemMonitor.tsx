@@ -132,7 +132,7 @@ export default function SystemMonitor() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gradient-free">
+          <h1 className="text-3xl font-bold ps-gradient-text">
             Monitoring Système
           </h1>
           <p className="text-gray-400 mt-1">Surveillance en temps réel</p>
@@ -152,7 +152,7 @@ export default function SystemMonitor() {
               fetchLogs();
               fetchMetrics();
             }}
-            className="btn-free p-2"
+            className="ps-btn-secondary p-2"
           >
             <RefreshCw className="w-4 h-4" />
           </button>
@@ -161,7 +161,7 @@ export default function SystemMonitor() {
 
       {/* Metrics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="card-free">
+        <div className="ps-card-accent p-6 rounded-lg">
           <div className="flex items-center justify-between mb-2">
             <span className="text-gray-400 text-sm flex items-center gap-2">
               <Cpu className="w-4 h-4 text-red-500" />
@@ -176,7 +176,7 @@ export default function SystemMonitor() {
           </div>
         </div>
 
-        <div className="card-free">
+        <div className="ps-card-accent p-6 rounded-lg">
           <div className="flex items-center justify-between mb-2">
             <span className="text-gray-400 text-sm flex items-center gap-2">
               <HardDrive className="w-4 h-4 text-red-500" />
@@ -191,7 +191,7 @@ export default function SystemMonitor() {
           </div>
         </div>
 
-        <div className="card-free">
+        <div className="ps-card-accent p-6 rounded-lg">
           <div className="flex items-center justify-between mb-2">
             <span className="text-gray-400 text-sm flex items-center gap-2">
               <Thermometer className="w-4 h-4 text-red-500" />
@@ -208,7 +208,7 @@ export default function SystemMonitor() {
       </div>
 
       {/* Logs Section */}
-      <div className="card-free">
+      <div className="ps-card-accent p-6 rounded-lg">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold text-red-500 flex items-center gap-2">
             <Activity className="w-5 h-5" />
@@ -218,7 +218,7 @@ export default function SystemMonitor() {
             <select
               value={filter}
               onChange={(e) => setFilter(e.target.value as any)}
-              className="input-free px-3 py-1 rounded text-sm"
+              className="ps-input text-sm"
             >
               <option value="all">Tous</option>
               <option value="info">Info</option>
@@ -264,7 +264,7 @@ export default function SystemMonitor() {
 
       {/* System Info */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="card-free">
+        <div className="ps-card-accent p-6 rounded-lg">
           <h3 className="text-lg font-semibold text-red-500 mb-3 flex items-center gap-2">
             <Wifi className="w-5 h-5" />
             Services
@@ -289,7 +289,7 @@ export default function SystemMonitor() {
           </div>
         </div>
 
-        <div className="card-free">
+        <div className="ps-card-accent p-6 rounded-lg">
           <h3 className="text-lg font-semibold text-red-500 mb-3 flex items-center gap-2">
             <Clock className="w-5 h-5" />
             Statistiques

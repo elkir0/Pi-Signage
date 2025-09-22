@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import HeaderPremium from '@/components/layout/HeaderPremium';
 import TabsPremium from '@/components/ui/TabsPremium';
 import DashboardPremium from '@/components/dashboard/DashboardPremium';
@@ -13,6 +13,16 @@ import Settings from '@/components/settings/Settings';
 
 export default function HomePremium() {
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [orbPositions, setOrbPositions] = useState<Array<{left: string, top: string}>>([]);
+
+  // Generate random positions only on client side to avoid hydration errors
+  useEffect(() => {
+    const positions = [...Array(5)].map(() => ({
+      left: `${Math.random() * 100}%`,
+      top: `${Math.random() * 100}%`
+    }));
+    setOrbPositions(positions);
+  }, []);
 
   const renderContent = () => {
     switch (activeTab) {
@@ -78,7 +88,7 @@ export default function HomePremium() {
       
       {/* Particules flottantes (optionnel) */}
       <div className="fixed inset-0 pointer-events-none">
-        {[...Array(5)].map((_, i) => (
+        {orbPositions.map((position, i) => (
           <div
             key={i}
             className="absolute w-64 h-64 rounded-full opacity-10"
@@ -86,8 +96,8 @@ export default function HomePremium() {
               background: `radial-gradient(circle, ${
                 i % 2 === 0 ? 'rgba(220, 38, 38, 0.3)' : 'rgba(59, 130, 246, 0.3)'
               } 0%, transparent 70%)`,
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
+              left: position.left,
+              top: position.top,
               animation: `float ${10 + i * 2}s ease-in-out infinite`,
               animationDelay: `${i * 2}s`
             }}

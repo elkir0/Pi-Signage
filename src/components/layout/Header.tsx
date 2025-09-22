@@ -83,7 +83,7 @@ export default function Header() {
       </div>
       
       {/* Bottom accent line */}
-      <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-crimson-500 to-transparent opacity-60" />
+      <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-red-600 to-transparent opacity-60" />
     </header>
   );
 }

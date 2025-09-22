@@ -72,8 +72,8 @@ export default function Dashboard() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="ps-card flex items-center space-x-3 px-6 py-4">
-          <div className="ps-animate-pulse-crimson w-6 h-6 bg-crimson-500 rounded-full" />
+        <div className="ps-card-accent flex items-center space-x-3 px-6 py-4">
+          <div className="ps-animate-pulse w-6 h-6 bg-red-600 rounded-full" />
           <span className="ps-gradient-text text-lg font-medium">Chargement du tableau de bord...</span>
         </div>
       </div>
@@ -91,18 +91,18 @@ export default function Dashboard() {
           Système de signalisation numérique haute performance
         </p>
         <div className="mt-6 flex justify-center">
-          <div className="ps-glass px-6 py-2 rounded-full border border-crimson-500/30">
+          <div className="ps-glass px-6 py-2 rounded-full border border-red-600/30">
             <span className="text-emerald-400 font-medium">🟢 Système opérationnel</span>
           </div>
         </div>
       </div>
 
       {/* VLC Control Panel */}
-      <div className="ps-card-elevated ps-glow-crimson p-8 ps-animate-slide-in-right">
+      <div className="ps-card-enhanced p-8 ps-animate-slide-up">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold ps-gradient-text flex items-center gap-3">
             <div className="p-2 ps-surface rounded-lg">
-              <Monitor className="w-6 h-6 text-crimson-400" />
+              <Monitor className="w-6 h-6 text-red-500" />
             </div>
             Contrôle Multimédia VLC
           </h2>
@@ -146,7 +146,7 @@ export default function Dashboard() {
             {/* Volume Control */}
             <div className="ps-surface p-4 rounded-xl">
               <label className="flex items-center gap-3 text-white/80 mb-3">
-                <Volume2 className="w-5 h-5 text-crimson-400" /> 
+                <Volume2 className="w-5 h-5 text-red-500" /> 
                 <span className="font-medium">Volume: </span>
                 <span className="ps-gradient-text font-bold">{volume}%</span>
               </label>
@@ -165,9 +165,9 @@ export default function Dashboard() {
                     width: 20px;
                     height: 20px;
                     border-radius: 50%;
-                    background: linear-gradient(135deg, hsl(var(--ps-crimson)), hsl(var(--ps-ruby)));
+                    background: linear-gradient(135deg, #DC2626, #EF4444);
                     cursor: pointer;
-                    box-shadow: 0 0 10px hsl(var(--ps-crimson) / 0.5);
+                    box-shadow: 0 0 10px rgba(220, 38, 38, 0.5);
                   }
                 `}</style>
               </div>
@@ -209,18 +209,18 @@ export default function Dashboard() {
       <div className="space-y-6">
         <h2 className="text-2xl font-bold ps-gradient-text flex items-center gap-3">
           <div className="p-2 ps-surface rounded-lg">
-            <Cpu className="w-6 h-6 text-crimson-400" />
+            <Cpu className="w-6 h-6 text-red-500" />
           </div>
           Performances Système
         </h2>
         
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
           {/* CPU Card */}
-          <div className="ps-card ps-animate-scale-in group hover:scale-105 transition-transform">
+          <div className="ps-card-accent ps-animate-slide-up group hover:scale-105 transition-transform">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
-                <div className="p-3 ps-surface rounded-xl group-hover:ps-glow-crimson transition-all">
-                  <Cpu className="w-6 h-6 text-crimson-400" />
+                <div className="p-3 ps-surface rounded-xl group-hover:shadow-red-600/50 transition-all">
+                  <Cpu className="w-6 h-6 text-red-500" />
                 </div>
                 <div>
                   <p className="text-white/60 text-sm font-medium">Processeur</p>
@@ -238,7 +238,7 @@ export default function Dashboard() {
               </div>
               <div className="h-2 ps-surface rounded-full overflow-hidden">
                 <div 
-                  className="h-full bg-gradient-to-r from-crimson-500 to-ruby-500 transition-all duration-1000 ease-out"
+                  className="h-full bg-gradient-to-r from-red-600 to-red-500 transition-all duration-1000 ease-out"
                   style={{ width: `${systemInfo?.cpu}%` }}
                 />
               </div>
@@ -246,10 +246,10 @@ export default function Dashboard() {
           </div>
 
           {/* Memory Card */}
-          <div className="ps-card ps-animate-scale-in group hover:scale-105 transition-transform animation-delay-200">
+          <div className="ps-card-accent ps-animate-slide-up group hover:scale-105 transition-transform animation-delay-200">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
-                <div className="p-3 ps-surface rounded-xl group-hover:ps-glow-crimson transition-all">
+                <div className="p-3 ps-surface rounded-xl group-hover:shadow-red-600/50 transition-all">
                   <HardDrive className="w-6 h-6 text-amber-400" />
                 </div>
                 <div>
@@ -276,10 +276,10 @@ export default function Dashboard() {
           </div>
 
           {/* Disk Card */}
-          <div className="ps-card ps-animate-scale-in group hover:scale-105 transition-transform animation-delay-400">
+          <div className="ps-card-accent ps-animate-slide-up group hover:scale-105 transition-transform animation-delay-400">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
-                <div className="p-3 ps-surface rounded-xl group-hover:ps-glow-crimson transition-all">
+                <div className="p-3 ps-surface rounded-xl group-hover:shadow-red-600/50 transition-all">
                   <HardDrive className="w-6 h-6 text-blue-400" />
                 </div>
                 <div>
@@ -306,10 +306,10 @@ export default function Dashboard() {
           </div>
 
           {/* Temperature Card */}
-          <div className="ps-card ps-animate-scale-in group hover:scale-105 transition-transform animation-delay-600">
+          <div className="ps-card-accent ps-animate-slide-up group hover:scale-105 transition-transform animation-delay-600">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
-                <div className="p-3 ps-surface rounded-xl group-hover:ps-glow-crimson transition-all">
+                <div className="p-3 ps-surface rounded-xl group-hover:shadow-red-600/50 transition-all">
                   <Thermometer className={`w-6 h-6 ${
                     (systemInfo?.temperature || 0) > 70 ? 'text-red-400' : 
                     (systemInfo?.temperature || 0) > 50 ? 'text-orange-400' : 
@@ -351,7 +351,7 @@ export default function Dashboard() {
       </div>
 
       {/* Network Information */}
-      <div className="ps-card-elevated p-6">
+      <div className="ps-card-enhanced p-6">
         <div className="flex items-center gap-3 mb-6">
           <div className="p-2 ps-surface rounded-lg">
             <Wifi className="w-6 h-6 text-emerald-400" />
@@ -393,7 +393,7 @@ export default function Dashboard() {
       </div>
 
       {/* Screenshot Section */}
-      <div className="ps-card-elevated p-6">
+      <div className="ps-card-enhanced p-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <div className="p-2 ps-surface rounded-lg">

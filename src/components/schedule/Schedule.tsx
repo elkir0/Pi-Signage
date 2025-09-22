@@ -80,14 +80,14 @@ export default function Schedule() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gradient-free">
+          <h1 className="text-3xl font-bold ps-gradient-text">
             Programmation
           </h1>
           <p className="text-gray-400 mt-1">Gérez vos playlists programmées</p>
         </div>
         <button
           onClick={() => setShowAddForm(true)}
-          className="btn-free flex items-center gap-2"
+          className="ps-btn-secondary flex items-center gap-2"
         >
           <Plus className="w-4 h-4" />
           Nouvelle programmation
@@ -96,7 +96,7 @@ export default function Schedule() {
 
       {/* Add Schedule Form */}
       {showAddForm && (
-        <div className="card-free border-glow animate-fade-in">
+        <div className="ps-card-accent ps-animate-fade-in">
           <h3 className="text-xl font-semibold text-red-500 mb-4">
             Nouvelle programmation
           </h3>
@@ -110,7 +110,7 @@ export default function Schedule() {
                 type="text"
                 value={newSchedule.name}
                 onChange={(e) => setNewSchedule({ ...newSchedule, name: e.target.value })}
-                className="input-free w-full px-3 py-2 rounded"
+                className="ps-input w-full"
                 placeholder="Ex: Horaires bureau"
               />
             </div>
@@ -122,7 +122,7 @@ export default function Schedule() {
               <select
                 value={newSchedule.playlistId}
                 onChange={(e) => setNewSchedule({ ...newSchedule, playlistId: e.target.value })}
-                className="input-free w-full px-3 py-2 rounded"
+                className="ps-input w-full"
               >
                 <option value="">Sélectionner une playlist</option>
                 {playlists.map(p => (
@@ -139,7 +139,7 @@ export default function Schedule() {
                 type="time"
                 value={newSchedule.startTime}
                 onChange={(e) => setNewSchedule({ ...newSchedule, startTime: e.target.value })}
-                className="input-free w-full px-3 py-2 rounded"
+                className="ps-input w-full"
               />
             </div>
             
@@ -151,7 +151,7 @@ export default function Schedule() {
                 type="time"
                 value={newSchedule.endTime}
                 onChange={(e) => setNewSchedule({ ...newSchedule, endTime: e.target.value })}
-                className="input-free w-full px-3 py-2 rounded"
+                className="ps-input w-full"
               />
             </div>
           </div>
@@ -180,7 +180,7 @@ export default function Schedule() {
           <div className="flex gap-2 mt-6">
             <button
               onClick={addSchedule}
-              className="btn-free flex items-center gap-2"
+              className="ps-btn-secondary flex items-center gap-2"
             >
               <Save className="w-4 h-4" />
               Enregistrer
@@ -198,12 +198,12 @@ export default function Schedule() {
       {/* Schedule List */}
       <div className="space-y-4">
         {schedules.length === 0 ? (
-          <div className="card-free text-center py-12">
+          <div className="ps-card-accent p-6 rounded-lg text-center py-12">
             <Calendar className="w-16 h-16 text-gray-600 mx-auto mb-4" />
             <p className="text-gray-400 mb-4">Aucune programmation configurée</p>
             <button
               onClick={() => setShowAddForm(true)}
-              className="btn-free inline-flex items-center gap-2"
+              className="ps-btn-secondary inline-flex items-center gap-2"
             >
               <Plus className="w-4 h-4" />
               Créer votre première programmation
@@ -213,7 +213,7 @@ export default function Schedule() {
           schedules.map(schedule => (
             <div
               key={schedule.id}
-              className={`card-free ${!schedule.enabled && 'opacity-50'}`}
+              className={`ps-card-accent p-6 rounded-lg ${!schedule.enabled && 'opacity-50'}`}
             >
               <div className="flex items-center justify-between">
                 <div className="flex-1">
@@ -277,7 +277,7 @@ export default function Schedule() {
       </div>
 
       {/* Info Section */}
-      <div className="card-free bg-gradient-to-r from-gray-900 to-gray-800 border-yellow-600/50">
+      <div className="ps-card-accent bg-gradient-to-r from-gray-900 to-gray-800 border-yellow-600/50">
         <div className="flex items-start gap-3">
           <Clock className="w-5 h-5 text-yellow-500 mt-0.5" />
           <div>
