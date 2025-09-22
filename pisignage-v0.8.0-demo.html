@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PiSignage v0.8.0 - Design System Demo</title>
+    <link rel="stylesheet" href="design-system-v0.8.0.css">
+    <style>
+        /* Demo specific styles */
+        .demo-section {
+            margin-bottom: 3rem;
+            padding-bottom: 2rem;
+            border-bottom: 1px solid var(--ps-border);
+        }
+        .demo-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--ps-primary);
+        }
+        .demo-grid {
+            display: grid;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        .color-swatch {
+            padding: 1rem;
+            border-radius: 0.5rem;
+            text-align: center;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="ps-header">
+        <div class="container">
+            <h1>🎬 PiSignage Control Center v0.8.0</h1>
+            <p>Design System professionnel - Interface technique claire et fonctionnelle</p>
+            <div class="flex gap-4 mt-4">
+                <button class="btn btn-secondary">📸 Capture</button>
+                <button class="btn btn-secondary">🔄 Actualiser</button>
+                <button class="btn btn-secondary">🔍 Plein écran</button>
+            </div>
+        </div>
+    </header>
+
+    <div class="container" style="padding-top: 2rem; padding-bottom: 2rem;">
+
+        <!-- Palette Couleurs -->
+        <section class="demo-section">
+            <h2 class="demo-title">1. Palette Couleurs</h2>
+            <p class="text-secondary">6 couleurs principales optimisées pour la lisibilité technique</p>
+
+            <div class="grid grid-3">
+                <div class="color-swatch" style="background: var(--ps-bg-primary); color: var(--ps-text-primary); border: 1px solid var(--ps-border);">
+                    --ps-bg-primary<br>#f8fafc
+                </div>
+                <div class="color-swatch" style="background: var(--ps-bg-secondary); color: var(--ps-text-primary); border: 1px solid var(--ps-border);">
+                    --ps-bg-secondary<br>#ffffff
+                </div>
+                <div class="color-swatch" style="background: var(--ps-bg-accent); color: var(--ps-text-primary); border: 1px solid var(--ps-border);">
+                    --ps-bg-accent<br>#f1f5f9
+                </div>
+                <div class="color-swatch" style="background: var(--ps-primary); color: white;">
+                    --ps-primary<br>#2563eb
+                </div>
+                <div class="color-swatch" style="background: var(--ps-success); color: white;">
+                    --ps-success<br>#059669
+                </div>
+                <div class="color-swatch" style="background: var(--ps-danger); color: white;">
+                    --ps-danger<br>#dc2626
+                </div>
+            </div>
+        </section>
+
+        <!-- Navigation Tabs -->
+        <section class="demo-section">
+            <h2 class="demo-title">2. Navigation</h2>
+            <nav class="nav-tabs">
+                <button class="nav-tab active">📊 Dashboard</button>
+                <button class="nav-tab">🎵 Médias</button>
+                <button class="nav-tab">📑 Playlists</button>
+                <button class="nav-tab">📺 YouTube</button>
+                <button class="nav-tab">⏰ Programmation</button>
+                <button class="nav-tab">🖥️ Affichage</button>
+                <button class="nav-tab">⚙️ Configuration</button>
+            </nav>
+        </section>
+
+        <!-- Stats Dashboard -->
+        <section class="demo-section">
+            <h2 class="demo-title">3. Dashboard - Stats Cards</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon success">
+                        <span class="status-indicator status-online"></span>
+                    </div>
+                    <div class="stat-content">
+                        <h3>Statut Lecteur</h3>
+                        <div class="value">En lecture</div>
+                        <small>VLC Media Player</small>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon warning">🌡️</div>
+                    <div class="stat-content">
+                        <h3>Température CPU</h3>
+                        <div class="value">45.2°C</div>
+                        <small>Raspberry Pi</small>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon info">💾</div>
+                    <div class="stat-content">
+                        <h3>Mémoire RAM</h3>
+                        <div class="value">67%</div>
+                        <small>Utilisation mémoire</small>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon primary">🎬</div>
+                    <div class="stat-content">
+                        <h3>Fichiers média</h3>
+                        <div class="value">42</div>
+                        <small>Vidéos et images</small>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Boutons -->
+        <section class="demo-section">
+            <h2 class="demo-title">4. Boutons</h2>
+            <div class="demo-grid">
+                <div>
+                    <h4>Actions principales</h4>
+                    <div class="btn-group">
+                        <button class="btn btn-primary">▶️ Lecture</button>
+                        <button class="btn btn-success">✅ Activer</button>
+                        <button class="btn btn-warning">⚠️ Attention</button>
+                        <button class="btn btn-danger">🗑️ Supprimer</button>
+                    </div>
+                </div>
+                <div>
+                    <h4>Actions secondaires</h4>
+                    <div class="btn-group">
+                        <button class="btn btn-secondary">🔧 Configurer</button>
+                        <button class="btn btn-info">ℹ️ Informations</button>
+                        <button class="btn btn-secondary btn-sm">📄 Logs</button>
+                        <button class="btn btn-primary btn-lg">💾 Sauvegarder</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Cards -->
+        <section class="demo-section">
+            <h2 class="demo-title">5. Cards & Conteneurs</h2>
+            <div class="grid grid-2">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">🎮 Contrôles du lecteur</h3>
+                        <p class="card-subtitle">Gestion de la lecture vidéo</p>
+                    </div>
+                    <div class="card-body">
+                        <p>Interface de contrôle principal pour la gestion des médias.</p>
+                    </div>
+                    <div class="card-footer">
+                        <div class="btn-group">
+                            <button class="btn btn-success btn-sm">▶️ Lecture</button>
+                            <button class="btn btn-warning btn-sm">⏸️ Pause</button>
+                            <button class="btn btn-danger btn-sm">⏹️ Arrêt</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card card-success">
+                    <div class="card-header">
+                        <h3 class="card-title">📸 Capture d'écran</h3>
+                        <span class="badge badge-success">En ligne</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="screenshot-placeholder">
+                            <div class="empty-state">
+                                <div class="icon">📺</div>
+                                <h3>Aperçu écran</h3>
+                                <p>Cliquez pour prendre une capture</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Forms -->
+        <section class="demo-section">
+            <h2 class="demo-title">6. Formulaires</h2>
+            <div class="grid grid-2">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">⚙️ Configuration système</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-group">
+                            <label class="form-label form-label-required">Nom d'affichage</label>
+                            <input type="text" class="form-control" value="PiSignage Display" placeholder="Nom du système">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Démarrage automatique</label>
+                            <select class="form-control form-select">
+                                <option value="true">Activé</option>
+                                <option value="false">Désactivé</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" id="autoUpdate" checked>
+                                <label class="form-check-label" for="autoUpdate">Mise à jour automatique</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <button class="btn btn-primary">💾 Sauvegarder</button>
+                        <button class="btn btn-secondary">↩️ Annuler</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">📤 Upload de médias</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="upload-zone">
+                            <div class="icon">📁</div>
+                            <h4>Glissez vos fichiers ici</h4>
+                            <p>ou cliquez pour sélectionner</p>
+                            <small>Formats: MP4, AVI, JPG, PNG - Max: 500MB</small>
+                        </div>
+                        <div class="progress mt-4" style="display: none;">
+                            <div class="progress-bar" style="width: 65%;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tables & Lists -->
+        <section class="demo-section">
+            <h2 class="demo-title">7. Tables & Listes</h2>
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">📁 Bibliothèque de médias</h3>
+                    <span class="badge badge-info">12 fichiers</span>
+                </div>
+                <div class="media-list">
+                    <div class="media-item">
+                        <div class="media-icon">🎬</div>
+                        <div class="media-info">
+                            <div class="media-name">presentation_2024.mp4</div>
+                            <div class="media-meta">245 MB • 15:32 • Modifié le 22/09/2025</div>
+                        </div>
+                        <div class="btn-group">
+                            <button class="btn btn-success btn-sm">▶️</button>
+                            <button class="btn btn-info btn-sm">ℹ️</button>
+                            <button class="btn btn-danger btn-sm">🗑️</button>
+                        </div>
+                    </div>
+
+                    <div class="media-item">
+                        <div class="media-icon" style="background-color: var(--ps-success);">🖼️</div>
+                        <div class="media-info">
+                            <div class="media-name">logo_entreprise.png</div>
+                            <div class="media-meta">2.3 MB • Image • Modifié le 21/09/2025</div>
+                        </div>
+                        <div class="btn-group">
+                            <button class="btn btn-success btn-sm">👁️</button>
+                            <button class="btn btn-info btn-sm">✏️</button>
+                            <button class="btn btn-danger btn-sm">🗑️</button>
+                        </div>
+                    </div>
+
+                    <div class="media-item">
+                        <div class="media-icon" style="background-color: var(--ps-warning);">🎵</div>
+                        <div class="media-info">
+                            <div class="media-name">musique_attente.mp3</div>
+                            <div class="media-meta">8.7 MB • 3:45 • Modifié le 20/09/2025</div>
+                        </div>
+                        <div class="btn-group">
+                            <button class="btn btn-success btn-sm">▶️</button>
+                            <button class="btn btn-info btn-sm">🎵</button>
+                            <button class="btn btn-danger btn-sm">🗑️</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Alerts & Status -->
+        <section class="demo-section">
+            <h2 class="demo-title">8. Alerts & Feedback</h2>
+            <div class="demo-grid">
+                <div class="alert alert-success">
+                    <strong>✅ Succès!</strong> La configuration a été sauvegardée avec succès.
+                </div>
+
+                <div class="alert alert-warning">
+                    <strong>⚠️ Attention!</strong> La température CPU est élevée (78°C).
+                </div>
+
+                <div class="alert alert-danger">
+                    <strong>❌ Erreur!</strong> Impossible de se connecter au serveur.
+                </div>
+
+                <div class="alert alert-info">
+                    <strong>ℹ️ Information:</strong> Mise à jour disponible (v0.8.1).
+                </div>
+            </div>
+
+            <h4 class="mt-4 mb-2">Indicateurs de statut</h4>
+            <div class="flex gap-4">
+                <span class="status-indicator status-online">Système en ligne</span>
+                <span class="status-indicator status-offline">Service arrêté</span>
+                <span class="status-indicator status-warning">Maintenance</span>
+                <span class="status-indicator status-error">Erreur critique</span>
+            </div>
+
+            <h4 class="mt-4 mb-2">Badges</h4>
+            <div class="flex gap-2">
+                <span class="badge badge-primary">Primary</span>
+                <span class="badge badge-success">En ligne</span>
+                <span class="badge badge-warning">Attention</span>
+                <span class="badge badge-danger">Critique</span>
+                <span class="badge badge-info">Info</span>
+                <span class="badge badge-secondary">Inactif</span>
+            </div>
+        </section>
+
+        <!-- Loading States -->
+        <section class="demo-section">
+            <h2 class="demo-title">9. États de chargement</h2>
+            <div class="grid grid-3">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <div class="loading mb-2"></div>
+                        <p>Chargement en cours...</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-body">
+                        <div class="skeleton" style="height: 1rem; margin-bottom: 0.5rem; border-radius: 0.25rem;"></div>
+                        <div class="skeleton" style="height: 1rem; width: 70%; border-radius: 0.25rem;"></div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-body">
+                        <h4>Progression</h4>
+                        <div class="progress">
+                            <div class="progress-bar" style="width: 45%;"></div>
+                        </div>
+                        <small class="text-muted">45% terminé</small>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </div>
+
+    <script>
+        // Demo interactivity
+        document.querySelectorAll('.nav-tab').forEach(tab => {
+            tab.addEventListener('click', function() {
+                document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+                this.classList.add('active');
+            });
+        });
+
+        // Upload zone demo
+        const uploadZone = document.querySelector('.upload-zone');
+        const progress = document.querySelector('.progress');
+
+        if (uploadZone) {
+            uploadZone.addEventListener('click', function() {
+                progress.style.display = 'block';
+                let width = 0;
+                const interval = setInterval(() => {
+                    width += Math.random() * 10;
+                    if (width >= 100) {
+                        width = 100;
+                        clearInterval(interval);
+                        setTimeout(() => {
+                            progress.style.display = 'none';
+                        }, 1000);
+                    }
+                    progress.querySelector('.progress-bar').style.width = width + '%';
+                }, 200);
+            });
+        }
+    </script>
+</body>
+</html>

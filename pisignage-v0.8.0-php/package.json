@@ -1,0 +1,27 @@
+{
+  "name": "pisignage-php",
+  "version": "0.8.0",
+  "description": "PiSignage Digital Signage System v0.8.0 - PHP Version",
+  "main": "public/index.php",
+  "scripts": {
+    "start": "php -S localhost:8080 -t public/",
+    "test": "node test-puppeteer.js",
+    "deploy": "./deploy.sh"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/elkir0/Pi-Signage.git"
+  },
+  "keywords": [
+    "pisignage",
+    "digital-signage",
+    "raspberry-pi",
+    "php"
+  ],
+  "author": "PiSignage Team",
+  "license": "MIT",
+  "homepage": "https://github.com/elkir0/Pi-Signage#readme",
+  "engines": {
+    "php": ">=8.1"
+  }
+}
