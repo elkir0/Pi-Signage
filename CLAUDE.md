@@ -31,11 +31,20 @@ Cela évite les conflits entre différents projets !
 
 ## 🔄 HISTORIQUE COMPLET DU PROJET (22/09/2025)
 
-### ⚠️ RÈGLE CRITIQUE AJOUTÉE : PUSH GITHUB OBLIGATOIRE
+### ⚠️ RÈGLES CRITIQUES OBLIGATOIRES
+
+#### 1. PUSH GITHUB OBLIGATOIRE
 **TOUJOURS PUSH SUR GITHUB APRÈS CHAQUE CHANGEMENT IMPORTANT**
 - Commande : `git add -A && git commit -m "message" && git push`
 - URL : https://github.com/elkir0/Pi-Signage
 - Token : Disponible avec accès complet
+
+#### 2. VALIDATION PUPPETEER OBLIGATOIRE (NOUVELLE RÈGLE)
+**AVANT DE DÉCLARER "OK" : MINIMUM 2 TESTS PUPPETEER**
+- Test 1 : Navigation → Screenshot → Analyse visuelle
+- Test 2 : Navigation → Console debug → Vérification erreurs
+- JAMAIS dire "c'est OK" sans ces 2 tests validés
+- Obligatoire pour toute page web/interface
 
 ## 🔄 HISTORIQUE COMPLET DU PROJET (22/09/2025)
 

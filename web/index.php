@@ -780,6 +780,44 @@
         let autoScreenshotInterval = null;
         let systemStatsInterval = null;
 
+        // Essential functions for Puppeteer tests
+        function switchTab(tabName) {
+            const tabs = document.querySelectorAll('.tab');
+            const contents = document.querySelectorAll('.tab-content');
+
+            tabs.forEach(tab => {
+                if (tab.id === tabName + '-tab') {
+                    tab.classList.add('active');
+                } else {
+                    tab.classList.remove('active');
+                }
+            });
+
+            contents.forEach(content => {
+                if (content.id === tabName + '-content') {
+                    content.style.display = 'block';
+                } else {
+                    content.style.display = 'none';
+                }
+            });
+        }
+
+        async function refreshDashboard() {
+            try {
+                const response = await fetch('/api/system.php');
+                const data = await response.json();
+
+                if (data.success) {
+                    document.getElementById('cpu-usage').innerText = data.data.cpu + '%';
+                    document.getElementById('memory-usage').innerText = data.data.memory + '%';
+                    document.getElementById('temperature').innerText = data.data.temperature + '°C';
+                    document.getElementById('uptime').innerText = data.data.uptime;
+                }
+            } catch (error) {
+                console.error('Dashboard refresh error:', error);
+            }
+        }
+
         // Initialize the application
         document.addEventListener('DOMContentLoaded', function() {
             loadSystemStats();
