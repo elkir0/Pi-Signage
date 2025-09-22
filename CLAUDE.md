@@ -31,6 +31,14 @@ Cela évite les conflits entre différents projets !
 
 ## 🔄 HISTORIQUE COMPLET DU PROJET (22/09/2025)
 
+### ⚠️ RÈGLE CRITIQUE AJOUTÉE : PUSH GITHUB OBLIGATOIRE
+**TOUJOURS PUSH SUR GITHUB APRÈS CHAQUE CHANGEMENT IMPORTANT**
+- Commande : `git add -A && git commit -m "message" && git push`
+- URL : https://github.com/elkir0/Pi-Signage
+- Token : Disponible avec accès complet
+
+## 🔄 HISTORIQUE COMPLET DU PROJET (22/09/2025)
+
 ### Phase 1 : Tentative Next.js v2.0.1 (Matin)
 - **Stack** : Next.js 14 + TypeScript + Tailwind + Glassmorphism
 - **Problèmes** :
