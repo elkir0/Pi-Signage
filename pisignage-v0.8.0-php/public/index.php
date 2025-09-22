@@ -9,6 +9,11 @@ define('ROOT_PATH', dirname(__DIR__));
 define('MEDIA_PATH', ROOT_PATH . '/media');
 define('LOGS_PATH', ROOT_PATH . '/logs');
 
+// Create necessary directories
+if (!is_dir(MEDIA_PATH)) mkdir(MEDIA_PATH, 0755, true);
+if (!is_dir(LOGS_PATH)) mkdir(LOGS_PATH, 0755, true);
+if (!is_dir(ROOT_PATH . '/screenshots')) mkdir(ROOT_PATH . '/screenshots', 0755, true);
+
 // Simple autoloader (no Composer needed for lightweight deployment)
 spl_autoload_register(function ($class) {
     $file = ROOT_PATH . '/src/' . str_replace('\\', '/', $class) . '.php';
@@ -65,7 +70,13 @@ if (strpos($path, '/api/') === 0) {
 $static_extensions = ['css', 'js', 'png', 'jpg', 'jpeg', 'gif', 'svg', 'ico'];
 $extension = pathinfo($path, PATHINFO_EXTENSION);
 if (in_array($extension, $static_extensions)) {
-    $file_path = ROOT_PATH . '/assets' . $path;
+    // First check in public directory
+    $file_path = __DIR__ . $path;
+    if (!file_exists($file_path)) {
+        // Then check in assets directory
+        $file_path = ROOT_PATH . '/assets' . $path;
+    }
+
     if (file_exists($file_path)) {
         $mime_types = [
             'css' => 'text/css',
