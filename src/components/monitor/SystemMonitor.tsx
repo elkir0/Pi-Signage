@@ -44,9 +44,17 @@ export default function SystemMonitor() {
     try {
       const response = await fetch('/api/system/logs');
       const data = await response.json();
-      setLogs(data);
+      // Ensure logs is always an array
+      if (Array.isArray(data)) {
+        setLogs(data);
+      } else if (data.logs && Array.isArray(data.logs)) {
+        setLogs(data.logs);
+      } else {
+        setLogs([]);
+      }
     } catch (error) {
       console.error('Failed to fetch logs:', error);
+      setLogs([]);
     }
   };
 
@@ -77,9 +85,9 @@ export default function SystemMonitor() {
     }
   };
 
-  const filteredLogs = logs.filter(log => 
-    filter === 'all' || log.level === filter
-  );
+  const filteredLogs = Array.isArray(logs) 
+    ? logs.filter(log => filter === 'all' || log.level === filter)
+    : [];
 
   const getLogIcon = (level: string) => {
     switch (level) {

@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const screenshotDir = '/opt/pisignage/src/public/screenshots'
+    const screenshotDir = path.join(process.cwd(), 'public', 'screenshots')
     const filename = `screenshot_${Date.now()}.png`
     const filepath = path.join(screenshotDir, filename)
     
@@ -39,15 +39,15 @@ export async function GET(request: NextRequest) {
       console.error('Failed to create screenshots directory:', error)
     }
 
-    // Use the screenshot script from old-version
-    const scriptPath = '/opt/pisignage/old-version/scripts/screenshot.sh'
+    // Try to use scrot for screenshot (common on Linux/Raspberry Pi)
+    const scriptPath = 'scrot'
     
     try {
-      // Execute screenshot script
-      const { stdout, stderr } = await execAsync(`"${scriptPath}" "${filepath}"`)
+      // Execute screenshot using scrot
+      const { stdout, stderr } = await execAsync(`${scriptPath} "${filepath}" 2>&1`)
       
-      // The script outputs the file path on success
-      const outputPath = stdout.trim()
+      // scrot directly creates the file at the specified path
+      const outputPath = filepath
       
       if (!outputPath || !await fs.access(outputPath).then(() => true).catch(() => false)) {
         throw new Error('Screenshot file was not created')
@@ -116,14 +116,28 @@ export async function GET(request: NextRequest) {
 
 async function createPlaceholderImage(filepath: string): Promise<string> {
   try {
-    // Try to create a placeholder using ImageMagick
-    await execAsync(`convert -size 800x600 xc:lightblue -gravity center -pointsize 24 -fill darkblue -annotate 0 "PiSignage\\n\\nScreenshot\\nnot available\\n\\n$(date)" "${filepath}"`)
+    // Create a simple black placeholder image with red text
+    try {
+      await execAsync(`convert -size 800x600 xc:black -gravity center -pointsize 24 -fill '#DC2626' -annotate 0 "PiSignage\\n\\nScreenshot\\nen cours de capture..." "${filepath}"`)
+    } catch {
+      // If ImageMagick is not available, create a minimal valid PNG
+      const minimalPNG = Buffer.from([
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG signature
+        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, // IHDR chunk
+        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53,
+        0xDE, 0x00, 0x00, 0x00, 0x0C, 0x49, 0x44, 0x41, // IDAT chunk
+        0x54, 0x08, 0x99, 0x63, 0xF8, 0x0F, 0x00, 0x00,
+        0x01, 0x01, 0x01, 0x00, 0x00, 0x05, 0x00, 0x00,
+        0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, // IEND chunk
+        0x60, 0x82
+      ])
+      await fs.writeFile(filepath, minimalPNG)
+    }
     return filepath
   } catch (error) {
-    // If ImageMagick fails, create a simple text file as fallback
-    const placeholderContent = 'Screenshot not available'
-    await fs.writeFile(filepath.replace('.png', '.txt'), placeholderContent)
-    return filepath.replace('.png', '.txt')
+    console.error('Failed to create placeholder:', error)
+    return filepath
   }
 }
 

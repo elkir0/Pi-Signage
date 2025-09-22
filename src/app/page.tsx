@@ -72,28 +72,9 @@ export default function HomePremium() {
   };
 
   return (
-    <div className="min-h-screen relative overflow-hidden">
-      {/* Mesh Background animé */}
+    <div className="min-h-screen relative overflow-hidden ps-bg-primary">
+      {/* Mesh Background simplifié */}
       <div className="mesh-background" />
-      
-      {/* Particules flottantes (optionnel) */}
-      <div className="fixed inset-0 pointer-events-none">
-        {[...Array(5)].map((_, i) => (
-          <div
-            key={i}
-            className="absolute w-64 h-64 rounded-full opacity-10"
-            style={{
-              background: `radial-gradient(circle, ${
-                i % 2 === 0 ? 'rgba(220, 38, 38, 0.3)' : 'rgba(59, 130, 246, 0.3)'
-              } 0%, transparent 70%)`,
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              animation: `float ${10 + i * 2}s ease-in-out infinite`,
-              animationDelay: `${i * 2}s`
-            }}
-          />
-        ))}
-      </div>
       
       {/* Contenu principal */}
       <div className="relative z-10">
