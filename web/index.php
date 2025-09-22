@@ -1166,30 +1166,30 @@
 
         // Screenshot
         function takeScreenshot() {
-            fetch('/api/screenshot.php', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ action: 'take' })
-            })
+            showAlert('Capture en cours...', 'info');
+            fetch('/api/screenshot-simple.php?action=capture')
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    displayScreenshot(data.data.filename);
+                    displayScreenshot(data.data.url);
                     showAlert('Capture réalisée avec succès!', 'success');
+                    // Mettre à jour le timestamp
+                    document.getElementById('last-screenshot').textContent = new Date().toLocaleTimeString();
                 } else {
                     showAlert('Erreur lors de la capture: ' + data.message, 'error');
                 }
             })
-            .catch(error => showAlert('Erreur lors de la capture.', 'error'));
+            .catch(error => {
+                console.error('Erreur:', error);
+                showAlert('Erreur lors de la capture.', 'error');
+            });
         }
 
-        function displayScreenshot(filename) {
+        function displayScreenshot(url) {
             const img = document.getElementById('screenshot-display');
             const placeholder = document.getElementById('screenshot-placeholder');
 
-            img.src = '/screenshots/' + filename + '?t=' + Date.now();
+            img.src = url + '?t=' + Date.now();
             img.style.display = 'block';
             placeholder.style.display = 'none';
         }
