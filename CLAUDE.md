@@ -21,13 +21,32 @@ Cela évite les conflits entre différents projets !
 
 # 📺 Mémoire de Contexte - PiSignage v0.8.0 - VERSION STABLE OFFICIELLE
 
-## ✅ ÉTAT ACTUEL : v0.8.0 COMPLÈTEMENT DÉPLOYÉE
+## ✅ ÉTAT ACTUEL : v0.8.0 INTERFACE GOLDEN MASTER
 
-**Mise à jour : 22/09/2025 - 15:20**
-**Version : 0.8.0 (SEULE VERSION OFFICIELLE)**
-**Status : ✅ GITHUB NETTOYÉ - PRÊT POUR PRODUCTION**
-**URL Production : http://192.168.1.103 (prêt pour déploiement)**
-**GitHub : https://github.com/elkir0/Pi-Signage (UNIQUEMENT v0.8.0)**
+**Mise à jour : 23/09/2025 - 12:50**
+**Version : 0.8.0 GOLDEN MASTER (NE JAMAIS MODIFIER CETTE INTERFACE)**
+**Status : ✅ INTERFACE PARFAITE - VALIDÉE PAR L'UTILISATEUR**
+**URL Production : http://192.168.1.103 (EN PRODUCTION)**
+**GitHub : https://github.com/elkir0/Pi-Signage (v0.8.0-golden-master)**
+
+### 🏆 INTERFACE GOLDEN MASTER - À CONSERVER ABSOLUMENT
+
+**⚠️ RÈGLE ABSOLUE : CETTE INTERFACE NE DOIT JAMAIS ÊTRE MODIFIÉE**
+
+L'utilisateur a validé le 23/09/2025 à 12:50 :
+> "tu fais en sorte qu'a l'avenir on conserve CETTE MISE EN PAGE, c'est exactement ce qu'il me faut."
+
+#### Caractéristiques à préserver ABSOLUMENT :
+1. **Sidebar latérale fixe** (280px) avec style glassmorphisme
+2. **Background bleu nuit** : linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)
+3. **Logo en haut** avec gradient bleu (#4a9eff → #3d7edb)
+4. **9 sections dans la sidebar** avec icônes emoji
+5. **Style glassmorphisme** : backdrop-filter blur(10px) sur tous les cards
+6. **Boutons avec gradients** et effets hover
+7. **Animation pulse** sur l'élément actif de navigation
+8. **Fichier de référence** : `/opt/pisignage/web/index-GOLDEN-MASTER.php`
+
+⚠️ **EN CAS DE DOUTE, TOUJOURS SE RÉFÉRER À index-GOLDEN-MASTER.php**
 
 ## 🔄 HISTORIQUE COMPLET DU PROJET (22/09/2025)
 
