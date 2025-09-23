@@ -1,0 +1,43 @@
+xcb_connection_has_error() returned true
+[0000563a0745cb90] main interface error: no suitable interface module
+[0000563a073706a0] main libvlc error: interface "globalhotkeys,none" initialization failed
+[0000563a0745cb90] [http] lua interface: Lua HTTP interface
+[0000563a0745cb90] [http] main interface error: socket bind error: Address already in use
+[0000563a0745cb90] [http] main interface error: cannot create socket(s) for HTTP host
+[0000563a0745cb90] [http] lua interface error: Error loading script /usr/lib/x86_64-linux-gnu/vlc/lua/intf/http.luac: lua/intf/http.lua:337: Failed to create HTTP host
+[00007fa6f0000d60] filesystem stream error: cannot open file /opt/pisignage/media/big_buck_bunny_original.mp4 (No such file or directory)
+[00007fa6fc000c90] main input error: Votre média d’entrée ne peut être ouvert
+[00007fa6fc000c90] main input error: VLC ne peut pas ouvrir « file:///opt/pisignage/media/big_buck_bunny_original.mp4 ». Vérifier les messages du journal pour plus de détails.
+[00007fa6e80018c0] filesystem stream error: cannot open file /opt/pisignage/media/big_buck_bunny_optimized.mp4 (No such file or directory)
+[00007fa6fc000c90] main input error: Votre média d’entrée ne peut être ouvert
+[00007fa6fc000c90] main input error: VLC ne peut pas ouvrir « file:///opt/pisignage/media/big_buck_bunny_optimized.mp4 ». Vérifier les messages du journal pour plus de détails.
+[00007fa6e8001650] filesystem stream error: cannot open file /opt/pisignage/media/jellyfish_original.mp4 (No such file or directory)
+[00007fa6fc0016d0] main input error: Votre média d’entrée ne peut être ouvert
+[00007fa6fc0016d0] main input error: VLC ne peut pas ouvrir « file:///opt/pisignage/media/jellyfish_original.mp4 ». Vérifier les messages du journal pour plus de détails.
+[00007fa6e8001650] filesystem stream error: cannot open file /opt/pisignage/media/jellyfish_optimized.mp4 (No such file or directory)
+[00007fa6fc0016d0] main input error: Votre média d’entrée ne peut être ouvert
+[00007fa6fc0016d0] main input error: VLC ne peut pas ouvrir « file:///opt/pisignage/media/jellyfish_optimized.mp4 ». Vérifier les messages du journal pour plus de détails.
+[00007fa6e8001620] filesystem stream error: cannot open file /opt/pisignage/media/big_buck_bunny_original.mp4 (No such file or directory)
+[00007fa6fc000c90] main input error: Votre média d’entrée ne peut être ouvert
+[00007fa6fc000c90] main input error: VLC ne peut pas ouvrir « file:///opt/pisignage/media/big_buck_bunny_original.mp4 ». Vérifier les messages du journal pour plus de détails.
+[00007fa6e800a3a0] filesystem stream error: cannot open file /opt/pisignage/media/big_buck_bunny_optimized.mp4 (No such file or directory)
+[00007fa6fc000c90] main input error: Votre média d’entrée ne peut être ouvert
+[00007fa6fc000c90] main input error: VLC ne peut pas ouvrir « file:///opt/pisignage/media/big_buck_bunny_optimized.mp4 ». Vérifier les messages du journal pour plus de détails.
+[00007fa6f8c02790] filesystem stream error: cannot open file /opt/pisignage/media/jellyfish_original.mp4 (No such file or directory)
+[00007fa6fc000c90] main input error: Votre média d’entrée ne peut être ouvert
+[00007fa6fc000c90] main input error: VLC ne peut pas ouvrir « file:///opt/pisignage/media/jellyfish_original.mp4 ». Vérifier les messages du journal pour plus de détails.
+[00007fa6e8001660] filesystem stream error: cannot open file /opt/pisignage/media/jellyfish_optimized.mp4 (No such file or directory)
+[00007fa6fc000c90] main input error: Votre média d’entrée ne peut être ouvert
+[00007fa6fc000c90] main input error: VLC ne peut pas ouvrir « file:///opt/pisignage/media/jellyfish_optimized.mp4 ». Vérifier les messages du journal pour plus de détails.
+[00007fa6f4001200] filesystem stream error: cannot open file /opt/pisignage/media/big_buck_bunny_original.mp4 (No such file or directory)
+[00007fa6fc000c90] main input error: Votre média d’entrée ne peut être ouvert
+[00007fa6fc000c90] main input error: VLC ne peut pas ouvrir « file:///opt/pisignage/media/big_buck_bunny_original.mp4 ». Vérifier les messages du journal pour plus de détails.
+[00007fa700001330] filesystem stream error: cannot open file /opt/pisignage/media/big_buck_bunny_optimized.mp4 (No such file or directory)
+[00007fa6fc000c90] main input error: Votre média d’entrée ne peut être ouvert
+[00007fa6fc000c90] main input error: VLC ne peut pas ouvrir « file:///opt/pisignage/media/big_buck_bunny_optimized.mp4 ». Vérifier les messages du journal pour plus de détails.
+[00007fa6f8000b40] filesystem stream error: cannot open file /opt/pisignage/media/jellyfish_original.mp4 (No such file or directory)
+[00007fa6fc000c90] main input error: Votre média d’entrée ne peut être ouvert
+[00007fa6fc000c90] main input error: VLC ne peut pas ouvrir « file:///opt/pisignage/media/jellyfish_original.mp4 ». Vérifier les messages du journal pour plus de détails.
+[00007fa700000f20] filesystem stream error: cannot open file /opt/pisignage/media/jellyfish_optimized.mp4 (No such file or directory)
+[00007fa6fc000c90] main input error: Votre média d’entrée ne peut être ouvert
+[00007fa6fc000c90] main input error: VLC ne peut pas ouvrir « file:///opt/pisignage/media/jellyfish_optimized.mp4 ». Vérifier les messages du journal pour plus de détails.

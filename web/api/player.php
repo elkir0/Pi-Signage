@@ -78,6 +78,7 @@ function handlePlayerAction($input) {
             break;
 
         case 'play_file':
+        case 'play-file':  // Support both formats
             if (!isset($input['file'])) {
                 jsonResponse(false, null, 'File parameter required');
             }
@@ -137,6 +138,46 @@ function handlePlayerAction($input) {
 
         case 'fullscreen':
             $result = vlcCommand('fullscreen');
+            break;
+
+        case 'set-mode':
+            if (!isset($input['mode'])) {
+                jsonResponse(false, null, 'Mode parameter required');
+            }
+
+            $mode = $input['mode'];
+            $startScript = '/opt/pisignage/start-pisignage.sh';
+
+            // Kill current processes
+            executeCommand('sudo killall -9 vlc chromium-browser chromium 2>/dev/null');
+            sleep(1);
+
+            switch ($mode) {
+                case 'fullscreen':
+                    // VLC only in fullscreen
+                    $cmd = 'DISPLAY=:0 cvlc --fullscreen --loop --no-audio --intf http --http-password pisignage /opt/pisignage/media/playlist.m3u > /dev/null 2>&1 &';
+                    executeCommand($cmd);
+                    $result = ['mode' => 'fullscreen', 'status' => 'started'];
+                    break;
+
+                case 'windowed':
+                    // VLC in windowed mode
+                    $cmd = 'DISPLAY=:0 cvlc --width=1920 --height=1050 --no-embedded-video --loop --no-audio --intf http --http-password pisignage /opt/pisignage/media/playlist.m3u > /dev/null 2>&1 &';
+                    executeCommand($cmd);
+                    $result = ['mode' => 'windowed', 'status' => 'started'];
+                    break;
+
+                case 'with-rss':
+                    // Launch the full startup script with RSS
+                    executeCommand("bash $startScript > /dev/null 2>&1 &");
+                    $result = ['mode' => 'with-rss', 'status' => 'started'];
+                    break;
+
+                default:
+                    jsonResponse(false, null, 'Invalid mode: ' . $mode);
+            }
+
+            logMessage("Player mode changed to: $mode");
             break;
 
         default:

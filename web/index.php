@@ -419,6 +419,7 @@
                             <button class="btn btn-success" onclick="vlcControl('play')">▶️ Play</button>
                             <button class="btn" onclick="vlcControl('pause')">⏸️ Pause</button>
                             <button class="btn btn-danger" onclick="vlcControl('stop')">⏹️ Stop</button>
+                            <button class="btn" onclick="takeQuickScreenshot('dashboard')">📸 Capture</button>
                         </div>
                     </div>
                 </div>
@@ -525,6 +526,7 @@
                         <button class="btn btn-danger" onclick="vlcControl('stop')">⏹️ Stop</button>
                         <button class="btn" onclick="vlcControl('next')">⏭️ Suivant</button>
                         <button class="btn" onclick="vlcControl('previous')">⏮️ Précédent</button>
+                        <button class="btn" onclick="takeQuickScreenshot('player')">📸 Capture</button>
                     </div>
 
                     <div class="input-group">
@@ -542,6 +544,19 @@
                         </select>
                     </div>
                     <button class="btn" onclick="playPlaylist()">▶️ Lancer la playlist</button>
+                </div>
+
+                <div class="card">
+                    <h3>🎬 Mode de lecture</h3>
+                    <div class="input-group">
+                        <label for="player-mode">Sélectionner le mode</label>
+                        <select id="player-mode">
+                            <option value="fullscreen">Plein écran</option>
+                            <option value="windowed">Fenêtré</option>
+                            <option value="with-rss">Avec bandeau RSS</option>
+                        </select>
+                    </div>
+                    <button class="btn" onclick="applyPlayerSettings()">💾 Appliquer</button>
                 </div>
 
                 <div class="card">
@@ -1122,6 +1137,111 @@
                 }
             })
             .catch(error => showAlert('Erreur lors du lancement.', 'error'));
+        }
+
+        // Single file playback
+        function playSingleFile() {
+            const fileName = document.getElementById('single-file-select').value;
+            if (!fileName) {
+                showAlert('Veuillez sélectionner un fichier.', 'error');
+                return;
+            }
+
+            fetch('/api/player.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    action: 'play-file',
+                    file: fileName
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert('Lecture du fichier démarrée!', 'success');
+                    updateVLCStatus();
+                } else {
+                    showAlert('Erreur lors de la lecture: ' + data.message, 'error');
+                }
+            })
+            .catch(error => showAlert('Erreur de communication avec le lecteur.', 'error'));
+        }
+
+        // Player mode settings
+        function applyPlayerSettings() {
+            const mode = document.getElementById('player-mode').value;
+
+            fetch('/api/player.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    action: 'set-mode',
+                    mode: mode
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert(`Mode ${mode} appliqué avec succès!`, 'success');
+                    updateVLCStatus();
+                } else {
+                    showAlert('Erreur lors du changement de mode: ' + data.message, 'error');
+                }
+            })
+            .catch(error => showAlert('Erreur de communication avec le lecteur.', 'error'));
+        }
+
+        // Quick screenshot function for dashboard and player
+        function takeQuickScreenshot(source) {
+            showAlert(`Capture d'écran depuis ${source}...`, 'info');
+
+            fetch('/api/screenshot-simple.php?action=capture')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Show a modal with the screenshot
+                    const modal = document.createElement('div');
+                    modal.className = 'modal';
+                    modal.style.cssText = `
+                        position: fixed;
+                        top: 0;
+                        left: 0;
+                        width: 100%;
+                        height: 100%;
+                        background: rgba(0,0,0,0.8);
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        z-index: 10000;
+                        cursor: pointer;
+                    `;
+
+                    const img = document.createElement('img');
+                    img.src = data.data.url + '?' + Date.now();
+                    img.style.cssText = `
+                        max-width: 90%;
+                        max-height: 90%;
+                        border-radius: 10px;
+                        box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+                    `;
+
+                    modal.appendChild(img);
+                    modal.onclick = () => document.body.removeChild(modal);
+                    document.body.appendChild(modal);
+
+                    showAlert('Capture réalisée avec succès!', 'success');
+                } else {
+                    showAlert('Erreur lors de la capture: ' + data.message, 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Erreur:', error);
+                showAlert('Erreur lors de la capture d\'écran.', 'error');
+            });
         }
 
         // YouTube download
