@@ -143,12 +143,20 @@ function showUploadModal() {
                     <span class="close" style="color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer;">&times;</span>
                 </div>
                 <div class="modal-body">
-                    <p>Sélectionnez les fichiers à uploader:</p>
-                    <input type="file" id="fileInput" multiple accept="video/*,image/*,audio/*" style="width: 100%; padding: 10px; margin: 10px 0; border: 2px dashed #ccc; border-radius: 5px;">
-                    <div id="uploadProgress" style="display: none;">
-                        <p>Upload en cours...</p>
-                        <div style="width: 100%; background-color: #f0f0f0; border-radius: 5px;">
-                            <div id="progressBar" style="width: 0%; height: 20px; background-color: #4CAF50; border-radius: 5px; transition: width 0.3s;"></div>
+                    <div id="fileSelectArea" style="border: 3px dashed #007bff; border-radius: 10px; padding: 30px; text-align: center; background-color: #f8f9fa; cursor: pointer; margin: 20px 0;">
+                        <h4 style="color: #007bff; margin-bottom: 15px;">📁 Cliquez ici pour sélectionner vos fichiers</h4>
+                        <p style="margin-bottom: 10px; color: #6c757d;">Ou glissez-déposez vos fichiers ici</p>
+                        <p style="font-size: 12px; color: #6c757d;">Formats supportés: MP4, AVI, JPG, PNG, MP3, etc.</p>
+                        <input type="file" id="fileInput" multiple accept="video/*,image/*,audio/*" style="display: none;">
+                    </div>
+                    <div id="selectedFiles" style="margin-top: 15px; display: none;">
+                        <h5>📋 Fichiers sélectionnés:</h5>
+                        <ul id="filesList" style="list-style: none; padding: 0;"></ul>
+                    </div>
+                    <div id="uploadProgress" style="display: none; margin-top: 20px;">
+                        <p><strong>⏳ Upload en cours...</strong></p>
+                        <div style="width: 100%; background-color: #e9ecef; border-radius: 10px; overflow: hidden;">
+                            <div id="progressBar" style="width: 0%; height: 25px; background: linear-gradient(90deg, #007bff, #0056b3); color: white; text-align: center; line-height: 25px; transition: width 0.3s; font-weight: bold;"></div>
                         </div>
                     </div>
                 </div>
@@ -183,6 +191,106 @@ function showUploadModal() {
             closeModal();
         }
     };
+
+    // File selection area click
+    const fileSelectArea = document.getElementById('fileSelectArea');
+    fileSelectArea.onclick = function() {
+        fileInput.click();
+    };
+
+    // Drag and drop events
+    fileSelectArea.ondragover = function(e) {
+        e.preventDefault();
+        fileSelectArea.style.backgroundColor = '#e3f2fd';
+        fileSelectArea.style.borderColor = '#2196f3';
+    };
+
+    fileSelectArea.ondragleave = function(e) {
+        e.preventDefault();
+        fileSelectArea.style.backgroundColor = '#f8f9fa';
+        fileSelectArea.style.borderColor = '#007bff';
+    };
+
+    fileSelectArea.ondrop = function(e) {
+        e.preventDefault();
+        fileSelectArea.style.backgroundColor = '#f8f9fa';
+        fileSelectArea.style.borderColor = '#007bff';
+
+        const droppedFiles = e.dataTransfer.files;
+        if (droppedFiles.length > 0) {
+            // Update the file input with dropped files
+            fileInput.files = droppedFiles;
+            updateSelectedFilesList();
+        }
+    };
+
+    // File input change event
+    fileInput.onchange = function() {
+        updateSelectedFilesList();
+    };
+
+    function updateSelectedFilesList() {
+        const files = fileInput.files;
+        const selectedFilesDiv = document.getElementById('selectedFiles');
+        const filesList = document.getElementById('filesList');
+
+        if (files.length > 0) {
+            selectedFilesDiv.style.display = 'block';
+            filesList.innerHTML = '';
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const li = document.createElement('li');
+                li.style.cssText = 'padding: 8px; margin: 5px 0; background-color: #e9ecef; border-radius: 5px; display: flex; justify-content: space-between; align-items: center;';
+
+                const fileInfo = document.createElement('span');
+                fileInfo.textContent = `📄 ${file.name} (${formatFileSize(file.size)})`;
+
+                const removeBtn = document.createElement('button');
+                removeBtn.textContent = '❌';
+                removeBtn.style.cssText = 'background: none; border: none; cursor: pointer; font-size: 16px; color: #dc3545;';
+                removeBtn.onclick = function() {
+                    removeFileFromSelection(i);
+                };
+
+                li.appendChild(fileInfo);
+                li.appendChild(removeBtn);
+                filesList.appendChild(li);
+            }
+
+            // Update the file select area text
+            fileSelectArea.innerHTML = `
+                <h4 style="color: #28a745; margin-bottom: 15px;">✅ ${files.length} fichier(s) sélectionné(s)</h4>
+                <p style="margin-bottom: 10px; color: #6c757d;">Cliquez pour changer la sélection</p>
+                <p style="font-size: 12px; color: #6c757d;">Ou glissez-déposez d'autres fichiers</p>
+                <input type="file" id="fileInput" multiple accept="video/*,image/*,audio/*" style="display: none;">
+            `;
+        } else {
+            selectedFilesDiv.style.display = 'none';
+        }
+    }
+
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    function removeFileFromSelection(index) {
+        const dt = new DataTransfer();
+        const files = fileInput.files;
+
+        for (let i = 0; i < files.length; i++) {
+            if (i !== index) {
+                dt.items.add(files[i]);
+            }
+        }
+
+        fileInput.files = dt.files;
+        updateSelectedFilesList();
+    }
 
     // Upload button click
     uploadBtn.onclick = function() {
