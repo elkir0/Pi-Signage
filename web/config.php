@@ -8,15 +8,17 @@
 define('PISIGNAGE_VERSION', '0.8.0');
 define('PISIGNAGE_TITLE', 'PiSignage v0.8.0');
 
-// Error reporting
-error_reporting(0);
-ini_set("display_errors", 0);
-
-// Paths
+// Paths - Define first before using in error logging
 define('BASE_PATH', dirname(__DIR__));
 define('MEDIA_PATH', BASE_PATH . '/media');
 define('CONFIG_PATH', BASE_PATH . '/config');
 define('LOGS_PATH', BASE_PATH . '/logs');
+
+// Error reporting - PHP 8.2 compatible
+error_reporting(E_ALL & ~E_DEPRECATED & ~E_NOTICE);
+ini_set("display_errors", 0);
+ini_set("log_errors", 1);
+ini_set("error_log", LOGS_PATH . "/php_errors.log");
 define('SCRIPTS_PATH', BASE_PATH . '/scripts');
 define('PLAYLISTS_PATH', CONFIG_PATH . '/playlists');
 define('SCHEDULES_PATH', CONFIG_PATH . '/schedules');
@@ -48,8 +50,9 @@ define('DB_PATH', CONFIG_PATH . '/pisignage.db');
 
 // Initialize database
 function initializeDatabase() {
-    $db = new PDO('sqlite:' . DB_PATH);
-    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    try {
+        $db = new PDO('sqlite:' . DB_PATH);
+        $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
     // Create tables
     $db->exec("
@@ -57,6 +60,7 @@ function initializeDatabase() {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT UNIQUE NOT NULL,
             items TEXT NOT NULL,
+            description TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
@@ -95,6 +99,18 @@ function initializeDatabase() {
     ");
 
     return $db;
+    } catch (PDOException $e) {
+        error_log("Database initialization failed: " . $e->getMessage());
+        return null;
+    }
+}
+
+// Initialize database on config load
+try {
+    $db = initializeDatabase();
+} catch (Exception $e) {
+    $db = null;
+    error_log("Database initialization failed: " . $e->getMessage());
 }
 
 // Utility functions
@@ -143,8 +159,14 @@ function getSystemStats() {
     $memInfo = file_get_contents('/proc/meminfo');
     preg_match('/MemTotal:\s+(\d+)/', $memInfo, $memTotal);
     preg_match('/MemAvailable:\s+(\d+)/', $memInfo, $memAvailable);
-    $memUsed = $memTotal[1] - $memAvailable[1];
-    $stats['memory'] = round(($memUsed / $memTotal[1]) * 100, 1);
+    if (isset($memTotal[1]) && isset($memAvailable[1]) && $memTotal[1] > 0) {
+        $memUsed = $memTotal[1] - $memAvailable[1];
+        $stats['memory'] = round(($memUsed / $memTotal[1]) * 100, 1);
+        $stats['ram'] = $stats['memory']; // Alias pour compatibilité
+    } else {
+        $stats['memory'] = 0;
+        $stats['ram'] = 0;
+    }
 
     // Temperature (Raspberry Pi specific)
     if (file_exists('/sys/class/thermal/thermal_zone0/temp')) {
