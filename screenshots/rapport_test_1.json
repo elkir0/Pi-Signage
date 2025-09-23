@@ -1,0 +1,51 @@
+{
+  "timestamp": "2025-09-23T15:49:53.774Z",
+  "url": "http://192.168.1.103/",
+  "tests": [
+    {
+      "name": "Dashboard",
+      "url": "http://192.168.1.103/",
+      "loadTime": 789,
+      "title": "PiSignage v0.8.0 - Interface de Gestion",
+      "screenshot": "01_dashboard.png",
+      "status": "SUCCESS"
+    },
+    {
+      "name": "Playlists",
+      "screenshot": "03_playlists.png",
+      "status": "SUCCESS"
+    }
+  ],
+  "errors": [
+    "Médias: No element found for selector: [onclick*=\"media\"]",
+    "YouTube: youtubeLinks[0].click is not a function",
+    "Lecteur: playerLinks[0].click is not a function",
+    "Paramètres: settingsLinks[0].click is not a function"
+  ],
+  "apis": [
+    {
+      "endpoint": "/api/system.php",
+      "status": 200,
+      "working": true,
+      "contentLength": 424
+    },
+    {
+      "endpoint": "/api/player.php",
+      "status": 200,
+      "working": true,
+      "contentLength": 205
+    },
+    {
+      "endpoint": "/api/playlist.php",
+      "status": 200,
+      "working": true,
+      "contentLength": 309
+    },
+    {
+      "endpoint": "/api/media.php",
+      "status": 404,
+      "working": false,
+      "contentLength": 541
+    }
+  ]
+}

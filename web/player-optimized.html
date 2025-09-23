@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PiSignage Player Optimized</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: #000;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        #fps-monitor {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 255, 0, 0.1);
+            border: 2px solid #4ade80;
+            padding: 15px 20px;
+            border-radius: 10px;
+            font-family: monospace;
+            color: #4ade80;
+            font-size: 32px;
+            font-weight: bold;
+            z-index: 1000;
+            min-width: 150px;
+            text-align: center;
+        }
+        #debug-info {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            color: #fff;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            border-radius: 5px;
+            max-width: 400px;
+        }
+        .info-line {
+            margin: 2px 0;
+        }
+    </style>
+</head>
+<body>
+    <video id="video-player" autoplay muted loop playsinline>
+        <source src="/media/demo_h264_baseline.mp4" type="video/mp4">
+    </video>
+
+    <div id="fps-monitor">-- FPS</div>
+
+    <div id="debug-info">
+        <div class="info-line">Codec: <span id="codec">Détection...</span></div>
+        <div class="info-line">Résolution: <span id="resolution">--</span></div>
+        <div class="info-line">Décodeur: <span id="decoder">--</span></div>
+        <div class="info-line">Dropped: <span id="dropped">0</span></div>
+    </div>
+
+    <script>
+        const video = document.getElementById('video-player');
+        const fpsDisplay = document.getElementById('fps-monitor');
+        const codecDisplay = document.getElementById('codec');
+        const resolutionDisplay = document.getElementById('resolution');
+        const decoderDisplay = document.getElementById('decoder');
+        const droppedDisplay = document.getElementById('dropped');
+
+        // Force hardware acceleration hints
+        video.setAttribute('x-webkit-airplay', 'allow');
+        video.setAttribute('x5-video-player-type', 'h5');
+        video.setAttribute('x5-video-player-fullscreen', 'true');
+        video.setAttribute('webkit-playsinline', 'true');
+
+        // FPS Monitor optimisé
+        let frameCount = 0;
+        let lastTime = performance.now();
+        let fps = 0;
+        let droppedFrames = 0;
+
+        function updateFPS() {
+            frameCount++;
+            const currentTime = performance.now();
+            const delta = currentTime - lastTime;
+
+            if (delta >= 1000) {
+                fps = Math.round((frameCount * 1000) / delta);
+                fpsDisplay.textContent = fps + ' FPS';
+
+                // Couleur selon performance
+                if (fps >= 28) {
+                    fpsDisplay.style.borderColor = '#4ade80';
+                    fpsDisplay.style.color = '#4ade80';
+                    fpsDisplay.style.background = 'rgba(0, 255, 0, 0.1)';
+                } else if (fps >= 24) {
+                    fpsDisplay.style.borderColor = '#fbbf24';
+                    fpsDisplay.style.color = '#fbbf24';
+                    fpsDisplay.style.background = 'rgba(251, 191, 36, 0.1)';
+                } else {
+                    fpsDisplay.style.borderColor = '#ef4444';
+                    fpsDisplay.style.color = '#ef4444';
+                    fpsDisplay.style.background = 'rgba(239, 68, 68, 0.1)';
+                }
+
+                frameCount = 0;
+                lastTime = currentTime;
+            }
+
+            requestAnimationFrame(updateFPS);
+        }
+
+        // Détection codec et stats vidéo
+        video.addEventListener('loadedmetadata', () => {
+            resolutionDisplay.textContent = `${video.videoWidth}x${video.videoHeight}`;
+
+            // Tenter de détecter le codec
+            if (video.webkitDecodedFrameCount !== undefined) {
+                decoderDisplay.textContent = 'Hardware (WebKit)';
+            } else if (video.mozDecodedFrames !== undefined) {
+                decoderDisplay.textContent = 'Hardware (Mozilla)';
+            } else {
+                decoderDisplay.textContent = 'Détection...';
+            }
+
+            // Détection codec via MediaCapabilities API si disponible
+            if ('MediaSource' in window && MediaSource.isTypeSupported) {
+                const codecs = [
+                    'video/mp4; codecs="avc1.42E01E"', // H.264 Baseline
+                    'video/mp4; codecs="avc1.4D401E"', // H.264 Main
+                    'video/mp4; codecs="avc1.64001E"', // H.264 High
+                ];
+
+                for (const codec of codecs) {
+                    if (MediaSource.isTypeSupported(codec)) {
+                        codecDisplay.textContent = codec.split('"')[1];
+                        break;
+                    }
+                }
+            }
+        });
+
+        // Monitoring des frames dropped
+        setInterval(() => {
+            if (video.getVideoPlaybackQuality) {
+                const quality = video.getVideoPlaybackQuality();
+                droppedFrames = quality.droppedVideoFrames || 0;
+                droppedDisplay.textContent = droppedFrames;
+            } else if (video.webkitDroppedFrameCount !== undefined) {
+                droppedFrames = video.webkitDroppedFrameCount;
+                droppedDisplay.textContent = droppedFrames;
+            }
+        }, 1000);
+
+        // Forcer le play si la vidéo se met en pause
+        video.addEventListener('pause', () => {
+            video.play().catch(e => console.error('Auto-play failed:', e));
+        });
+
+        // Gestion erreurs
+        video.addEventListener('error', (e) => {
+            console.error('Video error:', e);
+            codecDisplay.textContent = 'Erreur chargement';
+        });
+
+        // Liste de vidéos à faire défiler
+        const playlist = [
+            '/media/demo_h264_baseline.mp4',
+            '/media/demo.mp4',
+            '/media/jellyfish_optimized.mp4',
+            '/media/jellyfish_original.mp4'
+        ];
+        let currentIndex = 0;
+
+        // Changer de vidéo toutes les 30 secondes
+        setInterval(() => {
+            currentIndex = (currentIndex + 1) % playlist.length;
+            video.src = playlist[currentIndex];
+            video.play();
+        }, 30000);
+
+        // Démarrer le monitoring FPS
+        requestAnimationFrame(updateFPS);
+
+        // S'assurer que la vidéo démarre
+        video.play().catch(e => {
+            console.error('Initial play failed:', e);
+            // Retry avec user gesture simulation
+            setTimeout(() => video.play(), 1000);
+        });
+    </script>
+</body>
+</html>

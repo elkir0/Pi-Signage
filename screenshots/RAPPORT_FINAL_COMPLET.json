@@ -1,0 +1,303 @@
+{
+  "timestamp": "2025-09-23T15:55:27.780Z",
+  "version": "PiSignage v0.8.0",
+  "url": "http://192.168.1.103/",
+  "testSummary": {
+    "totalTests": 4,
+    "completedTests": 4,
+    "duration": "~10 minutes"
+  },
+  "results": {
+    "navigation": {
+      "dashboardLoadTime": 789,
+      "sectionsAccessible": 2,
+      "sectionsWorking": 2,
+      "title": "PiSignage v0.8.0 - Interface de Gestion",
+      "errors": 4
+    },
+    "performance": {
+      "loadTime": 1409,
+      "memoryUsage": 1.11,
+      "totalElements": 410,
+      "consoleMessages": 2,
+      "jsErrors": 0,
+      "networkErrors": 1
+    },
+    "apis": {
+      "totalApis": 9,
+      "workingApis": 5,
+      "brokenApis": 4,
+      "averageResponseTime": 922,
+      "apiDetails": {
+        "working": [
+          {
+            "endpoint": "/api/system.php",
+            "status": 200,
+            "time": 569
+          },
+          {
+            "endpoint": "/api/player.php",
+            "status": 200,
+            "time": 1022
+          },
+          {
+            "endpoint": "/api/playlist.php",
+            "status": 200,
+            "time": 1022
+          },
+          {
+            "endpoint": "/api/youtube.php",
+            "status": 200,
+            "time": 978
+          },
+          {
+            "endpoint": "/api/upload.php",
+            "status": 200,
+            "time": 1020
+          }
+        ],
+        "broken": [
+          {
+            "endpoint": "/api/media.php",
+            "status": 404
+          },
+          {
+            "endpoint": "/api/screenshot.php",
+            "status": 404
+          },
+          {
+            "endpoint": "/api/config.php",
+            "status": 404
+          },
+          {
+            "endpoint": "/api/status.php",
+            "status": 404
+          }
+        ]
+      }
+    },
+    "functionalities": {
+      "upload": {
+        "name": "Interface Upload",
+        "elementsFound": 3,
+        "screenshot": "09_upload_interface.png",
+        "status": "SUCCESS"
+      },
+      "playerControls": {
+        "name": "Contrôles Lecteur",
+        "controlsFound": 5,
+        "screenshot": "10_player_controls.png",
+        "status": "SUCCESS"
+      },
+      "playlists": {
+        "name": "Gestion Playlists",
+        "elementsFound": 5,
+        "screenshot": "11_playlist_management.png",
+        "status": "SUCCESS"
+      },
+      "systemActions": {
+        "name": "Actions Système",
+        "actionsFound": 4,
+        "screenshot": "12_system_actions.png",
+        "status": "SUCCESS"
+      },
+      "stats": {
+        "name": "Stats Système",
+        "statsFound": 20,
+        "stats": [
+          {
+            "element": "TITLE",
+            "text": "PiSignage v0.8.0 - Interface de Gestion",
+            "className": ""
+          },
+          {
+            "element": "DIV",
+            "text": "PiSignage\n                v0.8.0",
+            "className": "logo"
+          },
+          {
+            "element": "DIV",
+            "text": "PiSignage\n                v0.8.0",
+            "className": ""
+          },
+          {
+            "element": "DIV",
+            "text": "v0.8.0",
+            "className": "logo-version"
+          },
+          {
+            "element": "LI",
+            "text": "Programmation",
+            "className": "nav-item"
+          },
+          {
+            "element": "A",
+            "text": "Programmation",
+            "className": "nav-link"
+          },
+          {
+            "element": "SPAN",
+            "text": "Programmation",
+            "className": ""
+          },
+          {
+            "element": "LI",
+            "text": "Paramètres",
+            "className": "nav-item"
+          },
+          {
+            "element": "A",
+            "text": "Paramètres",
+            "className": "nav-link"
+          },
+          {
+            "element": "SPAN",
+            "text": "Paramètres",
+            "className": ""
+          },
+          {
+            "element": "DIV",
+            "text": "CPU\n                    2.3%",
+            "className": "stat-card"
+          },
+          {
+            "element": "DIV",
+            "text": "CPU",
+            "className": "stat-label"
+          },
+          {
+            "element": "DIV",
+            "text": "2.3%",
+            "className": "stat-value"
+          },
+          {
+            "element": "DIV",
+            "text": "RAM\n                    4.7%",
+            "className": "stat-card"
+          },
+          {
+            "element": "DIV",
+            "text": "RAM",
+            "className": "stat-label"
+          },
+          {
+            "element": "DIV",
+            "text": "4.7%",
+            "className": "stat-value"
+          },
+          {
+            "element": "DIV",
+            "text": "Température\n                    55°C",
+            "className": "stat-card"
+          },
+          {
+            "element": "DIV",
+            "text": "55°C",
+            "className": "stat-value"
+          },
+          {
+            "element": "SPAN",
+            "text": "°C",
+            "className": "stat-unit"
+          },
+          {
+            "element": "DIV",
+            "text": "Stockage\n                    7.2%",
+            "className": "stat-card"
+          }
+        ],
+        "status": "SUCCESS"
+      }
+    },
+    "errors": {
+      "total": 4,
+      "byCategory": {
+        "navigation": 4,
+        "javascript": 0,
+        "apis": 0,
+        "functionalities": 0
+      },
+      "details": [
+        "Navigation: Médias: No element found for selector: [onclick*=\"media\"]",
+        "Navigation: YouTube: youtubeLinks[0].click is not a function",
+        "Navigation: Lecteur: playerLinks[0].click is not a function",
+        "Navigation: Paramètres: settingsLinks[0].click is not a function"
+      ]
+    }
+  },
+  "screenshots": [
+    {
+      "filename": "01_dashboard.png",
+      "size": 626,
+      "created": "2025-09-23T15:49:56.949Z"
+    },
+    {
+      "filename": "03_playlists.png",
+      "size": 626,
+      "created": "2025-09-23T15:50:00.593Z"
+    },
+    {
+      "filename": "07_debug_final.png",
+      "size": 626,
+      "created": "2025-09-23T15:51:17.198Z"
+    },
+    {
+      "filename": "08_dashboard_nav.png",
+      "size": 625,
+      "created": "2025-09-23T15:52:32.559Z"
+    },
+    {
+      "filename": "08_lecteur_nav.png",
+      "size": 389,
+      "created": "2025-09-23T15:52:42.647Z"
+    },
+    {
+      "filename": "08_médias_nav.png",
+      "size": 449,
+      "created": "2025-09-23T15:52:35.963Z"
+    },
+    {
+      "filename": "08_playlists_nav.png",
+      "size": 299,
+      "created": "2025-09-23T15:52:39.279Z"
+    },
+    {
+      "filename": "09_upload_interface.png",
+      "size": 449,
+      "created": "2025-09-23T15:54:01.416Z"
+    },
+    {
+      "filename": "10_player_controls.png",
+      "size": 391,
+      "created": "2025-09-23T15:54:08.432Z"
+    },
+    {
+      "filename": "11_playlist_management.png",
+      "size": 300,
+      "created": "2025-09-23T15:54:12.340Z"
+    },
+    {
+      "filename": "12_system_actions.png",
+      "size": 473,
+      "created": "2025-09-23T15:54:16.264Z"
+    }
+  ],
+  "recommendations": [
+    "🔧 Corriger les APIs défaillantes (media.php, screenshot.php, config.php, status.php)",
+    "⚡ Optimiser le temps de chargement (actuellement > 1s)",
+    "🌐 Ajouter favicon.ico pour éviter l'erreur 404",
+    "🧭 Améliorer la navigation entre sections",
+    "✅ Interface fonctionnelle et utilisable",
+    "📱 Design responsive et moderne",
+    "🎯 Fonctionnalités principales opérationnelles"
+  ],
+  "globalScore": {
+    "total": 55,
+    "breakdown": {
+      "navigation": 20,
+      "performance": 60,
+      "apis": 56,
+      "functionalities": 85
+    }
+  }
+}
