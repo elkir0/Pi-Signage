@@ -126,6 +126,139 @@ function captureManual() {
     });
 }
 
+// Show upload modal
+function showUploadModal() {
+    // Remove existing modal if any
+    const existingModal = document.getElementById('uploadModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+
+    // Create modal HTML
+    const modalHTML = `
+        <div id="uploadModal" class="modal" style="display: block; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);">
+            <div class="modal-content" style="background-color: #fefefe; margin: 15% auto; padding: 20px; border: 1px solid #888; width: 80%; max-width: 500px; border-radius: 10px;">
+                <div class="modal-header">
+                    <h4>📁 Upload Media Files</h4>
+                    <span class="close" style="color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer;">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <p>Sélectionnez les fichiers à uploader:</p>
+                    <input type="file" id="fileInput" multiple accept="video/*,image/*,audio/*" style="width: 100%; padding: 10px; margin: 10px 0; border: 2px dashed #ccc; border-radius: 5px;">
+                    <div id="uploadProgress" style="display: none;">
+                        <p>Upload en cours...</p>
+                        <div style="width: 100%; background-color: #f0f0f0; border-radius: 5px;">
+                            <div id="progressBar" style="width: 0%; height: 20px; background-color: #4CAF50; border-radius: 5px; transition: width 0.3s;"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer" style="text-align: right; margin-top: 20px;">
+                    <button id="cancelUpload" class="btn btn-secondary" style="margin-right: 10px; padding: 8px 16px; border: none; border-radius: 4px; background-color: #6c757d; color: white; cursor: pointer;">Annuler</button>
+                    <button id="startUpload" class="btn btn-primary" style="padding: 8px 16px; border: none; border-radius: 4px; background-color: #007bff; color: white; cursor: pointer;">Upload</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Add modal to page
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+    // Add event listeners
+    const modal = document.getElementById('uploadModal');
+    const closeBtn = modal.querySelector('.close');
+    const cancelBtn = document.getElementById('cancelUpload');
+    const uploadBtn = document.getElementById('startUpload');
+    const fileInput = document.getElementById('fileInput');
+
+    // Close modal function
+    function closeModal() {
+        modal.remove();
+    }
+
+    // Event listeners
+    closeBtn.onclick = closeModal;
+    cancelBtn.onclick = closeModal;
+    modal.onclick = function(event) {
+        if (event.target === modal) {
+            closeModal();
+        }
+    };
+
+    // Upload button click
+    uploadBtn.onclick = function() {
+        const files = fileInput.files;
+        if (files.length === 0) {
+            alert('Veuillez sélectionner au moins un fichier');
+            return;
+        }
+
+        // Show progress
+        document.getElementById('uploadProgress').style.display = 'block';
+        uploadBtn.disabled = true;
+        uploadBtn.textContent = 'Upload...';
+
+        // Start upload
+        uploadFiles(files).then(() => {
+            showNotification('Upload terminé avec succès!', 'success');
+            closeModal();
+            refreshMediaList();
+        }).catch(error => {
+            showNotification('Erreur upload: ' + error.message, 'error');
+            document.getElementById('uploadProgress').style.display = 'none';
+            uploadBtn.disabled = false;
+            uploadBtn.textContent = 'Upload';
+        });
+    };
+}
+
+// Upload multiple files with progress
+function uploadFiles(files) {
+    return new Promise((resolve, reject) => {
+        const formData = new FormData();
+
+        for (let file of files) {
+            formData.append('files[]', file);
+        }
+
+        const xhr = new XMLHttpRequest();
+
+        // Progress handler
+        xhr.upload.addEventListener('progress', function(e) {
+            if (e.lengthComputable) {
+                const percentComplete = (e.loaded / e.total) * 100;
+                const progressBar = document.getElementById('progressBar');
+                if (progressBar) {
+                    progressBar.style.width = percentComplete + '%';
+                }
+            }
+        });
+
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                try {
+                    const data = JSON.parse(xhr.responseText);
+                    if (data.success) {
+                        resolve(data);
+                    } else {
+                        reject(new Error(data.message || 'Upload failed'));
+                    }
+                } catch (e) {
+                    reject(new Error('Invalid response format'));
+                }
+            } else {
+                reject(new Error('HTTP ' + xhr.status));
+            }
+        };
+
+        xhr.onerror = function() {
+            reject(new Error('Network error'));
+        };
+
+        xhr.open('POST', '/api/upload.php');
+        xhr.send(formData);
+    });
+}
+
 // Wrapper for uploadFiles to match expected function name
 function uploadFile(files) {
     if (typeof uploadFiles === 'function') {
