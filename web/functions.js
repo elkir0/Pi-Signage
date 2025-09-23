@@ -292,11 +292,6 @@ function uploadFile(files) {
 
 // Helper function for notifications
 function showNotification(message, type = 'info') {
-    // Check if a notification system exists
-    if (typeof window.showNotification === 'function') {
-        return window.showNotification(message, type);
-    }
-
     // Fallback to console
     console.log(`[${type.toUpperCase()}] ${message}`);
 
