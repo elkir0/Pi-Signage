@@ -1,0 +1,20 @@
+[2025-09-22 22:17:50] [ALERT] [WARNING] system_load: Charge système élevée: 003
+[2025-09-22 22:17:50] [ALERT] [CRITICAL] service_down: Service arrêté: php7.4-fpm
+[2025-09-22 22:17:50] [ALERT] [CRITICAL] web_interface: Interface web non accessible (HTTP 404)
+[2025-09-22 22:17:50] [ALERT] [WARNING] api_error: API non fonctionnelle: /api/system.php
+[2025-09-22 22:17:50] [ALERT] [WARNING] high_memory_usage: Processus à forte charge mémoire: /usr/bin/gnome-shell claude claude 
+[2025-09-22 22:17:51] [ALERT] [WARNING] system_load: Charge système élevée: 003
+[2025-09-22 22:17:51] [ALERT] [CRITICAL] service_down: Service arrêté: php7.4-fpm
+[2025-09-22 22:17:51] [ALERT] [CRITICAL] web_interface: Interface web non accessible (HTTP 404)
+[2025-09-22 22:17:51] [ALERT] [WARNING] api_error: API non fonctionnelle: /api/system.php
+[2025-09-22 22:17:51] [ALERT] [WARNING] high_memory_usage: Processus à forte charge mémoire: /usr/bin/gnome-shell claude claude 
+[2025-09-22 22:18:14] [ALERT] [CRITICAL] system_load: Charge système critique: 010
+[2025-09-22 22:18:14] [ALERT] [CRITICAL] service_down: Service arrêté: php7.4-fpm
+[2025-09-22 22:18:14] [ALERT] [CRITICAL] web_interface: Interface web non accessible (HTTP 404)
+[2025-09-22 22:18:14] [ALERT] [WARNING] api_error: API non fonctionnelle: /api/system.php
+[2025-09-22 22:18:14] [ALERT] [WARNING] high_memory_usage: Processus à forte charge mémoire: /usr/bin/gnome-shell claude claude 
+[2025-09-22 22:18:14] [ALERT] [CRITICAL] system_load: Charge système critique: 025
+[2025-09-22 22:18:14] [ALERT] [CRITICAL] service_down: Service arrêté: php7.4-fpm
+[2025-09-22 22:18:14] [ALERT] [CRITICAL] web_interface: Interface web non accessible (HTTP 404)
+[2025-09-22 22:18:14] [ALERT] [WARNING] api_error: API non fonctionnelle: /api/system.php
+[2025-09-22 22:18:14] [ALERT] [WARNING] high_memory_usage: Processus à forte charge mémoire: /usr/bin/gnome-shell claude claude 

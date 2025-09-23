@@ -1,0 +1,62 @@
+# Flags Chromium optimisés pour Raspberry Pi + Bullseye + 30+ FPS 720p
+# À utiliser dans le script start-kiosk.sh
+
+# Mode kiosk de base
+--kiosk
+--no-sandbox
+--disable-web-security
+
+# Accélération hardware (CRITIQUE pour 30+ FPS)
+--enable-features=VaapiVideoDecoder
+--use-gl=egl
+--enable-gpu-rasterization
+--enable-oop-rasterization
+--disable-software-rasterizer
+
+# Optimisations mémoire pour RPi
+--memory-pressure-off
+--max_old_space_size=512
+--js-flags="--max-old-space-size=512"
+--disable-dev-shm-usage
+
+# Désactiver les fonctionnalités non nécessaires
+--disable-features=TranslateUI
+--disable-ipc-flooding-protection
+--noerrdialogs
+--disable-session-crashed-bubble
+--disable-infobars
+
+# Optimisations performance
+--disable-background-timer-throttling
+--disable-renderer-backgrounding
+--disable-backgrounding-occluded-windows
+--disable-background-networking
+
+# Codec H.264 hardware (RPi4 spécifique)
+--enable-features=VaapiVideoDecoder,VaapiVideoEncoder
+--disable-features=UseChromeOSDirectVideoDecoder
+
+# Désactiver les extensions et plugins
+--disable-extensions
+--disable-plugins
+--disable-default-apps
+
+# Audio optimisé
+--autoplay-policy=no-user-gesture-required
+--disable-audio-sandbox
+
+# Cache optimisé
+--disk-cache-size=67108864
+--media-cache-size=67108864
+
+# Débogage (à retirer en production)
+--enable-logging=stderr
+--log-level=1
+
+# Stabilité
+--disable-hang-monitor
+--disable-prompt-on-repost
+--disable-popup-blocking
+
+# GPU Memory spécifique RPi (avec gpu_mem=128)
+--force_high_performance_gpu
