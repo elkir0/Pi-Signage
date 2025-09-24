@@ -1,7 +1,7 @@
 <?php
 /**
  * PiSignage v0.8.0 - Player Control API
- * Controls VLC media player via shell scripts
+ * Controls MPV media player via shell scripts
  */
 
 header('Content-Type: application/json');
@@ -17,8 +17,8 @@ $input = json_decode(file_get_contents('php://input'), true);
 
 switch ($method) {
     case 'GET':
-        // Get VLC status
-        $status = exec('/opt/pisignage/scripts/vlc-control.sh status 2>&1');
+        // Get MPV status
+        $status = exec('/opt/pisignage/scripts/mpv-control.sh status 2>&1');
         echo json_encode([
             'success' => true,
             'status' => $status,
@@ -41,35 +41,35 @@ switch ($method) {
         switch ($action) {
             case 'play':
             case 'start':
-                // Start VLC with all media files
+                // Start MPV with all media files
                 $output = [];
-                exec('/opt/pisignage/scripts/vlc-control.sh start 2>&1', $output, $retval);
+                exec('/opt/pisignage/scripts/mpv-control.sh start 2>&1', $output, $retval);
                 $success = ($retval === 0);
-                $message = !empty($output) ? implode("\n", $output) : 'VLC started';
+                $message = !empty($output) ? implode("\n", $output) : 'MPV started';
                 break;
 
             case 'stop':
-                // Stop VLC
+                // Stop MPV
                 $output = [];
-                exec('/opt/pisignage/scripts/vlc-control.sh stop 2>&1', $output, $retval);
+                exec('/opt/pisignage/scripts/mpv-control.sh stop 2>&1', $output, $retval);
                 $success = ($retval === 0);
-                $message = !empty($output) ? implode("\n", $output) : 'VLC stopped';
+                $message = !empty($output) ? implode("\n", $output) : 'MPV stopped';
                 break;
 
             case 'restart':
-                // Restart VLC
+                // Restart MPV
                 $output = [];
-                exec('/opt/pisignage/scripts/vlc-control.sh restart 2>&1', $output, $retval);
+                exec('/opt/pisignage/scripts/mpv-control.sh restart 2>&1', $output, $retval);
                 $success = ($retval === 0);
-                $message = !empty($output) ? implode("\n", $output) : 'VLC restarted';
+                $message = !empty($output) ? implode("\n", $output) : 'MPV restarted';
                 break;
 
             case 'pause':
-                // VLC pause via dbus (if available) or kill/resume
-                exec('dbus-send --print-reply --session --dest=org.mpris.MediaPlayer2.vlc /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player.PlayPause 2>&1', $output, $retval);
+                // MPV pause via dbus (if available) or kill/resume
+                exec('dbus-send --print-reply --session --dest=org.mpris.MediaPlayer2.mpv /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player.PlayPause 2>&1', $output, $retval);
                 if ($retval !== 0) {
-                    // Fallback: stop VLC
-                    exec('/opt/pisignage/scripts/vlc-control.sh stop 2>&1', $output, $retval);
+                    // Fallback: stop MPV
+                    exec('/opt/pisignage/scripts/mpv-control.sh stop 2>&1', $output, $retval);
                 }
                 $success = true;
                 $message = 'Paused';
@@ -78,7 +78,7 @@ switch ($method) {
             case 'next':
             case 'previous':
                 // Not supported in simple mode - restart playlist
-                exec('/opt/pisignage/scripts/vlc-control.sh restart 2>&1', $output, $retval);
+                exec('/opt/pisignage/scripts/mpv-control.sh restart 2>&1', $output, $retval);
                 $success = true;
                 $message = 'Playlist restarted';
                 break;
@@ -98,12 +98,12 @@ switch ($method) {
                     exit;
                 }
 
-                // Stop current VLC and play specific file
-                exec('pkill -f vlc 2>/dev/null');
+                // Stop current MPV and play specific file
+                exec('pkill -f mpv 2>/dev/null');
                 sleep(1);
 
-                $cmd = "DISPLAY=:0 cvlc --fullscreen --loop --no-video-title-show --intf dummy " .
-                       escapeshellarg($filepath) . " > " . LOGS_PATH . "/vlc.log 2>&1 &";
+                $cmd = "mpv --fullscreen --loop-playlist=inf --really-quiet " .
+                       escapeshellarg($filepath) . " > " . LOGS_PATH . "/mpv.log 2>&1 &";
                 exec($cmd, $output, $retval);
 
                 $success = true;
@@ -132,8 +132,8 @@ switch ($method) {
                     exit;
                 }
 
-                // Stop current VLC
-                exec('pkill -f vlc 2>/dev/null');
+                // Stop current MPV
+                exec('pkill -f mpv 2>/dev/null');
                 sleep(1);
 
                 // Build file list
@@ -151,8 +151,8 @@ switch ($method) {
                 }
 
                 // Play playlist
-                $cmd = "DISPLAY=:0 cvlc --fullscreen --loop --no-video-title-show --intf dummy " .
-                       implode(' ', $files) . " > " . LOGS_PATH . "/vlc.log 2>&1 &";
+                $cmd = "mpv --fullscreen --loop-playlist=inf --really-quiet " .
+                       implode(' ', $files) . " > " . LOGS_PATH . "/mpv.log 2>&1 &";
                 exec($cmd, $output, $retval);
 
                 $success = true;
