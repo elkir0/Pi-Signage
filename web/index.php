@@ -1446,7 +1446,7 @@ foreach ($dirs as $dir) {
             fetch('/api/media.php', {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ file: filename })
+                body: JSON.stringify({ filename: filename, action: 'delete' })
             })
             .then(response => response.json())
             .then(data => {
