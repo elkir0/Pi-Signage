@@ -1420,7 +1420,10 @@ foreach ($dirs as $dir) {
                             const card = document.createElement('div');
                             card.className = 'card';
                             card.innerHTML = `
-                                <h4>${file.name}</h4>
+                                <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                                    <input type="checkbox" id="media-${file.name}" value="${file.name}" style="margin-right: 10px;">
+                                    <h4 style="margin: 0; flex: 1;">${file.name}</h4>
+                                </div>
                                 <p>Taille: ${(file.size / 1024 / 1024).toFixed(2)} MB</p>
                                 <p>Type: ${file.type}</p>
                                 <button class="btn btn-danger" onclick="deleteFile('${file.name}')">
@@ -1497,6 +1500,178 @@ foreach ($dirs as $dir) {
                     }
                 })
                 .catch(error => console.error('Error loading playlists:', error));
+        }
+
+        // Create new playlist
+        function createPlaylist() {
+            const name = prompt('Nom de la nouvelle playlist:');
+            if (!name) return;
+
+            // Get selected files from media section
+            const selectedFiles = Array.from(document.querySelectorAll('#media input[type="checkbox"]:checked'))
+                .map(cb => cb.value);
+
+            fetch('/api/playlist.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'create',
+                    name: name,
+                    items: selectedFiles
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert('Playlist créée!', 'success');
+                    loadPlaylists();
+                } else {
+                    showAlert('Erreur: ' + data.message, 'error');
+                }
+            })
+            .catch(error => showAlert('Erreur de création', 'error'));
+        }
+
+        // Edit playlist
+        function editPlaylist(name) {
+            // Load playlist details
+            fetch(`/api/playlist.php?action=info&name=${encodeURIComponent(name)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.data) {
+                        const playlist = data.data;
+
+                        // Create edit modal
+                        const modalHTML = `
+                            <div id="editPlaylistModal" style="display: block; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9999;">
+                                <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #2a2d3a; padding: 30px; border-radius: 10px; width: 600px; max-width: 90%; max-height: 80vh; overflow-y: auto;">
+                                    <h2 style="margin: 0 0 20px; color: #4a9eff;">✏️ Modifier Playlist: ${name}</h2>
+
+                                    <div style="margin-bottom: 20px;">
+                                        <label style="display: block; margin-bottom: 5px;">Nom de la playlist:</label>
+                                        <input type="text" id="edit-playlist-name" value="${name}" style="width: 100%; padding: 8px; background: #1a1a2e; border: 1px solid #4a9eff; border-radius: 5px; color: white;">
+                                    </div>
+
+                                    <div style="margin-bottom: 20px;">
+                                        <label style="display: block; margin-bottom: 5px;">Fichiers dans la playlist:</label>
+                                        <div id="edit-playlist-items" style="max-height: 200px; overflow-y: auto; border: 1px solid #4a9eff; padding: 10px; border-radius: 5px;">
+                                            ${playlist.items.map(item => `
+                                                <div style="margin-bottom: 5px;">
+                                                    <input type="checkbox" id="item-${item}" value="${item}" checked>
+                                                    <label for="item-${item}" style="margin-left: 5px;">${item}</label>
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+
+                                    <div style="margin-bottom: 20px;">
+                                        <label style="display: block; margin-bottom: 5px;">Ajouter des fichiers:</label>
+                                        <select id="add-files-select" multiple style="width: 100%; height: 100px; background: #1a1a2e; border: 1px solid #4a9eff; color: white;">
+                                            <!-- Will be populated with available files -->
+                                        </select>
+                                    </div>
+
+                                    <div style="text-align: right;">
+                                        <button class="btn btn-primary" onclick="savePlaylistChanges('${name}')">💾 Sauvegarder</button>
+                                        <button class="btn btn-secondary" onclick="closeEditPlaylistModal()">Annuler</button>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+
+                        // Remove existing modal if any
+                        const existingModal = document.getElementById('editPlaylistModal');
+                        if (existingModal) existingModal.remove();
+
+                        // Add modal to page
+                        document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+                        // Populate available files
+                        fetch('/api/media.php?action=list')
+                            .then(response => response.json())
+                            .then(mediaData => {
+                                if (mediaData.success && mediaData.data) {
+                                    const select = document.getElementById('add-files-select');
+                                    mediaData.data.forEach(file => {
+                                        if (!playlist.items.includes(file.name)) {
+                                            const option = document.createElement('option');
+                                            option.value = file.name;
+                                            option.textContent = file.name;
+                                            select.appendChild(option);
+                                        }
+                                    });
+                                }
+                            });
+                    } else {
+                        showAlert('Erreur lors du chargement de la playlist', 'error');
+                    }
+                })
+                .catch(error => showAlert('Erreur de chargement', 'error'));
+        }
+
+        function closeEditPlaylistModal() {
+            const modal = document.getElementById('editPlaylistModal');
+            if (modal) modal.remove();
+        }
+
+        function savePlaylistChanges(originalName) {
+            const newName = document.getElementById('edit-playlist-name').value;
+
+            // Get selected existing items
+            const selectedItems = Array.from(document.querySelectorAll('#edit-playlist-items input:checked'))
+                .map(cb => cb.value);
+
+            // Get newly selected files
+            const newFiles = Array.from(document.getElementById('add-files-select').selectedOptions)
+                .map(option => option.value);
+
+            const allItems = [...selectedItems, ...newFiles];
+
+            fetch('/api/playlist.php', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'update',
+                    oldName: originalName,
+                    name: newName,
+                    items: allItems
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert('Playlist modifiée!', 'success');
+                    closeEditPlaylistModal();
+                    loadPlaylists();
+                } else {
+                    showAlert('Erreur: ' + data.message, 'error');
+                }
+            })
+            .catch(error => showAlert('Erreur de sauvegarde', 'error'));
+        }
+
+        // Delete playlist
+        function deletePlaylist(name) {
+            if (!confirm(`Supprimer la playlist "${name}"?`)) return;
+
+            fetch('/api/playlist.php', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'delete',
+                    name: name
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert('Playlist supprimée!', 'success');
+                    loadPlaylists();
+                } else {
+                    showAlert('Erreur: ' + data.message, 'error');
+                }
+            })
+            .catch(error => showAlert('Erreur de suppression', 'error'));
         }
 
         // YouTube download
