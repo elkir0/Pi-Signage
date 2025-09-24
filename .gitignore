@@ -1,46 +1,50 @@
-# Large media files
-media/*.mp4
-media/*.avi
-media/*.mkv
-media/*.mov
-media/*.webm
-media/*.flv
-media/*.wmv
-media/*.mpg
-media/*.mpeg
-
-# Keep demo files
-!media/demo_small.mp4
-
 # Logs
 logs/*.log
-logs/*.txt
+*.log
 
-# Temporary files
+# Media files
+media/*.mp4
+media/*.jpg
+media/*.png
+media/*.webm
+media/*.avi
+media/*.mkv
+
+# Temp files
 *.tmp
 *.swp
-*.swo
-*~
 .DS_Store
+*~
 
-# Screenshots (keep only documentation ones)
-screenshots/*.png
-screenshots/*.jpg
-!screenshots/README.md
+# Config local
+config/local.json
+
+# Node modules
+node_modules/
+package-lock.json
+
+# Backup files
+*.backup
+*.bak
+*.old
+
+# Screenshots
+screenshots/
+*.png
+*.jpg
 
 # Cache
-cache/
 .cache/
-
-# Node modules (if any)
-node_modules/
-
-# Python
 __pycache__/
-*.py[cod]
-*$py.class
 
 # IDE
 .vscode/
 .idea/
-*.iml
+
+# Python
+*.pyc
+*.pyo
+
+# System
+Thumbs.db
+.directory

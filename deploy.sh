@@ -1,499 +1,213 @@
 #!/bin/bash
 
-# PiSignage v0.9.0 - Système de Déploiement Automatisé One-Click
-# Spécialement conçu pour Raspberry Pi OS Bullseye (32-bit)
-# Auteur: Claude DevOps Expert
-# Date: 22/09/2025
-
-# Couleurs pour output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
-# Configuration globale
-export PI_IP="192.168.1.103"
-export PI_USER="pi"
-export PI_PASS="raspberry"
-export PROJECT_NAME="PiSignage"
-export VERSION="0.9.0"
-export DEPLOYMENT_DIR="/opt/pisignage"
-export BACKUP_DIR="/opt/pisignage-backup-$(date +%Y%m%d-%H%M%S)"
-export LOG_FILE="/tmp/pisignage-deploy-$(date +%Y%m%d-%H%M%S).log"
-
-# Variables de contrôle
-SKIP_BACKUPS=false
-FORCE_INSTALL=false
-DRY_RUN=false
-VERBOSE=false
-
-# Fonction de logging
-log() {
-    local level=$1
-    shift
-    local message="$*"
-    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-
-    case $level in
-        "INFO")
-            echo -e "${GREEN}[INFO]${NC} $message" | tee -a "$LOG_FILE"
-            ;;
-        "WARN")
-            echo -e "${YELLOW}[WARN]${NC} $message" | tee -a "$LOG_FILE"
-            ;;
-        "ERROR")
-            echo -e "${RED}[ERROR]${NC} $message" | tee -a "$LOG_FILE"
-            ;;
-        "DEBUG")
-            if [[ "$VERBOSE" == "true" ]]; then
-                echo -e "${BLUE}[DEBUG]${NC} $message" | tee -a "$LOG_FILE"
-            fi
-            ;;
-    esac
-    echo "[$timestamp] [$level] $message" >> "$LOG_FILE"
-}
-
-# Fonction d'aide
-show_help() {
-    cat << EOF
-PiSignage v0.9.0 - Système de Déploiement Automatisé
-
-USAGE:
-    $0 [OPTIONS] [COMMAND]
-
-COMMANDS:
-    deploy          Déploiement complet (défaut)
-    verify          Vérifications pré-déploiement uniquement
-    install         Installation packages uniquement
-    configure       Configuration système uniquement
-    test            Tests post-déploiement uniquement
-    rollback        Rollback vers sauvegarde précédente
-    monitor         Monitoring continu post-déploiement
-
-OPTIONS:
-    -h, --help         Afficher cette aide
-    -v, --verbose      Mode verbeux
-    -d, --dry-run      Simulation sans modifications
-    -f, --force        Forcer l'installation même si déjà présente
-    -s, --skip-backup  Ignorer les sauvegardes
-    --ip IP            IP du Raspberry Pi (défaut: 192.168.1.103)
-    --user USER        Utilisateur SSH (défaut: pi)
-    --pass PASS        Mot de passe SSH (défaut: raspberry)
-
-EXEMPLES:
-    $0                                    # Déploiement standard
-    $0 --verbose deploy                   # Déploiement avec logs détaillés
-    $0 --dry-run verify                   # Simulation vérifications
-    $0 --ip 192.168.1.104 deploy         # IP personnalisée
-    $0 rollback                           # Rollback automatique
-
-ÉTAPES DU DÉPLOIEMENT:
-    1. Vérifications pré-déploiement
-    2. Sauvegarde système existant
-    3. Installation packages requis
-    4. Configuration système complète
-    5. Déploiement application
-    6. Tests automatiques
-    7. Validation finale
-
-REQUIREMENTS:
-    - sshpass installé localement
-    - Raspberry Pi accessible en SSH
-    - Connexion Internet sur le Pi
-    - Au moins 2GB d'espace libre
-
-EOF
-}
-
-# Fonction de vérification des prérequis locaux
-check_local_requirements() {
-    log "INFO" "Vérification des prérequis locaux..."
-
-    # Vérifier sshpass
-    if ! command -v sshpass &> /dev/null; then
-        log "ERROR" "sshpass n'est pas installé. Installation requise:"
-        log "INFO" "  sudo apt-get install sshpass"
-        return 1
-    fi
-
-    # Vérifier que nous sommes dans le bon répertoire
-    if [[ ! -f "./VERSION" ]] || [[ ! -d "./web" ]]; then
-        log "ERROR" "Script doit être exécuté depuis le répertoire PiSignage (/opt/pisignage)"
-        return 1
-    fi
-
-    # Vérifier la version
-    local current_version=$(cat ./VERSION 2>/dev/null | tr -d '\n\r ')
-    if [[ "$current_version" != "$VERSION" ]]; then
-        log "WARN" "Version détectée: $current_version, attendue: $VERSION"
-    fi
-
-    log "INFO" "Prérequis locaux OK"
-    return 0
-}
-
-# Fonction de test de connexion SSH
-test_ssh_connection() {
-    log "INFO" "Test de connexion SSH vers $PI_USER@$PI_IP..."
-
-    if sshpass -p "$PI_PASS" ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no "$PI_USER@$PI_IP" "echo 'SSH OK'" &>/dev/null; then
-        log "INFO" "Connexion SSH réussie"
-        return 0
-    else
-        log "ERROR" "Impossible de se connecter en SSH"
-        log "INFO" "Vérifiez:"
-        log "INFO" "  - IP: $PI_IP"
-        log "INFO" "  - Utilisateur: $PI_USER"
-        log "INFO" "  - Mot de passe: $PI_PASS"
-        log "INFO" "  - SSH activé sur le Pi"
-        return 1
-    fi
-}
-
-# Fonction d'exécution de commande SSH avec gestion d'erreurs
-ssh_exec() {
-    local command="$1"
-    local description="$2"
-
-    log "DEBUG" "SSH EXEC: $description"
-    log "DEBUG" "COMMAND: $command"
-
-    if [[ "$DRY_RUN" == "true" ]]; then
-        log "INFO" "[DRY-RUN] $description"
-        return 0
-    fi
-
-    local output
-    local exit_code
-
-    output=$(sshpass -p "$PI_PASS" ssh -o StrictHostKeyChecking=no "$PI_USER@$PI_IP" "$command" 2>&1)
-    exit_code=$?
-
-    if [[ $exit_code -eq 0 ]]; then
-        log "DEBUG" "SUCCESS: $description"
-        if [[ "$VERBOSE" == "true" && -n "$output" ]]; then
-            echo "$output"
-        fi
-        return 0
-    else
-        log "ERROR" "ÉCHEC: $description"
-        log "ERROR" "Code de sortie: $exit_code"
-        log "ERROR" "Output: $output"
-        return $exit_code
-    fi
-}
-
-# Fonction de copie de fichiers via SCP avec gestion d'erreurs
-scp_copy() {
-    local local_path="$1"
-    local remote_path="$2"
-    local description="$3"
-
-    log "DEBUG" "SCP COPY: $description"
-    log "DEBUG" "FROM: $local_path TO: $PI_USER@$PI_IP:$remote_path"
-
-    if [[ "$DRY_RUN" == "true" ]]; then
-        log "INFO" "[DRY-RUN] $description"
-        return 0
-    fi
-
-    if sshpass -p "$PI_PASS" scp -o StrictHostKeyChecking=no -r "$local_path" "$PI_USER@$PI_IP:$remote_path" &>/dev/null; then
-        log "DEBUG" "SUCCESS: $description"
-        return 0
-    else
-        log "ERROR" "ÉCHEC: $description"
-        return 1
-    fi
-}
-
-# Fonction de vérifications pré-déploiement sur le Pi
-run_pre_deployment_checks() {
-    log "INFO" "Exécution des vérifications pré-déploiement..."
-
-    # Exécuter le script de vérifications
-    if ! ssh_exec "./deployment/scripts/pre-checks.sh" "Vérifications système Pi"; then
-        log "ERROR" "Échec des vérifications pré-déploiement"
-        return 1
-    fi
-
-    log "INFO" "Vérifications pré-déploiement réussies"
-    return 0
-}
-
-# Fonction de sauvegarde du système existant
-create_system_backup() {
-    if [[ "$SKIP_BACKUPS" == "true" ]]; then
-        log "INFO" "Sauvegardes ignorées (--skip-backup)"
-        return 0
-    fi
-
-    log "INFO" "Création de la sauvegarde système..."
-
-    if ! ssh_exec "./deployment/scripts/backup-system.sh" "Sauvegarde système"; then
-        log "ERROR" "Échec de la sauvegarde système"
-        return 1
-    fi
-
-    log "INFO" "Sauvegarde système créée avec succès"
-    return 0
-}
-
-# Fonction d'installation des packages
-install_system_packages() {
-    log "INFO" "Installation des packages système..."
-
-    if ! ssh_exec "./deployment/scripts/install-packages.sh" "Installation packages"; then
-        log "ERROR" "Échec de l'installation des packages"
-        return 1
-    fi
-
-    log "INFO" "Installation des packages terminée"
-    return 0
-}
-
-# Fonction de configuration système
-configure_system() {
-    log "INFO" "Configuration du système..."
-
-    if ! ssh_exec "./deployment/scripts/configure-system.sh" "Configuration système"; then
-        log "ERROR" "Échec de la configuration système"
-        return 1
-    fi
-
-    log "INFO" "Configuration système terminée"
-    return 0
-}
-
-# Fonction de déploiement de l'application
-deploy_application() {
-    log "INFO" "Déploiement de l'application PiSignage..."
-
-    if ! ssh_exec "./deployment/scripts/deploy-app.sh" "Déploiement application"; then
-        log "ERROR" "Échec du déploiement de l'application"
-        return 1
-    fi
-
-    log "INFO" "Déploiement de l'application terminé"
-    return 0
-}
-
-# Fonction de tests post-déploiement
-run_post_deployment_tests() {
-    log "INFO" "Exécution des tests post-déploiement..."
-
-    if ! ssh_exec "./deployment/scripts/post-tests.sh" "Tests post-déploiement"; then
-        log "ERROR" "Échec des tests post-déploiement"
-        return 1
-    fi
-
-    log "INFO" "Tests post-déploiement réussis"
-    return 0
-}
-
-# Fonction de déploiement complet
-deploy_complete() {
-    log "INFO" "========================================"
-    log "INFO" "DÉBUT DU DÉPLOIEMENT PISIGNAGE v$VERSION"
-    log "INFO" "========================================"
-
-    # 1. Vérifications locales
-    if ! check_local_requirements; then
-        return 1
-    fi
-
-    # 2. Test connexion SSH
-    if ! test_ssh_connection; then
-        return 1
-    fi
-
-    # 3. Copier les scripts de déploiement
-    log "INFO" "Copie des scripts de déploiement..."
-    if ! scp_copy "./deployment" "/tmp/" "Scripts de déploiement"; then
-        return 1
-    fi
-
-    # 4. Rendre les scripts exécutables
-    if ! ssh_exec "chmod +x /tmp/deployment/scripts/*.sh" "Permissions scripts"; then
-        return 1
-    fi
-
-    # 5. Vérifications pré-déploiement
-    if ! run_pre_deployment_checks; then
-        return 1
-    fi
-
-    # 6. Sauvegarde système
-    if ! create_system_backup; then
-        return 1
-    fi
-
-    # 7. Installation packages
-    if ! install_system_packages; then
-        return 1
-    fi
-
-    # 8. Configuration système
-    if ! configure_system; then
-        return 1
-    fi
-
-    # 9. Déploiement application
-    if ! deploy_application; then
-        return 1
-    fi
-
-    # 10. Tests post-déploiement
-    if ! run_post_deployment_tests; then
-        return 1
-    fi
-
-    log "INFO" "========================================"
-    log "INFO" "DÉPLOIEMENT RÉUSSI !"
-    log "INFO" "========================================"
-    log "INFO" "URL: http://$PI_IP"
-    log "INFO" "Version: $VERSION"
-    log "INFO" "Log: $LOG_FILE"
-
-    return 0
-}
-
-# Fonction de rollback
-rollback_deployment() {
-    log "INFO" "Rollback du déploiement..."
-
-    if ! ssh_exec "./deployment/scripts/rollback.sh" "Rollback système"; then
-        log "ERROR" "Échec du rollback"
-        return 1
-    fi
-
-    log "INFO" "Rollback terminé avec succès"
-    return 0
-}
-
-# Fonction de monitoring
-start_monitoring() {
-    log "INFO" "Démarrage du monitoring..."
-
-    if ! ssh_exec "./deployment/scripts/monitor.sh" "Monitoring système"; then
-        log "ERROR" "Échec du démarrage du monitoring"
-        return 1
-    fi
-
-    log "INFO" "Monitoring démarré"
-    return 0
-}
-
-# Fonction de nettoyage
-cleanup() {
-    log "INFO" "Nettoyage des fichiers temporaires..."
-    ssh_exec "rm -rf /tmp/deployment" "Nettoyage fichiers temporaires" || true
-}
-
-# Trap pour nettoyage automatique
-trap cleanup EXIT
-
-# Parsing des arguments
-COMMAND="deploy"
-while [[ $# -gt 0 ]]; do
-    case $1 in
-        -h|--help)
-            show_help
-            exit 0
-            ;;
-        -v|--verbose)
-            VERBOSE=true
-            shift
-            ;;
-        -d|--dry-run)
-            DRY_RUN=true
-            shift
-            ;;
-        -f|--force)
-            FORCE_INSTALL=true
-            shift
-            ;;
-        -s|--skip-backup)
-            SKIP_BACKUPS=true
-            shift
-            ;;
-        --ip)
-            PI_IP="$2"
-            shift 2
-            ;;
-        --user)
-            PI_USER="$2"
-            shift 2
-            ;;
-        --pass)
-            PI_PASS="$2"
-            shift 2
-            ;;
-        deploy|verify|install|configure|test|rollback|monitor)
-            COMMAND="$1"
-            shift
-            ;;
-        *)
-            log "ERROR" "Option inconnue: $1"
-            show_help
-            exit 1
-            ;;
-    esac
-done
-
-# Initialisation du log
-echo "======================================" > "$LOG_FILE"
-echo "PiSignage v$VERSION - Déploiement Log" >> "$LOG_FILE"
-echo "Date: $(date)" >> "$LOG_FILE"
-echo "Command: $COMMAND" >> "$LOG_FILE"
-echo "Target: $PI_USER@$PI_IP" >> "$LOG_FILE"
-echo "======================================" >> "$LOG_FILE"
-
-log "INFO" "PiSignage v$VERSION - Déploiement automatisé"
-log "INFO" "Commande: $COMMAND"
-log "INFO" "Cible: $PI_USER@$PI_IP"
-log "INFO" "Log: $LOG_FILE"
-
-# Exécution de la commande
-case $COMMAND in
-    "deploy")
-        deploy_complete
-        exit_code=$?
-        ;;
-    "verify")
-        check_local_requirements && test_ssh_connection && run_pre_deployment_checks
-        exit_code=$?
-        ;;
-    "install")
-        check_local_requirements && test_ssh_connection && install_system_packages
-        exit_code=$?
-        ;;
-    "configure")
-        check_local_requirements && test_ssh_connection && configure_system
-        exit_code=$?
-        ;;
-    "test")
-        check_local_requirements && test_ssh_connection && run_post_deployment_tests
-        exit_code=$?
-        ;;
-    "rollback")
-        check_local_requirements && test_ssh_connection && rollback_deployment
-        exit_code=$?
-        ;;
-    "monitor")
-        check_local_requirements && test_ssh_connection && start_monitoring
-        exit_code=$?
-        ;;
-    *)
-        log "ERROR" "Commande inconnue: $COMMAND"
-        exit_code=1
-        ;;
-esac
-
-if [[ $exit_code -eq 0 ]]; then
-    log "INFO" "Opération '$COMMAND' réussie"
+echo "=================================================="
+echo "DÉPLOIEMENT v0.8.0 SUR RASPBERRY PI"
+echo "=================================================="
+echo ""
+echo "Cible : 192.168.1.103"
+echo "Version : 0.8.0 (version stable)"
+echo ""
+
+# Créer l'archive
+echo "1. Création de l'archive..."
+cd /opt/pisignage
+tar -czf /tmp/pisignage-v080-deploy.tar.gz \
+    --exclude='.git' \
+    --exclude='node_modules' \
+    --exclude='*.log' \
+    --exclude='deploy*.sh' \
+    .
+
+if [ -f /tmp/pisignage-v080-deploy.tar.gz ]; then
+    echo "   ✅ Archive créée"
+    ls -lh /tmp/pisignage-v080-deploy.tar.gz
 else
-    log "ERROR" "Opération '$COMMAND' échouée (code: $exit_code)"
+    echo "   ❌ Erreur création archive"
+    exit 1
 fi
 
-exit $exit_code
+# Copier sur le Pi
+echo ""
+echo "2. Copie sur le Raspberry Pi..."
+sshpass -p 'raspberry' scp /tmp/pisignage-v080-deploy.tar.gz pi@192.168.1.103:/tmp/
+
+if [ $? -eq 0 ]; then
+    echo "   ✅ Archive copiée"
+else
+    echo "   ❌ Erreur de copie"
+    exit 1
+fi
+
+# Déployer sur le Pi
+echo ""
+echo "3. Déploiement sur le Raspberry Pi..."
+
+sshpass -p 'raspberry' ssh pi@192.168.1.103 << 'DEPLOY_SCRIPT'
+
+echo "   Déploiement en cours..."
+
+# 1. Arrêter les services
+echo "   - Arrêt des services..."
+sudo systemctl stop nginx 2>/dev/null
+sudo systemctl stop php8.2-fpm 2>/dev/null
+sudo systemctl stop php8.1-fpm 2>/dev/null
+
+# 2. Backup de l'ancienne version
+echo "   - Backup de l'ancienne version..."
+if [ -d /opt/pisignage ]; then
+    sudo mv /opt/pisignage /opt/pisignage-backup-$(date +%Y%m%d-%H%M%S)
+fi
+
+# 3. Créer nouveau dossier
+echo "   - Création du nouveau dossier..."
+sudo mkdir -p /opt/pisignage
+sudo mkdir -p /opt/pisignage/media
+sudo mkdir -p /opt/pisignage/config
+sudo mkdir -p /opt/pisignage/logs
+
+# 4. Extraire v0.8.0
+echo "   - Extraction de v0.8.0..."
+sudo tar -xzf /tmp/pisignage-v080-deploy.tar.gz -C /opt/pisignage/
+
+# 5. Permissions
+echo "   - Configuration des permissions..."
+sudo chown -R www-data:www-data /opt/pisignage
+sudo chmod -R 755 /opt/pisignage
+sudo chmod -R 777 /opt/pisignage/media
+sudo chmod -R 777 /opt/pisignage/logs
+
+# 6. Configuration nginx
+echo "   - Configuration nginx..."
+sudo tee /etc/nginx/sites-available/pisignage > /dev/null << 'NGINX_CONFIG'
+server {
+    listen 80;
+    server_name _;
+
+    root /opt/pisignage/web;
+    index index.php index.html;
+
+    # Taille max upload
+    client_max_body_size 500M;
+    client_body_timeout 300;
+    client_body_buffer_size 128k;
+
+    # Cache control - IMPORTANT: NO CACHE
+    add_header Cache-Control "no-cache, no-store, must-revalidate";
+    add_header Pragma "no-cache";
+    add_header Expires "0";
+
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    location ~ \.php$ {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:/var/run/php/php8.2-fpm.sock;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        include fastcgi_params;
+
+        # Timeout for long operations
+        fastcgi_read_timeout 300;
+        fastcgi_send_timeout 300;
+    }
+
+    location /media {
+        alias /opt/pisignage/media;
+        autoindex on;
+    }
+
+    location /api {
+        try_files $uri $uri/ =404;
+    }
+
+    # Security
+    location ~ /\.ht {
+        deny all;
+    }
+}
+NGINX_CONFIG
+
+# 7. Activer le site
+echo "   - Activation du site..."
+sudo ln -sf /etc/nginx/sites-available/pisignage /etc/nginx/sites-enabled/
+sudo rm -f /etc/nginx/sites-enabled/default
+
+# 8. Configuration PHP
+echo "   - Configuration PHP..."
+sudo tee /etc/php/8.2/fpm/conf.d/99-pisignage.ini > /dev/null << 'PHP_CONFIG'
+upload_max_filesize = 500M
+post_max_size = 500M
+max_execution_time = 300
+max_input_time = 300
+memory_limit = 256M
+PHP_CONFIG
+
+# Aussi pour PHP 8.1 si présent
+if [ -d /etc/php/8.1 ]; then
+    sudo cp /etc/php/8.2/fpm/conf.d/99-pisignage.ini /etc/php/8.1/fpm/conf.d/ 2>/dev/null
+fi
+
+# 9. Test configuration nginx
+echo "   - Test configuration nginx..."
+sudo nginx -t
+
+if [ $? -eq 0 ]; then
+    echo "   ✅ Configuration nginx valide"
+else
+    echo "   ❌ Erreur configuration nginx"
+fi
+
+# 10. Redémarrer les services
+echo "   - Redémarrage des services..."
+sudo systemctl restart nginx
+sudo systemctl restart php8.2-fpm 2>/dev/null || sudo systemctl restart php8.1-fpm
+
+# 11. Vider COMPLÈTEMENT le cache
+echo "   - Vidage COMPLET du cache..."
+sudo rm -rf /var/cache/nginx/*
+sudo rm -rf /tmp/nginx-cache/*
+sudo systemctl restart nginx
+
+# 12. Vérification finale
+echo ""
+echo "   === VÉRIFICATION ==="
+echo "   Version déployée :"
+cat /opt/pisignage/VERSION 2>/dev/null || echo "Pas de fichier VERSION"
+echo ""
+echo "   Structure :"
+ls -la /opt/pisignage/web/ | head -5
+echo ""
+echo "   Services :"
+sudo systemctl status nginx --no-pager | head -3
+sudo systemctl status php8.2-fpm --no-pager 2>/dev/null | head -3 || sudo systemctl status php8.1-fpm --no-pager | head -3
+echo ""
+
+echo "   ✅ DÉPLOIEMENT TERMINÉ !"
+
+DEPLOY_SCRIPT
+
+# 4. Test de validation
+echo ""
+echo "4. Test de validation..."
+echo "   Test HTTP..."
+
+response=$(curl -s -o /dev/null -w "%{http_code}" http://192.168.1.103)
+if [ "$response" = "200" ]; then
+    echo "   ✅ Site accessible (HTTP $response)"
+else
+    echo "   ❌ Site inaccessible (HTTP $response)"
+fi
+
+echo ""
+echo "=================================================="
+echo "✅ DÉPLOIEMENT v0.8.0 COMPLET"
+echo "=================================================="
+echo ""
+echo "Site : http://192.168.1.103"
+echo "Version : 0.8.0"
+echo ""
+echo "Prochaines étapes :"
+echo "1. Tester avec Puppeteer (2 tests minimum)"
+echo "2. Vérifier les APIs"
+echo "3. Confirmer le succès"
+echo ""
