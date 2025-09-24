@@ -136,6 +136,21 @@ sudo systemctl restart nginx
 sudo systemctl daemon-reload
 sudo systemctl enable pisignage-vlc
 
+# 12. Télécharger vidéo de test Big Buck Bunny
+echo "📥 Téléchargement vidéo de test..."
+if [ ! -f "/opt/pisignage/media/BigBuckBunny.mp4" ]; then
+    wget -q --show-progress -O /opt/pisignage/media/BigBuckBunny.mp4 \
+        "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4"
+    sudo chown www-data:www-data /opt/pisignage/media/BigBuckBunny.mp4
+    echo "✅ Vidéo de test téléchargée"
+else
+    echo "✅ Vidéo de test déjà présente"
+fi
+
+# 13. Démarrer VLC avec la vidéo test
+echo "🎬 Démarrage de VLC avec vidéo test..."
+sudo systemctl start pisignage-vlc
+
 echo ""
 echo "╔══════════════════════════════════════════════════════════╗"
 echo "║               ✅ INSTALLATION TERMINÉE !                  ║"
