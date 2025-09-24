@@ -1,9 +1,9 @@
 #!/bin/bash
 
 # VLC Control Script for PiSignage v0.8.0
-# Optimized for Raspberry Pi HD playback with hardware acceleration
-# Author: Claude Code Assistant
-# Date: 2025-09-22
+# Optimized for Raspberry Pi OS Bookworm 64-bit
+# Hardware acceleration with VideoCore VI (64-bit)
+# Date: 2025-09-23
 
 # ================================
 # CONFIGURATION VARIABLES
@@ -36,13 +36,15 @@ VLC_BASE_PARAMS=(
     --quiet                               # Reduce console output
 )
 
-# Hardware acceleration for Raspberry Pi
+# Hardware acceleration for Raspberry Pi 64-bit Bookworm
 VLC_HW_ACCEL=(
-    --avcodec-hw=mmal                     # MMAL hardware acceleration
-    --mmal-vout                           # MMAL video output
-    --codec=avcodec,mmal_decoder          # Use MMAL decoder
+    --avcodec-hw=mmal                     # MMAL hardware acceleration (64-bit)
+    --mmal-vout                           # MMAL video output optimized
+    --codec=avcodec,mmal_decoder          # Use MMAL decoder 64-bit
     --mmal-opaque                         # Use opaque buffers
     --mmal-resize                         # Hardware resize
+    --mmal-display=hdmi-1                 # Force HDMI output
+    --mmal-layer=1                        # Display layer
 )
 
 # HD Video optimization (1920x1080 30FPS)

@@ -14,3 +14,14 @@
 [2025-09-23 01:21:26] [INFO] Méthodes de capture détectées: scrot, import
 [2025-09-22 23:21:38] [ERROR] Database initialization failed: could not find driver
 [2025-09-23 01:21:38] [INFO] Méthodes de capture détectées: scrot, import
+[2025-09-23 17:04:10] [ERROR] Database initialization failed: could not find driver
+[2025-09-23 17:06:24] [ERROR] Database initialization failed: could not find driver
+[2025-09-23 17:06:32] [ERROR] Database initialization failed: could not find driver
+[2025-09-23 17:06:38] [ERROR] Database initialization failed: could not find driver
+[2025-09-23 17:06:44] [ERROR] Database initialization failed: could not find driver
+[2025-09-23 19:06:44] [INFO] Executing command: iwgetid -r 2>/dev/null
+[2025-09-23 19:06:44] [INFO] Executing command: amixer cget numid=3 2>/dev/null
+[2025-09-23 19:06:45] [INFO] Executing command: amixer get PCM 2>/dev/null
+[2025-09-23 17:06:51] [ERROR] Database initialization failed: could not find driver
+[2025-09-23 19:06:51] [INFO] Executing command: tail -n 100 '/opt/pisignage/logs/pisignage.log'
+[2025-09-23 17:07:24] [ERROR] Database initialization failed: could not find driver

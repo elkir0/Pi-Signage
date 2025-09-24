@@ -53,9 +53,9 @@ class ScreenshotManager {
      */
     private function detectAvailableMethods() {
         $methods = [
+            'fbgrab' => '/usr/bin/fbgrab',
             'raspi2png' => '/usr/bin/raspi2png',
             'scrot' => '/usr/bin/scrot',
-            'fbgrab' => '/usr/bin/fbgrab',
             'import' => '/usr/bin/import' // ImageMagick
         ];
 

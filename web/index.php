@@ -689,6 +689,7 @@ foreach ($dirs as $dir) {
             font-size: 14px;
         }
     </style>
+    <script src="functions.js" defer></script>
 </head>
 <body>
     <!-- Menu Toggle (Mobile) -->
@@ -1172,8 +1173,12 @@ foreach ($dirs as $dir) {
             // Update nav items
             document.querySelectorAll('.nav-item').forEach(el => {
                 el.classList.remove('active');
+                // Check if this nav item corresponds to the current section
+                const onclick = el.getAttribute('onclick');
+                if (onclick && onclick.includes(`'${section}'`)) {
+                    el.classList.add('active');
+                }
             });
-            event.target.closest('.nav-item').classList.add('active');
 
             currentSection = section;
         }
@@ -1410,7 +1415,7 @@ foreach ($dirs as $dir) {
                         container.innerHTML = '';
                         fileSelect.innerHTML = '<option value="">-- Choisir --</option>';
 
-                        data.data.files.forEach(file => {
+                        (data.data || []).forEach(file => {
                             // Add to grid
                             const card = document.createElement('div');
                             card.className = 'card';
@@ -1677,6 +1682,70 @@ foreach ($dirs as $dir) {
                 })
             })
             .catch(error => console.error('Volume error:', error));
+        }
+
+        // Upload Modal Functions
+        function showUploadModal() {
+            const modalHTML = `
+                <div id="uploadModal" style="display: block; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9999;">
+                    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #2a2d3a; padding: 30px; border-radius: 10px; width: 500px; max-width: 90%;">
+                        <h2 style="margin: 0 0 20px; color: #4a9eff;">📤 Upload de Fichiers</h2>
+                        <div style="border: 2px dashed #4a9eff; padding: 40px; text-align: center; margin-bottom: 20px;">
+                            <input type="file" id="uploadFiles" multiple accept="video/*,image/*" style="display: none;" onchange="handleFileSelect(this.files)">
+                            <button class="btn btn-primary" onclick="document.getElementById('uploadFiles').click()">
+                                Sélectionner des fichiers
+                            </button>
+                            <p style="margin: 10px 0; color: #999;">ou glissez-déposez ici</p>
+                        </div>
+                        <div style="text-align: right;">
+                            <button class="btn btn-secondary" onclick="closeUploadModal()">Annuler</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Remove existing modal if any
+            const existingModal = document.getElementById('uploadModal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+
+            // Add new modal
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+            // Add drag and drop
+            const modal = document.getElementById('uploadModal');
+            const dropZone = modal.querySelector('div[style*="border: 2px dashed"]');
+
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropZone.style.borderColor = '#fff';
+            });
+
+            dropZone.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                dropZone.style.borderColor = '#4a9eff';
+            });
+
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropZone.style.borderColor = '#4a9eff';
+                handleFileSelect(e.dataTransfer.files);
+            });
+        }
+
+        function closeUploadModal() {
+            const modal = document.getElementById('uploadModal');
+            if (modal) {
+                modal.remove();
+            }
+        }
+
+        function handleFileSelect(files) {
+            if (files && files.length > 0) {
+                closeUploadModal();
+                uploadFile(files);
+            }
         }
     </script>
 </body>
