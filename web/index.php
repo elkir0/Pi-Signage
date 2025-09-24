@@ -1674,43 +1674,155 @@ foreach ($dirs as $dir) {
             .catch(error => showAlert('Erreur de suppression', 'error'));
         }
 
-        // YouTube download
+        // YouTube download avec monitoring
+        let youtubeMonitorInterval = null;
+        let downloadStartTime = null;
+        let currentDownloadUrl = '';
+        let currentDownloadQuality = '';
+
         function downloadYoutube() {
             const url = document.getElementById('youtube-url').value;
             const quality = document.getElementById('youtube-quality').value;
-            const compression = document.getElementById('youtube-compression').value;
+
+            // Sauvegarder pour l'historique
+            currentDownloadUrl = url;
+            currentDownloadQuality = quality;
 
             if (!url) {
                 showAlert('Entrez une URL YouTube', 'error');
                 return;
             }
 
-            showAlert('Téléchargement démarré...', 'info');
+            // Afficher le feedback détaillé
+            showAlert('🚀 Lancement du téléchargement...', 'info');
             document.getElementById('youtube-progress').style.display = 'block';
 
-            fetch('/api/youtube.php', {
+            // Créer zone de feedback si elle n'existe pas
+            let feedbackDiv = document.getElementById('youtube-feedback');
+            if (!feedbackDiv) {
+                feedbackDiv = document.createElement('div');
+                feedbackDiv.id = 'youtube-feedback';
+                feedbackDiv.style.cssText = 'margin-top: 20px; padding: 15px; background: rgba(0,0,0,0.3); border-radius: 8px; font-family: monospace; font-size: 12px; max-height: 200px; overflow-y: auto;';
+                document.getElementById('youtube').appendChild(feedbackDiv);
+            }
+            feedbackDiv.innerHTML = '<div style="color: #4a9eff;">📥 Connexion à YouTube...</div>';
+
+            downloadStartTime = Date.now();
+
+            // Utiliser l'API simplifiée
+            fetch('/api/youtube-simple.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     url: url,
-                    quality: quality,
-                    compression: compression
+                    quality: quality
                 })
             })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    showAlert('Téléchargement terminé!', 'success');
-                    loadMediaFiles();
+                    feedbackDiv.innerHTML += '<div style="color: #4f4;">✅ Téléchargement lancé</div>';
+                    feedbackDiv.innerHTML += '<div style="color: #999;">⏳ Récupération des informations vidéo...</div>';
+
+                    // Démarrer le monitoring
+                    startYoutubeMonitoring();
                 } else {
                     showAlert('Erreur: ' + data.message, 'error');
+                    document.getElementById('youtube-progress').style.display = 'none';
                 }
-                document.getElementById('youtube-progress').style.display = 'none';
             })
             .catch(error => {
-                showAlert('Erreur de téléchargement', 'error');
+                showAlert('Erreur de connexion', 'error');
                 document.getElementById('youtube-progress').style.display = 'none';
             });
+        }
+
+        function startYoutubeMonitoring() {
+            let checkCount = 0;
+            const maxChecks = 120; // 10 minutes max
+
+            youtubeMonitorInterval = setInterval(() => {
+                checkCount++;
+
+                fetch('/api/youtube-simple.php?action=status')
+                    .then(response => response.json())
+                    .then(data => {
+                        const feedbackDiv = document.getElementById('youtube-feedback');
+                        const progressBar = document.getElementById('youtube-progress-fill');
+
+                        if (data.downloading) {
+                            // Afficher les logs
+                            if (data.log) {
+                                const lines = data.log.split('\n').filter(l => l.trim());
+                                const lastLine = lines[lines.length - 1] || '';
+
+                                // Extraire le pourcentage si présent
+                                const percentMatch = lastLine.match(/(\d+\.?\d*)%/);
+                                if (percentMatch) {
+                                    const percent = parseFloat(percentMatch[1]);
+                                    if (progressBar) {
+                                        progressBar.style.width = percent + '%';
+                                    }
+                                    feedbackDiv.innerHTML = '<div style="color: #4a9eff;">⏬ Téléchargement: ' + percent.toFixed(1) + '%</div>';
+                                }
+
+                                // Afficher info sur la vidéo
+                                if (lastLine.includes('Destination:')) {
+                                    const filename = lastLine.split('/').pop();
+                                    feedbackDiv.innerHTML += '<div style="color: #fff;">📁 ' + filename + '</div>';
+                                }
+                            }
+                        } else {
+                            // Téléchargement terminé
+                            clearInterval(youtubeMonitorInterval);
+                            const elapsed = Math.round((Date.now() - downloadStartTime) / 1000);
+
+                            feedbackDiv.innerHTML += '<div style="color: #4f4;">✅ Téléchargement terminé (' + elapsed + 's)</div>';
+                            showAlert('✅ Vidéo téléchargée avec succès!', 'success');
+
+                            document.getElementById('youtube-progress').style.display = 'none';
+
+                            // Ajouter à l'historique
+                            const historyDiv = document.getElementById('youtube-history');
+                            if (historyDiv) {
+                                const now = new Date().toLocaleString('fr-FR');
+                                const historyItem = `
+                                    <div style="padding: 10px; margin-bottom: 10px; background: rgba(74,158,255,0.1); border-radius: 5px; border-left: 3px solid #4a9eff;">
+                                        <div style="color: #4a9eff; font-size: 12px;">${now}</div>
+                                        <div style="color: #fff; margin: 5px 0;">✅ ${currentDownloadUrl}</div>
+                                        <div style="color: #999; font-size: 11px;">Qualité: ${currentDownloadQuality} - Durée: ${elapsed}s</div>
+                                    </div>
+                                `;
+                                historyDiv.innerHTML = historyItem + historyDiv.innerHTML;
+
+                                // Limiter l'historique à 10 entrées
+                                const items = historyDiv.children;
+                                while (items.length > 10) {
+                                    historyDiv.removeChild(items[items.length - 1]);
+                                }
+                            }
+
+                            // Auto-refresh MEDIA
+                            setTimeout(() => {
+                                loadMediaFiles();
+                                feedbackDiv.innerHTML += '<div style="color: #999;">📂 Section MEDIA mise à jour</div>';
+                            }, 2000);
+
+                            // Effacer le formulaire
+                            document.getElementById('youtube-url').value = '';
+                        }
+
+                        // Timeout après 10 minutes
+                        if (checkCount >= maxChecks) {
+                            clearInterval(youtubeMonitorInterval);
+                            feedbackDiv.innerHTML += '<div style="color: #f44;">⚠️ Timeout - Vérifiez les logs</div>';
+                            document.getElementById('youtube-progress').style.display = 'none';
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Monitoring error:', error);
+                    });
+            }, 5000); // Check toutes les 5 secondes
         }
 
         // System actions
@@ -1823,27 +1935,72 @@ foreach ($dirs as $dir) {
 
         function uploadFiles(files) {
             const formData = new FormData();
+            let totalSize = 0;
 
             for (let i = 0; i < files.length; i++) {
                 formData.append('files[]', files[i]);
+                totalSize += files[i].size;
             }
 
-            showAlert('Upload en cours...', 'info');
+            showAlert(`📤 Upload de ${files.length} fichier(s) - ${(totalSize/1024/1024).toFixed(1)}MB`, 'info');
 
-            fetch('/api/upload.php', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showAlert('Upload réussi!', 'success');
-                    loadMediaFiles();
-                } else {
-                    showAlert('Erreur: ' + data.message, 'error');
+            // Afficher une barre de progression
+            const progressDiv = document.createElement('div');
+            progressDiv.style.cssText = 'position: fixed; bottom: 20px; right: 20px; background: #2a2d3a; padding: 15px; border-radius: 8px; z-index: 1000; box-shadow: 0 4px 6px rgba(0,0,0,0.3);';
+            progressDiv.innerHTML = `
+                <div style="color: #4a9eff; margin-bottom: 10px;">Upload en cours...</div>
+                <div style="width: 200px; height: 10px; background: rgba(255,255,255,0.1); border-radius: 5px;">
+                    <div id="upload-progress-bar" style="width: 0%; height: 100%; background: #4a9eff; border-radius: 5px; transition: width 0.3s;"></div>
+                </div>
+            `;
+            document.body.appendChild(progressDiv);
+
+            const xhr = new XMLHttpRequest();
+
+            xhr.upload.addEventListener('progress', (e) => {
+                if (e.lengthComputable) {
+                    const percent = (e.loaded / e.total) * 100;
+                    const bar = document.getElementById('upload-progress-bar');
+                    if (bar) bar.style.width = percent + '%';
                 }
-            })
-            .catch(error => showAlert('Erreur d\'upload', 'error'));
+            });
+
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    try {
+                        const data = JSON.parse(xhr.responseText);
+                        if (data.success) {
+                            showAlert('✅ Upload terminé avec succès!', 'success');
+
+                            // Auto-refresh MEDIA après un délai
+                            setTimeout(() => {
+                                loadMediaFiles();
+                                showAlert('📂 Section MEDIA mise à jour', 'info');
+                            }, 1000);
+                        } else {
+                            showAlert('Erreur: ' + data.message, 'error');
+                        }
+                    } catch (e) {
+                        showAlert('Erreur de réponse serveur', 'error');
+                    }
+                }
+                // Retirer la barre de progression
+                setTimeout(() => {
+                    if (progressDiv.parentNode) {
+                        progressDiv.remove();
+                    }
+                }, 2000);
+            };
+
+            xhr.onerror = function() {
+                showAlert('Erreur d\'upload', 'error');
+                if (progressDiv.parentNode) {
+                    progressDiv.remove();
+                }
+            };
+
+            xhr.open('POST', '/api/upload.php');
+            xhr.send(formData);
         }
 
         // Volume control
