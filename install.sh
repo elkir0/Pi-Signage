@@ -31,7 +31,8 @@ sudo apt-get install -y \
     git curl wget \
     python3-pip \
     imagemagick \
-    scrot
+    scrot \
+    fbi
 
 # 3. Installation yt-dlp
 echo "📦 [3/9] Installation yt-dlp..."
@@ -120,8 +121,10 @@ After=graphical.target
 Type=simple
 User=pi
 Environment="DISPLAY=:0"
+ExecStartPre=/opt/pisignage/scripts/display-manager.sh start
 ExecStart=/opt/pisignage/scripts/vlc-control.sh start
 ExecStop=/opt/pisignage/scripts/vlc-control.sh stop
+ExecStopPost=/opt/pisignage/scripts/display-manager.sh start
 Restart=on-failure
 RestartSec=5
 

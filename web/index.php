@@ -943,23 +943,6 @@ foreach ($dirs as $dir) {
                 </div>
             </div>
 
-            <div class="card">
-                <h3 class="card-title">
-                    <span>🎬</span>
-                    Mode de lecture
-                </h3>
-                <div class="form-group">
-                    <label class="form-label">Sélectionner le mode</label>
-                    <select class="form-control" id="player-mode">
-                        <option value="fullscreen">Plein écran</option>
-                        <option value="windowed">Fenêtré</option>
-                        <option value="with-rss">Avec bandeau RSS</option>
-                    </select>
-                </div>
-                <button class="btn btn-primary" onclick="applyPlayerSettings()">
-                    💾 Appliquer
-                </button>
-            </div>
 
             <div class="card">
                 <h3 class="card-title">
@@ -1229,10 +1212,10 @@ foreach ($dirs as $dir) {
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    showAlert(`Action ${action} exécutée!`, 'success');
+                    showAlert(data.message || `Action ${action} exécutée!`, 'success');
                     updateVLCStatus();
                 } else {
-                    showAlert(`Erreur: ${data.message}`, 'error');
+                    showAlert(data.message || `Erreur: ${action} a échoué`, 'error');
                 }
             })
             .catch(error => showAlert('Erreur de communication', 'error'));
@@ -1240,40 +1223,19 @@ foreach ($dirs as $dir) {
 
         // Update VLC status
         function updateVLCStatus() {
-            fetch('/api/player.php?action=status')
+            fetch('/api/player.php')
                 .then(response => response.json())
                 .then(data => {
-                    if (data.success && data.data) {
-                        document.getElementById('vlc-state').textContent = data.data.state || 'Arrêté';
-                        document.getElementById('vlc-file').textContent = data.data.file || 'Aucun';
-                        document.getElementById('vlc-position').textContent = data.data.position || '00:00';
+                    if (data.success) {
+                        const status = data.running ? 'En lecture' : 'Arrêté';
+                        document.getElementById('vlc-state').textContent = status;
+                        document.getElementById('vlc-file').textContent = data.status || 'Aucun';
+                        document.getElementById('vlc-position').textContent = '--:--';
                     }
                 })
                 .catch(error => console.error('Error:', error));
         }
 
-        // Player settings
-        function applyPlayerSettings() {
-            const mode = document.getElementById('player-mode').value;
-
-            fetch('/api/player.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    action: 'set-mode',
-                    mode: mode
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showAlert(`Mode ${mode} appliqué!`, 'success');
-                } else {
-                    showAlert('Erreur: ' + data.message, 'error');
-                }
-            })
-            .catch(error => showAlert('Erreur de communication', 'error'));
-        }
 
         // Play single file
         function playSingleFile() {
@@ -1294,10 +1256,10 @@ foreach ($dirs as $dir) {
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    showAlert('Lecture démarrée!', 'success');
+                    showAlert(data.message || 'Lecture démarrée!', 'success');
                     updateVLCStatus();
                 } else {
-                    showAlert('Erreur: ' + data.message, 'error');
+                    showAlert(data.message || 'Erreur de lecture', 'error');
                 }
             })
             .catch(error => showAlert('Erreur de communication', 'error'));
@@ -1315,14 +1277,14 @@ foreach ($dirs as $dir) {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    action: 'play_playlist',
+                    action: 'play-playlist',
                     playlist: playlist
                 })
             })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    showAlert('Playlist lancée!', 'success');
+                    showAlert(data.message || 'Playlist lancée!', 'success');
                 } else {
                     showAlert('Erreur: ' + data.message, 'error');
                 }

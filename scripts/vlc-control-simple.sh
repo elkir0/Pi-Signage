@@ -1,8 +1,7 @@
 #!/bin/bash
-# PiSignage - VLC Control Script
+# PiSignage - Simple VLC Control Script
 
 MEDIA_DIR="/opt/pisignage/media"
-DISPLAY_MANAGER="/opt/pisignage/scripts/display-manager.sh"
 ACTION=$1
 
 case $ACTION in
@@ -10,9 +9,6 @@ case $ACTION in
         # Kill any existing VLC
         pkill -f vlc 2>/dev/null || true
         sleep 1
-
-        # Hide fallback image when starting VLC
-        [ -x "$DISPLAY_MANAGER" ] && $DISPLAY_MANAGER stop || true
 
         # Start VLC with basic parameters
         DISPLAY=:0 cvlc \
@@ -29,10 +25,6 @@ case $ACTION in
 
     stop)
         pkill -f vlc 2>/dev/null || true
-
-        # Show fallback image when stopping VLC
-        [ -x "$DISPLAY_MANAGER" ] && $DISPLAY_MANAGER start || true
-
         echo "VLC stopped"
         exit 0
         ;;
