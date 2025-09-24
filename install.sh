@@ -18,12 +18,12 @@ if [[ $EUID -eq 0 ]]; then
 fi
 
 # 1. Mise à jour système
-echo "📦 [1/10] Mise à jour système..."
+echo "📦 [1/9] Mise à jour système..."
 sudo apt-get update
 sudo apt-get upgrade -y
 
 # 2. Installation packages essentiels
-echo "📦 [2/10] Installation des packages..."
+echo "📦 [2/9] Installation des packages..."
 sudo apt-get install -y \
     nginx \
     php8.2-fpm php8.2-cli php8.2-curl php8.2-mbstring php8.2-json php8.2-xml \
@@ -31,33 +31,28 @@ sudo apt-get install -y \
     git curl wget \
     python3-pip \
     imagemagick \
-    scrot \
-    nodejs npm
+    scrot
 
 # 3. Installation yt-dlp
-echo "📦 [3/10] Installation yt-dlp..."
+echo "📦 [3/9] Installation yt-dlp..."
 sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
 sudo chmod a+rx /usr/local/bin/yt-dlp
 
-# 4. Installation Puppeteer (pour tests)
-echo "📦 [4/10] Installation Puppeteer pour tests..."
-npm install puppeteer
-
-# 5. Structure PiSignage
-echo "📁 [5/10] Création de la structure..."
+# 4. Structure PiSignage
+echo "📁 [4/9] Création de la structure..."
 sudo mkdir -p /opt/pisignage/{web/api,scripts,media,logs,config}
 sudo chown -R www-data:www-data /opt/pisignage
 
-# 6. Configuration PHP (upload 100MB)
-echo "⚙️  [6/10] Configuration PHP..."
+# 5. Configuration PHP (upload 100MB)
+echo "⚙️  [5/9] Configuration PHP..."
 sudo sed -i 's/upload_max_filesize = .*/upload_max_filesize = 100M/' /etc/php/8.2/fpm/php.ini
 sudo sed -i 's/post_max_size = .*/post_max_size = 100M/' /etc/php/8.2/fpm/php.ini
 sudo sed -i 's/post_max_size = .*/post_max_size = 100M/' /etc/php/8.2/cli/php.ini
 sudo sed -i 's/max_execution_time = .*/max_execution_time = 300/' /etc/php/8.2/fpm/php.ini
 sudo sed -i 's/memory_limit = .*/memory_limit = 256M/' /etc/php/8.2/fpm/php.ini
 
-# 7. Configuration Nginx
-echo "⚙️  [7/10] Configuration Nginx..."
+# 6. Configuration Nginx
+echo "⚙️  [6/9] Configuration Nginx..."
 sudo tee /etc/nginx/sites-available/pisignage > /dev/null << 'NGINX_CONFIG'
 server {
     listen 80 default_server;
@@ -89,14 +84,14 @@ server {
 }
 NGINX_CONFIG
 
-# 8. Activer site Nginx
-echo "⚙️  [8/10] Activation du site..."
+# 7. Activer site Nginx
+echo "⚙️  [7/9] Activation du site..."
 sudo ln -sf /etc/nginx/sites-available/pisignage /etc/nginx/sites-enabled/
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t
 
-# 9. Cloner le repository GitHub
-echo "📥 [9/10] Téléchargement du projet..."
+# 8. Cloner le repository GitHub
+echo "📥 [8/9] Téléchargement du projet..."
 cd /tmp
 rm -rf Pi-Signage
 git clone https://github.com/elkir0/Pi-Signage.git
@@ -107,14 +102,14 @@ sudo cp -r web/* /opt/pisignage/web/
 sudo cp -r scripts/* /opt/pisignage/scripts/
 sudo cp -r config/* /opt/pisignage/config/ 2>/dev/null || true
 
-# 10. Permissions et scripts exécutables
-echo "🔐 [10/10] Configuration des permissions..."
+# 9. Permissions et scripts exécutables
+echo "🔐 [9/9] Configuration des permissions..."
 sudo chown -R www-data:www-data /opt/pisignage
 sudo chmod -R 755 /opt/pisignage
 sudo chmod +x /opt/pisignage/scripts/*.sh
 sudo usermod -a -G video www-data
 
-# 11. Service systemd pour VLC
+# 10. Service systemd pour VLC
 echo "⚙️  Création du service systemd..."
 sudo tee /etc/systemd/system/pisignage-vlc.service > /dev/null << 'SERVICE_END'
 [Unit]
@@ -134,7 +129,7 @@ RestartSec=5
 WantedBy=default.target
 SERVICE_END
 
-# 12. Redémarrage des services
+# 11. Redémarrage des services
 echo "🔄 Redémarrage des services..."
 sudo systemctl restart php8.2-fpm
 sudo systemctl restart nginx
