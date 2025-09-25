@@ -26,7 +26,7 @@ sudo apt-get upgrade -y
 echo "📦 [2/9] Installation des packages..."
 sudo apt-get install -y \
     nginx \
-    php8.2-fpm php8.2-cli php8.2-curl php8.2-mbstring php8.2-json php8.2-xml \
+    php8.2-fpm php8.2-cli php8.2-curl php8.2-mbstring php8.2-json php8.2-xml php8.2-sqlite3 \
     mpv vlc \
     socat jq \
     git curl wget \
