@@ -1,7 +1,22 @@
 # 📋 CLAUDE.md - Instructions de Maintenance PiSignage v0.8.1 GOLDEN
 
+## 🚨 PROTOCOLE STRICT DE DÉVELOPPEMENT
+
+### Workflow OBLIGATOIRE
+1. **Développement** : Sur debiandev UNIQUEMENT
+2. **Déploiement** : Push vers Raspberry Pi (192.168.1.103)
+3. **Test** : Puppeteer depuis debiandev (screenshots + console)
+4. **Validation** : 3 screenshots consécutifs validés
+5. **Git Push** : SEULEMENT après validation explicite "OK" de l'utilisateur
+
+### ⛔ RÈGLES CRITIQUES
+- **JAMAIS** pusher sur GitHub sans validation "OK" explicite
+- **TOUJOURS** tester avec Puppeteer et screenshots
+- **OBLIGATOIRE** : 3 tests consécutifs réussis avant validation
+- **SI PROBLÈME** : Table ronde avec agents IA spécialisés
+
 ## 🎯 Mission Critique
-Maintenir PiSignage v0.8.1 GOLDEN opérationnel avec VLC + Big Buck Bunny au démarrage.
+Maintenir PiSignage v0.8.1 GOLDEN avec VLC + Big Buck Bunny EN MODE GRAPHIQUE.
 
 ## ⚙️ Configuration Actuelle (25/09/2025)
 - **Version** : v0.8.1 GOLDEN

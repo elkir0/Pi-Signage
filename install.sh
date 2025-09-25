@@ -1,624 +1,500 @@
 #!/bin/bash
 
-# Pi-Signage v0.8.1 - Installation Script COMPLETE
-# Optimisé pour Raspberry Pi OS Bookworm avec support Wayland/X11
-# Date: 2025-09-25
+# ╔══════════════════════════════════════════════════════════════════════╗
+# ║                  PiSignage v0.8.1 - Installation Unifiée             ║
+# ║                     Script d'installation ONE-CLICK                   ║
+# ║                          Date: 2025-09-25                            ║
+# ╚══════════════════════════════════════════════════════════════════════╝
 
 set -e
 
 # Configuration
-PISIGNAGE_DIR="/opt/pisignage"
-PISIGNAGE_USER="${SUDO_USER:-$USER}"
-PISIGNAGE_GROUP="pisignage"
-LOG_FILE="/var/log/pisignage-install.log"
+VERSION="0.8.1"
+INSTALL_DIR="/opt/pisignage"
+GITHUB_REPO="https://github.com/elkir0/Pi-Signage.git"
+BBB_URL="http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
 
-# Couleurs pour output
+# Couleurs
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+BLUE='\033[0;34m'
+NC='\033[0m'
 
-# Logging
-log() {
-    echo -e "${GREEN}[$(date '+%Y-%m-%d %H:%M:%S')]${NC} $1" | tee -a "$LOG_FILE"
-}
+# Fonctions d'affichage
+log_info() { echo -e "${GREEN}[✓]${NC} $1"; }
+log_warn() { echo -e "${YELLOW}[⚠]${NC} $1"; }
+log_error() { echo -e "${RED}[✗]${NC} $1"; }
+log_step() { echo -e "\n${BLUE}═══ $1 ═══${NC}\n"; }
 
-error() {
-    echo -e "${RED}[ERROR]${NC} $1" | tee -a "$LOG_FILE"
-    exit 1
-}
-
-warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1" | tee -a "$LOG_FILE"
-}
-
-# Vérification root
-if [[ $EUID -ne 0 ]]; then
-   error "Ce script doit être exécuté avec sudo"
-fi
-
-log "=== Début installation Pi-Signage v0.8.1 ==="
-
-# Détection de l'OS
-detect_os() {
-    if [ -f /etc/os-release ]; then
-        . /etc/os-release
-        OS_NAME="$NAME"
-        OS_VERSION="$VERSION_ID"
-        OS_CODENAME="$VERSION_CODENAME"
-    else
-        error "Impossible de détecter l'OS"
-    fi
-
-    log "OS détecté: $OS_NAME $OS_VERSION ($OS_CODENAME)"
-
-    if [[ "$OS_CODENAME" != "bookworm" ]]; then
-        warning "Cette version est optimisée pour Bookworm. Compatibilité limitée sur $OS_CODENAME"
+# Vérifier si root
+check_root() {
+    if [[ $EUID -eq 0 ]]; then
+        log_error "Ce script ne doit pas être exécuté en root"
+        log_info "Utilisation: bash install.sh"
+        exit 1
     fi
 }
 
-# Détection du modèle de Pi
-detect_pi_model() {
-    PI_MODEL=$(cat /proc/cpuinfo | grep "Model" | cut -d':' -f2 | xargs)
-    log "Modèle Pi détecté: $PI_MODEL"
-
-    # Détection des capacités
-    if [[ "$PI_MODEL" == *"Pi 4"* ]] || [[ "$PI_MODEL" == *"Pi 5"* ]]; then
-        HW_ACCEL="full"
-    elif [[ "$PI_MODEL" == *"Pi 3"* ]] || [[ "$PI_MODEL" == *"Zero 2"* ]]; then
-        HW_ACCEL="partial"
-    else
-        HW_ACCEL="none"
-        warning "Accélération HW limitée sur ce modèle"
-    fi
+# Bannière
+show_banner() {
+    clear
+    echo -e "${BLUE}"
+    echo "╔══════════════════════════════════════════════════════════════════════╗"
+    echo "║                                                                      ║"
+    echo "║                    🎬 PiSignage v${VERSION} Installer 🎬                   ║"
+    echo "║                                                                      ║"
+    echo "║                  Digital Signage pour Raspberry Pi                  ║"
+    echo "║                                                                      ║"
+    echo "╚══════════════════════════════════════════════════════════════════════╝"
+    echo -e "${NC}"
+    echo ""
+    echo "Ce script va installer:"
+    echo "  • Serveur web (nginx/Apache + PHP)"
+    echo "  • VLC et MPV (lecteurs vidéo)"
+    echo "  • Interface web glassmorphisme v${VERSION}"
+    echo "  • Big Buck Bunny (vidéo de démo)"
+    echo "  • Configuration automatique au démarrage"
+    echo ""
+    read -p "Appuyez sur Entrée pour commencer l'installation..."
 }
 
-# Installation des paquets système
-install_packages() {
-    log "Installation des paquets système..."
+# Mise à jour du système
+update_system() {
+    log_step "Mise à jour du système"
+    sudo apt-get update -qq
+    sudo apt-get upgrade -y -qq
+    log_info "Système mis à jour"
+}
 
-    # Mise à jour des sources
-    apt-get update || error "Échec mise à jour APT"
+# Installation des dépendances
+install_dependencies() {
+    log_step "Installation des dépendances"
 
-    # Paquets essentiels pour Bookworm
-    PACKAGES=(
+    local packages=(
+        # Serveur web
+        "nginx"
+        "php-fpm"
+        "php-cli"
+        "php-json"
+        "php-mbstring"
+        "php-zip"
+        "php-gd"
+
+        # Alternative Apache
+        "apache2"
+        "libapache2-mod-php"
+
         # Lecteurs vidéo
-        "mpv"
         "vlc"
-
-        # Accélération HW Raspberry Pi
-        "raspberrypi-ffmpeg"
-        "libraspberrypi-bin"
-
-        # Support Wayland/DRM
-        "seatd"
-        "libdrm2"
-        "libdrm-tests"
-        "libgl1-mesa-dri"
-        "mesa-utils"
-
-        # V4L2 pour accélération vidéo
-        "v4l-utils"
-        "libv4l-0"
-
-        # Gestion d'affichage
-        "wlr-randr"
-        "wayland-utils"
+        "mpv"
 
         # Outils système
         "git"
         "curl"
         "wget"
-        "unzip"
-        "python3-pip"
-        "python3-venv"
-        "nodejs"
-        "npm"
+        "htop"
+        "screen"
+        "feh"
+        "imagemagick"
+        "jq"
+        "sshpass"
 
         # Capture d'écran
         "scrot"
-        "grim"
-        "slurp"
+        "fbcat"
 
-        # Monitoring
-        "htop"
-        "iotop"
-        "nethogs"
+        # Python pour API
+        "python3"
+        "python3-pip"
     )
 
-    for package in "${PACKAGES[@]}"; do
-        log "Installation de $package..."
-        apt-get install -y "$package" || warning "Impossible d'installer $package"
+    log_info "Installation des packages..."
+    for package in "${packages[@]}"; do
+        echo -n "  • Installation de $package... "
+        if sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$package" > /dev/null 2>&1; then
+            echo -e "${GREEN}✓${NC}"
+        else
+            echo -e "${YELLOW}⚠ Déjà installé ou optionnel${NC}"
+        fi
     done
 
-    log "Paquets système installés"
-}
-
-# Configuration des groupes et permissions
-setup_permissions() {
-    log "Configuration des permissions..."
-
-    # Création du groupe pisignage
-    groupadd -f "$PISIGNAGE_GROUP"
-
-    # Ajout de l'utilisateur aux groupes nécessaires
-    usermod -aG video "$PISIGNAGE_USER"
-    usermod -aG render "$PISIGNAGE_USER"
-    usermod -aG audio "$PISIGNAGE_USER"
-    usermod -aG input "$PISIGNAGE_USER"
-    usermod -aG "$PISIGNAGE_GROUP" "$PISIGNAGE_USER"
-
-    # Permissions pour DRM/KMS
-    if [ -e /dev/dri/card0 ]; then
-        chmod 660 /dev/dri/card0
-        chgrp video /dev/dri/card0
+    # Installation de raspi2png si disponible
+    if [ -f /usr/bin/raspi2png ]; then
+        log_info "raspi2png déjà installé"
+    else
+        log_warn "Tentative d'installation de raspi2png..."
+        cd /tmp
+        if git clone https://github.com/AndrewFromMelbourne/raspi2png.git > /dev/null 2>&1; then
+            cd raspi2png
+            make > /dev/null 2>&1 && sudo make install > /dev/null 2>&1 || true
+            cd /tmp && rm -rf raspi2png
+        fi
     fi
 
-    if [ -e /dev/dri/renderD128 ]; then
-        chmod 660 /dev/dri/renderD128
-        chgrp render /dev/dri/renderD128
-    fi
-
-    log "Permissions configurées pour l'utilisateur $PISIGNAGE_USER"
+    log_info "Toutes les dépendances installées"
 }
 
-# Configuration de seatd
-setup_seatd() {
-    log "Configuration de seatd pour l'accès Wayland..."
+# Création de la structure de dossiers
+create_structure() {
+    log_step "Création de la structure PiSignage"
 
-    # Activation et démarrage de seatd
-    systemctl enable seatd
-    systemctl start seatd
-
-    # Ajout de l'utilisateur au groupe seat
-    usermod -aG seat "$PISIGNAGE_USER"
-
-    # Configuration seatd
-    mkdir -p /etc/seatd
-    cat > /etc/seatd/seatd.conf << EOF
-# Configuration seatd pour Pi-Signage
-[seatd]
-loglevel=info
-EOF
-
-    log "seatd configuré"
-}
-
-# Création de la structure de répertoires
-create_directories() {
-    log "Création de la structure de répertoires..."
-
-    # Répertoires principaux
-    mkdir -p "$PISIGNAGE_DIR"/{scripts,config,media,logs,cache}
-    mkdir -p "$PISIGNAGE_DIR"/config/{mpv,vlc}
-
-    # Répertoire utilisateur pour services systemd
-    sudo -u "$PISIGNAGE_USER" mkdir -p "/home/$PISIGNAGE_USER/.config/systemd/user"
-    sudo -u "$PISIGNAGE_USER" mkdir -p "/home/$PISIGNAGE_USER/.config/mpv"
+    sudo mkdir -p $INSTALL_DIR/{web,media,config,logs,scripts,backups}
+    sudo mkdir -p $INSTALL_DIR/web/{api,assets,css,js}
+    sudo mkdir -p /dev/shm/pisignage-screenshots
 
     # Permissions
-    chown -R "$PISIGNAGE_USER:$PISIGNAGE_GROUP" "$PISIGNAGE_DIR"
-    chmod 755 "$PISIGNAGE_DIR"
-    chmod 755 "$PISIGNAGE_DIR"/scripts
+    sudo chown -R $USER:$USER $INSTALL_DIR
+    chmod 755 $INSTALL_DIR
 
-    log "Structure de répertoires créée"
+    log_info "Structure créée dans $INSTALL_DIR"
 }
 
-# Configuration MPV optimisée pour Bookworm
-setup_mpv_config() {
-    log "Configuration de MPV pour Bookworm..."
+# Cloner depuis GitHub (optionnel)
+clone_from_github() {
+    log_step "Récupération depuis GitHub (optionnel)"
 
-    # Configuration globale MPV
-    cat > "$PISIGNAGE_DIR/config/mpv/mpv.conf" << 'EOF'
-# Configuration MPV optimisée pour Raspberry Pi OS Bookworm
-# v0.8.1 - Support Wayland/X11/DRM
-
-# Accélération matérielle
-hwdec=drm
-hwdec-codecs=all
-
-# Sortie vidéo
-vo=gpu-next
-gpu-context=auto
-
-# Qualité
-profile=gpu-hq
-scale=ewa_lanczossharp
-cscale=ewa_lanczossharp
-video-sync=display-resample
-interpolation=yes
-tscale=oversample
-
-# Performance
-cache=yes
-cache-secs=10
-demuxer-max-bytes=50M
-demuxer-max-back-bytes=25M
-
-# Audio
-audio-pitch-correction=yes
-volume=100
-volume-max=150
-
-# Affichage
-fullscreen=yes
-screen=0
-cursor-autohide=1000
-osd-level=1
-osd-duration=2000
-
-# Lecture
-loop-playlist=inf
-loop-file=inf
-keep-open=yes
-
-# Réseau
-network-timeout=30
-ytdl-format=bestvideo[height<=1080]+bestaudio/best[height<=1080]
-
-# Logs
-log-file=/opt/pisignage/logs/mpv.log
-msg-level=all=warn,ffmpeg/video=fatal
-EOF
-
-    # Configuration utilisateur MPV
-    sudo -u "$PISIGNAGE_USER" cp "$PISIGNAGE_DIR/config/mpv/mpv.conf" "/home/$PISIGNAGE_USER/.config/mpv/mpv.conf"
-
-    log "Configuration MPV créée"
+    if [ -d "$INSTALL_DIR/.git" ]; then
+        log_info "Dépôt Git déjà présent"
+        cd $INSTALL_DIR
+        git pull origin main 2>/dev/null || true
+    else
+        # Si le dépôt n'existe pas, on continue avec l'installation locale
+        log_info "Installation locale"
+    fi
 }
 
-# Configuration VLC (fallback)
-setup_vlc_config() {
-    log "Configuration de VLC (mode fallback)..."
+# Téléchargement de Big Buck Bunny
+download_bbb() {
+    log_step "Téléchargement de Big Buck Bunny"
 
-    # Configuration VLC pour Wayland
-    cat > "$PISIGNAGE_DIR/config/vlc/vlcrc" << 'EOF'
-# Configuration VLC pour Pi-Signage v0.8.1
-# Mode fallback - pas d'accélération HW sur Bookworm
-
-[main]
-intf=dummy
-quiet=2
-
-[video]
-vout=gles2
-fullscreen=1
-video-on-top=1
-video-title-show=0
-video-title-timeout=0
-deinterlace=-1
-deinterlace-mode=blend
-
-[gles2]
-gles2-text-renderer=freetype
-
-[audio]
-volume=256
-audio-replay-gain-mode=track
-
-[core]
-one-instance=0
-playlist-enqueue=0
-EOF
-
-    log "Configuration VLC créée"
+    if [ -f "$INSTALL_DIR/media/BigBuckBunny_720p.mp4" ]; then
+        log_info "Big Buck Bunny déjà présent"
+    else
+        log_info "Téléchargement en cours..."
+        wget -q --show-progress -O "$INSTALL_DIR/media/BigBuckBunny_720p.mp4" "$BBB_URL" || \
+        wget -q --show-progress -O "$INSTALL_DIR/media/BigBuckBunny_720p.mp4" \
+            "http://distribution.bbb3d.renderfarming.net/video/mp4/bbb_sunflower_1080p_60fps_normal.mp4"
+        log_info "Big Buck Bunny téléchargé"
+    fi
 }
 
-# Installation du script de détection d'environnement
-install_environment_detector() {
-    log "Installation du détecteur d'environnement..."
+# Copier les fichiers depuis la machine de développement
+copy_project_files() {
+    log_step "Copie des fichiers du projet"
 
-    cat > "$PISIGNAGE_DIR/scripts/detect-environment.sh" << 'EOF'
+    # Si on est sur la machine de développement, copier les fichiers
+    if [ -f "/opt/pisignage/web/index.php" ]; then
+        log_info "Copie de l'interface web existante..."
+        cp -r /opt/pisignage/web/* $INSTALL_DIR/web/ 2>/dev/null || true
+        cp -r /opt/pisignage/scripts/* $INSTALL_DIR/scripts/ 2>/dev/null || true
+        cp /opt/pisignage/config/player-config.json $INSTALL_DIR/config/ 2>/dev/null || true
+        cp /opt/pisignage/CLAUDE.md $INSTALL_DIR/ 2>/dev/null || true
+    fi
+
+    log_info "Fichiers copiés"
+}
+
+# Création/mise à jour de player-config.json
+create_config() {
+    log_step "Configuration du système"
+
+    cat > $INSTALL_DIR/config/player-config.json << 'ENDOFFILE'
+{
+  "player": {
+    "default": "vlc",
+    "current": "vlc",
+    "available": ["vlc", "mpv"]
+  },
+  "vlc": {
+    "enabled": true,
+    "version": "3.0.18",
+    "binary": "/usr/bin/cvlc",
+    "config_path": "/home/pi/.config/vlc/vlcrc",
+    "http_port": 8080,
+    "http_password": "signage123",
+    "log_file": "/opt/pisignage/logs/vlc.log"
+  },
+  "mpv": {
+    "enabled": true,
+    "version": "0.35.0",
+    "binary": "/usr/bin/mpv",
+    "config_path": "/home/pi/.config/mpv/mpv.conf",
+    "socket": "/tmp/mpv-socket",
+    "log_file": "/opt/pisignage/logs/mpv.log"
+  },
+  "system": {
+    "pi_model": "auto",
+    "display": ":0",
+    "autostart": true,
+    "watchdog": true
+  }
+}
+ENDOFFILE
+
+    log_info "Configuration créée"
+}
+
+# Création du script de démarrage VLC
+create_vlc_script() {
+    log_step "Création des scripts de contrôle"
+
+    cat > $INSTALL_DIR/scripts/start-vlc.sh << 'ENDOFFILE'
 #!/bin/bash
 
-# Détection de l'environnement graphique
-# Retourne: wayland, x11, ou tty
+echo "=== PiSignage v0.8.1 - Démarrage VLC ==="
 
-detect_display_server() {
-    if [ -n "$WAYLAND_DISPLAY" ]; then
-        echo "wayland"
-    elif [ -n "$DISPLAY" ]; then
-        echo "x11"
-    else
-        echo "tty"
-    fi
-}
+# Arrêt des lecteurs existants
+pkill -9 vlc mpv 2>/dev/null
+sleep 1
 
-# Détection du compositeur Wayland
-detect_wayland_compositor() {
-    if [ -n "$WAYLAND_DISPLAY" ]; then
-        if pgrep -x "labwc" > /dev/null; then
-            echo "labwc"
-        elif pgrep -x "wayfire" > /dev/null; then
-            echo "wayfire"
-        elif pgrep -x "weston" > /dev/null; then
-            echo "weston"
-        else
-            echo "unknown"
-        fi
-    fi
-}
+# Configuration de l'environnement
+export DISPLAY=${DISPLAY:-:0}
+export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
 
-# Export des variables pour MPV/VLC
-setup_player_environment() {
-    local display_server=$(detect_display_server)
-
-    case "$display_server" in
-        wayland)
-            export GDK_BACKEND=wayland
-            export QT_QPA_PLATFORM=wayland
-            export SDL_VIDEODRIVER=wayland
-            export LIBVA_DRIVER_NAME=v4l2_request
-            export LIBVA_V4L2_REQUEST_VIDEO_PATH=/dev/video10
-            echo "Environment: Wayland"
-            ;;
-        x11)
-            export GDK_BACKEND=x11
-            export QT_QPA_PLATFORM=xcb
-            export SDL_VIDEODRIVER=x11
-            echo "Environment: X11"
-            ;;
-        tty)
-            export GST_VAAPI_ALL_DRIVERS=1
-            export LIBVA_DRIVER_NAME=v4l2_request
-            echo "Environment: TTY/DRM"
-            ;;
-    esac
-}
-
-# Point d'entrée principal
-if [ "$1" == "detect" ]; then
-    detect_display_server
-elif [ "$1" == "setup" ]; then
-    setup_player_environment
+# Détection Wayland/X11
+if [ -n "$WAYLAND_DISPLAY" ]; then
+    echo "Environnement: Wayland"
+    VLC_OPTIONS="--intf dummy --vout gles2 --fullscreen --loop --no-video-title-show --quiet"
 else
-    echo "Usage: $0 {detect|setup}"
+    echo "Environnement: X11"
+    VLC_OPTIONS="--intf dummy --vout x11 --fullscreen --loop --no-video-title-show --quiet"
 fi
-EOF
 
-    chmod +x "$PISIGNAGE_DIR/scripts/detect-environment.sh"
-    log "Détecteur d'environnement installé"
-}
+# Fichier vidéo
+VIDEO="/opt/pisignage/media/BigBuckBunny_720p.mp4"
 
-# Installation du player manager
-install_player_manager() {
-    log "Installation du gestionnaire de lecture..."
+# Si pas de BBB, chercher une autre vidéo
+if [ ! -f "$VIDEO" ]; then
+    VIDEO=$(find /opt/pisignage/media -name "*.mp4" -o -name "*.mkv" | head -1)
+fi
 
-    cat > "$PISIGNAGE_DIR/scripts/player-manager.sh" << 'EOF'
+# Démarrer VLC
+if [ -n "$VIDEO" ]; then
+    cvlc $VLC_OPTIONS "$VIDEO" > /opt/pisignage/logs/vlc.log 2>&1 &
+    echo "✓ VLC démarré avec $(basename "$VIDEO")"
+else
+    echo "✗ Aucune vidéo trouvée"
+    exit 1
+fi
+ENDOFFILE
+
+    chmod +x $INSTALL_DIR/scripts/start-vlc.sh
+
+    # Script d'autostart
+    cat > $INSTALL_DIR/scripts/autostart.sh << 'ENDOFFILE'
 #!/bin/bash
 
-# Pi-Signage Player Manager v0.8.1
-# Gestionnaire de lecture vidéo optimisé
+# Attendre que le système soit prêt
+sleep 10
 
-SCRIPT_DIR="/opt/pisignage/scripts"
-CONFIG_DIR="/opt/pisignage/config"
-LOG_DIR="/opt/pisignage/logs"
-MEDIA_DIR="/opt/pisignage/media"
+# Démarrer le serveur web si nécessaire
+if ! systemctl is-active --quiet nginx && ! systemctl is-active --quiet apache2; then
+    cd /opt/pisignage/web
+    php -S 0.0.0.0:80 index.php > /opt/pisignage/logs/php-server.log 2>&1 &
+fi
 
-# Source environnement
-source "$SCRIPT_DIR/detect-environment.sh"
-setup_player_environment
+# Démarrer VLC
+/opt/pisignage/scripts/start-vlc.sh
 
-# Configuration du lecteur
-PLAYER="mpv"  # mpv ou vlc
-FALLBACK_PLAYER="vlc"
+# Watchdog
+while true; do
+    if ! pgrep vlc > /dev/null; then
+        echo "VLC s'est arrêté, redémarrage..."
+        /opt/pisignage/scripts/start-vlc.sh
+    fi
+    sleep 30
+done
+ENDOFFILE
 
-# Fonction de log
-log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_DIR/player.log"
+    chmod +x $INSTALL_DIR/scripts/autostart.sh
+
+    log_info "Scripts créés"
 }
 
-# Détection du meilleur lecteur
-detect_best_player() {
-    local env=$(detect_display_server)
+# Configuration du serveur web
+configure_webserver() {
+    log_step "Configuration du serveur web"
 
-    if [ "$env" == "wayland" ] || [ "$env" == "tty" ]; then
-        if command -v mpv &> /dev/null; then
-            echo "mpv"
-        else
-            echo "vlc"
-        fi
+    # Essayer d'abord avec nginx
+    if command -v nginx > /dev/null 2>&1; then
+        sudo tee /etc/nginx/sites-available/pisignage > /dev/null << ENDOFFILE
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+
+    root /opt/pisignage/web;
+    index index.php index.html;
+
+    server_name _;
+
+    location / {
+        try_files \$uri \$uri/ /index.php?\$query_string;
+    }
+
+    location ~ \.php$ {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:/var/run/php/php\$(/usr/bin/php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')-fpm.sock;
+    }
+
+    location ~ /\.ht {
+        deny all;
+    }
+
+    client_max_body_size 500M;
+    client_body_timeout 300s;
+}
+ENDOFFILE
+
+        sudo ln -sf /etc/nginx/sites-available/pisignage /etc/nginx/sites-enabled/
+        sudo rm -f /etc/nginx/sites-enabled/default
+        sudo systemctl restart nginx || true
+        log_info "Nginx configuré"
+
+    # Sinon essayer Apache
+    elif command -v apache2 > /dev/null 2>&1; then
+        sudo tee /etc/apache2/sites-available/pisignage.conf > /dev/null << ENDOFFILE
+<VirtualHost *:80>
+    DocumentRoot /opt/pisignage/web
+
+    <Directory /opt/pisignage/web>
+        Options Indexes FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+
+    ErrorLog \${APACHE_LOG_DIR}/pisignage-error.log
+    CustomLog \${APACHE_LOG_DIR}/pisignage-access.log combined
+</VirtualHost>
+ENDOFFILE
+
+        sudo a2enmod php* rewrite || true
+        sudo a2ensite pisignage || true
+        sudo a2dissite 000-default || true
+        sudo systemctl restart apache2 || true
+        log_info "Apache configuré"
+
     else
-        echo "vlc"
+        log_warn "Aucun serveur web trouvé, utilisation du serveur PHP intégré"
     fi
 }
 
-# Lecture avec MPV
-play_with_mpv() {
-    local file="$1"
-    log "Lecture avec MPV: $file"
+# Configuration du démarrage automatique
+configure_autostart() {
+    log_step "Configuration du démarrage automatique"
 
-    mpv --config-dir="$CONFIG_DIR/mpv" \
-        --fullscreen \
-        --loop-playlist=inf \
-        "$file" &
-
-    echo $! > /tmp/pisignage_player.pid
-}
-
-# Lecture avec VLC
-play_with_vlc() {
-    local file="$1"
-    log "Lecture avec VLC: $file"
-
-    cvlc --config "$CONFIG_DIR/vlc/vlcrc" \
-         --fullscreen \
-         --loop \
-         --intf dummy \
-         "$file" &
-
-    echo $! > /tmp/pisignage_player.pid
-}
-
-# Arrêt du lecteur
-stop_player() {
-    if [ -f /tmp/pisignage_player.pid ]; then
-        local pid=$(cat /tmp/pisignage_player.pid)
-        kill -TERM $pid 2>/dev/null
-        rm -f /tmp/pisignage_player.pid
-        log "Lecteur arrêté (PID: $pid)"
-    fi
-}
-
-# Lecture d'un fichier
-play_file() {
-    local file="$1"
-
-    if [ ! -f "$file" ]; then
-        log "Fichier introuvable: $file"
-        exit 1
-    fi
-
-    stop_player
-
-    local player=$(detect_best_player)
-
-    case "$player" in
-        mpv)
-            play_with_mpv "$file"
-            ;;
-        vlc)
-            play_with_vlc "$file"
-            ;;
-        *)
-            log "Aucun lecteur disponible"
-            exit 1
-            ;;
-    esac
-}
-
-# Point d'entrée principal
-case "$1" in
-    play)
-        play_file "$2"
-        ;;
-    stop)
-        stop_player
-        ;;
-    status)
-        if [ -f /tmp/pisignage_player.pid ]; then
-            echo "Lecteur actif (PID: $(cat /tmp/pisignage_player.pid))"
-        else
-            echo "Aucun lecteur actif"
-        fi
-        ;;
-    *)
-        echo "Usage: $0 {play|stop|status} [fichier]"
-        exit 1
-        ;;
-esac
-EOF
-
-    chmod +x "$PISIGNAGE_DIR/scripts/player-manager.sh"
-    log "Gestionnaire de lecture installé"
-}
-
-# Installation du service systemd
-install_systemd_service() {
-    log "Installation du service systemd..."
-
-    # Service principal
-    cat > /etc/systemd/system/pisignage.service << EOF
+    # Créer le service systemd
+    sudo tee /etc/systemd/system/pisignage.service > /dev/null << ENDOFFILE
 [Unit]
-Description=Pi-Signage Display Service
+Description=PiSignage Digital Signage System
 After=network.target graphical.target
-Wants=graphical.target
 
 [Service]
 Type=simple
-User=$PISIGNAGE_USER
-Group=$PISIGNAGE_GROUP
-WorkingDirectory=$PISIGNAGE_DIR
-
-# Variables d'environnement
-Environment="HOME=/home/$PISIGNAGE_USER"
-Environment="XDG_RUNTIME_DIR=/run/user/$(id -u $PISIGNAGE_USER)"
-
-# Détection automatique de l'environnement
-ExecStartPre=$PISIGNAGE_DIR/scripts/detect-environment.sh setup
-ExecStart=$PISIGNAGE_DIR/scripts/player-manager.sh play $PISIGNAGE_DIR/media/default.mp4
-
-# Redémarrage automatique
+User=$USER
+WorkingDirectory=/opt/pisignage
+Environment="DISPLAY=:0"
+Environment="XDG_RUNTIME_DIR=/run/user/$(id -u)"
+ExecStart=/opt/pisignage/scripts/autostart.sh
 Restart=always
 RestartSec=10
 
-# Logs
-StandardOutput=append:$PISIGNAGE_DIR/logs/pisignage.log
-StandardError=append:$PISIGNAGE_DIR/logs/pisignage-error.log
-
 [Install]
-WantedBy=default.target
-EOF
+WantedBy=multi-user.target
+ENDOFFILE
 
-    # Activation du service
-    systemctl daemon-reload
-    systemctl enable pisignage.service
+    # Activer le service
+    sudo systemctl daemon-reload
+    sudo systemctl enable pisignage.service
+    sudo systemctl start pisignage.service || true
 
-    log "Service systemd installé et activé"
+    log_info "Service de démarrage automatique configuré"
 }
 
-# Téléchargement d'une vidéo de test
-download_test_media() {
-    log "Téléchargement d'une vidéo de test..."
+# Configuration des permissions sudo (pour redémarrage)
+configure_sudo() {
+    log_step "Configuration des permissions"
 
-    # Vidéo de test Big Buck Bunny
-    if [ ! -f "$PISIGNAGE_DIR/media/default.mp4" ]; then
-        wget -q -O "$PISIGNAGE_DIR/media/default.mp4" \
-            "https://sample-videos.com/video321/mp4/720/big_buck_bunny_720p_1mb.mp4" || \
-        warning "Impossible de télécharger la vidéo de test"
-    fi
+    echo "$USER ALL=(ALL) NOPASSWD: /sbin/shutdown, /sbin/reboot, /bin/systemctl" | \
+        sudo tee /etc/sudoers.d/pisignage > /dev/null
 
-    chown -R "$PISIGNAGE_USER:$PISIGNAGE_GROUP" "$PISIGNAGE_DIR/media"
+    log_info "Permissions configurées"
 }
 
-# Configuration finale
-final_setup() {
-    log "Configuration finale..."
+# Test de l'installation
+test_installation() {
+    log_step "Test de l'installation"
 
-    # Désactivation du screensaver
-    sudo -u "$PISIGNAGE_USER" bash -c 'echo "xset s off" >> ~/.bashrc'
-    sudo -u "$PISIGNAGE_USER" bash -c 'echo "xset -dpms" >> ~/.bashrc'
+    # Vérifier que le serveur web répond
+    sleep 3
+    local ip=$(hostname -I | awk '{print $1}')
 
-    # Configuration boot silencieux
-    if grep -q "console=tty1" /boot/cmdline.txt; then
-        sed -i 's/console=tty1/console=tty3/g' /boot/cmdline.txt
+    if curl -s "http://localhost" > /dev/null 2>&1; then
+        log_info "Serveur web OK"
+    else
+        log_warn "Serveur web ne répond pas encore"
     fi
 
-    # Ajout logo boot
-    if ! grep -q "logo.nologo" /boot/cmdline.txt; then
-        sed -i '$ s/$/ logo.nologo quiet splash/' /boot/cmdline.txt
+    # Vérifier VLC
+    if pgrep vlc > /dev/null; then
+        log_info "VLC en cours d'exécution"
+    else
+        log_warn "VLC n'est pas encore démarré"
+        # Essayer de le démarrer
+        $INSTALL_DIR/scripts/start-vlc.sh &
     fi
 
-    log "Configuration finale terminée"
+    # Vérifier le service
+    if systemctl is-active --quiet pisignage; then
+        log_info "Service PiSignage actif"
+    else
+        log_warn "Service PiSignage inactif"
+    fi
+
+    log_info "Tests terminés"
 }
 
 # Fonction principale
 main() {
-    detect_os
-    detect_pi_model
-    install_packages
-    setup_permissions
-    setup_seatd
-    create_directories
-    setup_mpv_config
-    setup_vlc_config
-    install_environment_detector
-    install_player_manager
-    install_systemd_service
-    download_test_media
-    final_setup
+    check_root
+    show_banner
+    update_system
+    install_dependencies
+    create_structure
+    clone_from_github
+    download_bbb
+    copy_project_files
+    create_config
+    create_vlc_script
+    configure_webserver
+    configure_sudo
+    configure_autostart
+    test_installation
 
-    log "=== Installation Pi-Signage v0.8.1 terminée ==="
-    log ""
-    log "Pour démarrer le service:"
-    log "  sudo systemctl start pisignage"
-    log ""
-    log "Pour voir les logs:"
-    log "  tail -f $PISIGNAGE_DIR/logs/pisignage.log"
-    log ""
-    log "Redémarrez le système pour appliquer tous les changements:"
-    log "  sudo reboot"
+    local ip=$(hostname -I | awk '{print $1}')
+
+    echo ""
+    echo -e "${GREEN}╔══════════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}║                                                                      ║${NC}"
+    echo -e "${GREEN}║               🎉 Installation Terminée avec Succès! 🎉              ║${NC}"
+    echo -e "${GREEN}║                                                                      ║${NC}"
+    echo -e "${GREEN}╚══════════════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo "📋 Informations d'accès:"
+    echo "   • Interface Web: http://${ip}"
+    echo "   • Version: ${VERSION}"
+    echo "   • Dossier: $INSTALL_DIR"
+    echo ""
+    echo "🚀 PiSignage démarre automatiquement au boot!"
+    echo ""
+    echo "💡 Commandes utiles:"
+    echo "   sudo systemctl status pisignage   # Voir le statut"
+    echo "   sudo systemctl restart pisignage  # Redémarrer"
+    echo "   tail -f $INSTALL_DIR/logs/vlc.log # Voir les logs VLC"
+    echo ""
+    echo "📝 Documentation: $INSTALL_DIR/CLAUDE.md"
+    echo ""
 }
 
-# Exécution
-main
+# Exécuter l'installation
+main "$@"

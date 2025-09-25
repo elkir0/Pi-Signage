@@ -3,7 +3,7 @@ session_start();
 
 // Configuration
 $config = [
-    'version' => '0.8.0',
+    'version' => '0.8.1',
     'media_path' => '/opt/pisignage/media/',
     'config_path' => '/opt/pisignage/config/',
     'logs_path' => '/opt/pisignage/logs/',
@@ -908,22 +908,22 @@ foreach ($dirs as $dir) {
                         <div class="selector-title">Choisir le lecteur :</div>
                         <div class="player-options">
                             <label class="player-option">
-                                <input type="radio" name="player" value="mpv" id="player-mpv" checked>
-                                <div class="option-content">
-                                    <div class="option-icon">🚀</div>
-                                    <div class="option-details">
-                                        <div class="option-name">MPV</div>
-                                        <div class="option-desc">Performance optimale</div>
-                                    </div>
-                                </div>
-                            </label>
-                            <label class="player-option">
-                                <input type="radio" name="player" value="vlc" id="player-vlc">
+                                <input type="radio" name="player" value="vlc" id="player-vlc" checked>
                                 <div class="option-content">
                                     <div class="option-icon">🎛️</div>
                                     <div class="option-details">
                                         <div class="option-name">VLC</div>
                                         <div class="option-desc">Fonctionnalités avancées</div>
+                                    </div>
+                                </div>
+                            </label>
+                            <label class="player-option">
+                                <input type="radio" name="player" value="mpv" id="player-mpv">
+                                <div class="option-content">
+                                    <div class="option-icon">🚀</div>
+                                    <div class="option-details">
+                                        <div class="option-name">MPV</div>
+                                        <div class="option-desc">Performance optimale</div>
                                     </div>
                                 </div>
                             </label>
@@ -933,7 +933,7 @@ foreach ($dirs as $dir) {
 
                     <!-- Statut du lecteur -->
                     <div class="player-status">
-                        <div class="status-title">Statut : <span id="current-player">MPV</span></div>
+                        <div class="status-title">Statut : <span id="current-player">VLC</span></div>
                         <p><strong>État:</strong> <span id="player-state">Arrêté</span></p>
                         <p><strong>Fichier:</strong> <span id="player-file">Aucun</span></p>
                         <p><strong>Position:</strong> <span id="player-position">00:00</span></p>
@@ -1064,9 +1064,9 @@ foreach ($dirs as $dir) {
             </div>
 
             <div class="card">
-                <h3 class="card-title">
+                <h3 class="card-title" id="player-controls-title">
                     <span>🎮</span>
-                    Contrôles MPV
+                    <span id="player-controls-name">Contrôles VLC</span>
                 </h3>
                 <div class="player-controls">
                     <div class="player-btn" onclick="playerControl('play')">▶️</div>
@@ -1234,8 +1234,8 @@ foreach ($dirs as $dir) {
                     <button class="btn btn-danger" onclick="systemAction('shutdown')">
                         ⚡ Éteindre
                     </button>
-                    <button class="btn btn-glass" onclick="systemAction('restart-vlc')">
-                        🎵 Redémarrer MPV
+                    <button class="btn btn-glass" onclick="restartCurrentPlayer()">
+                        🎵 <span id="restart-player-text">Redémarrer VLC</span>
                     </button>
                     <button class="btn btn-glass" onclick="systemAction('clear-cache')">
                         🗑️ Vider le cache
@@ -1275,6 +1275,8 @@ foreach ($dirs as $dir) {
         let currentSection = 'dashboard';
         let autoScreenshotInterval = null;
         let systemStatsInterval = null;
+        let currentPlayer = 'vlc'; // Défaut VLC
+        let selectedPlayer = 'vlc';
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
@@ -1282,8 +1284,17 @@ foreach ($dirs as $dir) {
             loadMediaFiles();
             loadPlaylists();
 
+            // Initialiser le lecteur courant et mettre à jour l'interface
+            getCurrentPlayer();
+            updatePlayerInterface();
+
             // Auto refresh stats every 5 seconds
             systemStatsInterval = setInterval(refreshStats, 5000);
+
+            // Auto refresh player status every 3 seconds
+            setInterval(() => {
+                updatePlayerStatus();
+            }, 3000);
         });
 
         // Navigation
@@ -1303,6 +1314,11 @@ foreach ($dirs as $dir) {
                     el.classList.add('active');
                 }
             });
+
+            // Charger les playlists si on va dans cette section
+            if (section === 'playlists') {
+                loadPlaylists();
+            }
 
             currentSection = section;
         }
@@ -1343,38 +1359,65 @@ foreach ($dirs as $dir) {
                 .catch(error => console.error('Error loading stats:', error));
         }
 
-        // MPV Control
+        // Adaptive Player Control
         function playerControl(action) {
+            const playerName = currentPlayer.toUpperCase();
+
             fetch('/api/player.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: action })
+                body: JSON.stringify({
+                    action: action,
+                    player: currentPlayer
+                })
             })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    showAlert(data.message || `Action ${action} exécutée!`, 'success');
-                    updatePlayerStatus();
+                    showAlert(data.message || `${playerName}: ${action} exécutée!`, 'success');
+                    setTimeout(() => updatePlayerStatus(), 500);
                 } else {
-                    showAlert(data.message || `Erreur: ${action} a échoué`, 'error');
+                    showAlert(data.message || `Erreur ${playerName}: ${action} a échoué`, 'error');
                 }
             })
-            .catch(error => showAlert('Erreur de communication', 'error'));
+            .catch(error => showAlert(`Erreur de communication avec ${playerName}`, 'error'));
         }
 
-        // Update MPV status
+        // Update Player Status (Adaptive)
         function updatePlayerStatus() {
-            fetch('/api/player.php')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        const status = data.running ? 'En lecture' : 'Arrêté';
-                        document.getElementById('player-state').textContent = status;
-                        document.getElementById('player-file').textContent = data.status || 'Aucun';
-                        document.getElementById('player-position').textContent = '--:--';
-                    }
+            fetch('/api/player.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'status',
+                    player: currentPlayer
                 })
-                .catch(error => console.error('Error:', error));
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const status = data.running ? 'En lecture' : 'Arrêté';
+                    const statusColor = data.running ? '#51cf66' : '#ffd43b';
+
+                    // Mettre à jour l'affichage avec le nom du lecteur actuel
+                    const playerElement = document.getElementById('player-state');
+                    if (playerElement) {
+                        playerElement.textContent = status;
+                        playerElement.style.color = statusColor;
+                    }
+
+                    const fileElement = document.getElementById('player-file');
+                    if (fileElement) {
+                        fileElement.textContent = data.status || 'Aucun';
+                    }
+
+                    const positionElement = document.getElementById('player-position');
+                    if (positionElement) {
+                        positionElement.textContent = data.position || '00:00';
+                    }
+                }
+            })
+            .catch(error => console.error(`Erreur status ${currentPlayer}:`, error));
         }
 
         // Get current player from config
@@ -1383,8 +1426,12 @@ foreach ($dirs as $dir) {
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        const currentPlayer = data.player || 'mpv';
-                        document.getElementById('current-player').textContent = currentPlayer.toUpperCase();
+                        // Mettre à jour les variables globales
+                        currentPlayer = data.player || 'vlc';
+                        selectedPlayer = currentPlayer;
+
+                        // Mettre à jour l'interface
+                        updatePlayerInterface();
 
                         // Update radio buttons
                         if (document.getElementById('player-' + currentPlayer)) {
@@ -1392,44 +1439,110 @@ foreach ($dirs as $dir) {
                         }
                     }
                 })
-                .catch(error => console.error('Get player error:', error));
+                .catch(error => {
+                    console.error('Get player error:', error);
+                    // En cas d'erreur, utiliser VLC par défaut
+                    currentPlayer = 'vlc';
+                    selectedPlayer = 'vlc';
+                    updatePlayerInterface();
+                });
         }
 
-        // Switch between players
-        function switchPlayer() {
-            const selectedPlayer = document.querySelector('input[name="player"]:checked').value;
+        // Update Player Interface (NOUVELLE FONCTION ADAPTATIVE)
+        function updatePlayerInterface() {
+            const playerName = currentPlayer.toUpperCase();
 
-            if (confirm(`Basculer vers ${selectedPlayer.toUpperCase()} ? Le lecteur actuel sera arrêté.`)) {
-                showAlert('Basculement en cours...', 'info');
+            // Mettre à jour le statut principal
+            const currentPlayerElement = document.getElementById('current-player');
+            if (currentPlayerElement) {
+                currentPlayerElement.textContent = playerName;
+                currentPlayerElement.style.color = currentPlayer === 'vlc' ? '#4a9eff' : '#51cf66';
+            }
+
+            // Mettre à jour le titre des contrôles dans la section Player
+            const controlsNameElement = document.getElementById('player-controls-name');
+            if (controlsNameElement) {
+                controlsNameElement.textContent = `Contrôles ${playerName}`;
+            }
+
+            // Mettre à jour le texte du bouton de redémarrage
+            const restartTextElement = document.getElementById('restart-player-text');
+            if (restartTextElement) {
+                restartTextElement.textContent = `Redémarrer ${playerName}`;
+            }
+
+            // Mettre à jour les boutons radio
+            document.querySelectorAll('input[name="player"]').forEach(radio => {
+                radio.checked = (radio.value === currentPlayer);
+            });
+
+            // Adapter les boutons de contrôle selon le lecteur
+            const playerButtons = document.querySelectorAll('.player-btn');
+            playerButtons.forEach(btn => {
+                if (currentPlayer === 'vlc') {
+                    btn.style.background = 'linear-gradient(135deg, #4a9eff, #3d7edb)';
+                } else {
+                    btn.style.background = 'linear-gradient(135deg, #51cf66, #3eb854)';
+                }
+            });
+        }
+
+        // Switch between players (CORRIGÉ ET AMÉLIORÉ)
+        function switchPlayer() {
+            const newSelectedPlayer = document.querySelector('input[name="player"]:checked').value;
+
+            if (newSelectedPlayer === currentPlayer) {
+                showAlert(`${newSelectedPlayer.toUpperCase()} est déjà le lecteur actif`, 'info');
+                return;
+            }
+
+            if (confirm(`Basculer vers ${newSelectedPlayer.toUpperCase()} ?\nLe lecteur ${currentPlayer.toUpperCase()} sera arrêté.`)) {
+                showAlert(`🔄 Basculement vers ${newSelectedPlayer.toUpperCase()} en cours...`, 'info');
 
                 fetch('/api/system.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         action: 'switch_player',
-                        player: selectedPlayer
+                        player: newSelectedPlayer,
+                        current_player: currentPlayer
                     })
                 })
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        showAlert(`Basculement vers ${selectedPlayer.toUpperCase()} réussi!`, 'success');
+                        // Mettre à jour immédiatement les variables globales
+                        currentPlayer = newSelectedPlayer;
+                        selectedPlayer = newSelectedPlayer;
+
+                        // Mettre à jour l'interface
+                        updatePlayerInterface();
+
+                        showAlert(`✅ Basculement vers ${newSelectedPlayer.toUpperCase()} réussi!`, 'success');
+
+                        // Refresh status après un délai
                         setTimeout(() => {
-                            getCurrentPlayer();
                             updatePlayerStatus();
-                        }, 2000);
+                        }, 1500);
                     } else {
                         showAlert(data.message || 'Erreur lors du basculement', 'error');
+                        // Remettre le bon bouton radio en cas d'erreur
+                        document.getElementById('player-' + currentPlayer).checked = true;
                     }
                 })
                 .catch(error => {
-                    showAlert('Erreur de communication', 'error');
+                    showAlert('Erreur de communication lors du basculement', 'error');
                     console.error('Switch error:', error);
+                    // Remettre le bon bouton radio en cas d'erreur
+                    document.getElementById('player-' + currentPlayer).checked = true;
                 });
+            } else {
+                // L'utilisateur a annulé, remettre le bon bouton radio
+                document.getElementById('player-' + currentPlayer).checked = true;
             }
         }
 
-        // Play single file
+        // Play single file (ADAPTATIF)
         function playSingleFile() {
             const file = document.getElementById('single-file-select').value;
             if (!file) {
@@ -1437,27 +1550,30 @@ foreach ($dirs as $dir) {
                 return;
             }
 
+            const playerName = currentPlayer.toUpperCase();
+
             fetch('/api/player.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     action: 'play-file',
-                    file: file
+                    file: file,
+                    player: currentPlayer
                 })
             })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    showAlert(data.message || 'Lecture démarrée!', 'success');
-                    updatePlayerStatus();
+                    showAlert(data.message || `${playerName}: Lecture de ${file} démarrée!`, 'success');
+                    setTimeout(() => updatePlayerStatus(), 500);
                 } else {
-                    showAlert(data.message || 'Erreur de lecture', 'error');
+                    showAlert(data.message || `Erreur ${playerName}: Lecture impossible`, 'error');
                 }
             })
-            .catch(error => showAlert('Erreur de communication', 'error'));
+            .catch(error => showAlert(`Erreur de communication avec ${playerName}`, 'error'));
         }
 
-        // Play playlist
+        // Play playlist (ADAPTATIF)
         function playPlaylist() {
             const playlist = document.getElementById('playlist-select').value;
             if (!playlist) {
@@ -1465,23 +1581,27 @@ foreach ($dirs as $dir) {
                 return;
             }
 
+            const playerName = currentPlayer.toUpperCase();
+
             fetch('/api/player.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     action: 'play-playlist',
-                    playlist: playlist
+                    playlist: playlist,
+                    player: currentPlayer
                 })
             })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    showAlert(data.message || 'Playlist lancée!', 'success');
+                    showAlert(data.message || `${playerName}: Playlist ${playlist} lancée!`, 'success');
+                    setTimeout(() => updatePlayerStatus(), 500);
                 } else {
-                    showAlert('Erreur: ' + data.message, 'error');
+                    showAlert(`Erreur ${playerName}: ` + data.message, 'error');
                 }
             })
-            .catch(error => showAlert('Erreur de communication', 'error'));
+            .catch(error => showAlert(`Erreur de communication avec ${playerName}`, 'error'));
         }
 
         // Screenshot functions
@@ -2171,17 +2291,26 @@ foreach ($dirs as $dir) {
             xhr.send(formData);
         }
 
-        // Volume control
+        // Volume control (ADAPTATIF)
         function setVolume(value) {
             fetch('/api/player.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     action: 'volume',
-                    value: value
+                    value: value,
+                    player: currentPlayer
                 })
             })
-            .catch(error => console.error('Volume error:', error));
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    console.log(`${currentPlayer.toUpperCase()}: Volume réglé à ${value}%`);
+                } else {
+                    console.warn(`Erreur volume ${currentPlayer.toUpperCase()}:`, data.message);
+                }
+            })
+            .catch(error => console.error(`Erreur volume ${currentPlayer.toUpperCase()}:`, error));
         }
 
         // Upload Modal Functions
@@ -2191,7 +2320,7 @@ foreach ($dirs as $dir) {
                     <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #2a2d3a; padding: 30px; border-radius: 10px; width: 500px; max-width: 90%;">
                         <h2 style="margin: 0 0 20px; color: #4a9eff;">📤 Upload de Fichiers</h2>
                         <div style="border: 2px dashed #4a9eff; padding: 40px; text-align: center; margin-bottom: 20px;">
-                            <input type="file" id="uploadFiles" multiple accept="video/*,image/*" style="display: none;" onchange="handleFileSelect(this.files)">
+                            <input type="file" id="uploadFiles" multiple accept="video/*,image/*" style="display: none;" onchange="uploadFiles(this.files)">
                             <button class="btn btn-primary" onclick="document.getElementById('uploadFiles').click()">
                                 Sélectionner des fichiers
                             </button>
@@ -2244,9 +2373,216 @@ foreach ($dirs as $dir) {
         function handleFileSelect(files) {
             if (files && files.length > 0) {
                 closeUploadModal();
-                uploadFile(files);
+                uploadFiles(files);
             }
         }
+
+        // Fonction pour redémarrer le lecteur actuel
+        function restartCurrentPlayer() {
+            const player = currentPlayer || 'vlc';
+            const playerName = player.toUpperCase();
+
+            showAlert(`Redémarrage de ${playerName}...`, 'info');
+
+            fetch('/api/player.php?action=restart')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showAlert(`${playerName} redémarré avec succès`, 'success');
+                        setTimeout(() => {
+                            updatePlayerStatus();
+                            updatePlayerInterface();
+                        }, 2000);
+                    } else {
+                        showAlert(data.message || 'Erreur lors du redémarrage', 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Restart player error:', error);
+                    showAlert('Erreur de communication', 'error');
+                });
+        }
+
+        // Fonction pour redémarrer le système
+        function restartSystem() {
+            if (confirm('Êtes-vous sûr de vouloir redémarrer le système ?')) {
+                showAlert('Redémarrage du système...', 'info');
+
+                fetch('/api/system.php?action=restart')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            showAlert('Le système va redémarrer dans 5 secondes...', 'success');
+                            document.body.style.opacity = '0.5';
+                            document.body.style.pointerEvents = 'none';
+                        } else {
+                            showAlert(data.message || 'Erreur lors du redémarrage', 'error');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Restart system error:', error);
+                        showAlert('Erreur de communication', 'error');
+                    });
+            }
+        }
+
+        // Fonction pour arrêter le système
+        function shutdownSystem() {
+            if (confirm('Êtes-vous sûr de vouloir arrêter le système ?')) {
+                showAlert('Arrêt du système...', 'info');
+
+                fetch('/api/system.php?action=shutdown')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            showAlert('Le système va s\'arrêter dans 5 secondes...', 'success');
+                            document.body.style.opacity = '0.5';
+                            document.body.style.pointerEvents = 'none';
+                        } else {
+                            showAlert(data.message || 'Erreur lors de l\'arrêt', 'error');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Shutdown system error:', error);
+                        showAlert('Erreur de communication', 'error');
+                    });
+            }
+        }
+
+        // Fonctions pour gérer les playlists
+        function loadPlaylists() {
+            fetch('/api/playlist.php?action=list')
+                .then(response => response.json())
+                .then(data => {
+                    const container = document.getElementById('playlist-container');
+                    if (!container) return;
+
+                    if (data.success && data.playlists) {
+                        if (data.playlists.length === 0) {
+                            container.innerHTML = '<p style="text-align: center; opacity: 0.6; margin: 20px;">Aucune playlist créée</p>';
+                        } else {
+                            container.innerHTML = data.playlists.map(playlist => `
+                                <div class="card" style="margin-bottom: 15px;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <div>
+                                            <h4 style="margin: 0 0 5px 0;">${playlist.name || 'Playlist sans nom'}</h4>
+                                            <p style="margin: 0; opacity: 0.7;">
+                                                ${playlist.items ? playlist.items.length : 0} médias
+                                            </p>
+                                        </div>
+                                        <div style="display: flex; gap: 10px;">
+                                            <button class="btn btn-primary btn-sm" onclick="playPlaylist('${playlist.id || playlist.name}')">
+                                                ▶️ Lire
+                                            </button>
+                                            <button class="btn btn-glass btn-sm" onclick="editPlaylist('${playlist.id || playlist.name}')">
+                                                ✏️ Modifier
+                                            </button>
+                                            <button class="btn btn-danger btn-sm" onclick="deletePlaylist('${playlist.id || playlist.name}')">
+                                                🗑️ Supprimer
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('');
+                        }
+                    } else {
+                        container.innerHTML = '<p style="text-align: center; color: #ff6b6b; margin: 20px;">Erreur de chargement des playlists</p>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Load playlists error:', error);
+                    const container = document.getElementById('playlist-container');
+                    if (container) {
+                        container.innerHTML = '<p style="text-align: center; color: #ff6b6b; margin: 20px;">Erreur de connexion</p>';
+                    }
+                });
+        }
+
+        function createPlaylist() {
+            const name = prompt('Nom de la nouvelle playlist:');
+            if (name) {
+                fetch('/api/playlist.php?action=create', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name: name})
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showAlert('Playlist créée', 'success');
+                        loadPlaylists();
+                    } else {
+                        showAlert(data.message || 'Erreur', 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Create playlist error:', error);
+                    showAlert('Erreur de création', 'error');
+                });
+            }
+        }
+
+        function playPlaylist(id) {
+            fetch(`/api/playlist.php?action=play&id=${id}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showAlert('Playlist lancée', 'success');
+                    } else {
+                        showAlert(data.message || 'Erreur', 'error');
+                    }
+                });
+        }
+
+        function editPlaylist(id) {
+            showAlert('Fonction d\'édition en cours de développement', 'info');
+        }
+
+        function deletePlaylist(id) {
+            if (confirm('Supprimer cette playlist ?')) {
+                fetch(`/api/playlist.php?action=delete&id=${id}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            showAlert('Playlist supprimée', 'success');
+                            loadPlaylists();
+                        } else {
+                            showAlert(data.message || 'Erreur', 'error');
+                        }
+                    });
+            }
+        }
+
+        // Charger les playlists au changement de section
+        function showSectionOriginal(section) {
+            // Update sections
+            document.querySelectorAll('.content-section').forEach(el => {
+                el.classList.remove('active');
+            });
+            const targetSection = document.getElementById(section);
+            if (targetSection) {
+                targetSection.classList.add('active');
+            }
+
+            // Update nav
+            document.querySelectorAll('.nav-item').forEach(el => {
+                el.classList.remove('active');
+            });
+            event.target.closest('.nav-item').classList.add('active');
+
+            // Charger les playlists si on va dans cette section
+            if (section === 'playlists') {
+                loadPlaylists();
+            }
+        }
+
+        // Charger les playlists au démarrage si on est dans cette section
+        document.addEventListener('DOMContentLoaded', function() {
+            const activeSection = document.querySelector('.content-section.active');
+            if (activeSection && activeSection.id === 'playlists') {
+                loadPlaylists();
+            }
+        });
     </script>
 </body>
 </html>

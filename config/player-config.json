@@ -1,8 +1,8 @@
 {
   "player": {
-    "default": "mpv",
-    "current": "mpv",
-    "available": ["mpv", "vlc"]
+    "default": "vlc",
+    "current": "vlc",
+    "available": ["vlc", "mpv"]
   },
   "mpv": {
     "enabled": true,

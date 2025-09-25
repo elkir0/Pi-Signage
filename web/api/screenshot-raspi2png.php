@@ -1,13 +1,21 @@
 <?php
 /**
- * PiSignage v0.8.0 - Optimized Screenshot API with raspi2png
+ * PiSignage v0.8.1 - Optimized Screenshot API with raspi2png
  * Hardware-accelerated capture for Raspberry Pi
  */
 
-require_once '../config.php';
-
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
+
+// Fonction de réponse JSON
+function jsonResponse($success, $data = null, $message = null) {
+    echo json_encode([
+        'success' => $success,
+        'data' => $data,
+        'message' => $message
+    ]);
+    exit;
+}
 
 // Configuration
 $CACHE_DIR = '/dev/shm/pisignage-screenshots';
