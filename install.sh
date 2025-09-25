@@ -40,7 +40,8 @@ sudo apt-get install -y \
     xserver-xorg xinit x11-xserver-utils \
     lightdm lightdm-gtk-greeter \
     openbox \
-    unclutter
+    unclutter \
+    mesa-utils libgl1-mesa-dri libgles2-mesa libsdl2-2.0-0
 
 # 3. Installation yt-dlp et raspi2png
 echo "📦 [3/9] Installation yt-dlp et outils de capture..."
@@ -283,6 +284,10 @@ xset s noblank
 # Masquer le curseur après 1 seconde
 unclutter -idle 1 &
 
+# Configuration de l'environnement
+export XDG_RUNTIME_DIR=/run/user/1000
+export DISPLAY=:0
+
 # Attendre que le réseau soit prêt
 sleep 5
 
@@ -290,20 +295,22 @@ sleep 5
 PLAYER=$(jq -r '.player.current' /opt/pisignage/config/player-config.json 2>/dev/null || echo "vlc")
 
 if [ "$PLAYER" = "mpv" ]; then
-    # Lancer MPV
+    # Lancer MPV avec rendu software pour compatibilité
+    export LIBGL_ALWAYS_SOFTWARE=1
     mpv --fullscreen \
         --loop-playlist=inf \
         --no-osc \
         --no-input-default-bindings \
-        --hwdec=auto \
+        --hwdec=no \
         --vo=x11 \
         /opt/pisignage/media/*.{mp4,mkv,avi,mov} &
 else
-    # Lancer VLC
+    # Lancer VLC (configuration validée et testée)
     cvlc --fullscreen \
          --loop \
          --no-video-title-show \
          --intf dummy \
+         --vout x11 \
          /opt/pisignage/media/*.{mp4,mkv,avi,mov} &
 fi
 OPENBOX_END
