@@ -280,9 +280,44 @@ function openUploadModal() {
             closeModal();
             // FIXED: Refresh media list after successful upload
             setTimeout(() => {
-                if (typeof loadMediaFiles === 'function') {
+                // Try to call loadMediaFiles if it exists
+                if (typeof window.loadMediaFiles === 'function') {
                     console.log('Refreshing media list...');
-                    loadMediaFiles();
+                    window.loadMediaFiles();
+                } else if (document.getElementById('media-section').style.display !== 'none') {
+                    // If we're on the media section, refresh it directly
+                    console.log('Refreshing media section...');
+                    fetch('/api/media.php')
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                const container = document.getElementById('media-list');
+                                if (container) {
+                                    container.innerHTML = '';
+                                    (data.data || []).forEach(file => {
+                                        const card = document.createElement('div');
+                                        card.className = 'card';
+                                        card.innerHTML = `
+                                            <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                                                <input type="checkbox" id="media-${file.name}" value="${file.name}" style="margin-right: 10px;">
+                                                <h4 style="margin: 0; flex: 1;">${file.name}</h4>
+                                            </div>
+                                            <p>Taille: ${(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                                            <p>Type: ${file.type}</p>
+                                            <button class="btn btn-danger" onclick="deleteFile('${file.name}')">
+                                                🗑️ Supprimer
+                                            </button>
+                                        `;
+                                        container.appendChild(card);
+                                    });
+                                    showNotification(`✅ ${data.data.length} fichiers chargés`, 'success');
+                                }
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error refreshing media:', error);
+                            location.reload();
+                        });
                 } else {
                     console.log('Reloading page to refresh media...');
                     location.reload();

@@ -1556,7 +1556,7 @@ foreach ($dirs as $dir) {
         }
 
         // Media management
-        function loadMediaFiles() {
+        window.loadMediaFiles = function loadMediaFiles() {
             fetch('/api/media.php')
                 .then(response => response.json())
                 .then(data => {
