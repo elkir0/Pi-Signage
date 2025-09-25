@@ -36,7 +36,11 @@ sudo apt-get install -y \
     fbgrab \
     libpng-dev \
     build-essential \
-    cmake
+    cmake \
+    xserver-xorg xinit x11-xserver-utils \
+    lightdm lightdm-gtk-greeter \
+    openbox \
+    unclutter
 
 # 3. Installation yt-dlp et raspi2png
 echo "📦 [3/9] Installation yt-dlp et outils de capture..."
@@ -256,7 +260,93 @@ else
     echo "✅ Vidéo de test déjà présente"
 fi
 
-# 13. Démarrer le player unifié avec la vidéo test
+# 13. Configuration de l'environnement graphique
+echo "🖥️  Configuration de l'environnement graphique..."
+
+# Configurer l'auto-login graphique
+sudo mkdir -p /etc/lightdm/lightdm.conf.d
+sudo tee /etc/lightdm/lightdm.conf.d/60-pisignage.conf > /dev/null << 'LIGHTDM_END'
+[SeatDefaults]
+autologin-user=pi
+autologin-user-timeout=0
+xserver-command=X -nocursor
+LIGHTDM_END
+
+# Créer le script de démarrage pour openbox
+mkdir -p /home/pi/.config/openbox
+tee /home/pi/.config/openbox/autostart > /dev/null << 'OPENBOX_END'
+# Désactiver l'économiseur d'écran
+xset s off
+xset -dpms
+xset s noblank
+
+# Masquer le curseur après 1 seconde
+unclutter -idle 1 &
+
+# Attendre que le réseau soit prêt
+sleep 5
+
+# Lancer le player configuré (MPV ou VLC)
+PLAYER=$(jq -r '.player.current' /opt/pisignage/config/player-config.json 2>/dev/null || echo "vlc")
+
+if [ "$PLAYER" = "mpv" ]; then
+    # Lancer MPV
+    mpv --fullscreen \
+        --loop-playlist=inf \
+        --no-osc \
+        --no-input-default-bindings \
+        --hwdec=auto \
+        --vo=x11 \
+        /opt/pisignage/media/*.{mp4,mkv,avi,mov} &
+else
+    # Lancer VLC
+    cvlc --fullscreen \
+         --loop \
+         --no-video-title-show \
+         --intf dummy \
+         /opt/pisignage/media/*.{mp4,mkv,avi,mov} &
+fi
+OPENBOX_END
+
+chmod +x /home/pi/.config/openbox/autostart
+
+# Créer un service systemd pour PiSignage Display
+sudo tee /etc/systemd/system/pisignage-display.service > /dev/null << 'DISPLAY_SERVICE_END'
+[Unit]
+Description=PiSignage Display Service
+After=graphical.target
+
+[Service]
+Type=simple
+User=pi
+Environment="DISPLAY=:0"
+Environment="XAUTHORITY=/home/pi/.Xauthority"
+ExecStart=/opt/pisignage/scripts/player-manager.sh start
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=graphical.target
+DISPLAY_SERVICE_END
+
+# Activer les services graphiques
+sudo systemctl daemon-reload
+sudo systemctl enable lightdm
+sudo systemctl enable pisignage-display
+sudo systemctl set-default graphical.target
+
+# Optimisations Raspberry Pi
+echo "⚙️  Application des optimisations..."
+# Désactiver le bluetooth pour économiser les ressources
+sudo systemctl disable bluetooth 2>/dev/null || true
+sudo systemctl disable hciuart 2>/dev/null || true
+
+# Augmenter la mémoire GPU si nécessaire
+if ! grep -q "gpu_mem" /boot/config.txt; then
+    echo "gpu_mem=128" | sudo tee -a /boot/config.txt
+fi
+
+# 14. Démarrer le player unifié avec la vidéo test
 echo "🎬 Démarrage du player unifié (MPV par défaut)..."
 sudo systemctl start pisignage-player
 
