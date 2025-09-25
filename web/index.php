@@ -1206,17 +1206,19 @@ foreach ($dirs as $dir) {
                         <span>🌐</span>
                         Réseau
                     </h3>
-                    <div class="form-group">
-                        <label class="form-label">WiFi SSID</label>
-                        <input type="text" class="form-control" id="wifi-ssid" placeholder="Nom du réseau">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Mot de passe</label>
-                        <input type="password" class="form-control" id="wifi-password" placeholder="Mot de passe">
-                    </div>
-                    <button class="btn btn-primary" onclick="saveNetworkConfig()">
-                        💾 Appliquer
-                    </button>
+                    <form id="network-form" onsubmit="return false;">
+                        <div class="form-group">
+                            <label class="form-label">WiFi SSID</label>
+                            <input type="text" class="form-control" id="wifi-ssid" placeholder="Nom du réseau">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Mot de passe</label>
+                            <input type="password" class="form-control" id="wifi-password" placeholder="Mot de passe" autocomplete="new-password">
+                        </div>
+                        <button type="button" class="btn btn-primary" onclick="saveNetworkConfig()">
+                            💾 Appliquer
+                        </button>
+                    </form>
                 </div>
             </div>
 
@@ -2119,6 +2121,20 @@ foreach ($dirs as $dir) {
 
             xhr.onload = function() {
                 if (xhr.status === 200) {
+                        // AUTO-REFRESH après upload réussi
+                        console.log("Auto-refresh: tentative de refresh...");
+                        setTimeout(function() {
+                            if (typeof loadMediaFiles === "function") {
+                                console.log("Auto-refresh: appel de loadMediaFiles");
+                                loadMediaFiles();
+                            }
+                            // Forcer affichage section media
+                            var mediaSection = document.getElementById("media");
+                            if (mediaSection) {
+                                mediaSection.classList.add("active");
+                                mediaSection.style.display = "block";
+                            }
+                        }, 800);
                     try {
                         const data = JSON.parse(xhr.responseText);
                         if (data.success) {

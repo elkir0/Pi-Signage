@@ -278,51 +278,9 @@ function openUploadModal() {
         uploadFiles(files).then(() => {
             showNotification('✅ Upload terminé avec succès!', 'success');
             closeModal();
-            // FIXED: Refresh media list after successful upload
-            setTimeout(() => {
-                // Try to call loadMediaFiles if it exists
-                if (typeof window.loadMediaFiles === 'function') {
-                    console.log('Refreshing media list...');
-                    window.loadMediaFiles();
-                } else if (document.getElementById('media-section').style.display !== 'none') {
-                    // If we're on the media section, refresh it directly
-                    console.log('Refreshing media section...');
-                    fetch('/api/media.php')
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.success) {
-                                const container = document.getElementById('media-list');
-                                if (container) {
-                                    container.innerHTML = '';
-                                    (data.data || []).forEach(file => {
-                                        const card = document.createElement('div');
-                                        card.className = 'card';
-                                        card.innerHTML = `
-                                            <div style="display: flex; align-items: center; margin-bottom: 10px;">
-                                                <input type="checkbox" id="media-${file.name}" value="${file.name}" style="margin-right: 10px;">
-                                                <h4 style="margin: 0; flex: 1;">${file.name}</h4>
-                                            </div>
-                                            <p>Taille: ${(file.size / 1024 / 1024).toFixed(2)} MB</p>
-                                            <p>Type: ${file.type}</p>
-                                            <button class="btn btn-danger" onclick="deleteFile('${file.name}')">
-                                                🗑️ Supprimer
-                                            </button>
-                                        `;
-                                        container.appendChild(card);
-                                    });
-                                    showNotification(`✅ ${data.data.length} fichiers chargés`, 'success');
-                                }
-                            }
-                        })
-                        .catch(error => {
-                            console.error('Error refreshing media:', error);
-                            location.reload();
-                        });
-                } else {
-                    console.log('Reloading page to refresh media...');
-                    location.reload();
-                }
-            }, 500);
+
+            // BULLETPROOF: Multi-layer refresh strategy with failsafes
+            refreshMediaAfterUpload();
         }).catch(error => {
             showNotification('❌ Erreur upload: ' + error.message, 'error');
             document.getElementById('uploadProgress').style.display = 'none';
@@ -448,13 +406,16 @@ function refreshStats() {
             if (data.success) {
                 const stats = data.data;
 
-                // Update dashboard stats
-                if (document.getElementById('cpu-usage')) {
-                    document.getElementById('cpu-usage').textContent = stats.cpu + '%';
-                    document.getElementById('ram-usage').textContent = stats.ram + '%';
-                    document.getElementById('temperature').textContent = stats.temperature + '°C';
-                    document.getElementById('storage-usage').textContent = stats.storage;
-                }
+                // Update dashboard stats (avec vérification null)
+                var cpuElem = document.getElementById('cpu-usage');
+                var ramElem = document.getElementById('ram-usage');
+                var tempElem = document.getElementById('temperature');
+                var storageElem = document.getElementById('storage-usage');
+                
+                if (cpuElem) cpuElem.textContent = stats.cpu + '%';
+                if (ramElem) ramElem.textContent = stats.ram + '%';
+                if (tempElem) tempElem.textContent = stats.temperature + '°C';
+                if (storageElem) storageElem.textContent = stats.storage;
             }
         })
         .catch(error => console.error('Stats error:', error));
@@ -465,4 +426,146 @@ if (typeof window.statsInterval === 'undefined') {
     window.statsInterval = setInterval(refreshStats, 5000);
 }
 
-console.log('✅ Fixed functions loaded - Drag & drop and auto-refresh enabled');
+// ========== BULLETPROOF MEDIA REFRESH ==========
+/**
+ * Bulletproof media refresh with multiple failsafe strategies
+ * This function will try multiple approaches to ensure media list is refreshed
+ */
+function refreshMediaAfterUpload() {
+    console.log('🔄 Starting bulletproof media refresh...');
+
+    // Strategy 1: Event-based refresh with custom event
+    const refreshEvent = new CustomEvent('mediaListUpdated', {
+        detail: { source: 'upload', timestamp: Date.now() }
+    });
+
+    // Strategy 2: Multi-attempt refresh with exponential backoff
+    let attempts = 0;
+    const maxAttempts = 3;
+    const baseDelay = 300;
+
+    function attemptRefresh(attemptNumber = 0) {
+        setTimeout(() => {
+            console.log(`🔄 Refresh attempt ${attemptNumber + 1}/${maxAttempts}`);
+
+            // Method A: Try the global loadMediaFiles function
+            if (typeof window.loadMediaFiles === 'function') {
+                console.log('📂 Method A: Using window.loadMediaFiles()');
+                try {
+                    window.loadMediaFiles();
+
+                    // Verify if refresh worked by checking if media list has content
+                    setTimeout(() => {
+                        const mediaList = document.getElementById('media-list');
+                        if (mediaList && mediaList.children.length > 0) {
+                            console.log('✅ Method A successful - media list refreshed');
+                            document.dispatchEvent(refreshEvent);
+                            return;
+                        } else if (attemptNumber < maxAttempts - 1) {
+                            console.log('⚠️ Method A failed, trying Method B');
+                            attemptMethodB(attemptNumber);
+                        }
+                    }, 200);
+                } catch (error) {
+                    console.error('❌ Method A error:', error);
+                    if (attemptNumber < maxAttempts - 1) {
+                        attemptMethodB(attemptNumber);
+                    }
+                }
+            } else {
+                attemptMethodB(attemptNumber);
+            }
+        }, baseDelay * Math.pow(1.5, attemptNumber));
+    }
+
+    function attemptMethodB(attemptNumber) {
+        console.log('📂 Method B: Direct API call with DOM rebuild');
+
+        fetch('/api/media.php?_t=' + Date.now()) // Cache busting
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    const mediaList = document.getElementById('media-list');
+                    const fileSelect = document.getElementById('single-file-select');
+
+                    if (mediaList) {
+                        // Clear and rebuild media list
+                        mediaList.innerHTML = '';
+
+                        (data.data || []).forEach(file => {
+                            const card = document.createElement('div');
+                            card.className = 'card';
+                            card.innerHTML = `
+                                <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                                    <input type="checkbox" id="media-${file.name}" value="${file.name}" style="margin-right: 10px;">
+                                    <h4 style="margin: 0; flex: 1;">${file.name}</h4>
+                                </div>
+                                <p>Taille: ${(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                                <p>Type: ${file.type}</p>
+                                <button class="btn btn-danger" onclick="deleteFile('${file.name}')">
+                                    🗑️ Supprimer
+                                </button>
+                            `;
+                            mediaList.appendChild(card);
+                        });
+
+                        // Also update file select dropdown if it exists
+                        if (fileSelect) {
+                            fileSelect.innerHTML = '<option value="">-- Choisir --</option>';
+                            (data.data || []).forEach(file => {
+                                const option = document.createElement('option');
+                                option.value = file.name;
+                                option.textContent = file.name;
+                                fileSelect.appendChild(option);
+                            });
+                        }
+
+                        console.log(`✅ Method B successful - ${data.data.length} files loaded`);
+                        showNotification(`📁 ${data.data.length} fichiers chargés`, 'success');
+                        document.dispatchEvent(refreshEvent);
+                        return;
+                    }
+                }
+                throw new Error('Invalid API response or missing media-list element');
+            })
+            .catch(error => {
+                console.error(`❌ Method B error (attempt ${attemptNumber + 1}):`, error);
+
+                if (attemptNumber < maxAttempts - 1) {
+                    // Try next attempt
+                    attemptRefresh(attemptNumber + 1);
+                } else {
+                    // Final fallback: Force page reload
+                    console.log('🔄 Final fallback: Force page reload');
+                    showNotification('🔄 Rechargement de la page...', 'info');
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
+                }
+            });
+    }
+
+    // Start the first attempt
+    attemptRefresh(0);
+
+    // Strategy 3: Auto-switch to media section if not already there
+    setTimeout(() => {
+        const currentSection = document.querySelector('.content-section.active');
+        if (currentSection && currentSection.id !== 'media') {
+            console.log('📂 Auto-switching to media section');
+            if (typeof showSection === 'function') {
+                showSection('media');
+            }
+        }
+    }, 100);
+}
+
+// Event listener for media refresh events
+document.addEventListener('mediaListUpdated', function(event) {
+    console.log('📡 Media list updated event received:', event.detail);
+});
+
+console.log('✅ Fixed functions loaded - Drag & drop and bulletproof auto-refresh enabled');
