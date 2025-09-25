@@ -171,17 +171,36 @@ start_mpv() {
     pkill -f mpv 2>/dev/null
     sleep 1
 
+    # Configurer l'affichage
+    export DISPLAY=:0
+    export XAUTHORITY=/home/pi/.Xauthority
+
     # Créer playlist
     ls "$MEDIA_DIR"/*.{mp4,avi,mkv,mov,jpg,png} 2>/dev/null > /tmp/mpv-playlist.txt
 
     if [ -s /tmp/mpv-playlist.txt ]; then
-        mpv --playlist=/tmp/mpv-playlist.txt \
+        # Lancer MPV avec les bons paramètres pour X11/Wayland
+        DISPLAY=:0 mpv \
+            --vo=gpu \
+            --gpu-context=x11egl \
+            --hwdec=auto \
+            --fullscreen \
+            --loop-playlist=inf \
+            --no-osc \
+            --no-input-default-bindings \
+            --input-ipc-server=/tmp/mpv-socket \
+            --playlist=/tmp/mpv-playlist.txt \
             >> "$LOG_DIR/mpv.log" 2>&1 &
         echo "MPV started (PID: $!)"
     else
         echo "Aucun média trouvé, activation mode fallback"
         if [ -f "$MEDIA_DIR/fallback-logo.jpg" ]; then
-            mpv --fullscreen --keep-open=yes --loop-file=inf \
+            DISPLAY=:0 mpv \
+                --vo=gpu \
+                --gpu-context=x11egl \
+                --fullscreen \
+                --keep-open=yes \
+                --loop-file=inf \
                 "$MEDIA_DIR/fallback-logo.jpg" \
                 >> "$LOG_DIR/mpv.log" 2>&1 &
         fi
