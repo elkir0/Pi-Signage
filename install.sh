@@ -56,14 +56,25 @@ show_banner() {
     echo "  • Big Buck Bunny (vidéo de démo)"
     echo "  • Configuration automatique au démarrage"
     echo ""
-    read -p "Appuyez sur Entrée pour commencer l'installation..."
+    # Mode interactif ou automatique
+    if [ "$1" != "--auto" ]; then
+        read -p "Appuyez sur Entrée pour commencer l'installation..."
+    else
+        echo "Mode automatique activé"
+    fi
 }
 
 # Mise à jour du système
 update_system() {
     log_step "Mise à jour du système"
     sudo apt-get update -qq
-    sudo apt-get upgrade -y -qq
+    # Configuration pour éviter les interactions
+    export DEBIAN_FRONTEND=noninteractive
+    export NEEDRESTART_MODE=a
+    # Forcer les configurations par défaut pour éviter les blocages
+    sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq \
+        -o Dpkg::Options::="--force-confold" \
+        -o Dpkg::Options::="--force-confdef" || true
     log_info "Système mis à jour"
 }
 
@@ -71,48 +82,28 @@ update_system() {
 install_dependencies() {
     log_step "Installation des dépendances"
 
+    # Configuration pour éviter les interactions
+    export DEBIAN_FRONTEND=noninteractive
+    export NEEDRESTART_MODE=a
+
+    # Packages essentiels uniquement
     local packages=(
-        # Serveur web
         "nginx"
-        "php-fpm"
-        "php-cli"
-        "php-json"
-        "php-mbstring"
-        "php-zip"
-        "php-gd"
-
-        # Alternative Apache
-        "apache2"
-        "libapache2-mod-php"
-
-        # Lecteurs vidéo
+        "php8.2-fpm"
+        "php8.2-cli"
         "vlc"
         "mpv"
-
-        # Outils système
-        "git"
-        "curl"
         "wget"
-        "htop"
-        "screen"
-        "feh"
-        "imagemagick"
-        "jq"
-        "sshpass"
-
-        # Capture d'écran
-        "scrot"
-        "fbcat"
-
-        # Python pour API
-        "python3"
-        "python3-pip"
+        "curl"
     )
 
-    log_info "Installation des packages..."
+    log_info "Installation des packages essentiels..."
     for package in "${packages[@]}"; do
         echo -n "  • Installation de $package... "
-        if sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$package" > /dev/null 2>&1; then
+        if sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+            -o Dpkg::Options::="--force-confold" \
+            -o Dpkg::Options::="--force-confdef" \
+            "$package" > /dev/null 2>&1; then
             echo -e "${GREEN}✓${NC}"
         else
             echo -e "${YELLOW}⚠ Déjà installé ou optionnel${NC}"
@@ -179,20 +170,26 @@ download_bbb() {
     fi
 }
 
-# Copier les fichiers depuis la machine de développement
+# Copier les fichiers depuis GitHub
 copy_project_files() {
-    log_step "Copie des fichiers du projet"
+    log_step "Récupération des fichiers du projet"
 
-    # Si on est sur la machine de développement, copier les fichiers
-    if [ -f "/opt/pisignage/web/index.php" ]; then
-        log_info "Copie de l'interface web existante..."
-        cp -r /opt/pisignage/web/* $INSTALL_DIR/web/ 2>/dev/null || true
-        cp -r /opt/pisignage/scripts/* $INSTALL_DIR/scripts/ 2>/dev/null || true
-        cp /opt/pisignage/config/player-config.json $INSTALL_DIR/config/ 2>/dev/null || true
-        cp /opt/pisignage/CLAUDE.md $INSTALL_DIR/ 2>/dev/null || true
-    fi
+    # Télécharger depuis GitHub
+    log_info "Téléchargement de l'interface web depuis GitHub..."
+    wget -q https://raw.githubusercontent.com/elkir0/Pi-Signage/main/web/index.php \
+        -O $INSTALL_DIR/web/index.php || true
 
-    log_info "Fichiers copiés"
+    mkdir -p $INSTALL_DIR/web/api
+    wget -q https://raw.githubusercontent.com/elkir0/Pi-Signage/main/web/api/screenshot-raspi2png.php \
+        -O $INSTALL_DIR/web/api/screenshot-raspi2png.php || true
+
+    wget -q https://raw.githubusercontent.com/elkir0/Pi-Signage/main/config/player-config.json \
+        -O $INSTALL_DIR/config/player-config.json || true
+
+    wget -q https://raw.githubusercontent.com/elkir0/Pi-Signage/main/CLAUDE.md \
+        -O $INSTALL_DIR/CLAUDE.md || true
+
+    log_info "Fichiers récupérés depuis GitHub"
 }
 
 # Création/mise à jour de player-config.json
@@ -316,8 +313,11 @@ ENDOFFILE
 configure_webserver() {
     log_step "Configuration du serveur web"
 
-    # Essayer d'abord avec nginx
+    # Configurer nginx
     if command -v nginx > /dev/null 2>&1; then
+        # Supprimer d'abord la config par défaut
+        sudo rm -f /etc/nginx/sites-enabled/default
+
         sudo tee /etc/nginx/sites-available/pisignage > /dev/null << ENDOFFILE
 server {
     listen 80 default_server;
@@ -334,7 +334,7 @@ server {
 
     location ~ \.php$ {
         include snippets/fastcgi-php.conf;
-        fastcgi_pass unix:/var/run/php/php\$(/usr/bin/php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')-fpm.sock;
+        fastcgi_pass unix:/var/run/php/php8.2-fpm.sock;
     }
 
     location ~ /\.ht {
@@ -347,8 +347,8 @@ server {
 ENDOFFILE
 
         sudo ln -sf /etc/nginx/sites-available/pisignage /etc/nginx/sites-enabled/
-        sudo rm -f /etc/nginx/sites-enabled/default
         sudo systemctl restart nginx || true
+        sudo systemctl restart php8.2-fpm || true
         log_info "Nginx configuré"
 
     # Sinon essayer Apache
