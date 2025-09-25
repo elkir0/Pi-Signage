@@ -1,311 +1,448 @@
 #!/bin/bash
-# PiSignage - Universal Player Manager (VLC/MPV)
-# Gestion unifiée pour VLC et MPV avec détection automatique Pi3/Pi4
 
-MEDIA_DIR="/opt/pisignage/media"
-CONFIG_FILE="/opt/pisignage/config/player-config.json"
-LOG_DIR="/opt/pisignage/logs"
-SOCKET="/tmp/player-socket"
-ACTION=$1
-PLAYER=$2
+# Pi-Signage Player Manager v0.8.1
+# Gestion intelligente MPV/VLC avec détection Wayland/X11/DRM
+# Compatible Raspberry Pi OS Bookworm
 
-# Si pas de player spécifié, utiliser celui configuré
-if [ -z "$PLAYER" ]; then
-    PLAYER=$(jq -r '.player.current' "$CONFIG_FILE" 2>/dev/null || echo "mpv")
-fi
+set -e
 
-# Détection modèle Raspberry Pi
-get_pi_model() {
-    local model=$(cat /proc/cpuinfo | grep 'Model' | cut -d: -f2 | xargs)
-    if [[ "$model" == *"Pi 3"* ]]; then
-        echo "pi3"
-    elif [[ "$model" == *"Pi 4"* ]]; then
-        echo "pi4"
-    elif [[ "$model" == *"Pi 5"* ]]; then
-        echo "pi5"
+# Configuration
+PISIGNAGE_DIR="/opt/pisignage"
+CONFIG_DIR="$PISIGNAGE_DIR/config"
+LOG_DIR="$PISIGNAGE_DIR/logs"
+MEDIA_DIR="$PISIGNAGE_DIR/media"
+PLAYLIST_FILE="$MEDIA_DIR/playlist.m3u"
+
+# Logs
+LOG_FILE="$LOG_DIR/player-manager.log"
+MPV_LOG="$LOG_DIR/mpv.log"
+VLC_LOG="$LOG_DIR/vlc.log"
+
+# PID files
+PID_FILE="/tmp/pisignage-player.pid"
+LOCK_FILE="/tmp/pisignage.lock"
+
+# Préférence du player (peut être overridé)
+DEFAULT_PLAYER="${PLAYER:-mpv}"
+
+# Couleurs pour output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+# Logging functions
+log() {
+    echo -e "${GREEN}[$(date '+%Y-%m-%d %H:%M:%S')]${NC} $1" | tee -a "$LOG_FILE"
+}
+
+error() {
+    echo -e "${RED}[ERROR]${NC} $1" | tee -a "$LOG_FILE"
+    exit 1
+}
+
+warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1" | tee -a "$LOG_FILE"
+}
+
+info() {
+    echo -e "${BLUE}[INFO]${NC} $1" | tee -a "$LOG_FILE"
+}
+
+# Détection de l'environnement graphique
+detect_environment() {
+    if [ -n "$WAYLAND_DISPLAY" ]; then
+        echo "wayland"
+    elif [ -n "$DISPLAY" ]; then
+        echo "x11"
     else
-        echo "pi4"  # Par défaut
+        echo "tty"
     fi
 }
 
-PI_MODEL=$(get_pi_model)
-
-# ========== FONCTIONS VLC ==========
-setup_vlc_config() {
-    echo "Configuration VLC pour $PI_MODEL..."
-    mkdir -p ~/.config/vlc
-
-    cat > ~/.config/vlc/vlcrc << 'EOF'
-# Configuration VLC Signage - PiSignage
-intf=dummy
-extraintf=http
-video-title-show=0
-fullscreen=1
-loop=1
-random=0
-volume=256
-http-password=signage123
-http-port=8080
-playlist-autostart=1
-file-caching=2000
-network-caching=3000
-qt-privacy-ask=0
-qt-system-tray=0
-EOF
-
-    if [ "$PI_MODEL" = "pi3" ]; then
-        cat >> ~/.config/vlc/vlcrc << 'EOF'
-# Optimisations Pi 3
-vout=mmal_xsplitter
-codec=mmal
-h264-fps=30
-avcodec-skiploopfilter=4
-EOF
-    else
-        cat >> ~/.config/vlc/vlcrc << 'EOF'
-# Optimisations Pi 4
-vout=drm
-avcodec-hw=v4l2m2m
-avcodec-hw=drm
-EOF
+# Détection du compositeur Wayland
+detect_wayland_compositor() {
+    if [ -n "$WAYLAND_DISPLAY" ]; then
+        if pgrep -x "labwc" > /dev/null; then
+            echo "labwc"
+        elif pgrep -x "wayfire" > /dev/null; then
+            echo "wayfire"
+        elif pgrep -x "weston" > /dev/null; then
+            echo "weston"
+        elif pgrep -x "sway" > /dev/null; then
+            echo "sway"
+        else
+            echo "unknown"
+        fi
     fi
 }
 
-start_vlc() {
-    echo "Démarrage VLC ($PI_MODEL)..."
-    pkill -f vlc 2>/dev/null
-    sleep 1
+# Configuration de l'environnement selon le display server
+setup_display_environment() {
+    local display_server=$(detect_environment)
+    log "Display server détecté: $display_server"
 
-    if [ "$PI_MODEL" = "pi3" ]; then
-        cvlc --vout mmal_xsplitter --codec mmal --h264-fps 30 \
-             --fullscreen --loop --no-video-title-show \
-             --extraintf http --http-password signage123 \
-             "$MEDIA_DIR"/*.{mp4,avi,mkv,mov} 2>/dev/null \
-             > "$LOG_DIR/vlc.log" 2>&1 &
+    case "$display_server" in
+        wayland)
+            local compositor=$(detect_wayland_compositor)
+            log "Compositeur Wayland: $compositor"
+
+            export GDK_BACKEND=wayland
+            export QT_QPA_PLATFORM=wayland
+            export SDL_VIDEODRIVER=wayland
+            export CLUTTER_BACKEND=wayland
+
+            # Configuration V4L2 pour l'accélération HW
+            export LIBVA_DRIVER_NAME=v4l2_request
+            export LIBVA_V4L2_REQUEST_VIDEO_PATH=/dev/video10
+
+            # XDG Runtime pour Wayland
+            if [ -z "$XDG_RUNTIME_DIR" ]; then
+                export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+            fi
+
+            # MPV args spécifiques Wayland
+            MPV_DISPLAY_ARGS="--gpu-context=wayland --vo=gpu-next"
+            VLC_DISPLAY_ARGS="--vout=gles2 --intf=dummy"
+            ;;
+
+        x11)
+            log "Mode X11 détecté"
+
+            export GDK_BACKEND=x11
+            export QT_QPA_PLATFORM=xcb
+            export SDL_VIDEODRIVER=x11
+
+            # MPV args spécifiques X11
+            MPV_DISPLAY_ARGS="--gpu-context=x11 --vo=gpu"
+            VLC_DISPLAY_ARGS="--vout=xcb_x11 --intf=dummy"
+            ;;
+
+        tty)
+            log "Mode TTY/DRM direct détecté"
+
+            # Configuration pour DRM direct (kiosk mode)
+            export GST_VAAPI_ALL_DRIVERS=1
+            export LIBVA_DRIVER_NAME=v4l2_request
+
+            # MPV en mode DRM direct
+            MPV_DISPLAY_ARGS="--gpu-context=drm --vo=gpu --drm-connector=HDMI-A-1"
+            VLC_DISPLAY_ARGS="--vout=drm --intf=dummy"
+            ;;
+    esac
+
+    # Variables communes
+    export LIBVA_MESSAGING_LEVEL=0
+    export MESA_EXTENSION_OVERRIDE="+GL_EXT_gpu_shader4"
+}
+
+# Vérification de l'accélération HW
+check_hw_acceleration() {
+    info "Vérification de l'accélération matérielle..."
+
+    # Test V4L2 devices
+    if ls /dev/video* 2>/dev/null | grep -E 'video1[0-9]' > /dev/null; then
+        log "Devices V4L2 trouvés pour l'accélération"
+        HW_ACCEL_AVAILABLE=true
     else
-        cvlc --vout drm --avcodec-hw v4l2m2m \
-             --fullscreen --loop --no-video-title-show \
-             --extraintf http --http-password signage123 \
-             "$MEDIA_DIR"/*.{mp4,avi,mkv,mov} 2>/dev/null \
-             > "$LOG_DIR/vlc.log" 2>&1 &
+        warning "Pas de devices V4L2 pour l'accélération"
+        HW_ACCEL_AVAILABLE=false
     fi
 
-    echo "VLC started (PID: $!)"
-}
-
-stop_vlc() {
-    pkill -f vlc 2>/dev/null || true
-    echo "VLC stopped"
-}
-
-status_vlc() {
-    if pgrep -f vlc > /dev/null; then
-        echo "VLC is running"
-        # Obtenir le statut via HTTP API
-        curl -s --user :signage123 "http://localhost:8080/requests/status.json" 2>/dev/null | \
-            jq -r '.information.category.meta.filename' 2>/dev/null
+    # Test ffmpeg avec support V4L2
+    if ffmpeg -decoders 2>/dev/null | grep -E 'h264_v4l2m2m|hevc_v4l2m2m' > /dev/null; then
+        log "Décodeurs V4L2M2M disponibles dans ffmpeg"
     else
-        echo "VLC is not running"
+        warning "Pas de décodeurs V4L2M2M dans ffmpeg"
+        HW_ACCEL_AVAILABLE=false
     fi
-}
 
-# ========== FONCTIONS MPV ==========
-setup_mpv_config() {
-    echo "Configuration MPV pour $PI_MODEL..."
-    mkdir -p ~/.config/mpv
-
-    if [ "$PI_MODEL" = "pi3" ]; then
-        cat > ~/.config/mpv/mpv.conf << 'EOF'
-# Configuration MPV Pi 3 - PiSignage
-hwdec=mmal-copy
-vo=gpu
-gpu-context=drm
-gpu-mem=256
-cache=yes
-demuxer-max-bytes=50MiB
-demuxer-max-back-bytes=25MiB
-fullscreen=yes
-loop-playlist=inf
-keep-open=yes
-osc=no
-osd-bar=no
-cursor-autohide=0
-audio-device=alsa/default:CARD=vc4hdmi0
-input-ipc-server=/tmp/mpv-socket
-log-file=/opt/pisignage/logs/mpv.log
-quiet=yes
-image-display-duration=inf
-EOF
+    # Test DRM access
+    if [ -r /dev/dri/card0 ] && [ -r /dev/dri/renderD128 ]; then
+        log "Accès DRM disponible"
     else
-        cat > ~/.config/mpv/mpv.conf << 'EOF'
-# Configuration MPV Pi 4/5 - PiSignage
-hwdec=drm-copy
-vo=gpu
-gpu-context=drm
-cache=yes
-demuxer-max-bytes=100MiB
-demuxer-max-back-bytes=50MiB
-fullscreen=yes
-loop-playlist=inf
-keep-open=yes
-osc=no
-osd-bar=no
-cursor-autohide=0
-audio-device=alsa/default:CARD=vc4hdmi0
-profile=high-quality
-scale=ewa_lanczossharp
-input-ipc-server=/tmp/mpv-socket
-network-timeout=30
-rtsp-transport=tcp
-log-file=/opt/pisignage/logs/mpv.log
-quiet=yes
-image-display-duration=inf
-video-sync=display-resample
-interpolation=yes
-EOF
+        warning "Accès DRM limité - vérifiez les permissions"
     fi
 }
 
+# Configuration MPV selon l'environnement
+configure_mpv() {
+    log "Configuration de MPV..."
+
+    local mpv_args=(
+        # Base args
+        "--fullscreen"
+        "--keep-open=yes"
+        "--loop-playlist=inf"
+        "--no-osc"
+        "--no-osd-bar"
+        "--cursor-autohide=1000"
+
+        # Display args (définis par setup_display_environment)
+        $MPV_DISPLAY_ARGS
+
+        # Hardware acceleration
+        "--hwdec=auto"
+        "--hwdec-codecs=all"
+
+        # Performance
+        "--cache=yes"
+        "--cache-secs=10"
+        "--demuxer-max-bytes=50M"
+
+        # Audio
+        "--audio-pitch-correction=yes"
+        "--volume=100"
+
+        # Logging
+        "--log-file=$MPV_LOG"
+        "--msg-level=all=warn"
+    )
+
+    # Si pas d'accélération HW, utiliser le software decoding
+    if [ "$HW_ACCEL_AVAILABLE" = "false" ]; then
+        warning "Désactivation de l'accélération HW pour MPV"
+        mpv_args+=("--hwdec=no")
+    fi
+
+    # Configuration spécifique Pi 4/5
+    if grep -q "Pi [45]" /proc/cpuinfo; then
+        mpv_args+=("--profile=gpu-hq")
+    fi
+
+    echo "${mpv_args[@]}"
+}
+
+# Configuration VLC (fallback)
+configure_vlc() {
+    log "Configuration de VLC (mode fallback)..."
+
+    local vlc_args=(
+        # Base args
+        "--fullscreen"
+        "--no-video-title-show"
+        "--quiet"
+        "--loop"
+
+        # Display args
+        $VLC_DISPLAY_ARGS
+
+        # Audio
+        "--gain=1"
+
+        # Logging
+        "--file-logging"
+        "--logfile=$VLC_LOG"
+    )
+
+    echo "${vlc_args[@]}"
+}
+
+# Lancement de MPV
 start_mpv() {
-    echo "Démarrage MPV ($PI_MODEL)..."
-    pkill -f mpv 2>/dev/null
-    sleep 1
+    local media="$1"
+    log "Démarrage de MPV avec: $media"
 
-    # Configurer l'affichage
-    export DISPLAY=:0
-    export XAUTHORITY=/home/pi/.Xauthority
+    local mpv_args=$(configure_mpv)
 
-    # Créer playlist
-    ls "$MEDIA_DIR"/*.{mp4,avi,mkv,mov,jpg,png} 2>/dev/null > /tmp/mpv-playlist.txt
+    # Vérification que MPV est installé
+    if ! command -v mpv &> /dev/null; then
+        error "MPV n'est pas installé"
+    fi
 
-    if [ -s /tmp/mpv-playlist.txt ]; then
-        # Lancer MPV avec les bons paramètres pour X11/Wayland
-        DISPLAY=:0 mpv \
-            --vo=gpu \
-            --gpu-context=x11egl \
-            --hwdec=auto \
-            --fullscreen \
-            --loop-playlist=inf \
-            --no-osc \
-            --no-input-default-bindings \
-            --input-ipc-server=/tmp/mpv-socket \
-            --playlist=/tmp/mpv-playlist.txt \
-            >> "$LOG_DIR/mpv.log" 2>&1 &
-        echo "MPV started (PID: $!)"
-    else
-        echo "Aucun média trouvé, activation mode fallback"
-        if [ -f "$MEDIA_DIR/fallback-logo.jpg" ]; then
-            DISPLAY=:0 mpv \
-                --vo=gpu \
-                --gpu-context=x11egl \
-                --fullscreen \
-                --keep-open=yes \
-                --loop-file=inf \
-                "$MEDIA_DIR/fallback-logo.jpg" \
-                >> "$LOG_DIR/mpv.log" 2>&1 &
+    # Lancement avec nohup pour détacher du terminal
+    nohup mpv $mpv_args "$media" > "$LOG_DIR/mpv-output.log" 2>&1 &
+    local pid=$!
+
+    echo $pid > "$PID_FILE"
+    log "MPV démarré avec PID: $pid"
+
+    # Vérification que MPV a bien démarré
+    sleep 2
+    if ! kill -0 $pid 2>/dev/null; then
+        error "MPV n'a pas réussi à démarrer"
+    fi
+
+    return 0
+}
+
+# Lancement de VLC (fallback)
+start_vlc() {
+    local media="$1"
+    log "Démarrage de VLC (fallback) avec: $media"
+
+    local vlc_args=$(configure_vlc)
+
+    # Vérification que VLC est installé
+    if ! command -v vlc &> /dev/null; then
+        error "VLC n'est pas installé"
+    fi
+
+    # Lancement avec nohup
+    nohup vlc $vlc_args "$media" > "$LOG_DIR/vlc-output.log" 2>&1 &
+    local pid=$!
+
+    echo $pid > "$PID_FILE"
+    log "VLC démarré avec PID: $pid"
+
+    # Vérification
+    sleep 2
+    if ! kill -0 $pid 2>/dev/null; then
+        error "VLC n'a pas réussi à démarrer"
+    fi
+
+    return 0
+}
+
+# Arrêt du player
+stop_player() {
+    log "Arrêt du player..."
+
+    if [ -f "$PID_FILE" ]; then
+        local pid=$(cat "$PID_FILE")
+        if kill -0 $pid 2>/dev/null; then
+            kill $pid
+            sleep 1
+            if kill -0 $pid 2>/dev/null; then
+                kill -9 $pid
+            fi
+            log "Player arrêté (PID: $pid)"
         fi
+        rm -f "$PID_FILE"
+    fi
+
+    # Nettoyage des processus orphelins
+    pkill -f "mpv.*pisignage" 2>/dev/null || true
+    pkill -f "vlc.*pisignage" 2>/dev/null || true
+}
+
+# Fonction principale de démarrage
+start() {
+    local media="${1:-$PLAYLIST_FILE}"
+    local player="${2:-$DEFAULT_PLAYER}"
+
+    log "=== Démarrage Pi-Signage Player Manager v0.8.1 ==="
+
+    # Vérification du lock
+    if [ -f "$LOCK_FILE" ]; then
+        error "Une instance est déjà en cours d'exécution"
+    fi
+    touch "$LOCK_FILE"
+
+    # Configuration de l'environnement
+    setup_display_environment
+
+    # Vérification HW
+    check_hw_acceleration
+
+    # Vérification du média
+    if [ ! -f "$media" ] && [ ! -d "$media" ]; then
+        error "Média non trouvé: $media"
+    fi
+
+    # Tentative avec le player préféré
+    if [ "$player" = "mpv" ]; then
+        if start_mpv "$media"; then
+            log "MPV démarré avec succès"
+        else
+            warning "Échec MPV, basculement sur VLC"
+            start_vlc "$media"
+        fi
+    else
+        start_vlc "$media"
+    fi
+
+    rm -f "$LOCK_FILE"
+}
+
+# Statut du player
+status() {
+    if [ -f "$PID_FILE" ]; then
+        local pid=$(cat "$PID_FILE")
+        if kill -0 $pid 2>/dev/null; then
+            local player_cmd=$(ps -p $pid -o comm= 2>/dev/null)
+            info "Player actif: $player_cmd (PID: $pid)"
+
+            # Info environnement
+            info "Environnement: $(detect_environment)"
+
+            # CPU usage
+            local cpu=$(ps -p $pid -o %cpu= 2>/dev/null | xargs)
+            info "Utilisation CPU: ${cpu}%"
+
+            return 0
+        fi
+    fi
+
+    info "Aucun player actif"
+    return 1
+}
+
+# Fonction de test
+test_players() {
+    log "=== Test des players ==="
+
+    # Création d'une vidéo de test si nécessaire
+    local test_video="$MEDIA_DIR/test.mp4"
+    if [ ! -f "$test_video" ]; then
+        warning "Vidéo de test non trouvée, utilisation de Big Buck Bunny"
+        wget -q -O "$test_video" "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" || \
+            error "Impossible de télécharger la vidéo de test"
+    fi
+
+    # Test MPV
+    log "Test de MPV..."
+    if timeout 10 mpv --vo=null --ao=null --frames=100 "$test_video" &>/dev/null; then
+        log "✓ MPV fonctionne"
+    else
+        warning "✗ MPV a des problèmes"
+    fi
+
+    # Test VLC
+    log "Test de VLC..."
+    if timeout 10 vlc --intf=dummy --play-and-exit --stop-time=5 "$test_video" vlc://quit &>/dev/null; then
+        log "✓ VLC fonctionne"
+    else
+        warning "✗ VLC a des problèmes"
     fi
 }
 
-stop_mpv() {
-    pkill -f mpv 2>/dev/null || true
-    echo "MPV stopped"
-}
-
-status_mpv() {
-    if pgrep -f mpv > /dev/null; then
-        echo "MPV is running"
-        # Obtenir le statut via socket IPC
-        if [ -S "/tmp/mpv-socket" ]; then
-            echo '{"command": ["get_property", "filename"]}' | \
-                socat - /tmp/mpv-socket 2>/dev/null | \
-                jq -r '.data' 2>/dev/null
-        fi
-    else
-        echo "MPV is not running"
-    fi
-}
-
-# ========== ACTIONS PRINCIPALES ==========
-case "$ACTION" in
+# Point d'entrée principal
+case "${1:-}" in
     start)
-        if [ "$PLAYER" = "vlc" ]; then
-            start_vlc
-        else
-            start_mpv
-        fi
-        # Sauvegarder le player actuel
-        jq ".player.current = \"$PLAYER\"" "$CONFIG_FILE" > /tmp/config.tmp && \
-            mv /tmp/config.tmp "$CONFIG_FILE"
+        start "${2:-}" "${3:-}"
         ;;
-
     stop)
-        if [ "$PLAYER" = "vlc" ]; then
-            stop_vlc
-        else
-            stop_mpv
-        fi
+        stop_player
         ;;
-
     restart)
-        $0 stop "$PLAYER"
+        stop_player
         sleep 2
-        $0 start "$PLAYER"
+        start "${2:-}" "${3:-}"
         ;;
-
     status)
-        if [ "$PLAYER" = "vlc" ]; then
-            status_vlc
-        else
-            status_mpv
-        fi
+        status
         ;;
-
-    setup)
-        echo "Configuration des deux players..."
-        setup_vlc_config
-        setup_mpv_config
-        echo "Configuration terminée pour VLC et MPV"
+    test)
+        test_players
         ;;
-
-    switch)
-        # Basculer entre VLC et MPV
-        CURRENT=$(jq -r '.player.current' "$CONFIG_FILE")
-        if [ "$CURRENT" = "vlc" ]; then
-            NEW_PLAYER="mpv"
-        else
-            NEW_PLAYER="vlc"
-        fi
-        echo "Basculement de $CURRENT vers $NEW_PLAYER..."
-        $0 stop "$CURRENT"
-        sleep 2
-        $0 start "$NEW_PLAYER"
+    env)
+        setup_display_environment
+        env | grep -E "DISPLAY|WAYLAND|DRM|LIBVA|GDK|QT_QPA|SDL"
         ;;
-
-    info)
-        echo "========== PiSignage Player Info =========="
-        echo "Modèle Pi: $PI_MODEL"
-        echo "Player actuel: $(jq -r '.player.current' "$CONFIG_FILE")"
-        echo "Players disponibles: VLC, MPV"
-        echo ""
-        echo "Statut VLC:"
-        status_vlc
-        echo ""
-        echo "Statut MPV:"
-        status_mpv
-        echo "==========================================="
-        ;;
-
     *)
-        echo "Usage: $0 {start|stop|restart|status|setup|switch|info} [vlc|mpv]"
+        echo "Usage: $0 {start|stop|restart|status|test|env} [media] [player]"
+        echo ""
+        echo "Options:"
+        echo "  media   - Fichier média ou playlist (défaut: $PLAYLIST_FILE)"
+        echo "  player  - mpv ou vlc (défaut: mpv)"
         echo ""
         echo "Exemples:"
-        echo "  $0 start        # Démarre le player par défaut (MPV)"
-        echo "  $0 start vlc    # Démarre VLC"
-        echo "  $0 start mpv    # Démarre MPV"
-        echo "  $0 switch       # Bascule entre VLC et MPV"
-        echo "  $0 setup        # Configure les deux players"
-        echo "  $0 info         # Affiche les informations"
+        echo "  $0 start                    # Démarre avec playlist par défaut"
+        echo "  $0 start video.mp4          # Démarre avec vidéo spécifique"
+        echo "  $0 start playlist.m3u vlc   # Démarre VLC avec playlist"
+        echo "  $0 test                     # Test les players"
         exit 1
         ;;
 esac
