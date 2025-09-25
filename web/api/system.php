@@ -32,9 +32,13 @@ function handleGetSystemInfo() {
     $systemInfo['php_version'] = PHP_VERSION;
     $systemInfo['platform'] = PHP_OS;
 
-    // VLC status
-    $vlcStatus = vlcCommand('status');
-    $systemInfo['vlc_status'] = $vlcStatus !== false ? $vlcStatus : ['state' => 'offline'];
+    // Player status (unified VLC/MPV)
+    $playerStatus = getPlayerStatus();
+    $systemInfo['player_status'] = $playerStatus;
+
+    // Current player info
+    $currentPlayer = getCurrentPlayer();
+    $systemInfo['current_player'] = $currentPlayer;
 
     // Media files count
     $mediaFiles = getMediaFiles();
@@ -66,13 +70,34 @@ function handleSystemAction($input) {
     $action = $input['action'];
 
     switch ($action) {
-        case 'restart-vlc':
-            $result = executeCommand('sudo systemctl restart vlc');
+        case 'restart-player':
+            $result = executeCommand('sudo systemctl restart pisignage-player');
             if ($result['success']) {
-                logMessage("VLC restarted via system API");
-                jsonResponse(true, null, 'VLC restarted successfully');
+                logMessage("Player restarted via system API");
+                jsonResponse(true, null, 'Player restarted successfully');
             } else {
-                jsonResponse(false, $result, 'Failed to restart VLC');
+                jsonResponse(false, $result, 'Failed to restart player');
+            }
+            break;
+
+        case 'restart-vlc':
+            // Legacy support - redirect to restart-player
+            $result = executeCommand('sudo systemctl restart pisignage-player');
+            if ($result['success']) {
+                logMessage("Player (legacy VLC command) restarted via system API");
+                jsonResponse(true, null, 'Player restarted successfully');
+            } else {
+                jsonResponse(false, $result, 'Failed to restart player');
+            }
+            break;
+
+        case 'switch-player':
+            $result = executeCommand('/opt/pisignage/scripts/player-manager.sh switch');
+            if ($result['success']) {
+                logMessage("Player switched via system API");
+                jsonResponse(true, ['output' => $result['output']], 'Player switched successfully');
+            } else {
+                jsonResponse(false, $result, 'Failed to switch player');
             }
             break;
 
@@ -286,7 +311,7 @@ function handleGetLogs($input) {
 }
 
 function handleGetProcesses() {
-    $result = executeCommand('ps aux | grep -E "(vlc|nginx|php)" | grep -v grep');
+    $result = executeCommand('ps aux | grep -E "(vlc|mpv|nginx|php)" | grep -v grep');
 
     if ($result['success']) {
         $processes = [];
@@ -307,5 +332,67 @@ function getLocalIP() {
     socket_getsockname($socket, $localAddr);
     socket_close($socket);
     return $localAddr;
+}
+
+// ========== DUAL PLAYER SUPPORT FUNCTIONS ==========
+
+function getCurrentPlayer() {
+    $result = executeCommand('/opt/pisignage/scripts/unified-player-control.sh current');
+    if ($result['success'] && !empty($result['output'])) {
+        return trim($result['output'][0]);
+    }
+    return 'mpv'; // default
+}
+
+function getPlayerStatus() {
+    $result = executeCommand('/opt/pisignage/scripts/unified-player-control.sh status');
+    if ($result['success'] && !empty($result['output'])) {
+        $status = trim($result['output'][0]);
+        return [
+            'status' => $status,
+            'running' => strpos(strtolower($status), 'running') !== false,
+            'player' => getCurrentPlayer()
+        ];
+    }
+
+    return [
+        'status' => 'offline',
+        'running' => false,
+        'player' => getCurrentPlayer()
+    ];
+}
+
+function getPlayerInfo() {
+    $result = executeCommand('/opt/pisignage/scripts/player-manager.sh info');
+    if ($result['success']) {
+        return [
+            'info' => $result['output'],
+            'current_player' => getCurrentPlayer()
+        ];
+    }
+
+    return [
+        'info' => ['No player information available'],
+        'current_player' => getCurrentPlayer()
+    ];
+}
+
+function getPlayerConfiguration() {
+    $configFile = '/opt/pisignage/config/player-config.json';
+    if (file_exists($configFile)) {
+        $config = json_decode(file_get_contents($configFile), true);
+        if ($config) {
+            return $config;
+        }
+    }
+
+    // Return default configuration
+    return [
+        'player' => [
+            'default' => 'mpv',
+            'current' => 'mpv',
+            'available' => ['mpv', 'vlc']
+        ]
+    ];
 }
 ?>

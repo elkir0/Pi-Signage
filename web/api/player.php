@@ -1,7 +1,7 @@
 <?php
 /**
- * PiSignage v0.8.0 - Player Control API
- * Controls MPV media player via shell scripts
+ * PiSignage v0.8.0 - Unified Player Control API
+ * Controls both VLC and MPV media players via unified script
  */
 
 header('Content-Type: application/json');
@@ -11,19 +11,30 @@ define('MEDIA_PATH', '/opt/pisignage/media');
 define('SCRIPTS_PATH', '/opt/pisignage/scripts');
 define('PLAYLISTS_PATH', '/opt/pisignage/config');
 define('LOGS_PATH', '/opt/pisignage/logs');
+define('UNIFIED_SCRIPT', '/opt/pisignage/scripts/unified-player-control.sh');
 
 $method = $_SERVER['REQUEST_METHOD'];
 $input = json_decode(file_get_contents('php://input'), true);
 
 switch ($method) {
     case 'GET':
-        // Get MPV status
-        $status = exec('/opt/pisignage/scripts/mpv-control.sh status 2>&1');
-        echo json_encode([
-            'success' => true,
-            'status' => $status,
-            'running' => strpos($status, 'running') !== false
-        ]);
+        // Get current player status
+        if (isset($_GET['action']) && $_GET['action'] === 'current') {
+            // Get current player
+            $current_player = exec(UNIFIED_SCRIPT . ' current 2>&1');
+            echo json_encode([
+                'success' => true,
+                'current_player' => trim($current_player)
+            ]);
+        } else {
+            // Get player status
+            $status = exec(UNIFIED_SCRIPT . ' status 2>&1');
+            echo json_encode([
+                'success' => true,
+                'status' => $status,
+                'running' => strpos($status, 'running') !== false
+            ]);
+        }
         break;
 
     case 'POST':
@@ -41,46 +52,61 @@ switch ($method) {
         switch ($action) {
             case 'play':
             case 'start':
-                // Start MPV with all media files
+                // Start current player with all media files
                 $output = [];
-                exec('/opt/pisignage/scripts/mpv-control.sh start 2>&1', $output, $retval);
+                exec(UNIFIED_SCRIPT . ' play 2>&1', $output, $retval);
                 $success = ($retval === 0);
-                $message = !empty($output) ? implode("\n", $output) : 'MPV started';
+                $message = !empty($output) ? implode("\n", $output) : 'Player started';
                 break;
 
             case 'stop':
-                // Stop MPV
+                // Stop current player
                 $output = [];
-                exec('/opt/pisignage/scripts/mpv-control.sh stop 2>&1', $output, $retval);
+                exec(UNIFIED_SCRIPT . ' stop 2>&1', $output, $retval);
                 $success = ($retval === 0);
-                $message = !empty($output) ? implode("\n", $output) : 'MPV stopped';
+                $message = !empty($output) ? implode("\n", $output) : 'Player stopped';
                 break;
 
             case 'restart':
-                // Restart MPV
+                // Restart current player
                 $output = [];
-                exec('/opt/pisignage/scripts/mpv-control.sh restart 2>&1', $output, $retval);
+                exec(UNIFIED_SCRIPT . ' restart 2>&1', $output, $retval);
                 $success = ($retval === 0);
-                $message = !empty($output) ? implode("\n", $output) : 'MPV restarted';
+                $message = !empty($output) ? implode("\n", $output) : 'Player restarted';
                 break;
 
             case 'pause':
-                // MPV pause via dbus (if available) or kill/resume
-                exec('dbus-send --print-reply --session --dest=org.mpris.MediaPlayer2.mpv /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player.PlayPause 2>&1', $output, $retval);
-                if ($retval !== 0) {
-                    // Fallback: stop MPV
-                    exec('/opt/pisignage/scripts/mpv-control.sh stop 2>&1', $output, $retval);
-                }
+                // Pause current player
+                $output = [];
+                exec(UNIFIED_SCRIPT . ' pause 2>&1', $output, $retval);
                 $success = true;
-                $message = 'Paused';
+                $message = !empty($output) ? implode("\n", $output) : 'Player paused/resumed';
                 break;
 
             case 'next':
-            case 'previous':
-                // Not supported in simple mode - restart playlist
-                exec('/opt/pisignage/scripts/mpv-control.sh restart 2>&1', $output, $retval);
+                // Next track
+                $output = [];
+                exec(UNIFIED_SCRIPT . ' next 2>&1', $output, $retval);
                 $success = true;
-                $message = 'Playlist restarted';
+                $message = !empty($output) ? implode("\n", $output) : 'Next track';
+                break;
+
+            case 'previous':
+            case 'prev':
+                // Previous track
+                $output = [];
+                exec(UNIFIED_SCRIPT . ' prev 2>&1', $output, $retval);
+                $success = true;
+                $message = !empty($output) ? implode("\n", $output) : 'Previous track';
+                break;
+
+            case 'switch':
+            case 'switch_player':
+                // Switch between VLC and MPV
+                $output = [];
+                exec(UNIFIED_SCRIPT . ' switch 2>&1', $output, $retval);
+                $success = ($retval === 0);
+                $message = !empty($output) ? implode("\n", $output) : 'Player switched';
                 break;
 
             case 'play-file':
@@ -160,15 +186,16 @@ switch ($method) {
                 break;
 
             case 'volume':
-                // Volume control via amixer
+                // Volume control via unified script
                 if (!isset($input['value'])) {
                     echo json_encode(['success' => false, 'message' => 'Volume value required']);
                     exit;
                 }
                 $volume = intval($input['value']);
-                exec("amixer set Master {$volume}% 2>&1", $output, $retval);
+                $output = [];
+                exec(UNIFIED_SCRIPT . " volume $volume 2>&1", $output, $retval);
                 $success = ($retval === 0);
-                $message = "Volume set to $volume%";
+                $message = !empty($output) ? implode("\n", $output) : "Volume set to $volume%";
                 break;
 
             default:

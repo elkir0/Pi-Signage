@@ -226,115 +226,6 @@ foreach ($dirs as $dir) {
             border-color: rgba(74, 158, 255, 0.3);
         }
 
-        /* Player Selector Styles */
-        .player-selector {
-            background: var(--glass);
-            backdrop-filter: blur(10px);
-            border: 1px solid var(--glass-border);
-            border-radius: 15px;
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-
-        .selector-title {
-            color: #4a9eff;
-            font-weight: 600;
-            margin-bottom: 15px;
-            font-size: 16px;
-        }
-
-        .player-options {
-            display: flex;
-            gap: 15px;
-            margin-bottom: 15px;
-            flex-wrap: wrap;
-        }
-
-        .player-option {
-            flex: 1;
-            min-width: 200px;
-            cursor: pointer;
-            position: relative;
-        }
-
-        .player-option input[type="radio"] {
-            position: absolute;
-            opacity: 0;
-            width: 0;
-            height: 0;
-        }
-
-        .option-content {
-            display: flex;
-            align-items: center;
-            padding: 15px;
-            background: rgba(255, 255, 255, 0.05);
-            border: 2px solid rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
-            transition: all 0.3s ease;
-        }
-
-        .player-option:hover .option-content {
-            background: rgba(74, 158, 255, 0.1);
-            border-color: rgba(74, 158, 255, 0.3);
-        }
-
-        .player-option input:checked + .option-content {
-            background: linear-gradient(135deg, rgba(74, 158, 255, 0.2), rgba(61, 126, 219, 0.2));
-            border-color: #4a9eff;
-            box-shadow: 0 0 20px rgba(74, 158, 255, 0.3);
-        }
-
-        .option-icon {
-            font-size: 24px;
-            margin-right: 12px;
-        }
-
-        .option-name {
-            font-weight: 600;
-            color: #fff;
-            font-size: 16px;
-        }
-
-        .option-desc {
-            color: rgba(255, 255, 255, 0.7);
-            font-size: 12px;
-            margin-top: 2px;
-        }
-
-        .btn-switch {
-            background: linear-gradient(135deg, #4a9eff, #3d7edb);
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 10px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            font-size: 14px;
-        }
-
-        .btn-switch:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(74, 158, 255, 0.4);
-        }
-
-        .player-status {
-            background: var(--glass);
-            backdrop-filter: blur(10px);
-            border: 1px solid var(--glass-border);
-            border-radius: 15px;
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-
-        .status-title {
-            color: #4a9eff;
-            font-weight: 600;
-            margin-bottom: 15px;
-            font-size: 16px;
-        }
-
         .card-title {
             font-size: 20px;
             font-weight: 600;
@@ -901,47 +792,17 @@ foreach ($dirs as $dir) {
                 <div class="card">
                     <h3 class="card-title">
                         <span>🎵</span>
-                        Lecteur Vidéo
+                        Lecteur VLC
                     </h3>
-                    <!-- Sélecteur de lecteur vidéo -->
-                    <div class="player-selector">
-                        <div class="selector-title">Choisir le lecteur :</div>
-                        <div class="player-options">
-                            <label class="player-option">
-                                <input type="radio" name="player" value="mpv" id="player-mpv" checked>
-                                <div class="option-content">
-                                    <div class="option-icon">🚀</div>
-                                    <div class="option-details">
-                                        <div class="option-name">MPV</div>
-                                        <div class="option-desc">Performance optimale</div>
-                                    </div>
-                                </div>
-                            </label>
-                            <label class="player-option">
-                                <input type="radio" name="player" value="vlc" id="player-vlc">
-                                <div class="option-content">
-                                    <div class="option-icon">🎛️</div>
-                                    <div class="option-details">
-                                        <div class="option-name">VLC</div>
-                                        <div class="option-desc">Fonctionnalités avancées</div>
-                                    </div>
-                                </div>
-                            </label>
-                        </div>
-                        <button class="btn-switch" onclick="switchPlayer()">Basculer Lecteur</button>
-                    </div>
-
-                    <!-- Statut du lecteur -->
-                    <div class="player-status">
-                        <div class="status-title">Statut : <span id="current-player">MPV</span></div>
-                        <p><strong>État:</strong> <span id="player-state">Arrêté</span></p>
-                        <p><strong>Fichier:</strong> <span id="player-file">Aucun</span></p>
-                        <p><strong>Position:</strong> <span id="player-position">00:00</span></p>
+                    <div id="vlc-status">
+                        <p><strong>État:</strong> <span id="vlc-state">Arrêté</span></p>
+                        <p><strong>Fichier:</strong> <span id="vlc-file">Aucun</span></p>
+                        <p><strong>Position:</strong> <span id="vlc-position">00:00</span></p>
                     </div>
                     <div class="player-controls">
-                        <div class="player-btn" onclick="playerControl('play')">▶️</div>
-                        <div class="player-btn" onclick="playerControl('pause')">⏸️</div>
-                        <div class="player-btn" onclick="playerControl('stop')">⏹️</div>
+                        <div class="player-btn" onclick="vlcControl('play')">▶️</div>
+                        <div class="player-btn" onclick="vlcControl('pause')">⏸️</div>
+                        <div class="player-btn" onclick="vlcControl('stop')">⏹️</div>
                         <div class="player-btn" onclick="takeQuickScreenshot('player')">📸</div>
                     </div>
                 </div>
@@ -1066,14 +927,14 @@ foreach ($dirs as $dir) {
             <div class="card">
                 <h3 class="card-title">
                     <span>🎮</span>
-                    Contrôles MPV
+                    Contrôles VLC
                 </h3>
                 <div class="player-controls">
-                    <div class="player-btn" onclick="playerControl('play')">▶️</div>
-                    <div class="player-btn" onclick="playerControl('pause')">⏸️</div>
-                    <div class="player-btn" onclick="playerControl('stop')">⏹️</div>
-                    <div class="player-btn" onclick="playerControl('next')">⏭️</div>
-                    <div class="player-btn" onclick="playerControl('previous')">⏮️</div>
+                    <div class="player-btn" onclick="vlcControl('play')">▶️</div>
+                    <div class="player-btn" onclick="vlcControl('pause')">⏸️</div>
+                    <div class="player-btn" onclick="vlcControl('stop')">⏹️</div>
+                    <div class="player-btn" onclick="vlcControl('next')">⏭️</div>
+                    <div class="player-btn" onclick="vlcControl('previous')">⏮️</div>
                 </div>
 
                 <div class="form-group">
@@ -1233,7 +1094,7 @@ foreach ($dirs as $dir) {
                         ⚡ Éteindre
                     </button>
                     <button class="btn btn-glass" onclick="systemAction('restart-vlc')">
-                        🎵 Redémarrer MPV
+                        🎵 Redémarrer VLC
                     </button>
                     <button class="btn btn-glass" onclick="systemAction('clear-cache')">
                         🗑️ Vider le cache
@@ -1341,8 +1202,8 @@ foreach ($dirs as $dir) {
                 .catch(error => console.error('Error loading stats:', error));
         }
 
-        // MPV Control
-        function playerControl(action) {
+        // VLC Control
+        function vlcControl(action) {
             fetch('/api/player.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1352,7 +1213,7 @@ foreach ($dirs as $dir) {
             .then(data => {
                 if (data.success) {
                     showAlert(data.message || `Action ${action} exécutée!`, 'success');
-                    updatePlayerStatus();
+                    updateVLCStatus();
                 } else {
                     showAlert(data.message || `Erreur: ${action} a échoué`, 'error');
                 }
@@ -1360,72 +1221,21 @@ foreach ($dirs as $dir) {
             .catch(error => showAlert('Erreur de communication', 'error'));
         }
 
-        // Update MPV status
-        function updatePlayerStatus() {
+        // Update VLC status
+        function updateVLCStatus() {
             fetch('/api/player.php')
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
                         const status = data.running ? 'En lecture' : 'Arrêté';
-                        document.getElementById('player-state').textContent = status;
-                        document.getElementById('player-file').textContent = data.status || 'Aucun';
-                        document.getElementById('player-position').textContent = '--:--';
+                        document.getElementById('vlc-state').textContent = status;
+                        document.getElementById('vlc-file').textContent = data.status || 'Aucun';
+                        document.getElementById('vlc-position').textContent = '--:--';
                     }
                 })
                 .catch(error => console.error('Error:', error));
         }
 
-        // Get current player from config
-        function getCurrentPlayer() {
-            fetch('/api/system.php?action=get_player')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        const currentPlayer = data.player || 'mpv';
-                        document.getElementById('current-player').textContent = currentPlayer.toUpperCase();
-
-                        // Update radio buttons
-                        if (document.getElementById('player-' + currentPlayer)) {
-                            document.getElementById('player-' + currentPlayer).checked = true;
-                        }
-                    }
-                })
-                .catch(error => console.error('Get player error:', error));
-        }
-
-        // Switch between players
-        function switchPlayer() {
-            const selectedPlayer = document.querySelector('input[name="player"]:checked').value;
-
-            if (confirm(`Basculer vers ${selectedPlayer.toUpperCase()} ? Le lecteur actuel sera arrêté.`)) {
-                showAlert('Basculement en cours...', 'info');
-
-                fetch('/api/system.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        action: 'switch_player',
-                        player: selectedPlayer
-                    })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        showAlert(`Basculement vers ${selectedPlayer.toUpperCase()} réussi!`, 'success');
-                        setTimeout(() => {
-                            getCurrentPlayer();
-                            updatePlayerStatus();
-                        }, 2000);
-                    } else {
-                        showAlert(data.message || 'Erreur lors du basculement', 'error');
-                    }
-                })
-                .catch(error => {
-                    showAlert('Erreur de communication', 'error');
-                    console.error('Switch error:', error);
-                });
-            }
-        }
 
         // Play single file
         function playSingleFile() {
@@ -1447,7 +1257,7 @@ foreach ($dirs as $dir) {
             .then(data => {
                 if (data.success) {
                     showAlert(data.message || 'Lecture démarrée!', 'success');
-                    updatePlayerStatus();
+                    updateVLCStatus();
                 } else {
                     showAlert(data.message || 'Erreur de lecture', 'error');
                 }
@@ -1486,7 +1296,7 @@ foreach ($dirs as $dir) {
         function takeScreenshot() {
             showAlert('Capture en cours...', 'info');
 
-            fetch('/api/screenshot-raspi2png.php?action=capture')
+            fetch('/api/screenshot-simple.php?action=capture')
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
@@ -1511,7 +1321,7 @@ foreach ($dirs as $dir) {
         function takeQuickScreenshot(source) {
             showAlert(`Capture depuis ${source}...`, 'info');
 
-            fetch('/api/screenshot-raspi2png.php?action=capture')
+            fetch('/api/screenshot-simple.php?action=capture')
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
@@ -1617,7 +1427,7 @@ foreach ($dirs as $dir) {
 
         // Playlist management
         function loadPlaylists() {
-            fetch('/api/playlist-simple.php')
+            fetch('/api/playlist.php')
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {

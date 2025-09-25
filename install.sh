@@ -27,22 +27,44 @@ echo "📦 [2/9] Installation des packages..."
 sudo apt-get install -y \
     nginx \
     php8.2-fpm php8.2-cli php8.2-curl php8.2-mbstring php8.2-json php8.2-xml \
-    vlc \
+    mpv vlc \
+    socat jq \
     git curl wget \
-    python3-pip \
     imagemagick \
     scrot \
-    fbi
+    fbi \
+    fbgrab \
+    libpng-dev \
+    build-essential \
+    cmake
 
-# 3. Installation yt-dlp
-echo "📦 [3/9] Installation yt-dlp..."
+# 3. Installation yt-dlp et raspi2png
+echo "📦 [3/9] Installation yt-dlp et outils de capture..."
 sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
 sudo chmod a+rx /usr/local/bin/yt-dlp
 
+# Installation raspi2png pour capture hardware sur Pi
+if [[ -f /proc/device-tree/model ]]; then
+    echo "🎯 Détection Raspberry Pi - Installation raspi2png..."
+    cd /tmp
+    rm -rf raspi2png
+    git clone https://github.com/AndrewFromMelbourne/raspi2png.git
+    cd raspi2png
+    mkdir -p build && cd build
+    cmake .. -DCMAKE_BUILD_TYPE=Release
+    make -j$(nproc)
+    sudo make install
+    sudo ldconfig
+    echo "✅ raspi2png installé"
+    cd /tmp
+fi
+
 # 4. Structure PiSignage
 echo "📁 [4/9] Création de la structure..."
-sudo mkdir -p /opt/pisignage/{web/api,scripts,media,logs,config}
+sudo mkdir -p /opt/pisignage/{web/api,scripts,media,logs,config,screenshots}
+sudo mkdir -p /dev/shm/pisignage-screenshots
 sudo chown -R www-data:www-data /opt/pisignage
+sudo chown www-data:www-data /dev/shm/pisignage-screenshots
 
 # 5. Configuration PHP (upload 100MB)
 echo "⚙️  [5/9] Configuration PHP..."
@@ -110,21 +132,93 @@ sudo chmod -R 755 /opt/pisignage
 sudo chmod +x /opt/pisignage/scripts/*.sh
 sudo usermod -a -G video www-data
 
-# 10. Service systemd pour VLC
-echo "⚙️  Création du service systemd..."
-sudo tee /etc/systemd/system/pisignage-vlc.service > /dev/null << 'SERVICE_END'
+# 10. Configuration dual-player et service systemd
+echo "⚙️  Configuration dual-player..."
+
+# Créer configuration dual-player par défaut
+sudo mkdir -p /opt/pisignage/config
+sudo tee /opt/pisignage/config/player-config.json > /dev/null << 'CONFIG_END'
+{
+  "player": {
+    "default": "mpv",
+    "current": "mpv",
+    "available": ["mpv", "vlc"]
+  },
+  "mpv": {
+    "enabled": true,
+    "version": "auto",
+    "binary": "/usr/bin/mpv",
+    "config_path": "/home/pi/.config/mpv/mpv.conf",
+    "socket": "/tmp/mpv-socket",
+    "log_file": "/opt/pisignage/logs/mpv.log",
+    "optimizations": {
+      "pi3": {
+        "hwdec": "mmal-copy",
+        "vo": "gpu",
+        "gpu-context": "drm",
+        "cache": "yes",
+        "demuxer-max-bytes": "50MiB"
+      },
+      "pi4": {
+        "hwdec": "drm-copy",
+        "vo": "gpu",
+        "gpu-context": "drm",
+        "cache": "yes",
+        "demuxer-max-bytes": "100MiB",
+        "scale": "ewa_lanczossharp"
+      }
+    }
+  },
+  "vlc": {
+    "enabled": true,
+    "version": "auto",
+    "binary": "/usr/bin/cvlc",
+    "config_path": "/home/pi/.config/vlc/vlcrc",
+    "http_port": 8080,
+    "http_password": "signage123",
+    "log_file": "/opt/pisignage/logs/vlc.log",
+    "optimizations": {
+      "pi3": {
+        "vout": "mmal_xsplitter",
+        "codec": "mmal",
+        "h264-fps": 30,
+        "file-caching": 2000
+      },
+      "pi4": {
+        "vout": "drm",
+        "avcodec-hw": "v4l2m2m",
+        "file-caching": 2000,
+        "network-caching": 3000
+      }
+    }
+  },
+  "system": {
+    "pi_model": "auto",
+    "display": ":0",
+    "audio_device": "alsa/default:CARD=vc4hdmi0",
+    "fallback_image": "/opt/pisignage/media/fallback-logo.jpg",
+    "autostart": true,
+    "watchdog": true
+  }
+}
+CONFIG_END
+
+# Service systemd pour player unifié
+echo "⚙️  Création du service systemd unifié..."
+sudo tee /etc/systemd/system/pisignage-player.service > /dev/null << 'SERVICE_END'
 [Unit]
-Description=PiSignage VLC Player
+Description=PiSignage Unified Player (VLC/MPV)
 After=graphical.target
 
 [Service]
 Type=simple
 User=pi
 Environment="DISPLAY=:0"
-ExecStartPre=/opt/pisignage/scripts/display-manager.sh start
-ExecStart=/opt/pisignage/scripts/vlc-control.sh start
-ExecStop=/opt/pisignage/scripts/vlc-control.sh stop
-ExecStopPost=/opt/pisignage/scripts/display-manager.sh start
+Environment="HOME=/home/pi"
+ExecStartPre=/bin/sleep 5
+ExecStart=/opt/pisignage/scripts/player-manager.sh start
+ExecStop=/opt/pisignage/scripts/player-manager.sh stop
+ExecStopPost=/opt/pisignage/scripts/unified-player-control.sh fallback
 Restart=on-failure
 RestartSec=5
 
@@ -132,27 +226,39 @@ RestartSec=5
 WantedBy=default.target
 SERVICE_END
 
-# 11. Redémarrage des services
+# 11. Configuration et initialisation des players
+echo "⚙️  Configuration des players..."
+
+# Initialiser la configuration VLC et MPV
+sudo -u pi /opt/pisignage/scripts/player-manager.sh setup
+
+# 12. Redémarrage des services
 echo "🔄 Redémarrage des services..."
 sudo systemctl restart php8.2-fpm
 sudo systemctl restart nginx
 sudo systemctl daemon-reload
-sudo systemctl enable pisignage-vlc
 
-# 12. Télécharger vidéo de test Big Buck Bunny
+# Disable old service if exists
+sudo systemctl stop pisignage-mpv 2>/dev/null || true
+sudo systemctl disable pisignage-mpv 2>/dev/null || true
+
+# Enable new unified service
+sudo systemctl enable pisignage-player
+
+# 12. Télécharger vidéo de test Big Buck Bunny 720p
 echo "📥 Téléchargement vidéo de test..."
-if [ ! -f "/opt/pisignage/media/BigBuckBunny.mp4" ]; then
-    wget -q --show-progress -O /opt/pisignage/media/BigBuckBunny.mp4 \
-        "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4"
-    sudo chown www-data:www-data /opt/pisignage/media/BigBuckBunny.mp4
+if [ ! -f "/opt/pisignage/media/BigBuckBunny_720p.mp4" ]; then
+    wget -q --show-progress -O /opt/pisignage/media/BigBuckBunny_720p.mp4 \
+        "http://distribution.bbb3d.renderfarming.net/video/mp4/bbb_sunflower_1080p_60fps_normal.mp4"
+    sudo chown www-data:www-data /opt/pisignage/media/BigBuckBunny_720p.mp4
     echo "✅ Vidéo de test téléchargée"
 else
     echo "✅ Vidéo de test déjà présente"
 fi
 
-# 13. Démarrer VLC avec la vidéo test
-echo "🎬 Démarrage de VLC avec vidéo test..."
-sudo systemctl start pisignage-vlc
+# 13. Démarrer le player unifié avec la vidéo test
+echo "🎬 Démarrage du player unifié (MPV par défaut)..."
+sudo systemctl start pisignage-player
 
 echo ""
 echo "╔══════════════════════════════════════════════════════════╗"
@@ -163,5 +269,6 @@ echo "📌 Interface web : http://$(hostname -I | cut -d' ' -f1)/"
 echo "📂 Média : /opt/pisignage/media/"
 echo "📊 Logs : /opt/pisignage/logs/pisignage.log"
 echo ""
-echo "🔄 Pour démarrer VLC : sudo systemctl start pisignage-vlc"
+echo "🔄 Contrôle du player : sudo systemctl start/stop/restart pisignage-player"
+echo "🎛️  Basculement VLC/MPV : /opt/pisignage/scripts/player-manager.sh switch"
 echo "⚠️  Redémarrage recommandé : sudo reboot"

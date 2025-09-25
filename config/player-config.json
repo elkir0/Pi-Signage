@@ -1,0 +1,63 @@
+{
+  "player": {
+    "default": "mpv",
+    "current": "mpv",
+    "available": ["mpv", "vlc"]
+  },
+  "mpv": {
+    "enabled": true,
+    "version": "0.35.0",
+    "binary": "/usr/bin/mpv",
+    "config_path": "/home/pi/.config/mpv/mpv.conf",
+    "socket": "/tmp/mpv-socket",
+    "log_file": "/opt/pisignage/logs/mpv.log",
+    "optimizations": {
+      "pi3": {
+        "hwdec": "mmal-copy",
+        "vo": "gpu",
+        "gpu-context": "drm",
+        "cache": "yes",
+        "demuxer-max-bytes": "50MiB"
+      },
+      "pi4": {
+        "hwdec": "drm-copy",
+        "vo": "gpu",
+        "gpu-context": "drm",
+        "cache": "yes",
+        "demuxer-max-bytes": "100MiB",
+        "scale": "ewa_lanczossharp"
+      }
+    }
+  },
+  "vlc": {
+    "enabled": true,
+    "version": "3.0.18",
+    "binary": "/usr/bin/cvlc",
+    "config_path": "/home/pi/.config/vlc/vlcrc",
+    "http_port": 8080,
+    "http_password": "signage123",
+    "log_file": "/opt/pisignage/logs/vlc.log",
+    "optimizations": {
+      "pi3": {
+        "vout": "mmal_xsplitter",
+        "codec": "mmal",
+        "h264-fps": 30,
+        "file-caching": 2000
+      },
+      "pi4": {
+        "vout": "drm",
+        "avcodec-hw": "v4l2m2m",
+        "file-caching": 2000,
+        "network-caching": 3000
+      }
+    }
+  },
+  "system": {
+    "pi_model": "auto",
+    "display": ":0",
+    "audio_device": "alsa/default:CARD=vc4hdmi0",
+    "fallback_image": "/opt/pisignage/media/fallback-logo.jpg",
+    "autostart": true,
+    "watchdog": true
+  }
+}

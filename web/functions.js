@@ -442,7 +442,252 @@ function refreshMediaList() {
     }
 }
 
+// ========== DUAL PLAYER CONTROL FUNCTIONS ==========
+
+// Get current player
+function getCurrentPlayer() {
+    return fetch('/api/player.php?action=current')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                return data.current_player;
+            }
+            return 'mpv'; // default
+        })
+        .catch(error => {
+            console.error('Error getting current player:', error);
+            return 'mpv';
+        });
+}
+
+// Switch between VLC and MPV
+function switchPlayer() {
+    fetch('/api/player.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'switch' })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification('Player basculé: ' + data.message, 'success');
+            // Update interface
+            updatePlayerInterface();
+        } else {
+            showNotification('Erreur: ' + data.message, 'error');
+        }
+    })
+    .catch(error => {
+        showNotification('Erreur de basculement: ' + error, 'error');
+    });
+}
+
+// Unified player control function
+function playerControl(action, value = null) {
+    const body = { action: action };
+    if (value !== null) {
+        body.value = value;
+    }
+
+    fetch('/api/player.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    })
+    .then(response => response.json())
+    .then(data => {
+        const statusDiv = document.getElementById('player-status');
+        if (statusDiv) {
+            statusDiv.textContent = data.message || action + ' completed';
+        }
+
+        if (data.success) {
+            showNotification('Action réussie: ' + action, 'success');
+        } else {
+            showNotification('Erreur: ' + data.message, 'error');
+        }
+
+        // Update player status
+        updatePlayerStatus();
+    })
+    .catch(error => {
+        showNotification('Erreur de contrôle: ' + error, 'error');
+    });
+}
+
+// Update player interface to reflect current player
+function updatePlayerInterface() {
+    getCurrentPlayer().then(currentPlayer => {
+        // Update radio buttons
+        const mpvRadio = document.getElementById('player-mpv');
+        const vlcRadio = document.getElementById('player-vlc');
+
+        if (mpvRadio && vlcRadio) {
+            mpvRadio.checked = (currentPlayer === 'mpv');
+            vlcRadio.checked = (currentPlayer === 'vlc');
+        }
+
+        // Update status display
+        const statusDiv = document.getElementById('current-player');
+        if (statusDiv) {
+            statusDiv.textContent = currentPlayer.toUpperCase();
+        }
+    });
+}
+
+// Update player status
+function updatePlayerStatus() {
+    fetch('/api/player.php')
+        .then(response => response.json())
+        .then(data => {
+            const statusDiv = document.getElementById('player-status');
+            if (statusDiv && data.status) {
+                statusDiv.textContent = data.status;
+                statusDiv.className = data.running ? 'status-running' : 'status-stopped';
+            }
+        })
+        .catch(error => {
+            console.error('Error updating player status:', error);
+        });
+}
+
+// Play specific file
+function playFile(filename) {
+    fetch('/api/player.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            action: 'play-file',
+            file: filename
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification('Lecture de: ' + filename, 'success');
+        } else {
+            showNotification('Erreur: ' + data.message, 'error');
+        }
+    });
+}
+
+// Volume control
+function setVolume(volume) {
+    playerControl('volume', parseInt(volume));
+}
+
+// ========== LEGACY FUNCTIONS COMPATIBILITY ==========
+
+// Legacy MPV control function (for backward compatibility)
+function mpvControl(action, value = null) {
+    return playerControl(action, value);
+}
+
+// Quick screenshot function
+function takeQuickScreenshot(section) {
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Capture...';
+
+    fetch('/api/screenshot.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'capture' })
+    })
+    .then(response => response.json())
+    .then(data => {
+        btn.disabled = false;
+        btn.textContent = originalText;
+
+        if (data.success) {
+            showNotification('Capture réussie', 'success');
+        } else {
+            showNotification('Erreur: ' + data.message, 'error');
+        }
+    })
+    .catch(error => {
+        btn.disabled = false;
+        btn.textContent = originalText;
+        showNotification('Erreur: ' + error, 'error');
+    });
+}
+
+// ========== NAVIGATION AND UI FUNCTIONS ==========
+
+// Show section navigation
+function showSection(sectionName) {
+    // Hide all sections
+    const sections = document.querySelectorAll('.content-section');
+    sections.forEach(section => {
+        section.classList.remove('active');
+    });
+
+    // Show target section
+    const targetSection = document.getElementById(sectionName);
+    if (targetSection) {
+        targetSection.classList.add('active');
+    }
+
+    // Update navigation
+    const navItems = document.querySelectorAll('.nav-item');
+    navItems.forEach(item => {
+        item.classList.remove('active');
+    });
+
+    // Find and activate current nav item
+    const currentNav = Array.from(navItems).find(item =>
+        item.getAttribute('onclick') && item.getAttribute('onclick').includes(sectionName)
+    );
+    if (currentNav) {
+        currentNav.classList.add('active');
+    }
+
+    // Load section-specific data
+    if (sectionName === 'player') {
+        updatePlayerInterface();
+        updatePlayerStatus();
+    }
+}
+
+// Toggle sidebar for mobile
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    if (sidebar) {
+        sidebar.classList.toggle('show');
+    }
+}
+
+// Refresh system stats
+function refreshStats() {
+    fetch('/api/system.php?action=stats')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.data) {
+                const stats = data.data;
+                document.getElementById('cpu-usage').textContent = stats.cpu || '--';
+                document.getElementById('ram-usage').textContent = stats.ram || '--';
+                document.getElementById('temperature').textContent = stats.temperature || '--';
+            }
+        })
+        .catch(error => {
+            console.error('Error refreshing stats:', error);
+        });
+}
+
 // Auto-init when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('✅ Additional functions loaded for PiSignage v0.8.0');
+    console.log('✅ PiSignage v0.8.0 - Dual Player Functions loaded');
+
+    // Initialize player interface if on player section
+    if (document.getElementById('player')) {
+        updatePlayerInterface();
+        updatePlayerStatus();
+    }
+
+    // Auto-refresh player status every 10 seconds
+    setInterval(updatePlayerStatus, 10000);
+
+    // Auto-refresh stats every 5 seconds
+    setInterval(refreshStats, 5000);
 });
