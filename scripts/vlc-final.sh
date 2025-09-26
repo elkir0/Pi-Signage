@@ -30,19 +30,18 @@ start_vlc() {
     log "========================================="
     log "Démarrage de VLC - Configuration STABLE"
     log "Vidéo: $VIDEO"
-    log "IMPORTANT: Audio désactivé pour stabilité"
+    log "Audio: Activé"
     log "========================================="
 
     # Configuration qui FONCTIONNE :
     # - vlc (pas cvlc)
     # - -I dummy (pas --intf dummy)
-    # - --no-audio (CRITIQUE pour éviter les crashs)
     # - --fullscreen --loop pour l'affichage continu
+    # Audio réactivé : stable maintenant
 
     vlc -I dummy \
         --fullscreen \
         --loop \
-        --no-audio \
         --no-video-title-show \
         --quiet \
         "$VIDEO" > /dev/null 2>&1 &
@@ -55,7 +54,7 @@ start_vlc() {
     if kill -0 "$VLC_PID" 2>/dev/null; then
         log "✅ VLC démarré avec succès (PID: $VLC_PID)"
         log "📹 Lecture en boucle: $(basename "$VIDEO")"
-        log "🔇 Audio: Désactivé (pour stabilité)"
+        log "🔊 Audio: Activé"
         log "📸 Screenshots: http://192.168.1.103/"
         echo ""
         echo "VLC est maintenant STABLE et fonctionnel!"
