@@ -354,6 +354,15 @@ server {
 ENDOFFILE
 
         sudo ln -sf /etc/nginx/sites-available/pisignage /etc/nginx/sites-enabled/
+
+        # Configurer les limites PHP pour uploads
+        if [ -f /etc/php/8.2/fpm/php.ini ]; then
+            sudo sed -i 's/upload_max_filesize = .*/upload_max_filesize = 500M/' /etc/php/8.2/fpm/php.ini
+            sudo sed -i 's/post_max_size = .*/post_max_size = 500M/' /etc/php/8.2/fpm/php.ini
+            sudo sed -i 's/max_execution_time = .*/max_execution_time = 300/' /etc/php/8.2/fpm/php.ini
+            log_info "Limites PHP configurées (500MB uploads)"
+        fi
+
         sudo systemctl restart nginx || true
         sudo systemctl restart php8.2-fpm || true
         log_info "Nginx configuré"
