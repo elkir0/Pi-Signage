@@ -3,11 +3,19 @@
  * PiSignage - Configuration centrale
  */
 
+// Version
+define('PISIGNAGE_VERSION', 'v0.8.0');
+
 // Chemins
 define('BASE_DIR', '/opt/pisignage');
 define('MEDIA_DIR', BASE_DIR . '/media');
+define('MEDIA_PATH', BASE_DIR . '/media'); // Alias pour compatibilité
+define('PLAYLISTS_PATH', BASE_DIR . '/playlists');
 define('SCREENSHOTS_DIR', BASE_DIR . '/web/screenshots');
+define('SCREENSHOTS_PATH', BASE_DIR . '/web/screenshots'); // Alias
 define('LOGS_DIR', BASE_DIR . '/logs');
+define('LOGS_PATH', BASE_DIR . '/logs'); // Alias
+define('DB_PATH', BASE_DIR . '/data/pisignage.db');
 
 // Limites d'upload (500MB)
 define('MAX_UPLOAD_SIZE', 500 * 1024 * 1024); // 500MB en octets
@@ -88,10 +96,97 @@ function getUploadErrorMessage($errorCode) {
 }
 
 // Créer les répertoires s'ils n'existent pas
-foreach ([MEDIA_DIR, SCREENSHOTS_DIR, LOGS_DIR] as $dir) {
+foreach ([MEDIA_DIR, SCREENSHOTS_DIR, LOGS_DIR, PLAYLISTS_PATH, dirname(DB_PATH)] as $dir) {
     if (!is_dir($dir)) {
         mkdir($dir, 0755, true);
     }
+}
+
+// Initialiser la base de données
+try {
+    $db = new PDO('sqlite:' . DB_PATH);
+    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+    // Créer les tables si nécessaire
+    $db->exec("
+        CREATE TABLE IF NOT EXISTS media_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            filename TEXT NOT NULL,
+            original_name TEXT,
+            file_size INTEGER,
+            mime_type TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ");
+
+    $db->exec("
+        CREATE TABLE IF NOT EXISTS playlists (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL,
+            items TEXT DEFAULT '[]',
+            duration INTEGER DEFAULT 10,
+            transition TEXT DEFAULT 'none',
+            is_active INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ");
+
+    $db->exec("
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ");
+} catch (Exception $e) {
+    // Base de données non disponible - mode dégradé
+    $db = null;
+}
+
+// Fonction de log
+function logMessage($message, $level = 'INFO') {
+    $logFile = LOGS_DIR . '/system.log';
+    $timestamp = date('Y-m-d H:i:s');
+    $logEntry = "[$timestamp] [$level] $message\n";
+    @file_put_contents($logFile, $logEntry, FILE_APPEND | LOCK_EX);
+}
+
+// Fonction pour exécuter des commandes système
+function executeCommand($command) {
+    $output = [];
+    $returnVar = 0;
+    exec($command . ' 2>&1', $output, $returnVar);
+    return [
+        'success' => $returnVar === 0,
+        'output' => $output,
+        'return_code' => $returnVar
+    ];
+}
+
+// Fonction pour obtenir les fichiers média
+function getMediaFiles() {
+    $mediaFiles = [];
+
+    if (is_dir(MEDIA_PATH)) {
+        $files = scandir(MEDIA_PATH);
+
+        foreach ($files as $file) {
+            if ($file === '.' || $file === '..' || $file === 'thumbnails') continue;
+
+            $filepath = MEDIA_PATH . '/' . $file;
+            if (is_file($filepath) && isValidMediaFile($file)) {
+                $mediaFiles[] = [
+                    'name' => $file,
+                    'size' => filesize($filepath),
+                    'type' => mime_content_type($filepath),
+                    'modified' => filemtime($filepath)
+                ];
+            }
+        }
+    }
+
+    return $mediaFiles;
 }
 
 // Ajuster les limites PHP dynamiquement si possible

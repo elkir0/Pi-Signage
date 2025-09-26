@@ -9,6 +9,24 @@ require_once '../config.php';
 $method = $_SERVER['REQUEST_METHOD'];
 $input = json_decode(file_get_contents('php://input'), true);
 
+// Gestion spécifique pour l'action stats via GET
+if ($method === 'GET' && isset($_GET['action']) && $_GET['action'] === 'stats') {
+    $systemInfo = getSystemStats();
+    jsonResponse(true, $systemInfo);
+    exit;
+}
+
+// Gestion spécifique pour get_player
+if ($method === 'GET' && isset($_GET['action']) && $_GET['action'] === 'get_player') {
+    $playerInfo = [
+        'current' => getCurrentPlayer(),
+        'status' => getPlayerStatus(),
+        'config' => getPlayerConfiguration()
+    ];
+    jsonResponse(true, $playerInfo);
+    exit;
+}
+
 switch ($method) {
     case 'GET':
         handleGetSystemInfo();
@@ -332,6 +350,137 @@ function getLocalIP() {
     socket_getsockname($socket, $localAddr);
     socket_close($socket);
     return $localAddr;
+}
+
+function getSystemStats() {
+    $stats = [];
+
+    // CPU usage
+    $loadAvg = sys_getloadavg();
+    $stats['cpu'] = [
+        'load_1min' => round($loadAvg[0], 2),
+        'load_5min' => round($loadAvg[1], 2),
+        'load_15min' => round($loadAvg[2], 2),
+        'usage' => getCpuUsage()
+    ];
+
+    // Memory usage
+    $memInfo = getMemoryInfo();
+    $stats['memory'] = $memInfo;
+
+    // Disk usage
+    $diskInfo = getDiskInfo();
+    $stats['disk'] = $diskInfo;
+
+    // Temperature (for Raspberry Pi)
+    $temp = getCpuTemperature();
+    if ($temp !== null) {
+        $stats['temperature'] = $temp;
+    }
+
+    // Uptime
+    $uptime = getUptime();
+    $stats['uptime'] = $uptime;
+
+    return $stats;
+}
+
+function getCpuUsage() {
+    $result = executeCommand("top -bn1 | grep 'Cpu(s)' | awk '{print $2}' | cut -d '%' -f1");
+    if ($result['success'] && !empty($result['output'])) {
+        return floatval($result['output'][0]);
+    }
+    return 0;
+}
+
+function getMemoryInfo() {
+    $memInfo = [];
+    $result = executeCommand("free -b");
+
+    if ($result['success'] && count($result['output']) > 1) {
+        $lines = $result['output'];
+        $memLine = preg_split('/\s+/', $lines[1]);
+
+        if (count($memLine) >= 3) {
+            $total = intval($memLine[1]);
+            $used = intval($memLine[2]);
+            $free = isset($memLine[3]) ? intval($memLine[3]) : ($total - $used);
+
+            $memInfo = [
+                'total' => $total,
+                'used' => $used,
+                'free' => $free,
+                'percent' => $total > 0 ? round(($used / $total) * 100, 2) : 0,
+                'total_formatted' => formatFileSize($total),
+                'used_formatted' => formatFileSize($used),
+                'free_formatted' => formatFileSize($free)
+            ];
+        }
+    }
+
+    return $memInfo;
+}
+
+function getDiskInfo() {
+    $diskInfo = [];
+    $result = executeCommand("df -B1 /");
+
+    if ($result['success'] && count($result['output']) > 1) {
+        $lines = $result['output'];
+        $diskLine = preg_split('/\s+/', $lines[1]);
+
+        if (count($diskLine) >= 4) {
+            $total = intval($diskLine[1]);
+            $used = intval($diskLine[2]);
+            $available = intval($diskLine[3]);
+
+            $diskInfo = [
+                'total' => $total,
+                'used' => $used,
+                'available' => $available,
+                'percent' => $total > 0 ? round(($used / $total) * 100, 2) : 0,
+                'total_formatted' => formatFileSize($total),
+                'used_formatted' => formatFileSize($used),
+                'available_formatted' => formatFileSize($available)
+            ];
+        }
+    }
+
+    return $diskInfo;
+}
+
+function getCpuTemperature() {
+    // Try Raspberry Pi temperature file
+    $tempFile = '/sys/class/thermal/thermal_zone0/temp';
+    if (file_exists($tempFile)) {
+        $temp = intval(file_get_contents($tempFile)) / 1000;
+        return round($temp, 1);
+    }
+
+    // Try vcgencmd for Raspberry Pi
+    $result = executeCommand("vcgencmd measure_temp 2>/dev/null");
+    if ($result['success'] && !empty($result['output'])) {
+        if (preg_match('/temp=([\d.]+)/', $result['output'][0], $matches)) {
+            return floatval($matches[1]);
+        }
+    }
+
+    return null;
+}
+
+function getUptime() {
+    $result = executeCommand("uptime -p");
+    if ($result['success'] && !empty($result['output'])) {
+        return trim($result['output'][0]);
+    }
+
+    // Fallback to basic uptime
+    $uptimeSeconds = intval(file_get_contents('/proc/uptime'));
+    $days = floor($uptimeSeconds / 86400);
+    $hours = floor(($uptimeSeconds % 86400) / 3600);
+    $minutes = floor(($uptimeSeconds % 3600) / 60);
+
+    return "up {$days} days, {$hours} hours, {$minutes} minutes";
 }
 
 // ========== DUAL PLAYER SUPPORT FUNCTIONS ==========

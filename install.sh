@@ -91,6 +91,12 @@ install_dependencies() {
         "nginx"
         "php8.2-fpm"
         "php8.2-cli"
+        "php8.2-mbstring"
+        "php8.2-gd"
+        "php8.2-sqlite3"
+        "php8.2-xml"
+        "php8.2-curl"
+        "sqlite3"
         "vlc"
         "mpv"
         "ffmpeg"
@@ -335,21 +341,58 @@ server {
 
     server_name _;
 
+    # Configuration des limites d'upload pour 500MB
+    client_max_body_size 500M;
+    client_body_buffer_size 128k;
+    client_body_timeout 300s;
+
+    # Timeouts augmentés pour les gros fichiers
+    proxy_connect_timeout 300s;
+    proxy_send_timeout 300s;
+    proxy_read_timeout 300s;
+    send_timeout 300s;
+
+    # Configuration FastCGI pour PHP
+    fastcgi_connect_timeout 300s;
+    fastcgi_send_timeout 300s;
+    fastcgi_read_timeout 300s;
+    fastcgi_buffer_size 128k;
+    fastcgi_buffers 256 16k;
+    fastcgi_busy_buffers_size 256k;
+
+    # Répertoire temporaire pour les uploads
+    client_body_temp_path /tmp/nginx_upload 1 2;
+
     location / {
         try_files \$uri \$uri/ /index.php?\$query_string;
+    }
+
+    location /api {
+        try_files \$uri \$uri/ /api/index.php?\$query_string;
     }
 
     location ~ \.php$ {
         include snippets/fastcgi-php.conf;
         fastcgi_pass unix:/var/run/php/php8.2-fpm.sock;
+
+        # Timeouts spécifiques pour PHP
+        fastcgi_read_timeout 300s;
+        fastcgi_send_timeout 300s;
+
+        # Buffers pour gérer les gros uploads
+        fastcgi_buffer_size 256k;
+        fastcgi_buffers 256 256k;
+        fastcgi_busy_buffers_size 512k;
+        fastcgi_max_temp_file_size 0;
     }
 
     location ~ /\.ht {
         deny all;
     }
 
-    client_max_body_size 500M;
-    client_body_timeout 300s;
+    # Logs
+    access_log /opt/pisignage/logs/nginx_access.log;
+    error_log /opt/pisignage/logs/nginx_error.log warn;
 }
 ENDOFFILE
 
@@ -360,8 +403,14 @@ ENDOFFILE
             sudo sed -i 's/upload_max_filesize = .*/upload_max_filesize = 500M/' /etc/php/8.2/fpm/php.ini
             sudo sed -i 's/post_max_size = .*/post_max_size = 500M/' /etc/php/8.2/fpm/php.ini
             sudo sed -i 's/max_execution_time = .*/max_execution_time = 300/' /etc/php/8.2/fpm/php.ini
+            sudo sed -i 's/max_input_time = .*/max_input_time = 300/' /etc/php/8.2/fpm/php.ini
+            sudo sed -i 's/memory_limit = .*/memory_limit = 512M/' /etc/php/8.2/fpm/php.ini
             log_info "Limites PHP configurées (500MB uploads)"
         fi
+
+        # Créer le répertoire temporaire pour nginx
+        sudo mkdir -p /tmp/nginx_upload
+        sudo chown www-data:www-data /tmp/nginx_upload
 
         sudo systemctl restart nginx || true
         sudo systemctl restart php8.2-fpm || true

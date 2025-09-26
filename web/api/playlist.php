@@ -31,12 +31,74 @@ switch ($method) {
         jsonResponse(false, null, 'Method not allowed');
 }
 
+function getPlaylistByName($name) {
+    global $db;
+
+    if (!$db) {
+        // Mode dégradé - lire depuis fichiers JSON
+        $jsonFile = PLAYLISTS_PATH . '/' . sanitizeFilename($name) . '.json';
+        if (file_exists($jsonFile)) {
+            return json_decode(file_get_contents($jsonFile), true);
+        }
+        return null;
+    }
+
+    try {
+        $stmt = $db->prepare("SELECT * FROM playlists WHERE name = ?");
+        $stmt->execute([$name]);
+        return $stmt->fetch(PDO::FETCH_ASSOC);
+    } catch (Exception $e) {
+        logMessage("Failed to get playlist: " . $e->getMessage(), 'ERROR');
+        return null;
+    }
+}
+
+function calculatePlaylistDuration($items) {
+    $totalDuration = 0;
+    foreach ($items as $item) {
+        $filepath = MEDIA_PATH . '/' . basename($item);
+        if (file_exists($filepath)) {
+            // Pour une estimation simple, on compte 10 secondes par élément
+            // Dans une vraie implémentation, on utiliserait ffprobe
+            $totalDuration += 10;
+        }
+    }
+    return $totalDuration;
+}
+
+function getValidPlaylistItems($items) {
+    $validItems = [];
+    foreach ($items as $item) {
+        $filepath = MEDIA_PATH . '/' . basename($item);
+        if (file_exists($filepath)) {
+            $validItems[] = $item;
+        }
+    }
+    return $validItems;
+}
+
 function handleGetPlaylists() {
     global $db;
     $action = $_GET['action'] ?? 'list';
 
     switch ($action) {
         case 'list':
+            // Mode dégradé si pas de DB
+            if (!$db) {
+                $playlists = [];
+                $jsonFiles = glob(PLAYLISTS_PATH . '/*.json');
+                foreach ($jsonFiles as $file) {
+                    $playlist = json_decode(file_get_contents($file), true);
+                    if ($playlist) {
+                        $playlist['item_count'] = count($playlist['items'] ?? []);
+                        $playlist['total_duration'] = calculatePlaylistDuration($playlist['items'] ?? []);
+                        $playlists[] = $playlist;
+                    }
+                }
+                jsonResponse(true, $playlists);
+                return;
+            }
+
             try {
                 $stmt = $db->query("SELECT * FROM playlists ORDER BY updated_at DESC");
                 $playlists = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -342,9 +404,15 @@ function getValidPlaylistItems($items) {
 }
 
 function generateM3U($playlist) {
-    $items = json_decode($playlist['items'], true) ?: [];
+    // Gérer les items selon qu'ils soient déjà décodés ou non
+    if (is_string($playlist['items'])) {
+        $items = json_decode($playlist['items'], true) ?: [];
+    } else {
+        $items = $playlist['items'] ?: [];
+    }
+
     $m3u = "#EXTM3U\n";
-    $m3u .= "#PLAYLIST:" . $playlist['name'] . "\n";
+    $m3u .= "#PLAYLIST:" . ($playlist['name'] ?? 'Playlist') . "\n";
 
     foreach ($items as $item) {
         $filepath = MEDIA_PATH . '/' . basename($item);
@@ -361,7 +429,7 @@ function generateM3U($playlist) {
 function migrateOldPlaylists() {
     global $db;
 
-    $oldPlaylistFile = CONFIG_PATH . '/playlists.json';
+    $oldPlaylistFile = BASE_DIR . '/config/playlists.json';
 
     if (file_exists($oldPlaylistFile)) {
         $oldPlaylists = json_decode(file_get_contents($oldPlaylistFile), true);
