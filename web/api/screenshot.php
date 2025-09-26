@@ -52,14 +52,36 @@ class ScreenshotManager {
      * Détecte les méthodes de capture disponibles par ordre de préférence
      */
     private function detectAvailableMethods() {
+        // Détection de la session Wayland ou X11
+        $isWayland = getenv('WAYLAND_DISPLAY') !== false ||
+                     strpos(shell_exec('echo $XDG_SESSION_TYPE 2>/dev/null') ?: '', 'wayland') !== false;
+
+        // Vérifier si VLC est en cours d'exécution
+        $vlcRunning = shell_exec('pgrep -x vlc 2>/dev/null') !== null;
+
         $methods = [
-            'fbgrab' => '/usr/bin/fbgrab',
-            'raspi2png' => '/usr/bin/raspi2png',
-            'scrot' => '/usr/bin/scrot',
-            'import' => '/usr/bin/import' // ImageMagick
+            'ffmpeg-vlc' => '/usr/bin/ffmpeg',            // FFmpeg pour VLC
+            'grim' => '/usr/bin/grim',                    // Wayland standard
+            'gnome-screenshot' => 'gdbus',                // GNOME via D-Bus
+            'fbgrab' => '/usr/bin/fbgrab',               // Framebuffer
+            'raspi2png' => '/usr/bin/raspi2png',         // Raspberry Pi GPU
+            'scrot' => '/usr/bin/scrot',                 // X11 (fallback)
+            'import' => '/usr/bin/import'                // ImageMagick X11
         ];
 
+        // Si VLC est actif et ffmpeg disponible, prioriser ffmpeg-vlc
+        if ($vlcRunning && shell_exec("which ffmpeg 2>/dev/null")) {
+            $this->availableMethods[] = 'ffmpeg-vlc';
+        }
+
+        // Détection spéciale pour GNOME D-Bus
+        if (shell_exec("gdbus introspect --session --dest org.gnome.Shell.Screenshot --object-path /org/gnome/Shell/Screenshot 2>/dev/null | grep -q Screenshot")) {
+            $this->availableMethods[] = 'gnome-screenshot';
+        }
+
         foreach ($methods as $name => $path) {
+            if ($name === 'gnome-screenshot' || $name === 'ffmpeg-vlc') continue; // Déjà traité
+
             if (file_exists($path) && is_executable($path)) {
                 $this->availableMethods[] = $name;
             } elseif (shell_exec("which $name 2>/dev/null")) {
@@ -67,7 +89,13 @@ class ScreenshotManager {
             }
         }
 
-        logMessage("Méthodes de capture détectées: " . implode(', ', $this->availableMethods));
+        // Prioriser grim et gnome-screenshot pour Wayland
+        if ($isWayland && in_array('grim', $this->availableMethods)) {
+            $this->availableMethods = array_diff($this->availableMethods, ['grim']);
+            array_unshift($this->availableMethods, 'grim');
+        }
+
+        logMessage("Méthodes de capture détectées (Wayland=$isWayland, VLC=$vlcRunning): " . implode(', ', $this->availableMethods));
     }
 
     /**
@@ -240,6 +268,125 @@ class ScreenshotManager {
     }
 
     /**
+     * Capture avec grim (Wayland standard)
+     */
+    private function captureWithGrim($outputFile, $quality = null) {
+        $format = pathinfo($outputFile, PATHINFO_EXTENSION);
+        $cmd = "grim";
+
+        // Format et qualité
+        if ($format === 'jpg' || $format === 'jpeg') {
+            $cmd .= " -t jpeg";
+            if ($quality) {
+                $cmd .= " -q $quality";
+            }
+        } elseif ($format === 'png') {
+            $cmd .= " -t png";
+            // PNG utilise la compression, pas la qualité (0-9, 9 = max compression)
+            if ($quality) {
+                // Convertir la qualité (0-100) en compression (9-0)
+                $compression = 9 - floor($quality / 11);
+                $cmd .= " -l $compression";
+            }
+        }
+
+        $cmd .= " '$outputFile'";
+
+        $startTime = microtime(true);
+        $result = executeCommand($cmd);
+        $duration = microtime(true) - $startTime;
+
+        if ($result['success'] && file_exists($outputFile)) {
+            return ['success' => true, 'method' => 'grim', 'time' => $duration];
+        }
+
+        return ['success' => false, 'error' => $result['output']];
+    }
+
+    /**
+     * Capture avec FFmpeg depuis VLC
+     */
+    private function captureWithFfmpegVlc($outputFile, $quality = null) {
+        // Obtenir le fichier vidéo en cours de lecture par VLC
+        $vlcCommand = shell_exec("ps aux | grep -E 'vlc.*\\.mp4' | grep -v grep");
+        if (!$vlcCommand) {
+            return ['success' => false, 'error' => 'VLC not running or no video file found'];
+        }
+
+        // Extraire le chemin du fichier vidéo
+        preg_match('/(\S+\.mp4)/i', $vlcCommand, $matches);
+        if (empty($matches[1]) || !file_exists($matches[1])) {
+            return ['success' => false, 'error' => 'Could not find video file'];
+        }
+
+        $videoFile = $matches[1];
+
+        // Capturer une frame aléatoire entre 5 et 30 secondes
+        $seekTime = rand(5, 30);
+        $qualityParam = $quality ? 100 - $quality : 2; // FFmpeg utilise une échelle inversée (2=haute qualité)
+
+        $cmd = sprintf(
+            "ffmpeg -ss %d -i %s -vframes 1 -q:v %d %s -y 2>&1",
+            $seekTime,
+            escapeshellarg($videoFile),
+            $qualityParam,
+            escapeshellarg($outputFile)
+        );
+
+        $startTime = microtime(true);
+        $result = executeCommand($cmd);
+        $duration = microtime(true) - $startTime;
+
+        if ($result['success'] && file_exists($outputFile) && filesize($outputFile) > 1000) {
+            return ['success' => true, 'method' => 'ffmpeg-vlc', 'time' => $duration];
+        }
+
+        return ['success' => false, 'error' => 'FFmpeg capture failed'];
+    }
+
+    /**
+     * Capture avec GNOME D-Bus (compatible Wayland)
+     */
+    private function captureWithGnomeScreenshot($outputFile, $quality = null) {
+        // Génération d'un nom temporaire pour GNOME
+        $tempFile = "/tmp/gnome_screenshot_" . uniqid() . ".png";
+
+        $cmd = "gdbus call --session " .
+               "--dest org.gnome.Shell.Screenshot " .
+               "--object-path /org/gnome/Shell/Screenshot " .
+               "--method org.gnome.Shell.Screenshot.Screenshot " .
+               "true false '$tempFile'";
+
+        $startTime = microtime(true);
+        $result = executeCommand($cmd);
+        $duration = microtime(true) - $startTime;
+
+        if ($result['success'] && file_exists($tempFile)) {
+            // Conversion si nécessaire
+            if ($tempFile !== $outputFile || ($quality && $quality < 100)) {
+                if (shell_exec('which convert 2>/dev/null')) {
+                    $qualityParam = $quality ? " -quality $quality" : '';
+                    $convertCmd = "convert '$tempFile'$qualityParam '$outputFile'";
+                    $convertResult = executeCommand($convertCmd);
+                    unlink($tempFile);
+
+                    if (!$convertResult['success']) {
+                        return ['success' => false, 'error' => 'Conversion failed'];
+                    }
+                } else {
+                    rename($tempFile, $outputFile);
+                }
+            } else {
+                rename($tempFile, $outputFile);
+            }
+
+            return ['success' => true, 'method' => 'gnome-screenshot', 'time' => $duration];
+        }
+
+        return ['success' => false, 'error' => $result['output']];
+    }
+
+    /**
      * Effectue la capture d'écran
      */
     public function capture($options = []) {
@@ -295,6 +442,15 @@ class ScreenshotManager {
             logMessage("Tentative de capture avec: $currentMethod");
 
             switch ($currentMethod) {
+                case 'ffmpeg-vlc':
+                    $result = $this->captureWithFfmpegVlc($outputFile, $quality);
+                    break;
+                case 'grim':
+                    $result = $this->captureWithGrim($outputFile, $quality);
+                    break;
+                case 'gnome-screenshot':
+                    $result = $this->captureWithGnomeScreenshot($outputFile, $quality);
+                    break;
                 case 'raspi2png':
                     $result = $this->captureWithRaspi2png($outputFile, $quality);
                     break;
@@ -400,15 +556,36 @@ class ScreenshotManager {
      */
     public function getMethodsInfo() {
         $info = [];
+        $isWayland = getenv('WAYLAND_DISPLAY') !== false ||
+                     strpos(shell_exec('echo $XDG_SESSION_TYPE 2>/dev/null') ?: '', 'wayland') !== false;
+
         foreach ($this->availableMethods as $method) {
             switch ($method) {
+                case 'grim':
+                    $info[$method] = [
+                        'name' => 'grim',
+                        'description' => 'Capture native Wayland',
+                        'speed' => 'Très rapide',
+                        'quality' => 'Excellente',
+                        'recommended' => $isWayland
+                    ];
+                    break;
+                case 'gnome-screenshot':
+                    $info[$method] = [
+                        'name' => 'GNOME Screenshot',
+                        'description' => 'Capture GNOME via D-Bus (Wayland/X11)',
+                        'speed' => 'Rapide',
+                        'quality' => 'Excellente',
+                        'recommended' => $isWayland
+                    ];
+                    break;
                 case 'raspi2png':
                     $info[$method] = [
                         'name' => 'raspi2png',
                         'description' => 'Capture GPU optimisée Raspberry Pi',
                         'speed' => 'Très rapide (~25ms)',
                         'quality' => 'Excellente',
-                        'recommended' => true
+                        'recommended' => !$isWayland
                     ];
                     break;
                 case 'scrot':

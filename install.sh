@@ -93,8 +93,15 @@ install_dependencies() {
         "php8.2-cli"
         "vlc"
         "mpv"
+        "ffmpeg"
+        "grim"
+        "fbgrab"
+        "scrot"
+        "imagemagick"
         "wget"
         "curl"
+        "jq"
+        "socat"
     )
 
     log_info "Installation des packages essentiels..."
