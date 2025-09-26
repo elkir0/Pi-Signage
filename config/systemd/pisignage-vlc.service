@@ -1,0 +1,18 @@
+[Unit]
+Description=PiSignage VLC Player
+After=network.target graphical.target
+
+[Service]
+Type=simple
+User=pi
+Group=video
+Environment="HOME=/home/pi"
+WorkingDirectory=/opt/pisignage
+ExecStart=/usr/bin/cvlc --intf dummy --fullscreen --loop --repeat /opt/pisignage/media/BigBuckBunny_720p.mp4
+Restart=always
+RestartSec=5
+StandardOutput=append:/opt/pisignage/logs/vlc-service.log
+StandardError=append:/opt/pisignage/logs/vlc-service.log
+
+[Install]
+WantedBy=default.target
