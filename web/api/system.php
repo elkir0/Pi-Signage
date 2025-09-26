@@ -4,7 +4,7 @@
  * Provides system information and controls
  */
 
-require_once '../config.php';
+require_once "/opt/pisignage/web/config.php";
 
 $method = $_SERVER['REQUEST_METHOD'];
 $input = json_decode(file_get_contents('php://input'), true);
@@ -350,6 +350,12 @@ function getLocalIP() {
     socket_getsockname($socket, $localAddr);
     socket_close($socket);
     return $localAddr;
+}
+
+function formatFileSize($bytes) {
+    $units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    $factor = floor((strlen($bytes) - 1) / 3);
+    return sprintf("%.2f", $bytes / pow(1024, $factor)) . ' ' . $units[$factor];
 }
 
 function getSystemStats() {
