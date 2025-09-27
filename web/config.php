@@ -4,7 +4,7 @@
  */
 
 // Version
-define('PISIGNAGE_VERSION', 'v0.8.0');
+define('PISIGNAGE_VERSION', 'v0.8.1');
 
 // Chemins
 define('BASE_DIR', '/opt/pisignage');

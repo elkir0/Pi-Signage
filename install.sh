@@ -86,16 +86,31 @@ install_dependencies() {
     export DEBIAN_FRONTEND=noninteractive
     export NEEDRESTART_MODE=a
 
+    # Détection automatique de la version PHP
+    PHP_VERSION=""
+    if command -v php > /dev/null 2>&1; then
+        PHP_VERSION=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;' 2>/dev/null)
+    fi
+
+    # Utiliser PHP 8.2 par défaut si non détecté
+    if [ -z "$PHP_VERSION" ]; then
+        PHP_VERSION="8.2"
+        log_info "Version PHP non détectée, utilisation de PHP $PHP_VERSION par défaut"
+    else
+        log_info "Version PHP détectée : $PHP_VERSION"
+    fi
+
     # Packages essentiels uniquement
     local packages=(
         "nginx"
-        "php8.2-fpm"
-        "php8.2-cli"
-        "php8.2-mbstring"
-        "php8.2-gd"
-        "php8.2-sqlite3"
-        "php8.2-xml"
-        "php8.2-curl"
+        "php${PHP_VERSION}-fpm"
+        "php${PHP_VERSION}-cli"
+        "php${PHP_VERSION}-mbstring"
+        "php${PHP_VERSION}-gd"
+        "php${PHP_VERSION}-sqlite3"
+        "php${PHP_VERSION}-xml"
+        "php${PHP_VERSION}-curl"
+        "php${PHP_VERSION}-zip"
         "sqlite3"
         "vlc"
         "mpv"
@@ -147,9 +162,59 @@ create_structure() {
     sudo mkdir -p $INSTALL_DIR/web/{api,assets,css,js}
     sudo mkdir -p /dev/shm/pisignage-screenshots
 
-    # Permissions
+    # Permissions élargies pour éviter les problèmes
     sudo chown -R $USER:$USER $INSTALL_DIR
     chmod 755 $INSTALL_DIR
+    # Permissions spécifiques pour les répertoires critiques
+    chmod 777 $INSTALL_DIR/logs
+    chmod 777 $INSTALL_DIR/media
+    chmod 755 $INSTALL_DIR/web
+    chmod 755 $INSTALL_DIR/scripts
+    chmod 755 $INSTALL_DIR/config
+
+    # Initialiser la base de données SQLite
+    DB_FILE="$INSTALL_DIR/pisignage.db"
+    if [ ! -f "$DB_FILE" ]; then
+        log_info "Initialisation de la base de données..."
+        sqlite3 "$DB_FILE" <<EOF
+CREATE TABLE IF NOT EXISTS media (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    filename TEXT NOT NULL,
+    path TEXT NOT NULL,
+    type TEXT,
+    size INTEGER,
+    duration INTEGER,
+    uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS playlists (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS playlist_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    playlist_id INTEGER,
+    media_id INTEGER,
+    position INTEGER,
+    duration INTEGER,
+    FOREIGN KEY(playlist_id) REFERENCES playlists(id),
+    FOREIGN KEY(media_id) REFERENCES media(id)
+);
+
+CREATE TABLE IF NOT EXISTS logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    level TEXT,
+    message TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+EOF
+        chmod 666 "$DB_FILE"
+        log_info "Base de données initialisée"
+    fi
 
     log_info "Structure créée dans $INSTALL_DIR"
 }
@@ -279,10 +344,19 @@ if [ ! -f "$VIDEO" ]; then
     VIDEO=$(find /opt/pisignage/media -name "*.mp4" -o -name "*.mkv" | head -1)
 fi
 
-# Démarrer VLC
+# Démarrer VLC avec la commande stabilisée
 if [ -n "$VIDEO" ]; then
-    cvlc $VLC_OPTIONS "$VIDEO" > /opt/pisignage/logs/vlc.log 2>&1 &
-    echo "✓ VLC démarré avec $(basename "$VIDEO")"
+    # Utilisation de vlc -I dummy au lieu de cvlc (plus stable d'après les tests)
+    vlc -I dummy \
+        --fullscreen \
+        --loop \
+        --no-video-title-show \
+        --quiet \
+        "$VIDEO" > /opt/pisignage/logs/vlc.log 2>&1 &
+
+    VLC_PID=$!
+    echo $VLC_PID > /opt/pisignage/vlc.pid
+    echo "✓ VLC démarré avec $(basename "$VIDEO") (PID: $VLC_PID)"
 else
     echo "✗ Aucune vidéo trouvée"
     exit 1
@@ -399,22 +473,30 @@ ENDOFFILE
         sudo ln -sf /etc/nginx/sites-available/pisignage /etc/nginx/sites-enabled/
 
         # Configurer les limites PHP pour uploads
-        if [ -f /etc/php/8.2/fpm/php.ini ]; then
-            sudo sed -i 's/upload_max_filesize = .*/upload_max_filesize = 500M/' /etc/php/8.2/fpm/php.ini
-            sudo sed -i 's/post_max_size = .*/post_max_size = 500M/' /etc/php/8.2/fpm/php.ini
-            sudo sed -i 's/max_execution_time = .*/max_execution_time = 300/' /etc/php/8.2/fpm/php.ini
-            sudo sed -i 's/max_input_time = .*/max_input_time = 300/' /etc/php/8.2/fpm/php.ini
-            sudo sed -i 's/memory_limit = .*/memory_limit = 512M/' /etc/php/8.2/fpm/php.ini
-            log_info "Limites PHP configurées (500MB uploads)"
+        # Détecter automatiquement la version PHP
+        PHP_VERSION=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;' 2>/dev/null || echo "8.2")
+        PHP_INI="/etc/php/${PHP_VERSION}/fpm/php.ini"
+
+        if [ -f "$PHP_INI" ]; then
+            sudo sed -i 's/upload_max_filesize = .*/upload_max_filesize = 500M/' "$PHP_INI"
+            sudo sed -i 's/post_max_size = .*/post_max_size = 500M/' "$PHP_INI"
+            sudo sed -i 's/max_execution_time = .*/max_execution_time = 300/' "$PHP_INI"
+            sudo sed -i 's/max_input_time = .*/max_input_time = 300/' "$PHP_INI"
+            sudo sed -i 's/memory_limit = .*/memory_limit = 512M/' "$PHP_INI"
+            log_info "Limites PHP $PHP_VERSION configurées (500MB uploads)"
+        else
+            log_warn "php.ini non trouvé pour PHP $PHP_VERSION"
         fi
 
         # Créer le répertoire temporaire pour nginx
         sudo mkdir -p /tmp/nginx_upload
         sudo chown www-data:www-data /tmp/nginx_upload
 
+        # Redémarrer les services avec détection de version PHP
         sudo systemctl restart nginx || true
-        sudo systemctl restart php8.2-fpm || true
-        log_info "Nginx configuré"
+        PHP_VERSION=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;' 2>/dev/null || echo "8.2")
+        sudo systemctl restart php${PHP_VERSION}-fpm || true
+        log_info "Nginx configuré avec PHP $PHP_VERSION"
 
     # Sinon essayer Apache
     elif command -v apache2 > /dev/null 2>&1; then
