@@ -1347,11 +1347,11 @@ foreach ($dirs as $dir) {
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        document.getElementById('cpu-usage').textContent = data.data.cpu + '%';
-                        document.getElementById('ram-usage').textContent = data.data.ram + '%';
+                        document.getElementById('cpu-usage').textContent = (data.data.cpu?.usage || 0) + '%';
+                        document.getElementById('ram-usage').textContent = (data.data.memory?.percent || 0) + '%';
                         document.getElementById('temperature').textContent = data.data.temperature + '°C';
                         document.getElementById('uptime').textContent = data.data.uptime;
-                        document.getElementById('storage').textContent = data.data.storage + '%';
+                        document.getElementById('storage').textContent = (data.data.disk?.percent || 0) + '%';
                         document.getElementById('network').textContent = data.data.network;
                         document.getElementById('media-count').textContent = data.data.media_count;
                     }
@@ -1608,7 +1608,7 @@ foreach ($dirs as $dir) {
         function takeScreenshot() {
             showAlert('Capture en cours...', 'info');
 
-            fetch('/api/screenshot-raspi2png.php?action=capture')
+            fetch('/api/screenshot.php?action=capture')
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
@@ -1633,7 +1633,7 @@ foreach ($dirs as $dir) {
         function takeQuickScreenshot(source) {
             showAlert(`Capture depuis ${source}...`, 'info');
 
-            fetch('/api/screenshot-raspi2png.php?action=capture')
+            fetch('/api/screenshot.php?action=capture')
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
