@@ -1,0 +1,17 @@
+/**
+ * PiSignage CSS Variables
+ * Contains all CSS custom properties for the application
+ */
+
+:root {
+    --primary: #4a9eff;
+    --secondary: #ff6b6b;
+    --success: #51cf66;
+    --warning: #ffd43b;
+    --danger: #ff6b6b;
+    --dark: #1a1a2e;
+    --dark-light: #16213e;
+    --light: #f0f3f7;
+    --glass: rgba(255, 255, 255, 0.05);
+    --glass-border: rgba(255, 255, 255, 0.1);
+}

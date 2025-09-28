@@ -1,0 +1,271 @@
+/**
+ * PiSignage Responsive Styles
+ * Contains all media queries and responsive design rules
+ */
+
+/* Medium screens and below (768px) */
+@media (max-width: 768px) {
+    .menu-toggle {
+        display: block;
+    }
+
+    .sidebar {
+        transform: translateX(-100%);
+    }
+
+    .sidebar.active {
+        transform: translateX(0);
+    }
+
+    .main-content {
+        margin-left: 0;
+    }
+
+    .grid {
+        grid-template-columns: 1fr;
+    }
+
+    .transport-controls {
+        flex-wrap: wrap;
+    }
+
+    .system-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .playlist-editor-container {
+        margin-top: 10px;
+        gap: 10px;
+    }
+
+    .panel-header {
+        padding: 15px;
+    }
+
+    .panel-content {
+        padding: 15px;
+    }
+
+    .media-filters {
+        gap: 3px;
+    }
+
+    .filter-btn {
+        padding: 4px 8px;
+        font-size: 11px;
+    }
+}
+
+/* Large screens and below (1200px) */
+@media (max-width: 1200px) {
+    .playlist-editor-container {
+        flex-direction: column;
+        height: auto;
+    }
+
+    .playlist-panel {
+        width: 100%;
+        height: 400px;
+    }
+
+    .media-library-panel,
+    .workspace-panel,
+    .properties-panel {
+        width: 100%;
+        min-width: auto;
+    }
+}
+
+/* Extra small screens (below 480px) */
+@media (max-width: 480px) {
+    .main-content {
+        padding: 15px;
+    }
+
+    .header {
+        padding: 15px 20px;
+        flex-direction: column;
+        gap: 15px;
+    }
+
+    .page-title {
+        font-size: 24px;
+    }
+
+    .card {
+        padding: 15px;
+        margin-bottom: 15px;
+    }
+
+    .sidebar {
+        width: 100%;
+    }
+
+    .logo {
+        font-size: 20px;
+        margin-bottom: 30px;
+    }
+
+    .nav-item {
+        font-size: 14px;
+        padding: 12px 14px;
+    }
+
+    .player-options {
+        flex-direction: column;
+    }
+
+    .player-option {
+        min-width: auto;
+    }
+
+    .transport-controls {
+        gap: 8px;
+    }
+
+    .control-btn.primary {
+        width: 55px;
+        height: 55px;
+        font-size: 22px;
+    }
+
+    .control-btn {
+        width: 45px;
+        height: 45px;
+        font-size: 18px;
+    }
+
+    .control-btn.secondary {
+        width: 35px;
+        height: 35px;
+        font-size: 16px;
+    }
+
+    .volume-section {
+        max-width: 250px;
+    }
+
+    .playlist-editor-container {
+        gap: 5px;
+    }
+
+    .media-item {
+        padding: 10px;
+        gap: 10px;
+    }
+
+    .media-item-icon {
+        width: 35px;
+        height: 35px;
+        font-size: 16px;
+    }
+
+    .playlist-item {
+        padding: 12px;
+        gap: 12px;
+    }
+
+    .playlist-item-icon {
+        width: 45px;
+        height: 45px;
+        font-size: 18px;
+    }
+
+    .modal-content {
+        width: 95%;
+        margin: 20px;
+    }
+
+    .modal-header {
+        padding: 15px;
+    }
+
+    .modal-body {
+        padding: 15px;
+    }
+}
+
+/* Print styles */
+@media print {
+    .sidebar,
+    .menu-toggle,
+    .header-actions,
+    .transport-controls,
+    .volume-section,
+    .btn,
+    .modal {
+        display: none !important;
+    }
+
+    .main-content {
+        margin-left: 0;
+        padding: 20px;
+    }
+
+    .card {
+        border: 1px solid #ccc;
+        box-shadow: none;
+        break-inside: avoid;
+    }
+
+    body {
+        background: white !important;
+        color: black !important;
+    }
+
+    .page-title {
+        color: black !important;
+        -webkit-text-fill-color: black !important;
+    }
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+    :root {
+        --glass: rgba(255, 255, 255, 0.15);
+        --glass-border: rgba(255, 255, 255, 0.3);
+    }
+
+    .btn {
+        border: 2px solid;
+    }
+
+    .nav-item {
+        border: 1px solid transparent;
+    }
+
+    .nav-item:hover,
+    .nav-item.active {
+        border-color: var(--primary);
+    }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+
+    .pulse,
+    .status-dot {
+        animation: none !important;
+    }
+}
+
+/* Dark mode preference (already dark by default, but can be enhanced) */
+@media (prefers-color-scheme: dark) {
+    /* Already optimized for dark mode */
+    body {
+        background: linear-gradient(135deg, #0a0a1a 0%, #0f1423 50%, #0a2040 100%);
+    }
+}
+
+/* Light mode preference (if needed for accessibility) */
+@media (prefers-color-scheme: light) {
+    /* Keep dark theme as it's the intended design */
+    body {
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    }
+}

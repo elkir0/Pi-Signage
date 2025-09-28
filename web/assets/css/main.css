@@ -1,0 +1,26 @@
+/**
+ * PiSignage Main CSS File
+ * Imports all CSS modules in the correct order to maintain cascade specificity
+ *
+ * CRITICAL: The order of imports is crucial for proper styling!
+ * 1. Variables first (used by all other modules)
+ * 2. Core styles (base, reset, glassmorphism effects)
+ * 3. Layout (structure, grids, panels)
+ * 4. Components (buttons, cards, forms, controls)
+ * 5. Responsive last (overrides for different screen sizes)
+ */
+
+/* 1. CSS Custom Properties - Must be loaded first */
+@import url('variables.css');
+
+/* 2. Core Styles - Base styles, reset, glassmorphism, animations */
+@import url('core.css');
+
+/* 3. Layout - Structure, sidebar, grids, panels */
+@import url('layout.css');
+
+/* 4. Components - UI elements, buttons, cards, forms */
+@import url('components.css');
+
+/* 5. Responsive - Media queries and responsive overrides */
+@import url('responsive.css');

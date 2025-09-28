@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PiSignage Modular Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #1a1a2e; color: white; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #4a9eff; border-radius: 8px; }
+        .test-result { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .success { background-color: rgba(40, 167, 69, 0.2); border: 1px solid #28a745; }
+        .error { background-color: rgba(220, 53, 69, 0.2); border: 1px solid #dc3545; }
+        button { padding: 10px 15px; margin: 5px; background: #4a9eff; border: none; border-radius: 5px; color: white; cursor: pointer; }
+        button:hover { background: #3d7edb; }
+    </style>
+</head>
+<body>
+    <h1>🧪 PiSignage Modular JavaScript Test</h1>
+
+    <div class="test-section">
+        <h2>📚 Module Loading Test</h2>
+        <div id="module-tests"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>🧭 Navigation Test</h2>
+        <button onclick="testShowSection()">Test showSection Function</button>
+        <div id="navigation-test"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>📢 Alert System Test</h2>
+        <button onclick="testAlerts()">Test Alert System</button>
+        <div id="alert-test"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>🔧 API Functions Test</h2>
+        <button onclick="testAPIFunctions()">Test API Functions</button>
+        <div id="api-test"></div>
+    </div>
+
+    <!-- Load PiSignage modular scripts -->
+    <script src="functions.js" defer></script>
+    <script src="assets/js/core.js" defer></script>
+    <script src="assets/js/api.js" defer></script>
+    <script src="assets/js/dashboard.js" defer></script>
+    <script src="assets/js/media.js" defer></script>
+    <script src="assets/js/playlists.js" defer></script>
+    <script src="assets/js/player.js" defer></script>
+    <script src="assets/js/init.js" defer></script>
+
+    <script>
+        // Wait for all modules to load
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(runModuleTests, 1000);
+        });
+
+        function runModuleTests() {
+            const moduleTests = document.getElementById('module-tests');
+            const tests = [
+                { name: 'PiSignage Namespace', test: () => typeof window.PiSignage === 'object' },
+                { name: 'Core Module', test: () => typeof PiSignage.navigation === 'object' },
+                { name: 'API Module', test: () => typeof PiSignage.api === 'object' },
+                { name: 'Dashboard Module', test: () => typeof PiSignage.dashboard === 'object' },
+                { name: 'Media Module', test: () => typeof PiSignage.media === 'object' },
+                { name: 'Playlists Module', test: () => typeof PiSignage.playlists === 'object' },
+                { name: 'Player Module', test: () => typeof PiSignage.player === 'object' },
+                { name: 'Global showSection', test: () => typeof window.showSection === 'function' },
+                { name: 'Global showAlert', test: () => typeof window.showAlert === 'function' },
+                { name: 'Global refreshStats', test: () => typeof window.refreshStats === 'function' }
+            ];
+
+            moduleTests.innerHTML = '';
+            tests.forEach(test => {
+                const result = document.createElement('div');
+                result.className = 'test-result ' + (test.test() ? 'success' : 'error');
+                result.textContent = `${test.name}: ${test.test() ? '✅ PASS' : '❌ FAIL'}`;
+                moduleTests.appendChild(result);
+            });
+        }
+
+        function testShowSection() {
+            const testDiv = document.getElementById('navigation-test');
+            try {
+                // Test if showSection function exists and can be called
+                if (typeof window.showSection === 'function') {
+                    // This won't actually switch sections since we don't have the full UI, but it should not error
+                    console.log('Testing showSection function...');
+                    testDiv.innerHTML = '<div class="test-result success">✅ showSection function is available and callable</div>';
+                } else {
+                    testDiv.innerHTML = '<div class="test-result error">❌ showSection function not found</div>';
+                }
+            } catch (error) {
+                testDiv.innerHTML = '<div class="test-result error">❌ Error testing showSection: ' + error.message + '</div>';
+            }
+        }
+
+        function testAlerts() {
+            const testDiv = document.getElementById('alert-test');
+            try {
+                if (typeof window.showAlert === 'function') {
+                    window.showAlert('🧪 Test alert - modular system working!', 'success');
+                    testDiv.innerHTML = '<div class="test-result success">✅ Alert system working - check for notification</div>';
+                } else {
+                    testDiv.innerHTML = '<div class="test-result error">❌ showAlert function not found</div>';
+                }
+            } catch (error) {
+                testDiv.innerHTML = '<div class="test-result error">❌ Error testing alerts: ' + error.message + '</div>';
+            }
+        }
+
+        function testAPIFunctions() {
+            const testDiv = document.getElementById('api-test');
+            try {
+                const apiFunctions = [
+                    'PiSignage.api.system.getStats',
+                    'PiSignage.api.media.list',
+                    'PiSignage.api.playlists.list',
+                    'PiSignage.api.player.getStatus'
+                ];
+
+                let results = [];
+                apiFunctions.forEach(funcPath => {
+                    const parts = funcPath.split('.');
+                    let obj = window;
+                    let exists = true;
+
+                    for (let part of parts) {
+                        if (obj && typeof obj[part] !== 'undefined') {
+                            obj = obj[part];
+                        } else {
+                            exists = false;
+                            break;
+                        }
+                    }
+
+                    results.push(`${funcPath}: ${exists && typeof obj === 'function' ? '✅' : '❌'}`);
+                });
+
+                testDiv.innerHTML = '<div class="test-result success">API Functions Test:<br>' + results.join('<br>') + '</div>';
+            } catch (error) {
+                testDiv.innerHTML = '<div class="test-result error">❌ Error testing API functions: ' + error.message + '</div>';
+            }
+        }
+
+        // Global error handler for debugging
+        window.addEventListener('error', function(event) {
+            console.error('Global error:', event.error);
+        });
+    </script>
+</body>
+</html>
