@@ -127,7 +127,4 @@ function handleDeletePlaylist() {
     }
 }
 
-function sanitizeFilename($filename) {
-    return preg_replace('/[^a-zA-Z0-9_\-\s]/', '_', $filename);
-}
 ?>
