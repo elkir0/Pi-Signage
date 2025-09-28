@@ -6,6 +6,7 @@
  */
 
 require_once '../config.php';
+require_once 'media.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
 $input = json_decode(file_get_contents('php://input'), true);
@@ -487,19 +488,6 @@ function cancelDownload($downloadId) {
     return true;
 }
 
-function formatDuration($seconds) {
-    if ($seconds < 60) {
-        return $seconds . 's';
-    } elseif ($seconds < 3600) {
-        $minutes = floor($seconds / 60);
-        $secs = $seconds % 60;
-        return $minutes . 'm ' . $secs . 's';
-    } else {
-        $hours = floor($seconds / 3600);
-        $minutes = floor(($seconds % 3600) / 60);
-        return $hours . 'h ' . $minutes . 'm';
-    }
-}
 
 // Cleanup old downloads on startup
 function cleanupOldDownloads() {

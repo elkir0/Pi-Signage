@@ -1,4 +1,4 @@
-# Claude Development Protocol - PiSignage v0.8.5
+alors# Claude Development Protocol - PiSignage v0.8.5
 
 ## Project Overview
 

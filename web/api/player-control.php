@@ -5,6 +5,7 @@
  */
 
 require_once '../config.php';
+require_once 'system.php';
 
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
@@ -378,10 +379,6 @@ if ($method === 'GET' && $action === 'status') {
 /**
  * Helper functions
  */
-function getCpuUsage() {
-    $load = sys_getloadavg();
-    return round($load[0] * 100 / 4, 2); // Assuming 4 cores
-}
 
 function getMemoryUsage() {
     $free = shell_exec('free -b');
@@ -407,10 +404,6 @@ function getRaspberryPiTemperature() {
     return null;
 }
 
-function getUptime() {
-    $uptime = shell_exec('uptime -p');
-    return trim($uptime);
-}
 
 function loadPlaylistToVLC($playlistName) {
     $playlistFile = PLAYLISTS_PATH . '/' . $playlistName . '.json';

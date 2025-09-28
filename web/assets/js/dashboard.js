@@ -200,13 +200,15 @@ PiSignage.dashboard = {
 
     updatePlayerInterface: function() {
         const player = PiSignage.player.getCurrentPlayer();
-        const playerName = player.toUpperCase();
+        // Ensure player is a string with fallback to 'vlc'
+        const playerStr = (typeof player === 'string' && player) ? player : 'vlc';
+        const playerName = playerStr.toUpperCase();
 
         // Update main status display
         const currentPlayerEl = document.getElementById('current-player');
         if (currentPlayerEl) {
             currentPlayerEl.textContent = playerName;
-            currentPlayerEl.style.color = player === 'vlc' ? '#4a9eff' : '#51cf66';
+            currentPlayerEl.style.color = playerStr === 'vlc' ? '#4a9eff' : '#51cf66';
         }
 
         // Update controls section if present
@@ -223,13 +225,13 @@ PiSignage.dashboard = {
 
         // Update radio buttons
         document.querySelectorAll('input[name="player"]').forEach(radio => {
-            radio.checked = (radio.value === player);
+            radio.checked = (radio.value === playerStr);
         });
 
         // Adapt button colors based on player
         const playerButtons = document.querySelectorAll('.player-btn');
         playerButtons.forEach(btn => {
-            if (player === 'vlc') {
+            if (playerStr === 'vlc') {
                 btn.style.background = 'linear-gradient(135deg, #4a9eff, #3d7edb)';
             } else {
                 btn.style.background = 'linear-gradient(135deg, #51cf66, #3eb854)';

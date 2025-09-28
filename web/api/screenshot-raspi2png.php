@@ -4,18 +4,7 @@
  * Hardware-accelerated capture for Raspberry Pi
  */
 
-header('Content-Type: application/json');
-header('Access-Control-Allow-Origin: *');
-
-// Fonction de réponse JSON
-function jsonResponse($success, $data = null, $message = null) {
-    echo json_encode([
-        'success' => $success,
-        'data' => $data,
-        'message' => $message
-    ]);
-    exit;
-}
+require_once '../config.php';
 
 // Configuration
 $CACHE_DIR = '/dev/shm/pisignage-screenshots';

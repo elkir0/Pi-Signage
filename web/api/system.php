@@ -5,6 +5,7 @@
  */
 
 require_once "/opt/pisignage/web/config.php";
+require_once "config.php";
 
 $method = $_SERVER['REQUEST_METHOD'];
 $input = json_decode(file_get_contents('php://input'), true);
@@ -211,110 +212,8 @@ function handleConfigUpdate($input) {
     }
 }
 
-function updateDisplayConfig($input) {
-    $resolution = $input['resolution'] ?? null;
-    $rotation = $input['rotation'] ?? null;
 
-    $commands = [];
 
-    if ($resolution) {
-        // Update resolution in config.txt
-        $commands[] = "sudo sed -i 's/^hdmi_mode=.*/hdmi_mode=82/' /boot/config.txt";
-        $commands[] = "sudo sed -i 's/^hdmi_group=.*/hdmi_group=1/' /boot/config.txt";
-    }
-
-    if ($rotation !== null) {
-        // Update display rotation
-        $commands[] = "sudo sed -i 's/^display_rotate=.*/display_rotate=$rotation/' /boot/config.txt";
-    }
-
-    $success = true;
-    foreach ($commands as $cmd) {
-        $result = executeCommand($cmd);
-        if (!$result['success']) {
-            $success = false;
-        }
-    }
-
-    if ($success) {
-        logMessage("Display configuration updated");
-        jsonResponse(true, null, 'Display configuration updated. Reboot required.');
-    } else {
-        jsonResponse(false, null, 'Failed to update display configuration');
-    }
-}
-
-function updateAudioConfig($input) {
-    $output = $input['output'] ?? null;
-    $volume = $input['volume'] ?? null;
-
-    $commands = [];
-
-    if ($output) {
-        switch ($output) {
-            case 'hdmi':
-                $commands[] = 'sudo amixer cset numid=3 2';
-                break;
-            case 'jack':
-                $commands[] = 'sudo amixer cset numid=3 1';
-                break;
-            case 'auto':
-                $commands[] = 'sudo amixer cset numid=3 0';
-                break;
-        }
-    }
-
-    if ($volume !== null) {
-        $commands[] = "sudo amixer set PCM {$volume}%";
-    }
-
-    $success = true;
-    foreach ($commands as $cmd) {
-        $result = executeCommand($cmd);
-        if (!$result['success']) {
-            $success = false;
-        }
-    }
-
-    if ($success) {
-        logMessage("Audio configuration updated");
-        jsonResponse(true, null, 'Audio configuration updated');
-    } else {
-        jsonResponse(false, null, 'Failed to update audio configuration');
-    }
-}
-
-function updateNetworkConfig($input) {
-    $hostname = $input['hostname'] ?? null;
-    $timezone = $input['timezone'] ?? null;
-
-    $commands = [];
-
-    if ($hostname) {
-        $sanitizedHostname = preg_replace('/[^a-zA-Z0-9-]/', '', $hostname);
-        $commands[] = "sudo hostnamectl set-hostname $sanitizedHostname";
-        $commands[] = "sudo systemctl restart avahi-daemon";
-    }
-
-    if ($timezone) {
-        $commands[] = "sudo timedatectl set-timezone $timezone";
-    }
-
-    $success = true;
-    foreach ($commands as $cmd) {
-        $result = executeCommand($cmd);
-        if (!$result['success']) {
-            $success = false;
-        }
-    }
-
-    if ($success) {
-        logMessage("Network configuration updated");
-        jsonResponse(true, null, 'Network configuration updated');
-    } else {
-        jsonResponse(false, null, 'Failed to update network configuration');
-    }
-}
 
 function handleGetLogs($input) {
     $lines = $input['lines'] ?? 50;
@@ -349,19 +248,7 @@ function handleGetProcesses() {
     }
 }
 
-function getLocalIP() {
-    $socket = socket_create(AF_INET, SOCK_DGRAM, SOL_UDP);
-    socket_connect($socket, "8.8.8.8", 53);
-    socket_getsockname($socket, $localAddr);
-    socket_close($socket);
-    return $localAddr;
-}
 
-function formatFileSize($bytes) {
-    $units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    $factor = floor((strlen($bytes) - 1) / 3);
-    return sprintf("%.2f", $bytes / pow(1024, $factor)) . ' ' . $units[$factor];
-}
 
 function getSystemStats() {
     $stats = [];

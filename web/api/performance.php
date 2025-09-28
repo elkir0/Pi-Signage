@@ -8,25 +8,13 @@ Version: 1.0.0
 Date: 2025-09-22
 */
 
-header('Content-Type: application/json');
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST');
-header('Access-Control-Allow-Headers: Content-Type');
+require_once '../config.php';
+require_once 'system.php';
 
 // Configuration
 $STATS_FILE = '/var/log/pisignage/fps-stats.json';
 $LOG_FILE = '/var/log/pisignage/fps-monitoring.log';
 $CSV_FILE = '/var/log/pisignage/fps-monitoring.log.csv';
-
-/**
- * Fonction pour exécuter commandes système en sécurité
- */
-function executeCommand($command) {
-    $output = [];
-    $return_var = 0;
-    exec($command . ' 2>/dev/null', $output, $return_var);
-    return $return_var === 0 ? implode("\n", $output) : false;
-}
 
 /**
  * Récupérer statistiques GPU en temps réel
@@ -58,40 +46,6 @@ function getGPUStats() {
 /**
  * Récupérer statistiques système
  */
-function getSystemStats() {
-    $stats = [];
-
-    // CPU Usage
-    $cpu_usage = executeCommand("top -bn1 | grep 'Cpu(s)' | awk '{print $2}' | cut -d'%' -f1");
-    $stats['cpu_usage'] = $cpu_usage ? (float)$cpu_usage : null;
-
-    // Load average
-    $load = executeCommand('cat /proc/loadavg');
-    if ($load) {
-        $load_parts = explode(' ', $load);
-        $stats['load_average'] = [
-            '1min' => (float)$load_parts[0],
-            '5min' => (float)$load_parts[1],
-            '15min' => (float)$load_parts[2]
-        ];
-    }
-
-    // Mémoire
-    $mem_total = executeCommand("cat /proc/meminfo | grep MemTotal | awk '{print $2}'");
-    $mem_free = executeCommand("cat /proc/meminfo | grep MemFree | awk '{print $2}'");
-    $mem_available = executeCommand("cat /proc/meminfo | grep MemAvailable | awk '{print $2}'");
-
-    if ($mem_total && $mem_free && $mem_available) {
-        $stats['memory'] = [
-            'total_kb' => (int)$mem_total,
-            'free_kb' => (int)$mem_free,
-            'available_kb' => (int)$mem_available,
-            'used_percent' => round((($mem_total - $mem_available) / $mem_total) * 100, 2)
-        ];
-    }
-
-    return $stats;
-}
 
 /**
  * Vérifier processus Chromium
