@@ -400,7 +400,7 @@ function updatePlayerStatus() {
 
 // ========== SYSTEM STATS ==========
 function refreshStats() {
-    fetch('/api/system.php?action=stats')
+    fetch('/api/test-stats.php?action=stats')
         .then(response => response.json())
         .then(data => {
             if (data.success) {
