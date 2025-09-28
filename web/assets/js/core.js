@@ -21,12 +21,22 @@ window.PiSignage = window.PiSignage || {
     }
 };
 
-// Global variables for compatibility
-let currentSection = 'dashboard';
-let autoScreenshotInterval = null;
-let systemStatsInterval = null;
-let currentPlayer = 'vlc';
-let selectedPlayer = 'vlc';
+// Global variables for compatibility - Check if not already declared
+if (typeof currentSection === 'undefined') {
+    window.currentSection = 'dashboard';
+}
+if (typeof autoScreenshotInterval === 'undefined') {
+    window.autoScreenshotInterval = null;
+}
+if (typeof systemStatsInterval === 'undefined') {
+    window.systemStatsInterval = null;
+}
+if (typeof currentPlayer === 'undefined') {
+    window.currentPlayer = 'vlc';
+}
+if (typeof selectedPlayer === 'undefined') {
+    window.selectedPlayer = 'vlc';
+}
 
 // CRITICAL: Global showSection function for navigation
 window.showSection = function(section) {

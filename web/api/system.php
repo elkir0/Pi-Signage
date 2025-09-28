@@ -568,18 +568,5 @@ function getNetworkInfo() {
     return $ip;
 }
 
-function getMediaFiles() {
-    $mediaDir = MEDIA_PATH;
-    $files = array();
-
-    if (is_dir($mediaDir)) {
-        // Chercher tous les fichiers média communs
-        $extensions = ['mp4', 'mkv', 'avi', 'mov', 'webm', 'jpg', 'jpeg', 'png', 'gif'];
-        foreach ($extensions as $ext) {
-            $files = array_merge($files, glob($mediaDir . "/*." . $ext));
-        }
-    }
-
-    return $files;
-}
+// Function getMediaFiles() is already defined in config.php
 ?>

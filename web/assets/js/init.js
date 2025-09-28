@@ -10,7 +10,7 @@ let currentDownloadUrl = '';
 let currentDownloadQuality = '';
 
 // Screenshot auto-capture functionality
-let autoScreenshotInterval = null;
+// Using existing autoScreenshotInterval from core.js
 
 // Global event listeners and initialization
 document.addEventListener('DOMContentLoaded', function() {
