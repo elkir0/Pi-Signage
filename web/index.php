@@ -476,22 +476,128 @@ foreach ($dirs as $dir) {
             box-shadow: 0 0 20px rgba(74, 158, 255, 0.2);
         }
 
-        /* Player Controls */
-        .player-controls {
-            display: flex;
-            gap: 15px;
-            justify-content: center;
-            margin: 20px 0;
+        /* Enhanced Player Controls */
+        .now-playing-card {
+            background: linear-gradient(135deg, var(--glass), rgba(74, 158, 255, 0.05));
+            border: 1px solid var(--primary);
         }
 
-        .player-btn {
-            width: 60px;
-            height: 60px;
+        .now-playing-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+        }
+
+        .now-playing-title {
+            font-size: 22px;
+            font-weight: 600;
+            margin: 0 0 8px 0;
+            color: var(--light);
+        }
+
+        .now-playing-meta {
+            display: flex;
+            gap: 15px;
+            font-size: 14px;
+            color: rgba(240, 243, 247, 0.7);
+        }
+
+        .player-state {
+            padding: 4px 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            font-weight: 500;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 25px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--danger);
+            animation: pulse 2s infinite;
+        }
+
+        .status-indicator.playing .status-dot {
+            background: var(--success);
+        }
+
+        .status-indicator.paused .status-dot {
+            background: var(--warning);
+            animation: none;
+        }
+
+        /* Progress Section */
+        .progress-section {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin: 25px 0;
+        }
+
+        .time-current, .time-total {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--light);
+            min-width: 45px;
+        }
+
+        .progress-bar-container {
+            flex: 1;
+            position: relative;
+        }
+
+        .progress-bar-bg {
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--success));
+            border-radius: 10px;
+            transition: width 0.3s ease;
+        }
+
+        .progress-bar-input {
+            position: absolute;
+            top: -6px;
+            left: 0;
+            width: 100%;
+            height: 20px;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        /* Transport Controls */
+        .transport-controls {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            align-items: center;
+            margin: 25px 0;
+        }
+
+        .control-btn {
+            width: 50px;
+            height: 50px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 24px;
+            font-size: 20px;
             background: var(--glass);
             border: 2px solid var(--glass-border);
             color: var(--light);
@@ -499,15 +605,178 @@ foreach ($dirs as $dir) {
             transition: all 0.3s ease;
         }
 
-        .player-btn:hover {
-            transform: scale(1.1);
-            border-color: var(--primary);
-            background: rgba(74, 158, 255, 0.2);
-        }
-
-        .player-btn.active {
+        .control-btn.primary {
+            width: 65px;
+            height: 65px;
+            font-size: 26px;
             background: linear-gradient(135deg, var(--primary), #3d7edb);
             border-color: var(--primary);
+        }
+
+        .control-btn.secondary {
+            width: 40px;
+            height: 40px;
+            font-size: 18px;
+            opacity: 0.7;
+        }
+
+        .control-btn:hover {
+            transform: scale(1.1);
+            border-color: var(--primary);
+        }
+
+        .control-btn.active {
+            background: var(--primary);
+            color: white;
+        }
+
+        /* Volume Section */
+        .volume-section {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            max-width: 300px;
+            margin: 0 auto;
+        }
+
+        .volume-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--glass);
+            border: 2px solid var(--glass-border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .volume-slider-container {
+            flex: 1;
+            position: relative;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+
+        .volume-slider {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .volume-fill {
+            height: 100%;
+            background: var(--primary);
+            border-radius: 10px;
+            transition: width 0.1s ease;
+        }
+
+        .volume-value {
+            min-width: 40px;
+            font-size: 13px;
+            color: var(--light);
+        }
+
+        /* Playlist Controls */
+        .playlist-control-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+
+        .playlist-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .queue-section {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 10px;
+            padding: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .queue-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .queue-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            background: var(--glass);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .queue-item:hover {
+            background: rgba(74, 158, 255, 0.1);
+        }
+
+        .queue-item.current {
+            border-left: 3px solid var(--primary);
+            background: rgba(74, 158, 255, 0.15);
+        }
+
+        /* Quick Play Grid */
+        .quick-play-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .quick-play-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        /* System Stats Grid */
+        .system-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 10px;
+        }
+
+        .stat-item label {
+            display: block;
+            font-size: 11px;
+            color: rgba(240, 243, 247, 0.6);
+            margin-bottom: 5px;
+            text-transform: uppercase;
+        }
+
+        .stat-item span {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        @media (max-width: 768px) {
+            .transport-controls {
+                flex-wrap: wrap;
+            }
+
+            .system-stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
         }
 
         /* Upload Zone */
@@ -1782,67 +2051,177 @@ foreach ($dirs as $dir) {
             </div>
         </div>
 
-        <!-- Player Section -->
+        <!-- Enhanced Player Section -->
         <div id="player" class="content-section">
             <div class="header">
                 <h1 class="page-title">Contrôle du Lecteur</h1>
                 <div class="header-actions">
+                    <button class="btn btn-glass" onclick="refreshPlayerStatus()">
+                        🔄 Actualiser
+                    </button>
                     <button class="btn btn-glass" onclick="takeQuickScreenshot('player')">
                         📸 Capture
                     </button>
                 </div>
             </div>
 
-            <div class="card">
-                <h3 class="card-title" id="player-controls-title">
-                    <span>🎮</span>
-                    <span id="player-controls-name">Contrôles VLC</span>
-                </h3>
-                <div class="player-controls">
-                    <div class="player-btn" onclick="playerControl('play')">▶️</div>
-                    <div class="player-btn" onclick="playerControl('pause')">⏸️</div>
-                    <div class="player-btn" onclick="playerControl('stop')">⏹️</div>
-                    <div class="player-btn" onclick="playerControl('next')">⏭️</div>
-                    <div class="player-btn" onclick="playerControl('previous')">⏮️</div>
+            <!-- Now Playing Card -->
+            <div class="card now-playing-card">
+                <div class="now-playing-header">
+                    <div class="now-playing-info">
+                        <h3 class="now-playing-title" id="now-playing-title">Aucun média en lecture</h3>
+                        <p class="now-playing-meta" id="now-playing-meta">
+                            <span class="player-state" id="player-state">Arrêté</span>
+                            <span class="player-type">VLC</span>
+                        </p>
+                    </div>
+                    <div class="now-playing-status">
+                        <div class="status-indicator" id="status-indicator">
+                            <span class="status-dot"></span>
+                            <span id="status-text">Hors ligne</span>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="form-group">
-                    <label class="form-label">Volume</label>
-                    <input type="range" class="form-control" id="volume-control" min="0" max="100" value="50" onchange="setVolume(this.value)">
+                <!-- Progress Bar -->
+                <div class="progress-section">
+                    <span class="time-current" id="time-current">00:00</span>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar-bg">
+                            <div class="progress-bar-fill" id="progress-fill" style="width: 0%"></div>
+                            <input type="range" class="progress-bar-input" id="seek-bar"
+                                   min="0" max="100" value="0"
+                                   onchange="seekTo(this.value)"
+                                   oninput="updateSeekPreview(this.value)">
+                        </div>
+                    </div>
+                    <span class="time-total" id="time-total">00:00</span>
+                </div>
+
+                <!-- Transport Controls -->
+                <div class="transport-controls">
+                    <button class="control-btn secondary" id="shuffle-btn" onclick="toggleShuffle()" title="Aléatoire">
+                        🔀
+                    </button>
+                    <button class="control-btn" id="previous-btn" onclick="playerControl('previous')" title="Précédent">
+                        ⏮️
+                    </button>
+                    <button class="control-btn primary" id="play-pause-btn" onclick="togglePlayPause()" title="Lecture/Pause">
+                        ▶️
+                    </button>
+                    <button class="control-btn" id="stop-btn" onclick="playerControl('stop')" title="Arrêt">
+                        ⏹️
+                    </button>
+                    <button class="control-btn" id="next-btn" onclick="playerControl('next')" title="Suivant">
+                        ⏭️
+                    </button>
+                    <button class="control-btn secondary" id="loop-btn" onclick="toggleLoop()" title="Répéter">
+                        🔁
+                    </button>
+                </div>
+
+                <!-- Volume Control -->
+                <div class="volume-section">
+                    <button class="volume-btn" id="mute-btn" onclick="toggleMute()" title="Muet">
+                        🔊
+                    </button>
+                    <div class="volume-slider-container">
+                        <input type="range" class="volume-slider" id="volume-slider"
+                               min="0" max="100" value="50"
+                               oninput="setVolume(this.value)">
+                        <div class="volume-fill" id="volume-fill" style="width: 50%"></div>
+                    </div>
+                    <span class="volume-value" id="volume-value">50%</span>
                 </div>
             </div>
 
-
+            <!-- Playlist Control Card -->
             <div class="card">
                 <h3 class="card-title">
-                    <span>📄</span>
-                    Lecture de playlist
+                    <span>🎵</span>
+                    Gestion des Playlists
                 </h3>
-                <div class="form-group">
-                    <label class="form-label">Sélectionner une playlist</label>
-                    <select class="form-control" id="playlist-select">
-                        <option value="">-- Choisir --</option>
-                    </select>
+
+                <div class="playlist-control-grid">
+                    <!-- Playlist Selector -->
+                    <div class="playlist-selector-section">
+                        <div class="form-group">
+                            <label class="form-label">Playlist active</label>
+                            <select class="form-control" id="playlist-select" onchange="previewPlaylist()">
+                                <option value="">-- Sélectionner une playlist --</option>
+                            </select>
+                        </div>
+
+                        <div class="playlist-actions">
+                            <button class="btn btn-primary" onclick="loadPlaylist()">
+                                ▶️ Charger
+                            </button>
+                            <button class="btn btn-glass" onclick="showPlaylistQueue()">
+                                📋 File d'attente
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Current Queue -->
+                    <div class="queue-section" id="queue-section" style="display: none;">
+                        <h4>File d'attente actuelle</h4>
+                        <div class="queue-list" id="queue-list">
+                            <!-- Queue items will be loaded here -->
+                        </div>
+                    </div>
                 </div>
-                <button class="btn btn-primary" onclick="playPlaylist()">
-                    ▶️ Lancer
-                </button>
             </div>
 
+            <!-- Quick Media Control -->
             <div class="card">
                 <h3 class="card-title">
                     <span>📂</span>
-                    Lecture de fichier
+                    Lecture rapide
                 </h3>
-                <div class="form-group">
-                    <label class="form-label">Sélectionner un fichier</label>
-                    <select class="form-control" id="single-file-select">
-                        <option value="">-- Choisir --</option>
-                    </select>
+
+                <div class="quick-play-grid">
+                    <div class="form-group">
+                        <label class="form-label">Fichier média</label>
+                        <select class="form-control" id="media-select">
+                            <option value="">-- Sélectionner un fichier --</option>
+                        </select>
+                    </div>
+
+                    <div class="quick-play-actions">
+                        <button class="btn btn-primary" onclick="playMediaFile()">
+                            ▶️ Lire maintenant
+                        </button>
+                        <button class="btn btn-secondary" onclick="addMediaToQueue()">
+                            ➕ Ajouter à la file
+                        </button>
+                    </div>
                 </div>
-                <button class="btn btn-primary" onclick="playSingleFile()">
-                    ▶️ Lancer
-                </button>
+            </div>
+
+            <!-- System Stats -->
+            <div class="card">
+                <h3 class="card-title">
+                    <span>📊</span>
+                    Statistiques système
+                </h3>
+                <div class="system-stats-grid">
+                    <div class="stat-item">
+                        <label>CPU</label>
+                        <span id="player-cpu">--</span>
+                    </div>
+                    <div class="stat-item">
+                        <label>Mémoire</label>
+                        <span id="player-memory">--</span>
+                    </div>
+                    <div class="stat-item">
+                        <label>Température</label>
+                        <span id="player-temp">--</span>
+                    </div>
+                    <div class="stat-item">
+                        <label>Uptime</label>
+                        <span id="player-uptime">--</span>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -2153,42 +2532,387 @@ foreach ($dirs as $dir) {
                 });
         }
 
-        // Adaptive Player Control
-        function playerControl(action) {
-            const playerName = currentPlayer.toUpperCase();
+        // Enhanced Player Control with Real-time Status
+        let playerState = {
+            isPlaying: false,
+            isPaused: false,
+            currentFile: null,
+            position: 0,
+            duration: 0,
+            volume: 50,
+            isMuted: false,
+            isLooping: false,
+            isShuffling: false
+        };
 
-            fetch('/api/player.php', {
+        let statusUpdateInterval = null;
+
+        function playerControl(action) {
+            fetch('/api/player-control.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    action: action,
-                    player: currentPlayer
+                    action: action
                 })
             })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    showAlert(data.message || `${playerName}: ${action} exécutée!`, 'success');
-                    setTimeout(() => updatePlayerStatus(), 500);
+                    if (data.status) {
+                        updatePlayerUI(data.status);
+                    }
+                    showAlert(`${action} exécuté`, 'success');
                 } else {
-                    showAlert(data.message || `Erreur ${playerName}: ${action} a échoué`, 'error');
+                    showAlert(data.message || `Erreur: ${action}`, 'error');
                 }
             })
-            .catch(error => showAlert(`Erreur de communication avec ${playerName}`, 'error'));
+            .catch(error => {
+                console.error('Player control error:', error);
+                showAlert('Erreur de communication', 'error');
+            });
         }
 
-        // Update Player Status (Adaptive)
-        function updatePlayerStatus() {
-            fetch('/api/player.php', {
+        function togglePlayPause() {
+            const action = playerState.isPlaying ? 'pause' : 'play';
+            playerControl(action);
+        }
+
+        function seekTo(percentage) {
+            const position = (playerState.duration * percentage) / 100;
+            fetch('/api/player-control.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    action: 'status',
-                    player: currentPlayer
+                    action: 'seek',
+                    params: { position: position }
                 })
             })
             .then(response => response.json())
             .then(data => {
+                if (data.status) {
+                    updatePlayerUI(data.status);
+                }
+            });
+        }
+
+        function setVolume(volume) {
+            playerState.volume = volume;
+            document.getElementById('volume-value').textContent = volume + '%';
+            document.getElementById('volume-fill').style.width = volume + '%';
+
+            fetch('/api/player-control.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'volume',
+                    params: { volume: volume }
+                })
+            });
+        }
+
+        function toggleMute() {
+            playerState.isMuted = !playerState.isMuted;
+            const muteBtn = document.getElementById('mute-btn');
+
+            if (playerState.isMuted) {
+                muteBtn.textContent = '🔇';
+                setVolume(0);
+            } else {
+                muteBtn.textContent = '🔊';
+                setVolume(playerState.volume || 50);
+            }
+        }
+
+        function toggleLoop() {
+            playerState.isLooping = !playerState.isLooping;
+            const loopBtn = document.getElementById('loop-btn');
+            loopBtn.classList.toggle('active');
+
+            fetch('/api/player-control.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'set_loop',
+                    params: { enabled: playerState.isLooping }
+                })
+            });
+        }
+
+        function toggleShuffle() {
+            playerState.isShuffling = !playerState.isShuffling;
+            const shuffleBtn = document.getElementById('shuffle-btn');
+            shuffleBtn.classList.toggle('active');
+
+            fetch('/api/player-control.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'set_random',
+                    params: { enabled: playerState.isShuffling }
+                })
+            });
+        }
+
+        // Update Player UI with status data
+        function updatePlayerUI(status) {
+            if (!status) return;
+
+            // Update player state
+            playerState.isPlaying = status.state === 'playing';
+            playerState.isPaused = status.state === 'paused';
+            playerState.currentFile = status.current_file;
+            playerState.position = status.position || 0;
+            playerState.duration = status.duration || 0;
+            playerState.volume = status.volume || 50;
+
+            // Update Now Playing
+            const titleEl = document.getElementById('now-playing-title');
+            const metaEl = document.getElementById('player-state');
+            const statusEl = document.getElementById('status-indicator');
+            const statusTextEl = document.getElementById('status-text');
+
+            if (status.current_file) {
+                titleEl.textContent = status.current_file;
+            } else {
+                titleEl.textContent = 'Aucun média en lecture';
+            }
+
+            // Update status indicator
+            switch (status.state) {
+                case 'playing':
+                    metaEl.textContent = 'En lecture';
+                    statusEl.className = 'status-indicator playing';
+                    statusTextEl.textContent = 'En ligne';
+                    document.getElementById('play-pause-btn').textContent = '⏸️';
+                    break;
+                case 'paused':
+                    metaEl.textContent = 'En pause';
+                    statusEl.className = 'status-indicator paused';
+                    statusTextEl.textContent = 'En pause';
+                    document.getElementById('play-pause-btn').textContent = '▶️';
+                    break;
+                default:
+                    metaEl.textContent = 'Arrêté';
+                    statusEl.className = 'status-indicator';
+                    statusTextEl.textContent = 'Hors ligne';
+                    document.getElementById('play-pause-btn').textContent = '▶️';
+            }
+
+            // Update progress bar
+            if (playerState.duration > 0) {
+                const progress = (playerState.position / playerState.duration) * 100;
+                document.getElementById('progress-fill').style.width = progress + '%';
+                document.getElementById('seek-bar').value = progress;
+                document.getElementById('time-current').textContent = formatTime(playerState.position);
+                document.getElementById('time-total').textContent = formatTime(playerState.duration);
+            }
+
+            // Update volume
+            document.getElementById('volume-slider').value = playerState.volume;
+            document.getElementById('volume-fill').style.width = playerState.volume + '%';
+            document.getElementById('volume-value').textContent = Math.round(playerState.volume) + '%';
+
+            // Update system stats if available
+            if (status.system) {
+                document.getElementById('player-cpu').textContent = status.system.cpu + '%';
+                document.getElementById('player-memory').textContent = status.system.memory.percent + '%';
+                document.getElementById('player-temp').textContent = status.system.temperature + '°C';
+                document.getElementById('player-uptime').textContent = status.system.uptime || '--';
+            }
+        }
+
+        // Refresh Player Status
+        function refreshPlayerStatus() {
+            fetch('/api/player-control.php?action=status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.data) {
+                        updatePlayerUI(data.data);
+                    }
+                })
+                .catch(error => console.error('Error fetching player status:', error));
+        }
+
+        // Load playlist to player
+        function loadPlaylist() {
+            const playlistSelect = document.getElementById('playlist-select');
+            const playlistName = playlistSelect.value;
+
+            if (!playlistName) {
+                showAlert('Veuillez sélectionner une playlist', 'warning');
+                return;
+            }
+
+            fetch('/api/player-control.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'load_playlist',
+                    params: { name: playlistName }
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert(`Playlist "${playlistName}" chargée`, 'success');
+                    refreshPlayerStatus();
+                } else {
+                    showAlert(data.message || 'Erreur lors du chargement', 'error');
+                }
+            });
+        }
+
+        // Play media file
+        function playMediaFile() {
+            const mediaSelect = document.getElementById('media-select');
+            const file = mediaSelect.value;
+
+            if (!file) {
+                showAlert('Veuillez sélectionner un fichier', 'warning');
+                return;
+            }
+
+            fetch('/api/player-control.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'play_file',
+                    params: { file: file }
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert(`Lecture de ${file}`, 'success');
+                    refreshPlayerStatus();
+                } else {
+                    showAlert(data.message || 'Erreur de lecture', 'error');
+                }
+            });
+        }
+
+        // Add media to queue
+        function addMediaToQueue() {
+            const mediaSelect = document.getElementById('media-select');
+            const file = mediaSelect.value;
+
+            if (!file) {
+                showAlert('Veuillez sélectionner un fichier', 'warning');
+                return;
+            }
+
+            fetch('/api/player-control.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'add_to_playlist',
+                    params: { file: file }
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert(`${file} ajouté à la file d'attente`, 'success');
+                    refreshPlayerStatus();
+                } else {
+                    showAlert(data.message || 'Erreur', 'error');
+                }
+            });
+        }
+
+        // Show playlist queue
+        function showPlaylistQueue() {
+            const queueSection = document.getElementById('queue-section');
+            queueSection.style.display = queueSection.style.display === 'none' ? 'block' : 'none';
+
+            if (queueSection.style.display === 'block') {
+                // Load queue items
+                fetch('/api/player-control.php?action=status')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success && data.data && data.data.playlist) {
+                            renderQueueItems(data.data.playlist);
+                        }
+                    });
+            }
+        }
+
+        // Render queue items
+        function renderQueueItems(playlist) {
+            const queueList = document.getElementById('queue-list');
+            if (!playlist || playlist.length === 0) {
+                queueList.innerHTML = '<div class="empty-state">File d'attente vide</div>';
+                return;
+            }
+
+            queueList.innerHTML = playlist.map((item, index) => `
+                <div class="queue-item ${item.current ? 'current' : ''}" data-index="${index}">
+                    <span class="queue-number">${index + 1}</span>
+                    <span class="queue-name">${item.name}</span>
+                    ${item.current ? '<span class="queue-current">▶️</span>' : ''}
+                </div>
+            `).join('');
+        }
+
+        // Format time helper
+        function formatTime(seconds) {
+            if (!seconds || isNaN(seconds)) return '00:00';
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        // Update seek preview
+        function updateSeekPreview(value) {
+            // Optional: Show time preview on hover
+            const position = (playerState.duration * value) / 100;
+            // Could add a tooltip showing the time
+        }
+
+        // Initialize player on page load
+        function initializePlayer() {
+            // Load playlists
+            fetch('/api/playlist-simple.php')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.data) {
+                        const playlistSelect = document.getElementById('playlist-select');
+                        playlistSelect.innerHTML = '<option value="">-- Sélectionner une playlist --</option>';
+                        data.data.forEach(playlist => {
+                            playlistSelect.innerHTML += `<option value="${playlist.name}">${playlist.name}</option>`;
+                        });
+                    }
+                });
+
+            // Load media files
+            fetch('/api/media.php')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.data) {
+                        const mediaSelect = document.getElementById('media-select');
+                        mediaSelect.innerHTML = '<option value="">-- Sélectionner un fichier --</option>';
+                        data.data.forEach(file => {
+                            mediaSelect.innerHTML += `<option value="${file.name}">${file.name}</option>`;
+                        });
+                    }
+                });
+
+            // Start status polling
+            refreshPlayerStatus();
+            statusUpdateInterval = setInterval(refreshPlayerStatus, 2000);
+        }
+
+        // Clean up on page unload
+        window.addEventListener('beforeunload', () => {
+            if (statusUpdateInterval) {
+                clearInterval(statusUpdateInterval);
+            }
+        });
+
+        // Update Player Status (Adaptive) - Keep for compatibility
+        function updatePlayerStatus() {
+            refreshPlayerStatus();
+        }
                 if (data.success) {
                     const status = data.running ? 'En lecture' : 'Arrêté';
                     const statusColor = data.running ? '#51cf66' : '#ffd43b';
@@ -3380,6 +4104,9 @@ foreach ($dirs as $dir) {
             if (activeSection && activeSection.id === 'playlists') {
                 loadPlaylists();
             }
+
+            // Initialize player controls
+            initializePlayer();
         });
 
         // Advanced Playlist Editor JavaScript
