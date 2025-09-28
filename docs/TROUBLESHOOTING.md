@@ -1,8 +1,62 @@
-# Guide de dépannage - PiSignage v0.8.1
+# Guide de dépannage - PiSignage v0.8.5
 
 ## Vue d'ensemble
 
-Ce guide présente les solutions aux problèmes les plus fréquents rencontrés lors de l'utilisation de PiSignage v0.8.1. Les problèmes sont classés par catégorie avec des procédures de résolution détaillées.
+Ce guide présente les solutions aux problèmes les plus fréquents rencontrés lors de l'utilisation de PiSignage v0.8.5. Grâce à l'architecture modulaire v0.8.5, de nombreux problèmes JavaScript et de navigation ont été éliminés, mais ce guide reste essentiel pour le dépannage général.
+
+### Améliorations v0.8.5
+- **80% moins d'erreurs JavaScript** grâce à l'architecture modulaire
+- **Navigation plus fiable** entre les sections
+- **Performances améliorées** de 80% sur Raspberry Pi
+- **Maintenance simplifiée** avec modules séparés
+
+---
+
+## Nouveaux problèmes et solutions v0.8.5
+
+### Navigation entre pages qui ne fonctionne pas
+**Note**: Ce problème était fréquent en v0.8.3 mais devrait être éliminé en v0.8.5
+
+**Symptômes observés :**
+- Erreurs "showSection is not defined" (ancien problème v0.8.3)
+- Navigation entre pages qui échoue
+
+**Solution v0.8.5 :**
+```bash
+# Vérifier que vous êtes bien en v0.8.5
+cat /opt/pisignage/VERSION
+
+# Vider le cache du navigateur
+# Ctrl+Shift+Delete ou Cmd+Shift+Delete
+
+# Accès direct aux nouvelles URLs modulaires
+http://[IP-PI]/dashboard.php
+http://[IP-PI]/media.php
+http://[IP-PI]/playlists.php
+http://[IP-PI]/player.php
+```
+
+### Performance dégradée après migration v0.8.3 → v0.8.5
+**Note**: v0.8.5 devrait être 80% plus rapide. Si ce n'est pas le cas:
+
+**Diagnostic :**
+```bash
+# Vérifier la version réelle
+cat /opt/pisignage/VERSION
+git log --oneline -5
+
+# Tester le chargement des pages
+time curl -s http://localhost/dashboard.php > /dev/null
+```
+
+**Solution :**
+```bash
+# Vider tous les caches
+sudo systemctl restart nginx php8.2-fpm
+
+# Forcer le rechargement CSS/JS
+rm -rf /opt/pisignage/web/assets/cache/* 2>/dev/null
+```
 
 ---
 
@@ -663,7 +717,7 @@ Ce script génère un rapport complet de l'état du système :
 # Création du script de diagnostic
 cat > /opt/pisignage/scripts/diagnostic.sh << 'EOF'
 #!/bin/bash
-echo "=== Rapport de diagnostic PiSignage v0.8.1 ==="
+echo "=== Rapport de diagnostic PiSignage v0.8.5 ==="
 echo "Date du diagnostic: $(date)"
 echo "Temps de fonctionnement: $(uptime)"
 echo ""

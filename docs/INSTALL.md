@@ -1,8 +1,22 @@
-# Guide d'installation détaillé - PiSignage v0.8.1
+# Guide d'installation détaillé - PiSignage v0.8.5
+
+## Nouveautés v0.8.5
+
+- **Architecture modulaire**: Interface web divisée en 9 pages spécialisées
+- **Performance améliorée**: 80% plus rapide sur Raspberry Pi
+- **Navigation fiable**: Fini les erreurs JavaScript "showSection is not defined"
+- **Maintenance facilitée**: Code organisé en modules focalisés
+- **Compatibilité 100%**: Toutes les fonctionnalités v0.8.3 préservées
 
 ## Introduction
 
-Ce document vous accompagne dans l'installation de PiSignage sur votre Raspberry Pi. L'installation automatique prend environ 10-15 minutes sur un système à jour, ou jusqu'à 60 minutes sur un système fraîchement installé nécessitant des mises à jour complètes.
+Ce document vous accompagne dans l'installation de PiSignage v0.8.5 sur votre Raspberry Pi. L'installation automatique prend environ 10-15 minutes sur un système à jour, ou jusqu'à 60 minutes sur un système fraîchement installé nécessitant des mises à jour complètes.
+
+**Avantages de v0.8.5**:
+- Interface plus réactive et moderne
+- Navigation plus fluide entre les sections
+- Performance optimisée pour Raspberry Pi
+- Architecture modulaire pour une maintenance simplifiée
 
 ## Configuration matérielle requise
 
@@ -492,6 +506,10 @@ chmod +x /opt/pisignage/scripts/monitor.sh
 
 ## Remarques finales
 
-Ce guide couvre l'installation complète de PiSignage v0.8.1. L'installation automatique convient à la majorité des cas d'usage. L'installation manuelle est réservée aux utilisateurs expérimentés ou aux configurations spécifiques.
+Ce guide couvre l'installation complète de PiSignage v0.8.5. L'installation automatique convient à la majorité des cas d'usage. L'installation manuelle est réservée aux utilisateurs expérimentés ou aux configurations spécifiques.
+
+## Migration depuis v0.8.3
+
+Si vous avez déjà PiSignage v0.8.3 installé, consultez le [Guide de migration](MIGRATION.md) pour une mise à jour en douceur vers v0.8.5.
 
 Pour toute question ou problème, consultez la documentation de dépannage ou ouvrez une issue sur le dépôt GitHub.

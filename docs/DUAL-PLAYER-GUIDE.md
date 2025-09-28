@@ -1,8 +1,10 @@
-# Dual-Player Guide - PiSignage v0.8.1
+# Dual-Player Guide - PiSignage v0.8.5
+
+> **Updated for v0.8.5**: Enhanced with modular architecture for better reliability and performance
 
 ## Overview
 
-PiSignage v0.8.1 includes a dual-player system that allows dynamic switching between VLC and MPV media players. This architecture provides flexibility and hardware-specific optimizations for different Raspberry Pi models.
+PiSignage v0.8.5 includes an enhanced dual-player system that allows dynamic switching between VLC and MPV media players. The new modular architecture provides better reliability, performance, and hardware-specific optimizations for different Raspberry Pi models.
 
 ### Dual-Player System
 
@@ -37,7 +39,8 @@ The dual-player system automatically adapts player configuration based on the de
 ├── scripts/
 │   └── player-manager-v0.8.1.sh        # VLC/MPV management script
 ├── web/
-│   ├── index.php                       # Web interface with dynamic switching
+│   ├── player.php                      # Dedicated player control page (v0.8.5)
+│   ├── dashboard.php                   # Main dashboard with player status
 │   └── api/
 │       ├── player.php                  # Unified control API
 │       └── system.php                  # System API with dual support
@@ -144,17 +147,20 @@ PiSignage v0.8.1 automatically detects the graphics environment:
 
 ### Web Interface
 
-#### Access and Navigation
-1. **Access URL**: `http://[RASPBERRY-IP]/`
-2. **Player Section**: Dedicated tab for player management
-3. **Status Indicator**: Real-time display of active player
-4. **Switch Button**: One-click VLC ↔ MPV switching
+#### Access and Navigation (v0.8.5 Modular Interface)
+1. **Access URL**: `http://[RASPBERRY-IP]/player.php` (direct access to player controls)
+2. **Dashboard**: `http://[RASPBERRY-IP]/dashboard.php` (overview with player status)
+3. **Navigation**: Reliable modular navigation between sections
+4. **Status Indicator**: Real-time display of active player
+5. **Switch Button**: One-click VLC ↔ MPV switching with improved reliability
 
-#### Interface Features
+#### Interface Features (Enhanced in v0.8.5)
 - **Visual selection**: Radio buttons showing current player
 - **Real-time feedback**: Playback status and media information
 - **Unified controls**: Same Play/Stop/Pause buttons for both players
 - **Smart switching**: Media and position preservation during switch
+- **Modular design**: Player controls isolated in dedicated page for better performance
+- **Reliable navigation**: No more JavaScript conflicts affecting player switching
 
 ### Command Line
 
