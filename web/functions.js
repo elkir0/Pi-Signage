@@ -412,10 +412,11 @@ function refreshStats() {
                 var tempElem = document.getElementById('temperature');
                 var storageElem = document.getElementById('storage-usage');
                 
-                if (cpuElem) cpuElem.textContent = (stats.cpu.usage || stats.cpu.load_1min || 0).toFixed(1) + '%';
-                if (ramElem) ramElem.textContent = (stats.memory && stats.memory.percent || 0) + '%';
-                if (tempElem) tempElem.textContent = (stats.temperature || (stats.temp && stats.temp) || "N/A") + '°C';
-                if (storageElem) storageElem.textContent = (stats.disk && stats.disk.percent ? stats.disk.percent + "%" : "N/A");
+                // Safe access with optional chaining
+                if (cpuElem) cpuElem.textContent = ((stats.cpu?.usage || stats.cpu?.load_1min || 0)).toFixed(1) + '%';
+                if (ramElem) ramElem.textContent = (stats.memory?.percent || 0).toFixed(1) + '%';
+                if (tempElem) tempElem.textContent = (stats.temperature || stats.temp || "N/A") + (stats.temperature || stats.temp ? '°C' : '');
+                if (storageElem) storageElem.textContent = stats.disk?.percent ? stats.disk.percent.toFixed(1) + "%" : "N/A";
             }
         })
         .catch(error => console.error('Stats error:', error));

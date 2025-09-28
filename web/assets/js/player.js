@@ -225,10 +225,11 @@ PiSignage.player = {
                 if (el) el.textContent = value;
             };
 
-            updateStat('player-cpu', status.system.cpu + '%');
-            updateStat('player-memory', status.system.memory.percent + '%');
-            updateStat('player-temp', status.system.temperature + '°C');
-            updateStat('player-uptime', status.system.uptime || '--');
+            // Safe access with optional chaining and fallbacks
+            updateStat('player-cpu', (status.system?.cpu || 0) + '%');
+            updateStat('player-memory', (status.system?.memory?.percent || 0) + '%');
+            updateStat('player-temp', (status.system?.temperature || 'N/A') + '°C');
+            updateStat('player-uptime', status.system?.uptime || '--');
         }
     },
 
