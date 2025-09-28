@@ -9,7 +9,7 @@
 set -e
 
 # Configuration
-VERSION="0.8.1"
+VERSION="0.8.3"
 INSTALL_DIR="/opt/pisignage"
 GITHUB_REPO="https://github.com/elkir0/Pi-Signage.git"
 BBB_URL="http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
@@ -115,6 +115,9 @@ install_dependencies() {
         "vlc"
         "mpv"
         "ffmpeg"
+        "xinit"
+        "x11-xserver-utils"
+        "xserver-xorg"
         "grim"
         "fbgrab"
         "scrot"
@@ -158,12 +161,12 @@ install_dependencies() {
 create_structure() {
     log_step "Création de la structure PiSignage"
 
-    sudo mkdir -p $INSTALL_DIR/{web,media,config,logs,scripts,backups}
-    sudo mkdir -p $INSTALL_DIR/web/{api,assets,css,js}
+    sudo mkdir -p $INSTALL_DIR/{web,media,config,logs,scripts,backups,data}
+    sudo mkdir -p $INSTALL_DIR/web/{api,assets,css,js,screenshots}
     sudo mkdir -p /dev/shm/pisignage-screenshots
 
     # Permissions élargies pour éviter les problèmes
-    sudo chown -R $USER:$USER $INSTALL_DIR
+    sudo chown -R www-data:www-data $INSTALL_DIR
     chmod 755 $INSTALL_DIR
     # Permissions spécifiques pour les répertoires critiques
     chmod 777 $INSTALL_DIR/logs
@@ -171,6 +174,8 @@ create_structure() {
     chmod 755 $INSTALL_DIR/web
     chmod 755 $INSTALL_DIR/scripts
     chmod 755 $INSTALL_DIR/config
+    chmod 755 $INSTALL_DIR/data
+    chmod 777 $INSTALL_DIR/web/screenshots
 
     # Initialiser la base de données SQLite
     DB_FILE="$INSTALL_DIR/pisignage.db"
@@ -268,6 +273,75 @@ copy_project_files() {
         -O $INSTALL_DIR/CLAUDE.md || true
 
     log_info "Fichiers récupérés depuis GitHub"
+
+    # Créer le fichier config.php
+    cat > $INSTALL_DIR/web/config.php << 'ENDOFCONFIG'
+<?php
+/**
+ * PiSignage - Configuration centrale
+ */
+
+// Version
+define('PISIGNAGE_VERSION', 'v0.8.3');
+
+// Chemins
+define('BASE_DIR', '/opt/pisignage');
+define('MEDIA_DIR', BASE_DIR . '/media');
+define('MEDIA_PATH', BASE_DIR . '/media'); // Alias pour compatibilité
+define('PLAYLISTS_PATH', BASE_DIR . '/playlists');
+define('SCREENSHOTS_DIR', BASE_DIR . '/web/screenshots');
+define('SCREENSHOTS_PATH', BASE_DIR . '/web/screenshots'); // Alias
+define('LOGS_DIR', BASE_DIR . '/logs');
+define('LOGS_PATH', BASE_DIR . '/logs'); // Alias
+define('DB_PATH', BASE_DIR . '/data/pisignage.db');
+
+// Limites d'upload (500MB)
+ini_set('upload_max_filesize', '500M');
+ini_set('post_max_size', '500M');
+ini_set('max_execution_time', '300');
+ini_set('max_input_time', '300');
+
+// Helper functions
+function jsonResponse($success, $data = null, $message = '', $httpCode = 200) {
+    http_response_code($httpCode);
+    header('Content-Type: application/json');
+
+    $response = [
+        'success' => $success,
+        'data' => $data,
+        'message' => $message,
+        'timestamp' => date('Y-m-d H:i:s')
+    ];
+
+    echo json_encode($response, JSON_PRETTY_PRINT);
+    exit;
+}
+
+function getMediaFiles() {
+    $mediaDir = MEDIA_DIR;
+    $files = [];
+
+    if (is_dir($mediaDir)) {
+        $items = scandir($mediaDir);
+        foreach ($items as $item) {
+            if ($item !== '.' && $item !== '..' && !is_dir($mediaDir . '/' . $item)) {
+                if (!in_array(pathinfo($item, PATHINFO_EXTENSION), ['m3u', 'db', 'json'])) {
+                    $files[] = [
+                        'name' => $item,
+                        'size' => filesize($mediaDir . '/' . $item),
+                        'type' => mime_content_type($mediaDir . '/' . $item)
+                    ];
+                }
+            }
+        }
+    }
+
+    return $files;
+}
+?>
+ENDOFCONFIG
+
+    log_info "Fichier config.php créé"
 }
 
 # Création/mise à jour de player-config.json
@@ -556,6 +630,54 @@ ENDOFFILE
     sudo systemctl start pisignage.service || true
 
     log_info "Service de démarrage automatique configuré"
+
+    # Créer le script de démarrage VLC
+    cat > $INSTALL_DIR/scripts/autostart-vlc.sh << 'ENDOFSCRIPT'
+#!/bin/bash
+# Script de démarrage automatique VLC pour PiSignage
+
+# Attendre que le système soit prêt
+sleep 10
+
+# Créer le répertoire runtime si nécessaire
+export XDG_RUNTIME_DIR=/run/user/1000
+mkdir -p $XDG_RUNTIME_DIR
+chown pi:pi $XDG_RUNTIME_DIR
+
+# Arrêter toute instance VLC existante
+pkill -9 vlc 2>/dev/null
+sleep 2
+
+# Démarrer VLC en boucle avec Big Buck Bunny
+sudo -u pi bash -c "export XDG_RUNTIME_DIR=/run/user/1000; vlc --intf dummy --fullscreen --loop --no-video-title-show --vout drm_vout /opt/pisignage/media/BigBuckBunny_720p.mp4 > /tmp/vlc.log 2>&1 &"
+
+echo "VLC démarré avec succès"
+ENDOFSCRIPT
+    chmod +x $INSTALL_DIR/scripts/autostart-vlc.sh
+
+    # Créer le service systemd pour VLC
+    sudo tee /etc/systemd/system/pisignage-vlc.service > /dev/null << ENDOFSERVICE
+[Unit]
+Description=PiSignage VLC Player
+After=multi-user.target
+
+[Service]
+Type=forking
+User=pi
+ExecStart=/opt/pisignage/scripts/autostart-vlc.sh
+ExecStop=/usr/bin/pkill vlc
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+ENDOFSERVICE
+
+    sudo systemctl daemon-reload
+    sudo systemctl enable pisignage-vlc.service
+    sudo systemctl start pisignage-vlc.service || true
+
+    log_info "Service VLC configuré pour démarrage automatique"
 }
 
 # Configuration des permissions sudo (pour redémarrage)

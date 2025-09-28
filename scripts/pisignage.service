@@ -1,0 +1,15 @@
+[Unit]
+Description=PiSignage Digital Signage Service
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/pisignage
+ExecStart=/usr/bin/php /opt/pisignage/scripts/service-manager.php
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

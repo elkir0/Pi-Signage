@@ -8,7 +8,7 @@ error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
 // Version
-define('PISIGNAGE_VERSION', 'v0.8.1');
+define('PISIGNAGE_VERSION', 'v0.8.2');
 
 // Chemins
 define('BASE_DIR', '/opt/pisignage');

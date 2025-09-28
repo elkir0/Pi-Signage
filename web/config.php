@@ -4,7 +4,7 @@
  */
 
 // Version
-define('PISIGNAGE_VERSION', 'v0.8.1');
+define('PISIGNAGE_VERSION', 'v0.8.3');
 
 // Chemins
 define('BASE_DIR', '/opt/pisignage');
@@ -166,27 +166,41 @@ function executeCommand($command) {
 
 // Fonction pour obtenir les fichiers média
 function getMediaFiles() {
-    $mediaFiles = [];
+    $files = [];
 
-    if (is_dir(MEDIA_PATH)) {
-        $files = scandir(MEDIA_PATH);
+    if (is_dir(MEDIA_DIR)) {
+        $items = scandir(MEDIA_DIR);
+        foreach ($items as $item) {
+            if ($item === '.' || $item === '..') continue;
 
-        foreach ($files as $file) {
-            if ($file === '.' || $file === '..' || $file === 'thumbnails') continue;
+            $path = MEDIA_DIR . '/' . $item;
+            if (is_file($path) && isValidMediaFile($item)) {
+                $ext = strtolower(pathinfo($item, PATHINFO_EXTENSION));
+                $type = 'other';
 
-            $filepath = MEDIA_PATH . '/' . $file;
-            if (is_file($filepath) && isValidMediaFile($file)) {
-                $mediaFiles[] = [
-                    'name' => $file,
-                    'size' => filesize($filepath),
-                    'type' => mime_content_type($filepath),
-                    'modified' => filemtime($filepath)
+                if (in_array($ext, ALLOWED_VIDEO_EXTENSIONS)) {
+                    $type = 'video';
+                } elseif (in_array($ext, ALLOWED_IMAGE_EXTENSIONS)) {
+                    $type = 'image';
+                } elseif (in_array($ext, ALLOWED_AUDIO_EXTENSIONS)) {
+                    $type = 'audio';
+                }
+
+                $files[] = [
+                    'name' => $item,
+                    'path' => '/media/' . $item,
+                    'size' => filesize($path),
+                    'size_formatted' => formatBytes(filesize($path)),
+                    'type' => $type,
+                    'extension' => $ext,
+                    'modified' => filemtime($path),
+                    'modified_date' => date('Y-m-d H:i:s', filemtime($path))
                 ];
             }
         }
     }
 
-    return $mediaFiles;
+    return $files;
 }
 
 // Ajuster les limites PHP dynamiquement si possible

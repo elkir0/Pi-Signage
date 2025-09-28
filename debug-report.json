@@ -1,0 +1,26 @@
+{
+  "jsErrors": [
+    {
+      "error": "Unexpected token ')'"
+    }
+  ],
+  "missingFunctions": [],
+  "apiErrors": [],
+  "uiProblems": [
+    "#cpu-usage vide: \"--\"",
+    "#ram-usage vide: \"--\"",
+    "#temperature vide: \"--\"",
+    "#uptime vide: \"--\"",
+    "#storage vide: \"--\"",
+    "#network vide: \"--\"",
+    "#media-count vide: \"--\"",
+    "Navigation vers media impossible",
+    "Navigation vers playlists impossible",
+    "Navigation vers youtube impossible",
+    "Navigation vers settings impossible",
+    "Navigation vers system impossible",
+    "Navigation vers about impossible",
+    "Aucune playlist chargée",
+    "Fonction loadPlaylists introuvable"
+  ]
+}

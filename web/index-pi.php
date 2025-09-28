@@ -3,7 +3,7 @@ session_start();
 
 // Configuration
 $config = [
-    'version' => '0.8.3',
+    'version' => '0.8.2',
     'media_path' => '/opt/pisignage/media/',
     'config_path' => '/opt/pisignage/config/',
     'logs_path' => '/opt/pisignage/logs/',
@@ -797,593 +797,6 @@ foreach ($dirs as $dir) {
         .empty-state-text {
             font-size: 14px;
         }
-
-        /* Playlist Editor Styles */
-        .playlist-editor-container {
-            display: flex;
-            gap: 20px;
-            height: calc(100vh - 140px);
-            margin-top: 20px;
-        }
-
-        .playlist-panel {
-            background: var(--glass);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid var(--glass-border);
-            border-radius: 15px;
-            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
-        .media-library-panel {
-            width: 30%;
-            min-width: 280px;
-        }
-
-        .workspace-panel {
-            width: 45%;
-            min-width: 400px;
-        }
-
-        .properties-panel {
-            width: 25%;
-            min-width: 250px;
-        }
-
-        .panel-header {
-            padding: 20px;
-            border-bottom: 1px solid var(--glass-border);
-            background: rgba(255, 255, 255, 0.02);
-        }
-
-        .panel-header h3 {
-            margin: 0 0 10px 0;
-            font-size: 16px;
-            color: var(--primary);
-        }
-
-        .panel-controls {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-        }
-
-        .playlist-info {
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-        }
-
-        .playlist-stats {
-            font-size: 12px;
-            opacity: 0.7;
-        }
-
-        .panel-content {
-            flex: 1;
-            padding: 20px;
-            overflow-y: auto;
-        }
-
-        .media-filters {
-            display: flex;
-            gap: 5px;
-            margin-bottom: 15px;
-            flex-wrap: wrap;
-        }
-
-        .filter-btn {
-            padding: 6px 12px;
-            background: transparent;
-            border: 1px solid var(--glass-border);
-            border-radius: 8px;
-            color: var(--light);
-            font-size: 12px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .filter-btn:hover {
-            background: rgba(74, 158, 255, 0.1);
-            border-color: var(--primary);
-        }
-
-        .filter-btn.active {
-            background: var(--primary);
-            border-color: var(--primary);
-            color: white;
-        }
-
-        .search-input {
-            flex: 1;
-            padding: 8px 12px;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid var(--glass-border);
-            border-radius: 8px;
-            color: var(--light);
-            font-size: 12px;
-        }
-
-        .search-input::placeholder {
-            color: rgba(240, 243, 247, 0.5);
-        }
-
-        .search-input:focus {
-            outline: none;
-            border-color: var(--primary);
-            background: rgba(255, 255, 255, 0.08);
-        }
-
-        .btn-icon {
-            padding: 8px;
-            background: transparent;
-            border: 1px solid var(--glass-border);
-            border-radius: 8px;
-            color: var(--light);
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .btn-icon:hover {
-            background: rgba(74, 158, 255, 0.1);
-            border-color: var(--primary);
-        }
-
-        .media-library-list {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .media-item {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 12px;
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid transparent;
-            border-radius: 10px;
-            cursor: grab;
-            transition: all 0.3s ease;
-            position: relative;
-        }
-
-        .media-item:hover {
-            background: rgba(255, 255, 255, 0.06);
-            border-color: var(--glass-border);
-            transform: translateY(-1px);
-        }
-
-        .media-item.dragging {
-            opacity: 0.5;
-            cursor: grabbing;
-        }
-
-        .media-item-icon {
-            width: 40px;
-            height: 40px;
-            border-radius: 8px;
-            background: var(--primary);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 18px;
-            flex-shrink: 0;
-        }
-
-        .media-item-icon.video {
-            background: linear-gradient(135deg, #ff6b6b, #ee5a52);
-        }
-
-        .media-item-icon.image {
-            background: linear-gradient(135deg, #51cf66, #40c057);
-        }
-
-        .media-item-icon.audio {
-            background: linear-gradient(135deg, #ffd43b, #fab005);
-        }
-
-        .media-item-info {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .media-item-name {
-            font-size: 13px;
-            font-weight: 500;
-            color: var(--light);
-            margin-bottom: 4px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .media-item-meta {
-            font-size: 11px;
-            color: rgba(240, 243, 247, 0.6);
-        }
-
-        .media-item-actions {
-            display: flex;
-            gap: 5px;
-        }
-
-        .btn-add {
-            padding: 4px 8px;
-            background: var(--success);
-            border: none;
-            border-radius: 6px;
-            color: white;
-            font-size: 12px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .btn-add:hover {
-            background: #45a049;
-            transform: scale(1.05);
-        }
-
-        /* Playlist Workspace */
-        .playlist-workspace {
-            position: relative;
-            height: 100%;
-        }
-
-        .drop-zone {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            border: 2px dashed var(--glass-border);
-            border-radius: 15px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.3s ease;
-        }
-
-        .drop-zone.drag-over {
-            border-color: var(--primary);
-            background: rgba(74, 158, 255, 0.05);
-        }
-
-        .drop-zone.hidden {
-            display: none;
-        }
-
-        .drop-zone-content {
-            text-align: center;
-            color: rgba(240, 243, 247, 0.6);
-        }
-
-        .drop-zone-icon {
-            font-size: 48px;
-            margin-bottom: 15px;
-            opacity: 0.3;
-        }
-
-        .drop-zone-hint {
-            font-size: 12px;
-            margin-top: 10px;
-        }
-
-        .playlist-items {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        .playlist-item {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            padding: 15px;
-            background: rgba(255, 255, 255, 0.04);
-            border: 1px solid var(--glass-border);
-            border-radius: 10px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            position: relative;
-        }
-
-        .playlist-item:hover {
-            background: rgba(255, 255, 255, 0.07);
-            transform: translateY(-1px);
-        }
-
-        .playlist-item.selected {
-            border-color: var(--primary);
-            background: rgba(74, 158, 255, 0.1);
-        }
-
-        .playlist-item.dragging {
-            opacity: 0.5;
-            transform: rotate(5deg);
-        }
-
-        .drag-handle {
-            cursor: grab;
-            color: rgba(240, 243, 247, 0.4);
-            font-size: 14px;
-            padding: 5px;
-        }
-
-        .drag-handle:hover {
-            color: var(--primary);
-        }
-
-        .playlist-item-icon {
-            width: 50px;
-            height: 50px;
-            border-radius: 8px;
-            background: var(--primary);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 20px;
-            flex-shrink: 0;
-        }
-
-        .playlist-item-content {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .playlist-item-name {
-            font-size: 14px;
-            font-weight: 500;
-            color: var(--light);
-            margin-bottom: 5px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .playlist-item-details {
-            display: flex;
-            gap: 15px;
-            font-size: 12px;
-            color: rgba(240, 243, 247, 0.6);
-        }
-
-        .playlist-item-actions {
-            display: flex;
-            gap: 5px;
-        }
-
-        .btn-sm {
-            padding: 6px 10px;
-            border: none;
-            border-radius: 6px;
-            font-size: 11px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .btn-danger {
-            background: var(--danger);
-            color: white;
-        }
-
-        .btn-danger:hover {
-            background: #e63946;
-            transform: scale(1.05);
-        }
-
-        /* Properties Panel */
-        .properties-section {
-            margin-bottom: 25px;
-            padding-bottom: 20px;
-            border-bottom: 1px solid var(--glass-border);
-        }
-
-        .properties-section:last-child {
-            border-bottom: none;
-        }
-
-        .properties-section h4 {
-            margin: 0 0 15px 0;
-            font-size: 14px;
-            color: var(--primary);
-        }
-
-        .form-group {
-            margin-bottom: 15px;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-size: 12px;
-            color: rgba(240, 243, 247, 0.8);
-        }
-
-        .form-group input[type="text"],
-        .form-group input[type="number"],
-        .form-group select {
-            width: 100%;
-            padding: 8px 12px;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid var(--glass-border);
-            border-radius: 8px;
-            color: var(--light);
-            font-size: 12px;
-        }
-
-        .form-group input[type="text"]:focus,
-        .form-group input[type="number"]:focus,
-        .form-group select:focus {
-            outline: none;
-            border-color: var(--primary);
-            background: rgba(255, 255, 255, 0.08);
-        }
-
-        .form-group input[type="checkbox"] {
-            margin-right: 8px;
-        }
-
-        .btn-block {
-            width: 100%;
-            margin-bottom: 10px;
-        }
-
-        /* Modal Styles */
-        .modal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.7);
-            backdrop-filter: blur(5px);
-            z-index: 2000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .modal-content {
-            background: var(--glass);
-            backdrop-filter: blur(20px);
-            border: 1px solid var(--glass-border);
-            border-radius: 15px;
-            max-width: 600px;
-            width: 90%;
-            max-height: 80vh;
-            overflow: hidden;
-        }
-
-        .modal-header {
-            padding: 20px;
-            border-bottom: 1px solid var(--glass-border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .modal-header h3 {
-            margin: 0;
-            color: var(--primary);
-        }
-
-        .btn-close {
-            background: none;
-            border: none;
-            color: var(--light);
-            font-size: 24px;
-            cursor: pointer;
-            padding: 0;
-            width: 30px;
-            height: 30px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 6px;
-            transition: all 0.3s ease;
-        }
-
-        .btn-close:hover {
-            background: rgba(255, 255, 255, 0.1);
-        }
-
-        .modal-body {
-            padding: 20px;
-            max-height: 60vh;
-            overflow-y: auto;
-        }
-
-        .existing-playlist-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 15px;
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid var(--glass-border);
-            border-radius: 10px;
-            margin-bottom: 10px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .existing-playlist-item:hover {
-            background: rgba(255, 255, 255, 0.06);
-            border-color: var(--primary);
-        }
-
-        .existing-playlist-info h4 {
-            margin: 0 0 5px 0;
-            color: var(--light);
-        }
-
-        .existing-playlist-meta {
-            font-size: 12px;
-            color: rgba(240, 243, 247, 0.6);
-        }
-
-        /* Animations */
-        @keyframes fadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .playlist-item {
-            animation: fadeInUp 0.3s ease;
-        }
-
-        /* Responsive Design */
-        @media (max-width: 1200px) {
-            .playlist-editor-container {
-                flex-direction: column;
-                height: auto;
-            }
-
-            .playlist-panel {
-                width: 100%;
-                height: 400px;
-            }
-
-            .media-library-panel,
-            .workspace-panel,
-            .properties-panel {
-                width: 100%;
-                min-width: auto;
-            }
-        }
-
-        @media (max-width: 768px) {
-            .playlist-editor-container {
-                margin-top: 10px;
-                gap: 10px;
-            }
-
-            .panel-header {
-                padding: 15px;
-            }
-
-            .panel-content {
-                padding: 15px;
-            }
-
-            .media-filters {
-                gap: 3px;
-            }
-
-            .filter-btn {
-                padding: 4px 8px;
-                font-size: 11px;
-            }
-        }
     </style>
     <script src="functions.js" defer></script>
 </head>
@@ -1575,159 +988,16 @@ foreach ($dirs as $dir) {
         <!-- Playlists Section -->
         <div id="playlists" class="content-section">
             <div class="header">
-                <h1 class="page-title">Éditeur de Playlists</h1>
+                <h1 class="page-title">Playlists</h1>
                 <div class="header-actions">
-                    <button class="btn btn-primary" onclick="createNewPlaylist()">
+                    <button class="btn btn-primary" onclick="createPlaylist()">
                         ➕ Nouvelle Playlist
                     </button>
-                    <button class="btn btn-secondary" onclick="loadExistingPlaylist()">
-                        📂 Charger
-                    </button>
-                    <button class="btn btn-success" onclick="saveCurrentPlaylist()" id="save-playlist-btn" disabled>
-                        💾 Sauvegarder
-                    </button>
                 </div>
             </div>
 
-            <!-- Playlist Editor Interface -->
-            <div class="playlist-editor-container">
-                <!-- Media Library Panel (Left) -->
-                <div class="playlist-panel media-library-panel">
-                    <div class="panel-header">
-                        <h3>📁 Bibliothèque Média</h3>
-                        <div class="panel-controls">
-                            <button class="btn-icon" onclick="refreshMediaLibrary()" title="Actualiser">
-                                🔄
-                            </button>
-                            <input type="text" class="search-input" placeholder="Rechercher..." id="media-search" onkeyup="filterMediaLibrary()">
-                        </div>
-                    </div>
-                    <div class="panel-content">
-                        <div class="media-filters">
-                            <button class="filter-btn active" data-type="all" onclick="filterMediaType('all')">Tous</button>
-                            <button class="filter-btn" data-type="video" onclick="filterMediaType('video')">Vidéos</button>
-                            <button class="filter-btn" data-type="image" onclick="filterMediaType('image')">Images</button>
-                            <button class="filter-btn" data-type="audio" onclick="filterMediaType('audio')">Audio</button>
-                        </div>
-                        <div class="media-library-list" id="media-library-list">
-                            <!-- Media files will be loaded here -->
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Playlist Workspace Panel (Center) -->
-                <div class="playlist-panel workspace-panel">
-                    <div class="panel-header">
-                        <h3>🎵 Playlist Workspace</h3>
-                        <div class="playlist-info">
-                            <span id="playlist-name-display">Nouvelle Playlist</span>
-                            <span class="playlist-stats">
-                                <span id="item-count">0 éléments</span> -
-                                <span id="total-duration">00:00</span>
-                            </span>
-                        </div>
-                    </div>
-                    <div class="panel-content">
-                        <div class="playlist-workspace" id="playlist-workspace">
-                            <div class="drop-zone" id="playlist-drop-zone">
-                                <div class="drop-zone-content">
-                                    <div class="drop-zone-icon">📁</div>
-                                    <p>Glissez des médias ici pour créer votre playlist</p>
-                                    <p class="drop-zone-hint">Ou cliquez sur "+" dans la bibliothèque</p>
-                                </div>
-                            </div>
-                            <div class="playlist-items" id="playlist-items">
-                                <!-- Playlist items will be added here -->
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Properties Panel (Right) -->
-                <div class="playlist-panel properties-panel">
-                    <div class="panel-header">
-                        <h3>⚙️ Propriétés</h3>
-                    </div>
-                    <div class="panel-content">
-                        <div class="properties-section">
-                            <h4>Playlist</h4>
-                            <div class="form-group">
-                                <label>Nom:</label>
-                                <input type="text" id="playlist-name-input" placeholder="Nom de la playlist" onchange="updatePlaylistName()">
-                            </div>
-                            <div class="form-group">
-                                <label>
-                                    <input type="checkbox" id="playlist-loop" onchange="updatePlaylistSettings()">
-                                    Lecture en boucle
-                                </label>
-                            </div>
-                            <div class="form-group">
-                                <label>
-                                    <input type="checkbox" id="playlist-shuffle" onchange="updatePlaylistSettings()">
-                                    Lecture aléatoire
-                                </label>
-                            </div>
-                            <div class="form-group">
-                                <label>
-                                    <input type="checkbox" id="playlist-auto-advance" checked onchange="updatePlaylistSettings()">
-                                    Avancement automatique
-                                </label>
-                            </div>
-                        </div>
-
-                        <div class="properties-section" id="item-properties" style="display: none;">
-                            <h4>Élément sélectionné</h4>
-                            <div class="form-group">
-                                <label>Fichier:</label>
-                                <span id="selected-file-name">-</span>
-                            </div>
-                            <div class="form-group">
-                                <label>Durée (secondes):</label>
-                                <input type="number" id="item-duration" min="1" max="3600" value="10" onchange="updateItemDuration()">
-                            </div>
-                            <div class="form-group">
-                                <label>Transition:</label>
-                                <select id="item-transition" onchange="updateItemTransition()">
-                                    <option value="none">Aucune</option>
-                                    <option value="fade">Fondu</option>
-                                    <option value="slide-left">Glissement gauche</option>
-                                    <option value="slide-right">Glissement droite</option>
-                                    <option value="zoom">Zoom</option>
-                                    <option value="dissolve">Dissolution</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label>Durée transition (ms):</label>
-                                <input type="number" id="transition-duration" min="0" max="5000" value="1000" onchange="updateTransitionDuration()">
-                            </div>
-                        </div>
-
-                        <div class="properties-section">
-                            <h4>Actions</h4>
-                            <button class="btn btn-primary btn-block" onclick="previewPlaylist()" id="preview-btn" disabled>
-                                ▶️ Aperçu
-                            </button>
-                            <button class="btn btn-secondary btn-block" onclick="clearPlaylist()">
-                                🗑️ Vider
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Loading existing playlists modal -->
-            <div id="load-playlist-modal" class="modal" style="display: none;">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h3>Charger une Playlist</h3>
-                        <button class="btn-close" onclick="closeLoadPlaylistModal()">×</button>
-                    </div>
-                    <div class="modal-body">
-                        <div id="existing-playlists-list">
-                            <!-- Existing playlists will be loaded here -->
-                        </div>
-                    </div>
-                </div>
+            <div id="playlist-container">
+                <!-- Playlists will be loaded here -->
             </div>
         </div>
 
@@ -2009,53 +1279,21 @@ foreach ($dirs as $dir) {
         let selectedPlayer = 'vlc';
 
         // Initialize
-        document.addEventListener('DOMContentLoaded', function() {
-            // Initialize immediately with direct calls to ensure execution
-            setTimeout(function() {
-                // Call refreshStats directly with fetch to ensure it works
-                fetch('/api/system.php?action=stats')
-                    .then(function(r) { return r.json(); })
-                    .then(function(data) {
-                        if (data.success && data.data) {
-                            // Update all stats directly
-                            var el;
-                            el = document.getElementById('cpu-usage');
-                            if (el) el.textContent = ((data.data.cpu && data.data.cpu.usage) || 0) + '%';
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(() => { refreshStats(); console.log("Delayed refresh"); }, 2000);
+            refreshStats();
+            loadMediaFiles();
+            loadPlaylists();
 
-                            el = document.getElementById('ram-usage');
-                            if (el) el.textContent = ((data.data.memory && data.data.memory.percent) || 0) + '%';
-
-                            el = document.getElementById('temperature');
-                            if (el) el.textContent = (data.data.temperature || 0) + '°C';
-
-                            el = document.getElementById('uptime');
-                            if (el) el.textContent = data.data.uptime || '--';
-
-                            el = document.getElementById('storage');
-                            if (el && data.data.disk) {
-                                el.textContent = data.data.disk.used_formatted + ' / ' + data.data.disk.total_formatted + ' (' + data.data.disk.percent + '%)';
-                            }
-
-                            el = document.getElementById('network');
-                            if (el) el.textContent = data.data.network || '--';
-
-                            el = document.getElementById('media-count');
-                            if (el) el.textContent = (data.data.media_count || 0) + ' fichiers';
-                        }
-                    });
-
-                // Also load media and playlists
-                loadMediaFiles();
-                loadPlaylists();
-                getCurrentPlayer();
-                updatePlayerInterface();
-            }, 100);
+            // Initialiser le lecteur courant et mettre à jour l'interface
+            getCurrentPlayer();
+            updatePlayerInterface();
 
             // Auto refresh stats every 5 seconds
             systemStatsInterval = setInterval(refreshStats, 5000);
 
             // Auto refresh player status every 3 seconds
-            setInterval(function() {
+            setInterval(() => {
                 updatePlayerStatus();
             }, 3000);
         });
@@ -2078,15 +1316,9 @@ foreach ($dirs as $dir) {
                 }
             });
 
-            // Initialize playlist editor if switching to playlists
+            // Charger les playlists si on va dans cette section
             if (section === 'playlists') {
-                setTimeout(() => {
-                    if (typeof initPlaylistEditor === 'function') {
-                        initPlaylistEditor();
-                    } else {
-                        loadPlaylists(); // Fallback to old function
-                    }
-                }, 100);
+                loadPlaylists();
             }
 
             currentSection = section;
@@ -2111,46 +1343,59 @@ foreach ($dirs as $dir) {
         }
 
         // System stats
-        window.refreshStats = function refreshStats() {
+        function refreshStats() {
+            // v0.8.2 : Fonction refactorisée avec gestion d'erreur améliorée
             fetch('/api/system.php?action=stats')
-                .then(function(response) { return response.json(); })
-                .then(function(data) {
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
                     if (data.success && data.data) {
-                        // CPU, RAM, Temperature
-                        var cpuEl = document.getElementById('cpu-usage');
-                        if (cpuEl) cpuEl.textContent = ((data.data.cpu && data.data.cpu.usage) || 0) + '%';
+                        // Stats principales
+                        document.getElementById('cpu-usage').textContent = (data.data.cpu?.usage || 0) + '%';
+                        document.getElementById('ram-usage').textContent = (data.data.memory?.percent || 0) + '%';
+                        document.getElementById('temperature').textContent = (data.data.temperature || 0) + '°C';
 
-                        var ramEl = document.getElementById('ram-usage');
-                        if (ramEl) ramEl.textContent = ((data.data.memory && data.data.memory.percent) || 0) + '%';
+                        // Stats système secondaires (corrigé v0.8.2)
+                        const uptimeEl = document.getElementById('uptime');
+                        if (uptimeEl) uptimeEl.textContent = data.data.uptime || 'N/A';
 
-                        var tempEl = document.getElementById('temperature');
-                        if (tempEl) tempEl.textContent = (data.data.temperature || 0) + '°C';
-
-                        // Stats système
-                        var uptimeEl = document.getElementById('uptime');
-                        if (uptimeEl) {
-                            uptimeEl.textContent = data.data.uptime || '--';
-                        }
-
-                        var storageEl = document.getElementById('storage');
+                        const storageEl = document.getElementById('storage');
                         if (storageEl && data.data.disk) {
-                            storageEl.textContent = data.data.disk.used_formatted + ' / ' + data.data.disk.total_formatted + ' (' + data.data.disk.percent + '%)';
+                            storageEl.textContent = `${data.data.disk.used_formatted} / ${data.data.disk.total_formatted} (${data.data.disk.percent}%)`;
                         }
 
-                        var networkEl = document.getElementById('network');
-                        if (networkEl) {
-                            networkEl.textContent = data.data.network || '--';
-                        }
+                        const networkEl = document.getElementById('network');
+                        if (networkEl) networkEl.textContent = data.data.network || 'N/A';
 
-                        var mediaCountEl = document.getElementById('media-count');
-                        if (mediaCountEl) {
-                            mediaCountEl.textContent = (data.data.media_count || 0) + ' fichiers';
-                        }
+                        const mediaEl = document.getElementById('media-count');
+                        if (mediaEl) mediaEl.textContent = (data.data.media_count || 0) + ' fichiers';
+
+                        console.log('Stats refreshed successfully');
+                    } else {
+                        console.error('API Error:', data.message || 'Unknown error');
+                        setErrorStats();
                     }
                 })
-                .catch(function(error) {
+                .catch(error => {
                     console.error('Error loading stats:', error);
+                    setErrorStats();
                 });
+        }
+
+        function setErrorStats() {
+            // v0.8.2 : Affichage d'erreur au lieu de "--"
+            const errorElements = [
+                'cpu-usage', 'ram-usage', 'temperature',
+                'uptime', 'storage', 'network', 'media-count'
+            ];
+            errorElements.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = 'Erreur';
+            });
         }
 
         // Adaptive Player Control
@@ -2534,43 +1779,40 @@ foreach ($dirs as $dir) {
         // Playlist management
         function loadPlaylists() {
             fetch('/api/playlist-simple.php')
-                .then(function(response) { return response.json(); })
-                .then(function(data) {
+                .then(response => response.json())
+                .then(data => {
                     if (data.success) {
-                        var container = document.getElementById('playlist-container');
-                        var select = document.getElementById('playlist-select');
+                        const container = document.getElementById('playlist-container');
+                        const select = document.getElementById('playlist-select');
 
-                        if (container) container.innerHTML = '';
-                        if (select) select.innerHTML = '<option value="">-- Choisir --</option>';
+                        container.innerHTML = '';
+                        select.innerHTML = '<option value="">-- Choisir --</option>';
 
-                        if (data.data && container) {
-                            data.data.forEach(function(playlist) {
-                                // Add to container
-                                var card = document.createElement('div');
-                                card.className = 'card';
-                                card.innerHTML = '<h3 class="card-title">' + playlist.name + '</h3>' +
-                                    '<p>' + (playlist.items ? playlist.items.length : 0) + ' fichiers</p>' +
-                                    '<button class="btn btn-primary" onclick="editPlaylist(\'' + playlist.name + '\')">' +
-                                    '✏️ Modifier</button>' +
-                                    '<button class="btn btn-danger" onclick="deletePlaylist(\'' + playlist.name + '\')">' +
-                                    '🗑️ Supprimer</button>';
-                                container.appendChild(card);
+                        data.data.forEach(playlist => {
+                            // Add to container
+                            const card = document.createElement('div');
+                            card.className = 'card';
+                            card.innerHTML = `
+                                <h3 class="card-title">${playlist.name}</h3>
+                                <p>${playlist.items.length} fichiers</p>
+                                <button class="btn btn-primary" onclick="editPlaylist('${playlist.name}')">
+                                    ✏️ Modifier
+                                </button>
+                                <button class="btn btn-danger" onclick="deletePlaylist('${playlist.name}')">
+                                    🗑️ Supprimer
+                                </button>
+                            `;
+                            container.appendChild(card);
 
                             // Add to select
-                                // Add to select
-                                if (select) {
-                                    var option = document.createElement('option');
-                                    option.value = playlist.name;
-                                    option.textContent = playlist.name;
-                                    select.appendChild(option);
-                                }
-                            });
-                        }
+                            const option = document.createElement('option');
+                            option.value = playlist.name;
+                            option.textContent = playlist.name;
+                            select.appendChild(option);
+                        });
                     }
                 })
-                .catch(function(error) {
-                    console.error('Error loading playlists:', error);
-                });
+                .catch(error => console.error('Error loading playlists:', error));
         }
 
         // Create new playlist
@@ -3247,8 +2489,7 @@ foreach ($dirs as $dir) {
         }
 
         // Fonctions pour gérer les playlists
-        /* Commented duplicate function
-        function loadPlaylistsDuplicate() {
+        function loadPlaylists() {
             fetch('/api/playlist.php?action=list')
                 .then(response => response.json())
                 .then(data => {
@@ -3294,7 +2535,7 @@ foreach ($dirs as $dir) {
                         container.innerHTML = '<p style="text-align: center; color: #ff6b6b; margin: 20px;">Erreur de connexion</p>';
                     }
                 });
-        } */
+        }
 
         function createPlaylist() {
             const name = prompt('Nom de la nouvelle playlist:');
@@ -3374,625 +2615,7 @@ foreach ($dirs as $dir) {
             }
         }
 
-        // Charger les playlists au démarrage si on est dans cette section
-        document.addEventListener('DOMContentLoaded', function() {
-            const activeSection = document.querySelector('.content-section.active');
-            if (activeSection && activeSection.id === 'playlists') {
-                loadPlaylists();
-            }
-        });
-
-        // Advanced Playlist Editor JavaScript
-        let currentPlaylist = {
-            name: '',
-            items: [],
-            settings: {
-                loop: true,
-                shuffle: false,
-                auto_advance: true,
-                fade_duration: 1000
-            }
-        };
-
-        let mediaLibrary = [];
-        let selectedItem = null;
-        let draggedElement = null;
-        let playlistModified = false;
-
-        // Initialize playlist editor when section is loaded
-        function initPlaylistEditor() {
-            loadMediaLibrary();
-            resetPlaylistEditor();
-            setupEventListeners();
-        }
-
-        // Setup event listeners for drag & drop and interactions
-        function setupEventListeners() {
-            // Drop zone listeners
-            const dropZone = document.getElementById('playlist-drop-zone');
-            if (dropZone) {
-                dropZone.addEventListener('dragover', handleDragOver);
-                dropZone.addEventListener('drop', handleDrop);
-                dropZone.addEventListener('dragleave', handleDragLeave);
-            }
-
-            // Playlist workspace listeners
-            const workspace = document.getElementById('playlist-workspace');
-            if (workspace) {
-                workspace.addEventListener('dragover', handleDragOver);
-                workspace.addEventListener('drop', handleDrop);
-            }
-        }
-
-        // Load media library
-        function refreshMediaLibrary() {
-            loadMediaLibrary();
-        }
-
-        function loadMediaLibrary() {
-            fetch('/api/media.php?action=list')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        mediaLibrary = data.data || [];
-                        renderMediaLibrary();
-                    } else {
-                        showAlert('Erreur de chargement des médias', 'error');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error loading media library:', error);
-                    showAlert('Erreur de connexion aux médias', 'error');
-                });
-        }
-
-        // Render media library
-        function renderMediaLibrary() {
-            const container = document.getElementById('media-library-list');
-            if (!container) return;
-
-            const searchTerm = document.getElementById('media-search')?.value.toLowerCase() || '';
-            const activeFilter = document.querySelector('.filter-btn.active')?.dataset.type || 'all';
-
-            const filteredMedia = mediaLibrary.filter(file => {
-                const matchesSearch = !searchTerm || file.name.toLowerCase().includes(searchTerm);
-                const matchesFilter = activeFilter === 'all' || getMediaType(file.type) === activeFilter;
-                return matchesSearch && matchesFilter;
-            });
-
-            container.innerHTML = filteredMedia.map(file => {
-                const mediaType = getMediaType(file.type);
-                const icon = getMediaIcon(mediaType);
-                const duration = file.duration ? formatTime(file.duration) : '';
-                const size = file.size_formatted || '';
-
-                return `
-                    <div class="media-item" draggable="true" data-file="${file.name}" data-type="${mediaType}">
-                        <div class="media-item-icon ${mediaType}">
-                            ${icon}
-                        </div>
-                        <div class="media-item-info">
-                            <div class="media-item-name" title="${file.name}">${file.name}</div>
-                            <div class="media-item-meta">${duration} ${size}</div>
-                        </div>
-                        <div class="media-item-actions">
-                            <button class="btn-add" onclick="addMediaToPlaylist('${file.name}')" title="Ajouter à la playlist">
-                                +
-                            </button>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-
-            // Add drag listeners to media items
-            container.querySelectorAll('.media-item').forEach(item => {
-                item.addEventListener('dragstart', handleMediaDragStart);
-                item.addEventListener('dragend', handleMediaDragEnd);
-            });
-        }
-
-        // Get media type from MIME type
-        function getMediaType(mimeType) {
-            if (mimeType.startsWith('video/')) return 'video';
-            if (mimeType.startsWith('audio/')) return 'audio';
-            if (mimeType.startsWith('image/')) return 'image';
-            return 'file';
-        }
-
-        // Get media icon
-        function getMediaIcon(type) {
-            const icons = {
-                video: '🎬',
-                audio: '🎵',
-                image: '🖼️',
-                file: '📄'
-            };
-            return icons[type] || icons.file;
-        }
-
-        // Filter media library
-        function filterMediaLibrary() {
-            renderMediaLibrary();
-        }
-
-        function filterMediaType(type) {
-            // Update filter buttons
-            document.querySelectorAll('.filter-btn').forEach(btn => {
-                btn.classList.toggle('active', btn.dataset.type === type);
-            });
-            renderMediaLibrary();
-        }
-
-        // Drag and drop handlers
-        function handleMediaDragStart(e) {
-            draggedElement = e.target;
-            e.target.classList.add('dragging');
-            e.dataTransfer.setData('text/plain', e.target.dataset.file);
-            e.dataTransfer.effectAllowed = 'copy';
-        }
-
-        function handleMediaDragEnd(e) {
-            e.target.classList.remove('dragging');
-            draggedElement = null;
-        }
-
-        function handleDragOver(e) {
-            e.preventDefault();
-            e.dataTransfer.dropEffect = 'copy';
-
-            const dropZone = document.getElementById('playlist-drop-zone');
-            if (dropZone && !dropZone.classList.contains('hidden')) {
-                dropZone.classList.add('drag-over');
-            }
-        }
-
-        function handleDragLeave(e) {
-            const dropZone = document.getElementById('playlist-drop-zone');
-            if (dropZone) {
-                dropZone.classList.remove('drag-over');
-            }
-        }
-
-        function handleDrop(e) {
-            e.preventDefault();
-            const fileName = e.dataTransfer.getData('text/plain');
-
-            const dropZone = document.getElementById('playlist-drop-zone');
-            if (dropZone) {
-                dropZone.classList.remove('drag-over');
-            }
-
-            if (fileName) {
-                addMediaToPlaylist(fileName);
-            }
-        }
-
-        // Add media to playlist
-        function addMediaToPlaylist(fileName) {
-            const mediaFile = mediaLibrary.find(file => file.name === fileName);
-            if (!mediaFile) return;
-
-            const playlistItem = {
-                file: fileName,
-                duration: getDefaultDuration(mediaFile.type),
-                transition: 'none',
-                order: currentPlaylist.items.length
-            };
-
-            currentPlaylist.items.push(playlistItem);
-            renderPlaylistItems();
-            updatePlaylistStats();
-            setPlaylistModified(true);
-            showDropZone(false);
-        }
-
-        // Get default duration based on media type
-        function getDefaultDuration(mimeType) {
-            if (mimeType.startsWith('image/')) return 10;
-            if (mimeType.startsWith('video/')) return 30;
-            if (mimeType.startsWith('audio/')) return 60;
-            return 10;
-        }
-
-        // Render playlist items
-        function renderPlaylistItems() {
-            const container = document.getElementById('playlist-items');
-            if (!container) return;
-
-            container.innerHTML = currentPlaylist.items.map((item, index) => {
-                const mediaFile = mediaLibrary.find(file => file.name === item.file);
-                const mediaType = mediaFile ? getMediaType(mediaFile.type) : 'file';
-                const icon = getMediaIcon(mediaType);
-
-                return `
-                    <div class="playlist-item" data-index="${index}" onclick="selectPlaylistItem(${index})">
-                        <div class="drag-handle" onmousedown="startItemDrag(event, ${index})">⋮⋮</div>
-                        <div class="playlist-item-icon ${mediaType}">
-                            ${icon}
-                        </div>
-                        <div class="playlist-item-content">
-                            <div class="playlist-item-name" title="${item.file}">${item.file}</div>
-                            <div class="playlist-item-details">
-                                <span>Durée: ${item.duration}s</span>
-                                <span>Transition: ${item.transition}</span>
-                                <span>Position: ${index + 1}</span>
-                            </div>
-                        </div>
-                        <div class="playlist-item-actions">
-                            <button class="btn btn-sm btn-danger" onclick="removePlaylistItem(${index})" title="Supprimer">
-                                🗑️
-                            </button>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-
-            // Update drop zone visibility
-            showDropZone(currentPlaylist.items.length === 0);
-        }
-
-        // Show/hide drop zone
-        function showDropZone(show) {
-            const dropZone = document.getElementById('playlist-drop-zone');
-            if (dropZone) {
-                dropZone.classList.toggle('hidden', !show);
-            }
-        }
-
-        // Select playlist item
-        function selectPlaylistItem(index) {
-            selectedItem = index;
-
-            // Update visual selection
-            document.querySelectorAll('.playlist-item').forEach((item, i) => {
-                item.classList.toggle('selected', i === index);
-            });
-
-            // Update properties panel
-            updatePropertiesPanel();
-        }
-
-        // Update properties panel
-        function updatePropertiesPanel() {
-            const propertiesSection = document.getElementById('item-properties');
-            if (!propertiesSection) return;
-
-            if (selectedItem !== null && currentPlaylist.items[selectedItem]) {
-                const item = currentPlaylist.items[selectedItem];
-
-                document.getElementById('selected-file-name').textContent = item.file;
-                document.getElementById('item-duration').value = item.duration;
-                document.getElementById('item-transition').value = item.transition;
-                document.getElementById('transition-duration').value = currentPlaylist.settings.fade_duration;
-
-                propertiesSection.style.display = 'block';
-            } else {
-                propertiesSection.style.display = 'none';
-            }
-        }
-
-        // Remove playlist item
-        function removePlaylistItem(index) {
-            currentPlaylist.items.splice(index, 1);
-
-            // Update order values
-            currentPlaylist.items.forEach((item, i) => {
-                item.order = i;
-            });
-
-            renderPlaylistItems();
-            updatePlaylistStats();
-            setPlaylistModified(true);
-
-            // Clear selection if removed item was selected
-            if (selectedItem === index) {
-                selectedItem = null;
-                updatePropertiesPanel();
-            } else if (selectedItem > index) {
-                selectedItem--;
-            }
-        }
-
-        // Update item properties
-        function updateItemDuration() {
-            if (selectedItem !== null && currentPlaylist.items[selectedItem]) {
-                const duration = parseInt(document.getElementById('item-duration').value) || 10;
-                currentPlaylist.items[selectedItem].duration = Math.max(1, Math.min(3600, duration));
-                renderPlaylistItems();
-                updatePlaylistStats();
-                setPlaylistModified(true);
-            }
-        }
-
-        function updateItemTransition() {
-            if (selectedItem !== null && currentPlaylist.items[selectedItem]) {
-                const transition = document.getElementById('item-transition').value;
-                currentPlaylist.items[selectedItem].transition = transition;
-                renderPlaylistItems();
-                setPlaylistModified(true);
-            }
-        }
-
-        function updateTransitionDuration() {
-            const duration = parseInt(document.getElementById('transition-duration').value) || 1000;
-            currentPlaylist.settings.fade_duration = Math.max(0, Math.min(5000, duration));
-            setPlaylistModified(true);
-        }
-
-        // Update playlist settings
-        function updatePlaylistSettings() {
-            currentPlaylist.settings.loop = document.getElementById('playlist-loop').checked;
-            currentPlaylist.settings.shuffle = document.getElementById('playlist-shuffle').checked;
-            currentPlaylist.settings.auto_advance = document.getElementById('playlist-auto-advance').checked;
-            setPlaylistModified(true);
-        }
-
-        function updatePlaylistName() {
-            const name = document.getElementById('playlist-name-input').value.trim();
-            if (name) {
-                currentPlaylist.name = name;
-                document.getElementById('playlist-name-display').textContent = name;
-                setPlaylistModified(true);
-            }
-        }
-
-        // Update playlist statistics
-        function updatePlaylistStats() {
-            const itemCount = currentPlaylist.items.length;
-            const totalDuration = currentPlaylist.items.reduce((sum, item) => sum + item.duration, 0);
-
-            document.getElementById('item-count').textContent = `${itemCount} élément${itemCount !== 1 ? 's' : ''}`;
-            document.getElementById('total-duration').textContent = formatTime(totalDuration);
-
-            // Enable/disable buttons
-            const hasItems = itemCount > 0;
-            document.getElementById('preview-btn').disabled = !hasItems;
-            document.getElementById('save-playlist-btn').disabled = !hasItems || !currentPlaylist.name;
-        }
-
-        // Format time in seconds to MM:SS
-        function formatTime(seconds) {
-            const mins = Math.floor(seconds / 60);
-            const secs = seconds % 60;
-            return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-        }
-
-        // Playlist management functions
-        function createNewPlaylist() {
-            if (playlistModified) {
-                if (!confirm('Voulez-vous abandonner les modifications actuelles?')) {
-                    return;
-                }
-            }
-            resetPlaylistEditor();
-        }
-
-        function resetPlaylistEditor() {
-            currentPlaylist = {
-                name: '',
-                items: [],
-                settings: {
-                    loop: true,
-                    shuffle: false,
-                    auto_advance: true,
-                    fade_duration: 1000
-                }
-            };
-
-            selectedItem = null;
-            setPlaylistModified(false);
-
-            // Update UI
-            document.getElementById('playlist-name-input').value = '';
-            document.getElementById('playlist-name-display').textContent = 'Nouvelle Playlist';
-            document.getElementById('playlist-loop').checked = currentPlaylist.settings.loop;
-            document.getElementById('playlist-shuffle').checked = currentPlaylist.settings.shuffle;
-            document.getElementById('playlist-auto-advance').checked = currentPlaylist.settings.auto_advance;
-
-            renderPlaylistItems();
-            updatePlaylistStats();
-            updatePropertiesPanel();
-        }
-
-        function setPlaylistModified(modified) {
-            playlistModified = modified;
-            const saveBtn = document.getElementById('save-playlist-btn');
-            if (saveBtn) {
-                saveBtn.disabled = !modified || !currentPlaylist.name || currentPlaylist.items.length === 0;
-            }
-        }
-
-        // Save current playlist
-        function saveCurrentPlaylist() {
-            if (!currentPlaylist.name) {
-                const name = prompt('Nom de la playlist:');
-                if (!name) return;
-                currentPlaylist.name = name;
-                document.getElementById('playlist-name-input').value = name;
-                document.getElementById('playlist-name-display').textContent = name;
-            }
-
-            if (currentPlaylist.items.length === 0) {
-                showAlert('La playlist doit contenir au moins un élément', 'warning');
-                return;
-            }
-
-            const playlistData = {
-                name: currentPlaylist.name,
-                items: currentPlaylist.items,
-                settings: currentPlaylist.settings
-            };
-
-            fetch('/api/playlist-simple.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(playlistData)
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showAlert(`Playlist "${currentPlaylist.name}" sauvegardée!`, 'success');
-                    setPlaylistModified(false);
-                } else {
-                    showAlert('Erreur: ' + (data.message || 'Échec de la sauvegarde'), 'error');
-                }
-            })
-            .catch(error => {
-                console.error('Save error:', error);
-                showAlert('Erreur de connexion lors de la sauvegarde', 'error');
-            });
-        }
-
-        // Load existing playlist
-        function loadExistingPlaylist() {
-            fetch('/api/playlist-simple.php')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        const playlists = data.data || [];
-                        showLoadPlaylistModal(playlists);
-                    } else {
-                        showAlert('Erreur de chargement des playlists', 'error');
-                    }
-                })
-                .catch(error => {
-                    console.error('Load error:', error);
-                    showAlert('Erreur de connexion', 'error');
-                });
-        }
-
-        function showLoadPlaylistModal(playlists) {
-            const modal = document.getElementById('load-playlist-modal');
-            const container = document.getElementById('existing-playlists-list');
-
-            if (!modal || !container) return;
-
-            container.innerHTML = playlists.map(playlist => `
-                <div class="existing-playlist-item" onclick="loadPlaylistData('${playlist.name}')">
-                    <div class="existing-playlist-info">
-                        <h4>${playlist.name}</h4>
-                        <div class="existing-playlist-meta">
-                            ${playlist.items ? playlist.items.length : 0} éléments -
-                            Modifié: ${playlist.modified || 'Inconnu'}
-                        </div>
-                    </div>
-                </div>
-            `).join('');
-
-            modal.style.display = 'flex';
-        }
-
-        function closeLoadPlaylistModal() {
-            const modal = document.getElementById('load-playlist-modal');
-            if (modal) {
-                modal.style.display = 'none';
-            }
-        }
-
-        function loadPlaylistData(playlistName) {
-            if (playlistModified) {
-                if (!confirm('Voulez-vous abandonner les modifications actuelles?')) {
-                    return;
-                }
-            }
-
-            fetch('/api/playlist-simple.php')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        const playlist = data.data.find(p => p.name === playlistName);
-                        if (playlist) {
-                            currentPlaylist = {
-                                name: playlist.name,
-                                items: playlist.items || [],
-                                settings: playlist.settings || {
-                                    loop: true,
-                                    shuffle: false,
-                                    auto_advance: true,
-                                    fade_duration: 1000
-                                }
-                            };
-
-                            // Update UI
-                            document.getElementById('playlist-name-input').value = currentPlaylist.name;
-                            document.getElementById('playlist-name-display').textContent = currentPlaylist.name;
-                            document.getElementById('playlist-loop').checked = currentPlaylist.settings.loop;
-                            document.getElementById('playlist-shuffle').checked = currentPlaylist.settings.shuffle;
-                            document.getElementById('playlist-auto-advance').checked = currentPlaylist.settings.auto_advance;
-
-                            renderPlaylistItems();
-                            updatePlaylistStats();
-                            setPlaylistModified(false);
-                            closeLoadPlaylistModal();
-
-                            showAlert(`Playlist "${playlistName}" chargée!`, 'success');
-                        }
-                    }
-                })
-                .catch(error => {
-                    console.error('Load playlist error:', error);
-                    showAlert('Erreur de chargement', 'error');
-                });
-        }
-
-        // Clear playlist
-        function clearPlaylist() {
-            if (currentPlaylist.items.length === 0) return;
-
-            if (confirm('Voulez-vous vider la playlist?')) {
-                currentPlaylist.items = [];
-                selectedItem = null;
-                renderPlaylistItems();
-                updatePlaylistStats();
-                updatePropertiesPanel();
-                setPlaylistModified(true);
-            }
-        }
-
-        // Preview playlist
-        function previewPlaylist() {
-            if (currentPlaylist.items.length === 0) {
-                showAlert('Aucun élément à prévisualiser', 'warning');
-                return;
-            }
-
-            // Create preview data
-            const previewData = {
-                name: currentPlaylist.name || 'Aperçu',
-                items: currentPlaylist.items.map(item => item.file),
-                duration: 5 // Short preview duration
-            };
-
-            // Show preview info
-            const itemNames = currentPlaylist.items.slice(0, 3).map(item => item.file).join(', ');
-            const moreText = currentPlaylist.items.length > 3 ? ` et ${currentPlaylist.items.length - 3} autres...` : '';
-
-            showAlert(`Aperçu de la playlist: ${itemNames}${moreText}`, 'info');
-        }
-
-        // Item reordering (drag & drop for playlist items)
-        let draggedItemIndex = null;
-
-        function startItemDrag(event, index) {
-            draggedItemIndex = index;
-            const item = event.target.closest('.playlist-item');
-            if (item) {
-                item.classList.add('dragging');
-                item.draggable = true;
-
-                item.addEventListener('dragstart', (e) => {
-                    e.dataTransfer.setData('text/plain', index.toString());
-                    e.dataTransfer.effectAllowed = 'move';
-                });
-
-                item.addEventListener('dragend', () => {
-                    item.classList.remove('dragging');
-                    item.draggable = false;
-                    draggedItemIndex = null;
-                });
-            }
-        }
-
+        // Supprimé : Double DOMContentLoaded redondant (v0.8.2 fix)
     </script>
 </body>
 </html>

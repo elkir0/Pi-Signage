@@ -1,174 +1,156 @@
-# PiSignage v0.8.1
+# PiSignage v0.8.3
 
-Solution complète de digital signage pour Raspberry Pi avec installation one-click et interface web moderne.
+Digital signage solution for Raspberry Pi with web interface and media management.
 
-## Présentation
+## Features
 
-PiSignage est une solution d'affichage dynamique conçue spécifiquement pour Raspberry Pi. Elle offre une interface web intuitive avec un design glassmorphisme, la gestion de médias multiples, et un système dual-player VLC/MPV optimisé pour les performances.
+- Web-based management interface
+- Multiple media format support (video, images)
+- Playlist creation and scheduling
+- Real-time system monitoring
+- Remote control capabilities
+- Hardware acceleration support
+- Multi-player support (VLC, MPV)
 
-### Fonctionnalités principales
+## Requirements
 
-- **Installation automatique** : Déploiement complet en une commande
-- **Interface web moderne** : Design glassmorphisme responsive v0.8.1
-- **Dual-player avancé** : Support VLC et MPV avec basculement dynamique
-- **Gestion multimédia** : Upload, playlists, programmation horaire
-- **Optimisations Raspberry Pi** : Configurations spécifiques Pi 3/4/5
-- **API REST complète** : Contrôle programmatique de tous les composants
-- **Service systemd** : Démarrage automatique et supervision
+- Raspberry Pi 3/4/5
+- Raspbian OS (Bullseye or newer)
+- 2GB+ RAM recommended
+- Network connectivity
+- Display connected via HDMI
 
-## Installation rapide
+## Installation
 
-### Installation depuis GitHub
+### Quick Install
 ```bash
-git clone https://github.com/elkir0/Pi-Signage.git
-cd Pi-Signage
-bash install.sh --auto
+wget https://raw.githubusercontent.com/your-username/PiSignage/main/install.sh
+bash install.sh
 ```
 
-### Installation directe
+### Manual Install
 ```bash
-wget https://raw.githubusercontent.com/elkir0/Pi-Signage/main/install.sh
-bash install.sh --auto
+git clone https://github.com/your-username/PiSignage.git
+cd PiSignage
+sudo ./install.sh
 ```
 
-Le script installe automatiquement :
-- Serveur web (Nginx + PHP 8.2-FPM)
-- Lecteurs vidéo (VLC + MPV)
-- Interface web avec tous les assets
-- Configuration optimisée pour votre modèle de Pi
-- Service systemd `pisignage`
-- Vidéo de démonstration Big Buck Bunny
+## Usage
 
-## Prérequis système
+### Access Web Interface
+Open browser and navigate to:
+```
+http://[raspberry-pi-ip]
+```
 
-- **Matériel** : Raspberry Pi 3, 4 ou 5
-- **Système** : Raspberry Pi OS Bookworm (64-bit recommandé)
-- **Mémoire** : 2GB RAM minimum, 4GB recommandé
-- **Stockage** : 8GB d'espace libre minimum
-- **Réseau** : Connexion Internet pour l'installation
+### Default Directories
+- Media files: `/opt/pisignage/media/`
+- Configuration: `/opt/pisignage/config/`
+- Logs: `/opt/pisignage/logs/`
+- Scripts: `/opt/pisignage/scripts/`
 
-## Accès et utilisation
+### Starting the Service
+```bash
+sudo systemctl start pisignage
+sudo systemctl enable pisignage  # Auto-start on boot
+```
 
-### Interface web
-Accédez à l'interface via : `http://[IP-RASPBERRY]`
+### VLC Player Control
+```bash
+sudo systemctl start pisignage-vlc
+sudo systemctl stop pisignage-vlc
+```
 
-L'interface propose :
-- **Dashboard** : Vue d'ensemble du système et statut des lecteurs
-- **Gestion de médias** : Upload, suppression, prévisualisation
-- **Playlists** : Création et édition de listes de lecture
-- **Programmateur** : Planification horaire d'affichage
-- **Configuration** : Paramètres système et lecteurs
-- **Monitoring** : Logs, performances, captures d'écran
+## API Documentation
 
-### Structure des fichiers
+See [API_DOCUMENTATION.md](API_DOCUMENTATION.md) for complete API reference.
+
+### Quick API Examples
+
+Get system stats:
+```bash
+curl http://[pi-ip]/api/system.php?action=stats
+```
+
+Upload media:
+```bash
+curl -X POST -F "file=@video.mp4" http://[pi-ip]/api/upload.php
+```
+
+Create playlist:
+```bash
+curl -X POST http://[pi-ip]/api/playlist-simple.php \
+  -H "Content-Type: application/json" \
+  -d '{"name":"My Playlist","items":[{"file":"video.mp4","duration":30}]}'
+```
+
+## Configuration
+
+### Player Configuration
+Edit `/opt/pisignage/config/player-config.json`:
+```json
+{
+  "player": {
+    "default": "vlc",
+    "autostart": true
+  }
+}
+```
+
+### Network Settings
+Configure via web interface or edit system files directly.
+
+## Troubleshooting
+
+### No Video Display
+1. Check VLC service: `sudo systemctl status pisignage-vlc`
+2. Verify media files: `ls -la /opt/pisignage/media/`
+3. Check logs: `tail -f /opt/pisignage/logs/vlc.log`
+
+### Web Interface Not Loading
+1. Check nginx: `sudo systemctl status nginx`
+2. Verify PHP: `sudo systemctl status php*-fpm`
+3. Check firewall: `sudo ufw status`
+
+### Upload Failures
+1. Check permissions: `ls -la /opt/pisignage/media/`
+2. Verify disk space: `df -h`
+3. Check upload limits in `/etc/nginx/sites-available/pisignage`
+
+## Development
+
+### Project Structure
 ```
 /opt/pisignage/
-├── config/          # Configuration système et lecteurs
-├── docs/            # Documentation technique
-├── logs/            # Fichiers de logs
-├── media/           # Contenus multimédias
-├── scripts/         # Scripts de gestion
-├── web/             # Interface web et API
-├── install.sh       # Script d'installation
-└── README.md        # Documentation principale
+├── web/           # Web interface
+│   ├── api/       # REST API endpoints
+│   └── assets/    # CSS, JS, images
+├── media/         # Media storage
+├── scripts/       # System scripts
+├── config/        # Configuration files
+└── logs/          # Application logs
 ```
 
-### Configuration principale
-- **Lecteurs** : `/opt/pisignage/config/player-config.json`
-- **Médias** : `/opt/pisignage/media/`
-- **Logs** : `/opt/pisignage/logs/`
-- **Interface** : `http://[IP-RASPBERRY]/`
+### Contributing
+1. Fork the repository
+2. Create feature branch
+3. Commit changes
+4. Push to branch
+5. Create Pull Request
 
-## Gestion des services
+## License
 
-### Service principal
-```bash
-# Statut du service
-sudo systemctl status pisignage
+MIT License - see LICENSE file for details.
 
-# Contrôle du service
-sudo systemctl start|stop|restart pisignage
+## Support
 
-# Activation au démarrage
-sudo systemctl enable pisignage
-```
+For issues and questions:
+- GitHub Issues: https://github.com/your-username/PiSignage/issues
+- Documentation: https://github.com/your-username/PiSignage/wiki
 
-### Gestion des lecteurs
-```bash
-# Script de gestion unifié
-/opt/pisignage/scripts/player-manager-v0.8.1.sh
+## Credits
 
-# Actions disponibles
-sudo systemctl restart pisignage    # Redémarrer le lecteur actuel
-pkill vlc && pkill mpv             # Arrêt forcé des lecteurs
-```
+Developed for reliable digital signage on Raspberry Pi hardware.
 
-### Monitoring et logs
-```bash
-# Logs en temps réel
-sudo journalctl -u pisignage -f
-
-# Logs spécifiques
-tail -f /opt/pisignage/logs/vlc.log      # Logs VLC
-tail -f /opt/pisignage/logs/mpv.log      # Logs MPV
-tail -f /opt/pisignage/logs/pisignage.log # Logs système
-```
-
-## Dépannage rapide
-
-### Service ne démarre pas
-```bash
-# Vérifier les dépendances
-sudo systemctl status nginx php8.2-fpm
-
-# Redémarrer les services web
-sudo systemctl restart nginx php8.2-fpm
-
-# Vérifier les permissions
-sudo chown -R www-data:www-data /opt/pisignage
-```
-
-### Problèmes d'affichage
-```bash
-# Vérifier l'affichage
-echo $DISPLAY    # Doit retourner :0
-
-# Test manuel des lecteurs
-mpv --fs /opt/pisignage/media/*.mp4
-cvlc --fullscreen /opt/pisignage/media/*.mp4
-```
-
-### Interface inaccessible
-```bash
-# Vérifier l'état des services
-sudo systemctl status nginx php8.2-fpm pisignage
-
-# Redémarrage complet
-sudo systemctl restart nginx php8.2-fpm pisignage
-```
-
-## Documentation technique
-
-Pour une utilisation avancée, consultez la documentation complète :
-
-- **[Guide d'installation](docs/INSTALL.md)** : Procédures détaillées d'installation
-- **[Documentation API](docs/API.md)** : Référence complète des endpoints
-- **[Guide Dual-Player](docs/DUAL-PLAYER-GUIDE.md)** : Configuration VLC/MPV avancée
-- **[Dépannage](docs/TROUBLESHOOTING.md)** : Résolution de problèmes détaillée
-
-## Informations projet
-
-- **Version** : 0.8.1
-- **Date** : Septembre 2025
-- **Licence** : MIT
-- **Compatibilité** : Raspberry Pi 3/4/5, Raspberry Pi OS Bookworm
-
-### Liens utiles
-
-- **Code source** : https://github.com/elkir0/Pi-Signage
-- **Signaler un problème** : https://github.com/elkir0/Pi-Signage/issues
-- **Documentation** : Dossier `/opt/pisignage/docs/`
-
-### Contribution
-
-Les contributions sont les bienvenues via pull requests sur le dépôt GitHub. Merci de consulter les issues existantes avant de proposer de nouvelles fonctionnalités.
+---
+Version 0.8.3 - Production Ready

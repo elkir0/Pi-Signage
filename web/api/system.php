@@ -58,9 +58,14 @@ function handleGetSystemInfo() {
     $currentPlayer = getCurrentPlayer();
     $systemInfo['current_player'] = $currentPlayer;
 
-    // Media files count
+    // Media files count (compatible avec l'interface)
     $mediaFiles = getMediaFiles();
     $systemInfo['media_files'] = count($mediaFiles);
+    $systemInfo['media_count'] = count($mediaFiles); // Alias pour compatibilité front-end
+
+    // Network info
+    $networkInfo = getNetworkInfo();
+    $systemInfo['network'] = $networkInfo;
 
     // Playlist count
     $playlists = glob(PLAYLISTS_PATH . '/*.json');
@@ -549,5 +554,32 @@ function getPlayerConfiguration() {
             'available' => ['mpv', 'vlc']
         ]
     ];
+}
+
+function getNetworkInfo() {
+    // Récupérer l'IP locale
+    $result = executeCommand("hostname -I | awk '{print $1}'");
+    if ($result['success'] && !empty($result['output'])) {
+        return trim($result['output'][0]);
+    }
+
+    // Alternative si hostname -I échoue
+    $ip = $_SERVER['SERVER_ADDR'] ?? '127.0.0.1';
+    return $ip;
+}
+
+function getMediaFiles() {
+    $mediaDir = MEDIA_PATH;
+    $files = array();
+
+    if (is_dir($mediaDir)) {
+        // Chercher tous les fichiers média communs
+        $extensions = ['mp4', 'mkv', 'avi', 'mov', 'webm', 'jpg', 'jpeg', 'png', 'gif'];
+        foreach ($extensions as $ext) {
+            $files = array_merge($files, glob($mediaDir . "/*." . $ext));
+        }
+    }
+
+    return $files;
 }
 ?>

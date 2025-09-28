@@ -1,0 +1,19 @@
+[Unit]
+Description=PiSignage VLC Media Player Service
+After=network.target pisignage.service
+Requires=pisignage.service
+
+[Service]
+Type=simple
+User=pi
+Group=video
+Environment="DISPLAY=:0"
+Environment="HOME=/home/pi"
+WorkingDirectory=/opt/pisignage
+ExecStart=/usr/bin/vlc --intf dummy --fullscreen --no-video-title-show --loop --playlist-autostart /opt/pisignage/media/
+ExecStop=/usr/bin/killall vlc
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
