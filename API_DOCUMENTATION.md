@@ -1,4 +1,4 @@
-# PiSignage v0.8.5 API Documentation
+sur laa# PiSignage v0.8.5 API Documentation
 
 > **Note**: API endpoints remain 100% compatible with v0.8.3. The modular v0.8.5 architecture provides the same REST API with improved performance and reliability.
 

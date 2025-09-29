@@ -24,10 +24,12 @@ class ScreenshotManager {
     private $availableMethods = [];
 
     public function __construct() {
+        error_log("DEBUG: ScreenshotManager constructor called");
         $this->cacheDir = SCREENSHOT_CACHE_DIR;
         $this->lastCaptureFile = $this->cacheDir . '/.last_capture';
         $this->initializeCache();
         $this->detectAvailableMethods();
+        error_log("DEBUG: Available methods after detection: " . implode(', ', $this->availableMethods));
     }
 
     /**
@@ -57,7 +59,7 @@ class ScreenshotManager {
                      strpos(shell_exec('echo $XDG_SESSION_TYPE 2>/dev/null') ?: '', 'wayland') !== false;
 
         // Vérifier si VLC est en cours d'exécution
-        $vlcRunning = shell_exec('pgrep -x vlc 2>/dev/null') !== null;
+        $vlcRunning = !empty(trim(shell_exec('pgrep -x vlc 2>/dev/null')));
 
         $methods = [
             'ffmpeg-vlc' => '/usr/bin/ffmpeg',            // FFmpeg pour VLC
@@ -70,8 +72,19 @@ class ScreenshotManager {
         ];
 
         // Si VLC est actif et ffmpeg disponible, prioriser ffmpeg-vlc
+        logMessage("VLC detection: vlcRunning=" . ($vlcRunning ? 'true' : 'false') . ", ffmpeg=" . (shell_exec("which ffmpeg 2>/dev/null") ? 'found' : 'not found'));
+        error_log("DEBUG: VLC detection: vlcRunning=" . ($vlcRunning ? 'true' : 'false') . ", ffmpeg=" . (shell_exec("which ffmpeg 2>/dev/null") ? 'found' : 'not found'));
         if ($vlcRunning && shell_exec("which ffmpeg 2>/dev/null")) {
             $this->availableMethods[] = 'ffmpeg-vlc';
+            logMessage("Added ffmpeg-vlc to available methods");
+
+            // Vérifier si VLC utilise DRM (pas de X11) - dans ce cas, ffmpeg-vlc est la seule solution viable
+            $noX11 = !$vlcRunning || getenv('DISPLAY') === false;
+            if ($noX11) {
+                // En mode console/DRM, les méthodes framebuffer capturent le TTY, pas VLC
+                // Prioriser ffmpeg-vlc et déplacer fbgrab/scrot en fallback
+                logMessage("Mode console détecté avec VLC - Priorisation ffmpeg-vlc pour capturer le contenu vidéo réel");
+            }
         }
 
         // Détection spéciale pour GNOME D-Bus
@@ -95,7 +108,15 @@ class ScreenshotManager {
             array_unshift($this->availableMethods, 'grim');
         }
 
-        logMessage("Méthodes de capture détectées (Wayland=$isWayland, VLC=$vlcRunning): " . implode(', ', $this->availableMethods));
+        // Prioriser ffmpeg-vlc en mode console quand VLC est actif
+        $noX11 = getenv('DISPLAY') === false || getenv('DISPLAY') === '';
+        if ($vlcRunning && $noX11 && in_array('ffmpeg-vlc', $this->availableMethods)) {
+            $this->availableMethods = array_diff($this->availableMethods, ['ffmpeg-vlc']);
+            array_unshift($this->availableMethods, 'ffmpeg-vlc');
+            logMessage("Mode console avec VLC actif - ffmpeg-vlc priorisé");
+        }
+
+        logMessage("Méthodes de capture détectées (Wayland=$isWayland, VLC=$vlcRunning, Console=$noX11): " . implode(', ', $this->availableMethods));
     }
 
     /**
@@ -307,22 +328,30 @@ class ScreenshotManager {
      * Capture avec FFmpeg depuis VLC
      */
     private function captureWithFfmpegVlc($outputFile, $quality = null) {
-        // Obtenir le fichier vidéo en cours de lecture par VLC
-        $vlcCommand = shell_exec("ps aux | grep -E 'vlc.*\\.mp4' | grep -v grep");
-        if (!$vlcCommand) {
-            return ['success' => false, 'error' => 'VLC not running or no video file found'];
+        // Vérifier si VLC est actif via HTTP
+        $vlcStatus = shell_exec("curl -s --user ':pisignage' 'http://localhost:8080/requests/status.json' 2>/dev/null");
+        if (!$vlcStatus) {
+            return ['success' => false, 'error' => 'VLC HTTP interface not accessible'];
         }
 
-        // Extraire le chemin du fichier vidéo
-        preg_match('/(\S+\.mp4)/i', $vlcCommand, $matches);
-        if (empty($matches[1]) || !file_exists($matches[1])) {
-            return ['success' => false, 'error' => 'Could not find video file'];
+        $status = json_decode($vlcStatus, true);
+        if (!$status || !isset($status['information']['category']['meta']['filename'])) {
+            return ['success' => false, 'error' => 'No video file currently playing in VLC'];
         }
 
-        $videoFile = $matches[1];
+        $filename = $status['information']['category']['meta']['filename'];
 
-        // Capturer une frame aléatoire entre 5 et 30 secondes
-        $seekTime = rand(5, 30);
+        // Construire le chemin complet du fichier
+        $videoFile = "/opt/pisignage/media/" . $filename;
+        if (!file_exists($videoFile)) {
+            return ['success' => false, 'error' => 'Video file not found: ' . $videoFile];
+        }
+
+        // Obtenir la position actuelle de lecture
+        $currentTime = intval($status['time'] ?? 0);
+
+        // Capturer à la position actuelle ou proche
+        $seekTime = max(0, $currentTime);
         $qualityParam = $quality ? 100 - $quality : 2; // FFmpeg utilise une échelle inversée (2=haute qualité)
 
         $cmd = sprintf(
@@ -341,7 +370,11 @@ class ScreenshotManager {
             return ['success' => true, 'method' => 'ffmpeg-vlc', 'time' => $duration];
         }
 
-        return ['success' => false, 'error' => 'FFmpeg capture failed'];
+        $errorOutput = $result['output'] ?? 'Unknown error';
+        if (is_array($errorOutput)) {
+            $errorOutput = implode(' ', $errorOutput);
+        }
+        return ['success' => false, 'error' => 'FFmpeg capture failed: ' . $errorOutput];
     }
 
     /**
@@ -561,6 +594,15 @@ class ScreenshotManager {
 
         foreach ($this->availableMethods as $method) {
             switch ($method) {
+                case 'ffmpeg-vlc':
+                    $info[$method] = [
+                        'name' => 'FFmpeg-VLC',
+                        'description' => 'Capture du contenu vidéo VLC via FFmpeg',
+                        'speed' => 'Rapide',
+                        'quality' => 'Excellente',
+                        'recommended' => true
+                    ];
+                    break;
                 case 'grim':
                     $info[$method] = [
                         'name' => 'grim',
