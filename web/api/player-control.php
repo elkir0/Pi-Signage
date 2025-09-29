@@ -59,7 +59,12 @@ class VLCController {
             return $this->fallbackToShell($command, $params);
         }
 
-        return json_decode($response, true);
+        $vlcResponse = json_decode($response, true);
+        // VLC doesn't return success field, so we add it if we got a response
+        if ($vlcResponse !== null) {
+            return ['success' => true, 'data' => $vlcResponse];
+        }
+        return ['success' => false, 'message' => 'Invalid VLC response'];
     }
 
     /**
@@ -375,7 +380,22 @@ if ($method === 'GET' && $action === 'status') {
     // Add current status to response
     $result['status'] = $vlc->getStatus();
 
-    jsonResponse($result['success'] ?? false, $result);
+    // Set proper success status and message
+    $success = $result['success'] ?? false;
+
+    // If we have a result with data, consider it successful
+    if (!$success && isset($result['data'])) {
+        $success = true;
+    }
+
+    // Create proper response message
+    if ($success) {
+        $message = ucfirst($action) . ' command executed';
+    } else {
+        $message = $result['message'] ?? 'Command failed';
+    }
+
+    jsonResponse($success, $result, $message);
 } else {
     jsonResponse(false, null, 'Invalid request method');
 }
