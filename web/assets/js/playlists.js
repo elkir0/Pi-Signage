@@ -687,6 +687,56 @@ PiSignage.playlists = {
         }
     },
 
+    // Function to show playlist selection modal
+    loadExistingPlaylist: function() {
+        if (this.currentPlaylists.length === 0) {
+            showAlert('Aucune playlist disponible', 'info');
+            return;
+        }
+
+        // Create modal for playlist selection
+        const modal = document.createElement('div');
+        modal.className = 'modal show';
+        modal.style.cssText = 'display: flex; align-items: center; justify-content: center; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000;';
+
+        modal.innerHTML = `
+            <div class="modal-content" style="background: white; padding: 30px; border-radius: 8px; max-width: 500px; width: 90%;">
+                <h3>Charger une Playlist</h3>
+                <div class="playlist-list" style="max-height: 400px; overflow-y: auto; margin: 20px 0;">
+                    ${this.currentPlaylists.map(playlist => `
+                        <div class="playlist-item" style="padding: 10px; margin: 5px 0; border: 1px solid #ddd; border-radius: 4px; cursor: pointer;"
+                             onclick="PiSignage.playlists.selectAndLoadPlaylist('${playlist.name}')">
+                            <strong>${playlist.name}</strong>
+                            <span style="float: right;">${playlist.items ? playlist.items.length : 0} éléments</span>
+                        </div>
+                    `).join('')}
+                </div>
+                <button class="btn btn-secondary" onclick="this.closest('.modal').remove()">Annuler</button>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+    },
+
+    selectAndLoadPlaylist: function(playlistName) {
+        const playlist = this.currentPlaylists.find(p => p.name === playlistName);
+        if (playlist) {
+            this.currentPlaylist = {
+                name: playlist.name,
+                items: playlist.items || [],
+                settings: playlist.settings || {
+                    loop: true,
+                    shuffle: false,
+                    auto_advance: true,
+                    fade_duration: 1000
+                }
+            };
+            this.renderPlaylistEditor();
+            document.querySelector('.modal.show')?.remove();
+            showAlert(`Playlist "${playlistName}" chargée`, 'success');
+        }
+    },
+
     // Setup global functions for backward compatibility
     setupGlobalFunctions: function() {
         window.loadPlaylists = this.loadPlaylists.bind(this);
@@ -697,6 +747,8 @@ PiSignage.playlists = {
         window.initPlaylistEditor = this.initPlaylistEditor.bind(this);
         window.saveCurrentPlaylist = this.saveCurrentPlaylist.bind(this);
         window.createNewPlaylist = this.resetPlaylistEditor.bind(this);
+        window.loadExistingPlaylist = this.loadExistingPlaylist.bind(this);
+        window.selectAndLoadPlaylist = this.selectAndLoadPlaylist.bind(this);
     }
 };
 
