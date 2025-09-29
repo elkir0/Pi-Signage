@@ -5,7 +5,11 @@
  */
 
 require_once '../config.php';
-require_once 'system.php';
+// Don't include system.php directly as it processes requests
+// Instead, include only the functions we need
+if (file_exists('system-functions.php')) {
+    require_once 'system-functions.php';
+}
 
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
