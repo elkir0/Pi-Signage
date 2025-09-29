@@ -5,10 +5,40 @@
  */
 
 require_once '../config.php';
-// Don't include system.php directly as it processes requests
-// Instead, include only the functions we need
-if (file_exists('system-functions.php')) {
-    require_once 'system-functions.php';
+
+// Helper functions directly included to avoid file dependency issues
+function getCpuUsage() {
+    $load = sys_getloadavg();
+    return round($load[0] * 25, 1); // Simple approximation
+}
+
+function getMemoryUsage() {
+    $free = shell_exec('free -b');
+    $free = (string)trim($free);
+    $free_arr = explode("\n", $free);
+    $mem = explode(" ", preg_replace('/\s+/', ' ', $free_arr[1]));
+
+    $total = intval($mem[1] ?? 1);
+    $used = intval($mem[2] ?? 0);
+
+    return [
+        'total' => $total,
+        'used' => $used,
+        'percent' => round(($used / $total) * 100, 2)
+    ];
+}
+
+function getRaspberryPiTemperature() {
+    if (file_exists('/sys/class/thermal/thermal_zone0/temp')) {
+        $temp = intval(file_get_contents('/sys/class/thermal/thermal_zone0/temp'));
+        return round($temp / 1000, 1);
+    }
+    return null;
+}
+
+function getUptime() {
+    $uptime = shell_exec('uptime -p');
+    return trim($uptime);
 }
 
 header('Content-Type: application/json');
@@ -401,32 +431,8 @@ if ($method === 'GET' && $action === 'status') {
 }
 
 /**
- * Helper functions
+ * Helper functions are now defined at the top of the file
  */
-
-function getMemoryUsage() {
-    $free = shell_exec('free -b');
-    $free = (string)trim($free);
-    $free_arr = explode("\n", $free);
-    $mem = explode(" ", preg_replace('/\s+/', ' ', $free_arr[1]));
-
-    $total = intval($mem[1] ?? 0);
-    $used = intval($mem[2] ?? 0);
-
-    return [
-        'total' => $total,
-        'used' => $used,
-        'percent' => $total > 0 ? round(($used / $total) * 100, 2) : 0
-    ];
-}
-
-function getRaspberryPiTemperature() {
-    if (file_exists('/sys/class/thermal/thermal_zone0/temp')) {
-        $temp = intval(file_get_contents('/sys/class/thermal/thermal_zone0/temp'));
-        return round($temp / 1000, 1);
-    }
-    return null;
-}
 
 
 function loadPlaylistToVLC($playlistName) {
