@@ -403,7 +403,7 @@ function refreshStats() {
     fetch('/api/stats.php')
         .then(response => response.json())
         .then(data => {
-            if (data.success) {
+            if (data.success && data.data) {
                 const stats = data.data;
 
                 // Update dashboard stats (avec vérification null)
@@ -411,12 +411,20 @@ function refreshStats() {
                 var ramElem = document.getElementById('ram-usage');
                 var tempElem = document.getElementById('temperature');
                 var storageElem = document.getElementById('storage-usage');
-                
-                // Safe access with optional chaining
-                if (cpuElem) cpuElem.textContent = ((stats.cpu?.usage || stats.cpu?.load_1min || 0)).toFixed(1) + '%';
-                if (ramElem) ramElem.textContent = (stats.memory?.percent || 0).toFixed(1) + '%';
-                if (tempElem) tempElem.textContent = (stats.temperature || stats.temp || "N/A") + (stats.temperature || stats.temp ? '°C' : '');
-                if (storageElem) storageElem.textContent = stats.disk?.percent ? stats.disk.percent.toFixed(1) + "%" : "N/A";
+
+                // Safe access with better checks
+                if (cpuElem && stats.cpu) {
+                    cpuElem.textContent = (stats.cpu.usage || stats.cpu.load_1min || 0).toFixed(1) + '%';
+                }
+                if (ramElem && stats.memory) {
+                    ramElem.textContent = (stats.memory.percent || 0).toFixed(1) + '%';
+                }
+                if (tempElem) {
+                    tempElem.textContent = stats.temperature ? stats.temperature + '°C' : 'N/A';
+                }
+                if (storageElem && stats.disk) {
+                    storageElem.textContent = stats.disk.percent ? stats.disk.percent.toFixed(1) + '%' : 'N/A';
+                }
             }
         })
         .catch(error => console.error('Stats error:', error));
