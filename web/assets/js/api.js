@@ -55,7 +55,7 @@ PiSignage.api = {
     // System API calls
     system: {
         getStats: function() {
-            return PiSignage.api.request('/api/system.php?action=stats');
+            return PiSignage.api.request('/api/stats.php');
         },
 
         switchPlayer: function(newPlayer, currentPlayer) {
