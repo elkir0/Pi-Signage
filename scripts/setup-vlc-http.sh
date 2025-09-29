@@ -1,9 +1,25 @@
 #!/bin/bash
 ###############################################################################
 # PiSignage - Setup VLC HTTP Interface
-# Configures VLC for real-time control via HTTP
+# NOTE: This script is deprecated. HTTP interface is now integrated
+# into the main pisignage-vlc.service. Use systemctl to manage VLC.
 ###############################################################################
 
+echo "⚠️  NOTICE: VLC HTTP interface is now integrated into pisignage-vlc.service"
+echo "   No separate vlc-http service is needed."
+echo ""
+echo "Current VLC service status:"
+systemctl status pisignage-vlc.service --no-pager -l
+echo ""
+echo "To restart VLC with HTTP interface:"
+echo "  sudo systemctl restart pisignage-vlc"
+echo ""
+echo "HTTP interface will be available at: http://localhost:8080"
+echo "Password: pisignage"
+echo ""
+exit 0
+
+# Legacy configuration below (not executed)
 echo "Configuring VLC HTTP interface..."
 
 # Create VLC config directory

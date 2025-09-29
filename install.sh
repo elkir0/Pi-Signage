@@ -393,9 +393,10 @@ create_vlc_script() {
 
 echo "=== PiSignage v0.8.1 - Démarrage VLC ==="
 
-# Arrêt des lecteurs existants
-pkill -9 vlc mpv 2>/dev/null
-sleep 1
+# Arrêt gracieux des lecteurs existants
+systemctl --user stop pisignage-vlc.service 2>/dev/null || true
+pkill -TERM vlc 2>/dev/null || true
+sleep 2
 
 # Configuration de l'environnement
 export DISPLAY=${DISPLAY:-:0}
@@ -418,19 +419,26 @@ if [ ! -f "$VIDEO" ]; then
     VIDEO=$(find /opt/pisignage/media -name "*.mp4" -o -name "*.mkv" | head -1)
 fi
 
-# Démarrer VLC avec la commande stabilisée
+# Démarrer VLC avec la commande stabilisée (compatible avec le service unifié)
 if [ -n "$VIDEO" ]; then
-    # Utilisation de vlc -I dummy au lieu de cvlc (plus stable d'après les tests)
-    vlc -I dummy \
+    # Utilisation de la configuration unifiée avec HTTP interface
+    vlc --intf http \
+        --extraintf dummy \
+        --http-host 0.0.0.0 \
+        --http-port 8080 \
+        --http-password pisignage \
         --fullscreen \
         --loop \
         --no-video-title-show \
+        --video-on-top \
+        --no-osd \
         --quiet \
         "$VIDEO" > /opt/pisignage/logs/vlc.log 2>&1 &
 
     VLC_PID=$!
     echo $VLC_PID > /opt/pisignage/vlc.pid
-    echo "✓ VLC démarré avec $(basename "$VIDEO") (PID: $VLC_PID)"
+    echo "✓ VLC démarré avec $(basename "$VIDEO") et HTTP interface (PID: $VLC_PID)"
+    echo "  Interface HTTP: http://localhost:8080 (mot de passe: pisignage)"
 else
     echo "✗ Aucune vidéo trouvée"
     exit 1
@@ -452,14 +460,14 @@ if ! systemctl is-active --quiet nginx && ! systemctl is-active --quiet apache2;
     php -S 0.0.0.0:80 index.php > /opt/pisignage/logs/php-server.log 2>&1 &
 fi
 
-# Démarrer VLC
-/opt/pisignage/scripts/start-vlc.sh
+# Démarrer le service VLC unifié
+sudo systemctl start pisignage-vlc.service || true
 
-# Watchdog
+# Watchdog - vérifier le service VLC
 while true; do
-    if ! pgrep vlc > /dev/null; then
-        echo "VLC s'est arrêté, redémarrage..."
-        /opt/pisignage/scripts/start-vlc.sh
+    if ! systemctl is-active --quiet pisignage-vlc.service; then
+        echo "Service VLC arrêté, redémarrage..."
+        sudo systemctl restart pisignage-vlc.service
     fi
     sleep 30
 done
@@ -644,30 +652,60 @@ export XDG_RUNTIME_DIR=/run/user/1000
 mkdir -p $XDG_RUNTIME_DIR
 chown pi:pi $XDG_RUNTIME_DIR
 
-# Arrêter toute instance VLC existante
-pkill -9 vlc 2>/dev/null
-sleep 2
+# Arrêter toute instance VLC existante proprement
+systemctl --user stop pisignage-vlc.service 2>/dev/null || true
+pkill -TERM vlc 2>/dev/null || true
+sleep 3
 
-# Démarrer VLC en boucle avec Big Buck Bunny
-sudo -u pi bash -c "export XDG_RUNTIME_DIR=/run/user/1000; vlc --intf dummy --fullscreen --loop --no-video-title-show --vout drm_vout /opt/pisignage/media/BigBuckBunny_720p.mp4 > /tmp/vlc.log 2>&1 &"
+# Démarrer le service VLC unifié (recommandé)
+systemctl --user start pisignage-vlc.service 2>/dev/null || \
+sudo systemctl start pisignage-vlc.service
 
-echo "VLC démarré avec succès"
+echo "Service VLC unifié démarré avec succès"
+echo "Interface HTTP disponible sur: http://localhost:8080"
+echo "Mot de passe: pisignage"
 ENDOFSCRIPT
     chmod +x $INSTALL_DIR/scripts/autostart-vlc.sh
 
-    # Créer le service systemd pour VLC
+    # Créer le service systemd unifié pour VLC avec interface HTTP
     sudo tee /etc/systemd/system/pisignage-vlc.service > /dev/null << ENDOFSERVICE
 [Unit]
-Description=PiSignage VLC Player
-After=multi-user.target
+Description=PiSignage VLC Media Player with HTTP Interface
+After=network.target display-manager.service
+Requires=network.target
 
 [Service]
-Type=forking
+Type=simple
 User=pi
-ExecStart=/opt/pisignage/scripts/autostart-vlc.sh
-ExecStop=/usr/bin/pkill vlc
+Group=video
+Environment="DISPLAY=:0"
+Environment="HOME=/home/pi"
+Environment="XDG_RUNTIME_DIR=/run/user/1000"
+WorkingDirectory=/opt/pisignage
+
+# Start VLC with both display output and HTTP interface
+ExecStart=/usr/bin/vlc \\
+    --intf http \\
+    --extraintf dummy \\
+    --http-host 0.0.0.0 \\
+    --http-port 8080 \\
+    --http-password pisignage \\
+    --fullscreen \\
+    --no-video-title-show \\
+    --loop \\
+    --playlist-autostart \\
+    --video-on-top \\
+    --no-osd \\
+    /opt/pisignage/media/
+
+# Graceful shutdown - no more pkill/killall conflicts
+ExecStop=/bin/kill -TERM \$MAINPID
+TimeoutStopSec=15
+KillMode=mixed
 Restart=on-failure
 RestartSec=5
+StandardOutput=append:/opt/pisignage/logs/vlc.log
+StandardError=append:/opt/pisignage/logs/vlc.log
 
 [Install]
 WantedBy=multi-user.target
@@ -704,13 +742,13 @@ test_installation() {
         log_warn "Serveur web ne répond pas encore"
     fi
 
-    # Vérifier VLC
-    if pgrep vlc > /dev/null; then
-        log_info "VLC en cours d'exécution"
+    # Vérifier le service VLC unifié
+    if systemctl is-active --quiet pisignage-vlc.service; then
+        log_info "Service VLC unifié en cours d'exécution"
     else
-        log_warn "VLC n'est pas encore démarré"
+        log_warn "Service VLC unifié n'est pas encore démarré"
         # Essayer de le démarrer
-        $INSTALL_DIR/scripts/start-vlc.sh &
+        sudo systemctl start pisignage-vlc.service || true
     fi
 
     # Vérifier le service
@@ -718,6 +756,20 @@ test_installation() {
         log_info "Service PiSignage actif"
     else
         log_warn "Service PiSignage inactif"
+    fi
+
+    # Vérification finale de la configuration unifiée
+    if systemctl is-enabled --quiet pisignage-vlc.service; then
+        log_info "✓ Service VLC unifié correctement configuré"
+    else
+        log_warn "Service VLC unifié non activé"
+    fi
+
+    # Vérifier l'interface HTTP
+    if curl -s --connect-timeout 5 http://localhost:8080 >/dev/null 2>&1; then
+        log_info "✓ Interface HTTP VLC accessible"
+    else
+        log_warn "Interface HTTP VLC non accessible (normal au premier démarrage)"
     fi
 
     log_info "Tests terminés"
@@ -757,9 +809,11 @@ main() {
     echo "🚀 PiSignage démarre automatiquement au boot!"
     echo ""
     echo "💡 Commandes utiles:"
-    echo "   sudo systemctl status pisignage   # Voir le statut"
-    echo "   sudo systemctl restart pisignage  # Redémarrer"
-    echo "   tail -f $INSTALL_DIR/logs/vlc.log # Voir les logs VLC"
+    echo "   sudo systemctl status pisignage     # Voir le statut principal"
+    echo "   sudo systemctl status pisignage-vlc # Voir le statut VLC"
+    echo "   sudo systemctl restart pisignage-vlc # Redémarrer VLC"
+    echo "   tail -f $INSTALL_DIR/logs/vlc.log   # Voir les logs VLC"
+    echo "   Interface HTTP VLC: http://${ip}:8080 (mot de passe: pisignage)"
     echo ""
     echo "📝 Documentation: $INSTALL_DIR/CLAUDE.md"
     echo ""
