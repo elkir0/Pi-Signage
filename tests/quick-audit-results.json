@@ -1,0 +1,57 @@
+[
+  {
+    "module": "settings",
+    "url": "http://192.168.1.103/settings.php",
+    "pageExists": false,
+    "pageLoads": false,
+    "consoleErrors": [],
+    "visibleElements": [],
+    "screenshot": null,
+    "timestamp": "2025-09-30T20:50:14.514Z",
+    "error": "Navigation timeout of 10000 ms exceeded"
+  },
+  {
+    "module": "schedule",
+    "url": "http://192.168.1.103/schedule.php",
+    "pageExists": false,
+    "pageLoads": false,
+    "consoleErrors": [],
+    "visibleElements": [],
+    "screenshot": null,
+    "timestamp": "2025-09-30T20:50:24.885Z",
+    "error": "Navigation timeout of 10000 ms exceeded"
+  },
+  {
+    "module": "screenshot",
+    "url": "http://192.168.1.103/screenshot.php",
+    "pageExists": false,
+    "pageLoads": false,
+    "consoleErrors": [],
+    "visibleElements": [],
+    "screenshot": null,
+    "timestamp": "2025-09-30T20:50:35.273Z",
+    "error": "Navigation timeout of 10000 ms exceeded"
+  },
+  {
+    "module": "logs",
+    "url": "http://192.168.1.103/logs.php",
+    "pageExists": false,
+    "pageLoads": false,
+    "consoleErrors": [],
+    "visibleElements": [],
+    "screenshot": null,
+    "timestamp": "2025-09-30T20:50:45.622Z",
+    "error": "Navigation timeout of 10000 ms exceeded"
+  },
+  {
+    "module": "youtube",
+    "url": "http://192.168.1.103/youtube.php",
+    "pageExists": false,
+    "pageLoads": false,
+    "consoleErrors": [],
+    "visibleElements": [],
+    "screenshot": null,
+    "timestamp": "2025-09-30T20:50:56.000Z",
+    "error": "Navigation timeout of 10000 ms exceeded"
+  }
+]
