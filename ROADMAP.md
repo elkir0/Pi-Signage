@@ -191,7 +191,7 @@
    - Afficher: fichier en cours, durée, position
 
 ### Priorité 2 - Court terme (Amélioration UX)
-4. **Dashboard actions rapides** (BUG-001)
+4. **Dashboard actions rapides** (BUG-001)on
    - Ajouter boutons: Reboot, Clear Cache, etc.
 
 5. **Navigation sidebar** (BUG-002)

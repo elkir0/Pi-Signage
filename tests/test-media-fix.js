@@ -28,8 +28,8 @@ async function testMediaFixes() {
 
     try {
         // Navigate to media page
-        console.log('\n📍 Navigating to http://192.168.1.103/media.php');
-        await page.goto('http://192.168.1.103/media.php', {
+        console.log('\n📍 Navigating to http://192.168.1.142/media.php');
+        await page.goto('http://192.168.1.142/media.php', {
             waitUntil: 'networkidle2'
         });
 

@@ -68,6 +68,7 @@
     position: relative;
     font-size: 15px;
     color: rgba(240, 243, 247, 0.8);
+    text-decoration: none;
 }
 
 .nav-item:hover {

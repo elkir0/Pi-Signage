@@ -9,49 +9,49 @@
 
         <div class="nav-section">
             <div class="nav-title">Principal</div>
-            <div class="nav-item <?= getCurrentPage() === 'dashboard' ? 'active' : '' ?>" onclick="location.href='dashboard.php'">
+            <a href="dashboard.php" class="nav-item <?= getCurrentPage() === 'dashboard' ? 'active' : '' ?>">
                 <span>📊</span>
                 <span>Dashboard</span>
-            </div>
-            <div class="nav-item <?= getCurrentPage() === 'media' ? 'active' : '' ?>" onclick="location.href='media.php'">
+            </a>
+            <a href="media.php" class="nav-item <?= getCurrentPage() === 'media' ? 'active' : '' ?>">
                 <span>📁</span>
                 <span>Médias</span>
-            </div>
-            <div class="nav-item <?= getCurrentPage() === 'playlists' ? 'active' : '' ?>" onclick="location.href='playlists.php'">
+            </a>
+            <a href="playlists.php" class="nav-item <?= getCurrentPage() === 'playlists' ? 'active' : '' ?>">
                 <span>🎵</span>
                 <span>Playlists</span>
-            </div>
-            <div class="nav-item <?= getCurrentPage() === 'youtube' ? 'active' : '' ?>" onclick="location.href='youtube.php'">
+            </a>
+            <a href="youtube.php" class="nav-item <?= getCurrentPage() === 'youtube' ? 'active' : '' ?>">
                 <span>📺</span>
                 <span>YouTube</span>
-            </div>
+            </a>
         </div>
 
         <div class="nav-section">
             <div class="nav-title">Contrôle</div>
-            <div class="nav-item <?= getCurrentPage() === 'player' ? 'active' : '' ?>" onclick="location.href='player.php'">
+            <a href="player.php" class="nav-item <?= getCurrentPage() === 'player' ? 'active' : '' ?>">
                 <span>▶️</span>
                 <span>Lecteur</span>
-            </div>
-            <div class="nav-item <?= getCurrentPage() === 'schedule' ? 'active' : '' ?>" onclick="location.href='schedule.php'">
+            </a>
+            <a href="schedule.php" class="nav-item <?= getCurrentPage() === 'schedule' ? 'active' : '' ?>">
                 <span>📅</span>
                 <span>Programmation</span>
-            </div>
-            <div class="nav-item <?= getCurrentPage() === 'screenshot' ? 'active' : '' ?>" onclick="location.href='screenshot.php'">
+            </a>
+            <a href="screenshot.php" class="nav-item <?= getCurrentPage() === 'screenshot' ? 'active' : '' ?>">
                 <span>📸</span>
                 <span>Capture</span>
-            </div>
+            </a>
         </div>
 
         <div class="nav-section">
             <div class="nav-title">Système</div>
-            <div class="nav-item <?= getCurrentPage() === 'settings' ? 'active' : '' ?>" onclick="location.href='settings.php'">
+            <a href="settings.php" class="nav-item <?= getCurrentPage() === 'settings' ? 'active' : '' ?>">
                 <span>⚙️</span>
                 <span>Paramètres</span>
-            </div>
-            <div class="nav-item <?= getCurrentPage() === 'logs' ? 'active' : '' ?>" onclick="location.href='logs.php'">
+            </a>
+            <a href="logs.php" class="nav-item <?= getCurrentPage() === 'logs' ? 'active' : '' ?>">
                 <span>📋</span>
                 <span>Logs</span>
-            </div>
+            </a>
         </div>
     </div>

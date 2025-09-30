@@ -8,7 +8,7 @@ const fs = require('fs').promises;
 const path = require('path');
 
 class PiSignageAuditor {
-    constructor(baseUrl = 'http://192.168.1.103') {
+    constructor(baseUrl = 'http://192.168.1.142') {
         this.baseUrl = baseUrl;
         this.browser = null;
         this.page = null;

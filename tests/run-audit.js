@@ -239,7 +239,7 @@ const playerTests = [
 
 // Main audit execution
 async function runCompleteAudit() {
-    const auditor = new PiSignageAuditor('http://192.168.1.103');
+    const auditor = new PiSignageAuditor('http://192.168.1.142');
 
     try {
         await auditor.initialize();
