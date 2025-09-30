@@ -84,16 +84,26 @@
          */
         loadPlaylists: async function() {
             try {
-                const response = await fetch('/api/playlists.php');
+                const response = await fetch('/api/playlist-simple.php');
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
                 const data = await response.json();
 
-                if (data.success && data.playlists) {
-                    this.playlists = data.playlists;
+                if (data.success && data.data) {
+                    this.playlists = data.data;
                     this.populatePlaylistDropdown();
+                    console.log('[Schedule] Loaded', this.playlists.length, 'playlists');
+                } else {
+                    console.warn('[Schedule] No playlists found');
+                    this.playlists = [];
                 }
             } catch (error) {
                 console.error('[Schedule] Error loading playlists:', error);
                 showAlert('Erreur lors du chargement des playlists', 'error');
+                this.playlists = [];
             }
         },
 
