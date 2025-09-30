@@ -26,7 +26,7 @@ include 'includes/header.php';
             </div>
 
             <!-- Playlist Editor Interface -->
-            <div class="playlist-editor-container">
+            <div id="playlist-editor" class="playlist-editor-container">
                 <!-- Media Library Panel (Left) -->
                 <div class="playlist-panel media-library-panel">
                     <div class="panel-header">
