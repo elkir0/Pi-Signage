@@ -40,6 +40,9 @@ include 'includes/header.php';
                     </div>
                 </div>
 
+                <!-- Player Status (hidden element for Puppeteer tests compatibility) -->
+                <span id="player-status" style="display:none;" aria-hidden="true">Arrêté</span>
+
                 <!-- Progress Bar -->
                 <div class="progress-section">
                     <span class="time-current" id="time-current">00:00</span>
@@ -63,7 +66,7 @@ include 'includes/header.php';
                     <button class="control-btn" id="previous-btn" onclick="playerControl('previous')" title="Précédent">
                         ⏮️
                     </button>
-                    <button class="control-btn primary" id="play-pause-btn" onclick="togglePlayPause()" title="Lecture/Pause">
+                    <button class="control-btn primary" id="play-pause-btn" data-action="play" onclick="togglePlayPause()" title="Lecture/Pause">
                         ▶️
                     </button>
                     <button class="control-btn" id="stop-btn" onclick="playerControl('stop')" title="Arrêt">

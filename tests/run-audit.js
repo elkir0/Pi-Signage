@@ -195,8 +195,8 @@ const playerTests = [
         description: 'Check if player controls exist',
         fn: async (auditor) => {
             const controls = await auditor.evaluateFunction(() => {
-                const playBtn = document.querySelector('[onclick*="play"]');
-                const pauseBtn = document.querySelector('[onclick*="pause"]');
+                const playBtn = document.querySelector('[data-action="play"]');
+                const pauseBtn = document.querySelector('[data-action="pause"]');
                 const stopBtn = document.querySelector('[onclick*="stop"]');
 
                 return {
@@ -239,7 +239,7 @@ const playerTests = [
 
 // Main audit execution
 async function runCompleteAudit() {
-    const auditor = new PiSignageAuditor('http://192.168.1.142');
+    const auditor = new PiSignageAuditor('http://192.168.1.103');
 
     try {
         await auditor.initialize();

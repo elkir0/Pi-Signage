@@ -187,6 +187,22 @@ PiSignage.player = {
             }
         }
 
+        // Synchronize #player-status for Puppeteer tests (BUG-007 fix)
+        const playerStatusEl = document.getElementById('player-status');
+        if (playerStatusEl) {
+            playerStatusEl.textContent = status.state || 'stopped';
+        }
+
+        // Update data-action attribute for Puppeteer tests (BUG-006 fix)
+        const playPauseBtn = document.getElementById('play-pause-btn');
+        if (playPauseBtn) {
+            if (status.state === 'playing') {
+                playPauseBtn.setAttribute('data-action', 'pause');
+            } else {
+                playPauseBtn.setAttribute('data-action', 'play');
+            }
+        }
+
         // Update file and position display
         const fileElement = document.getElementById('player-file');
         if (fileElement) {
