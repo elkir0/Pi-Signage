@@ -99,6 +99,24 @@ include 'includes/header.php';
                     </div>
                 </div>
             </div>
+
+            <div class="card">
+                <h3 class="card-title">
+                    <span>⚡</span>
+                    Actions Rapides
+                </h3>
+                <div class="quick-actions" style="display: flex; gap: 15px; flex-wrap: wrap;">
+                    <button class="btn btn-danger" onclick="systemAction('reboot')">
+                        🔄 Redémarrer système
+                    </button>
+                    <button class="btn btn-glass" onclick="systemAction('clear-cache')">
+                        🗑️ Vider le cache
+                    </button>
+                    <button class="btn btn-glass" onclick="systemAction('restart-player')">
+                        🎵 Redémarrer lecteur
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
