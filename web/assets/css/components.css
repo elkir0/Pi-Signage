@@ -222,12 +222,13 @@
 }
 
 .btn-sm {
-    padding: 6px 10px;
+    padding: 11px 16px;
     border: none;
     border-radius: 6px;
     font-size: 11px;
     cursor: pointer;
     transition: all 0.3s ease;
+    min-height: 44px;
 }
 
 .btn-danger:hover {
@@ -277,9 +278,11 @@
     color: var(--light);
     font-size: 24px;
     cursor: pointer;
-    padding: 0;
-    width: 30px;
-    height: 30px;
+    padding: 11px;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -513,8 +516,8 @@
 }
 
 .control-btn.secondary {
-    width: 40px;
-    height: 40px;
+    width: 44px;
+    height: 44px;
     font-size: 18px;
     opacity: 0.7;
 }
