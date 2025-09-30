@@ -731,7 +731,9 @@ PiSignage.playlists = {
                     fade_duration: 1000
                 }
             };
-            this.renderPlaylistEditor();
+            this.renderPlaylistItems();
+            this.renderMediaLibrary();
+            this.updatePropertiesPanel();
             document.querySelector('.modal.show')?.remove();
             showAlert(`Playlist "${playlistName}" chargée`, 'success');
         }
