@@ -1,5 +1,26 @@
 {
-  "dependencies": {
+  "name": "pisignage",
+  "version": "1.0.0",
+  "description": "Professional digital signage solution for Raspberry Pi with modular web interface and advanced media management.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "devDependencies": {
     "puppeteer": "^24.22.3"
-  }
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/elkir0/Pi-Signage.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/elkir0/Pi-Signage/issues"
+  },
+  "homepage": "https://github.com/elkir0/Pi-Signage#readme"
 }
