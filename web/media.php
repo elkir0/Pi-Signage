@@ -13,13 +13,13 @@ include 'includes/header.php';
             <div class="header">
                 <h1 class="page-title">Gestion des Médias</h1>
                 <div class="header-actions">
-                    <button class="btn btn-primary" onclick="openUploadModal()">
+                    <button id="upload-btn" class="btn btn-primary" onclick="openUploadModal()">
                         📤 Upload
                     </button>
                 </div>
             </div>
 
-            <div class="upload-zone" id="upload-zone" ondrop="dropHandler(event);" ondragover="dragOverHandler(event);" ondragleave="dragLeaveHandler(event);">
+            <div class="upload-zone" id="drop-zone" data-upload-zone>
                 <div class="empty-state">
                     <div class="empty-state-icon">📁</div>
                     <div class="empty-state-title">Glisser-déposer des fichiers ici</div>
@@ -32,5 +32,46 @@ include 'includes/header.php';
             </div>
         </div>
     </div>
+
+<script>
+// Bridge functions for drag & drop compatibility
+function dropHandler(event) {
+    event.preventDefault();
+    if (PiSignage && PiSignage.media && PiSignage.media.handleDrop) {
+        PiSignage.media.handleDrop(event);
+    }
+}
+
+function dragOverHandler(event) {
+    event.preventDefault();
+    if (PiSignage && PiSignage.media && PiSignage.media.handleDragOver) {
+        PiSignage.media.handleDragOver(event);
+    }
+}
+
+function dragLeaveHandler(event) {
+    event.preventDefault();
+    if (PiSignage && PiSignage.media && PiSignage.media.handleDragLeave) {
+        PiSignage.media.handleDragLeave(event);
+    }
+}
+
+// Initialize drag & drop on the drop zone after page load
+document.addEventListener('DOMContentLoaded', function() {
+    const dropZone = document.getElementById('drop-zone');
+    if (dropZone) {
+        dropZone.addEventListener('dragover', dragOverHandler);
+        dropZone.addEventListener('dragleave', dragLeaveHandler);
+        dropZone.addEventListener('drop', dropHandler);
+
+        // Also make it clickable to open upload modal
+        dropZone.addEventListener('click', function(e) {
+            if (e.target.closest('.empty-state')) {
+                openUploadModal();
+            }
+        });
+    }
+});
+</script>
 
 <?php include 'includes/footer.php'; ?>

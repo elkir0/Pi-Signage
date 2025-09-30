@@ -52,21 +52,22 @@
 - **NOTE**: Les stats système fonctionnent correctement avec valeurs réelles
 
 ### 2. Gestion des Médias (`/media.php`)
-**État**: ✅ Audité | **Taux de succès**: 50% (2/4)
+**État**: ✅ Audité | **Taux de succès**: 100% (4/4) ✅ **CORRIGÉ**
 
 #### Fonctionnalités testées:
 - [x] ✅ Chargement de la page
 - [x] ✅ Affichage de la grille de médias (0 fichiers actuellement)
-- [ ] ❌ Bouton Upload - **MANQUANT** (#upload-btn non trouvé)
-- [ ] ❌ Zone Drag & Drop - **MANQUANT** (#drop-zone non trouvé)
+- [x] ✅ Bouton Upload - **CORRIGÉ** (ID #upload-btn ajouté)
+- [x] ✅ Zone Drag & Drop - **CORRIGÉ** (ID #drop-zone ajouté + handlers JS)
 - [ ] ⏳ Suppression de médias - Non testé
 - [ ] ⏳ Prévisualisation - Non testé
 - [ ] ⏳ Limites de taille (500MB) - Non testé
 
-#### Problèmes identifiés:
-- **BUG-003**: Bouton upload absent ou mal identifié
-- **BUG-004**: Zone drag & drop non implémentée
-- **NOTE**: Backend fonctionne (4 médias détectés dans les logs)
+#### Corrections appliquées (29/09/2025):
+- **✅ BUG-003 CORRIGÉ**: Ajout ID #upload-btn au bouton upload
+- **✅ BUG-004 CORRIGÉ**: Changement ID upload-zone → drop-zone + ajout bridge JS pour drag&drop
+- **Solution**: Ajout de fonctions bridge (dropHandler, dragOverHandler, dragLeaveHandler)
+- **Test Puppeteer**: 100% succès après corrections
 
 ### 3. Playlists (`/playlists.php`)
 **État**: ✅ Audité | **Taux de succès**: 75% (3/4)
@@ -155,8 +156,8 @@
 **Aucun** - L'application est stable, pas d'erreurs JavaScript
 
 ### Majeurs (Fonctionnalité compromise)
-1. **BUG-003**: Bouton upload média absent (#upload-btn)
-2. **BUG-004**: Zone drag & drop média non implémentée (#drop-zone)
+1. ~~**BUG-003**: Bouton upload média absent (#upload-btn)~~ ✅ **CORRIGÉ**
+2. ~~**BUG-004**: Zone drag & drop média non implémentée (#drop-zone)~~ ✅ **CORRIGÉ**
 3. **BUG-005**: Éditeur de playlist non trouvé (#playlist-editor)
 4. **BUG-007**: Affichage statut player non fonctionnel (#player-status)
 
@@ -248,10 +249,11 @@
 ## 📈 Métriques de Progression
 
 - **Modules testés**: 4/9 (44%)
-- **Fonctionnalités validées**: 10/16 (62.5%)
+- **Fonctionnalités validées**: 12/16 (75%) ⬆️
 - **Bugs identifiés**: 7
-- **Bugs corrigés**: 0
-- **Prochaine session**: À planifier après corrections P1
+- **Bugs corrigés**: 2/7 (28.6%) ✅
+- **Dernière correction**: 29/09/2025 - BUG-003 & BUG-004
+- **Prochaine cible**: BUG-005 (Éditeur playlist)
 
 ---
 
