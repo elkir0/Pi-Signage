@@ -214,13 +214,7 @@ PiSignage.media = {
             return;
         }
 
-        // Use the enhanced upload modal from functions.js if available
-        if (typeof openUploadModal === 'function') {
-            openUploadModal();
-            return;
-        }
-
-        // Fallback to basic modal
+        // Show basic upload modal
         this.showBasicUploadModal();
     },
 
