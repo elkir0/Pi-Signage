@@ -51,6 +51,14 @@ test-report*.json
 coverage/
 .nyc_output/
 
+# Audit/test artifacts (v0.8.9+)
+tests/audit-report-*.md
+tests/audit-results-*.json
+tests/debug-*.js
+tests/test-*.js
+tests/*-report.md
+tests/capture-*.js
+
 # IDE
 .vscode/
 .idea/

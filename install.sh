@@ -1,15 +1,15 @@
 b#!/bin/bash
 
 # ╔══════════════════════════════════════════════════════════════════════╗
-# ║                  PiSignage v0.8.1 - Installation Unifiée             ║
+# ║                  PiSignage v0.8.9 - Installation Unifiée             ║
 # ║                     Script d'installation ONE-CLICK                   ║
-# ║                          Date: 2025-09-25                            ║
+# ║                          Date: 2025-10-01                            ║
 # ╚══════════════════════════════════════════════════════════════════════╝
 
 set -e
 
 # Configuration
-VERSION="0.8.3"
+VERSION="0.8.9"
 INSTALL_DIR="/opt/pisignage"
 GITHUB_REPO="https://github.com/elkir0/Pi-Signage.git"
 BBB_URL="http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
@@ -51,7 +51,7 @@ show_banner() {
     echo ""
     echo "Ce script va installer:"
     echo "  • Serveur web (nginx/Apache + PHP)"
-    echo "  • VLC et MPV (lecteurs vidéo)"
+    echo "  • VLC (lecteur vidéo)"
     echo "  • Interface web glassmorphisme v${VERSION}"
     echo "  • Big Buck Bunny (vidéo de démo)"
     echo "  • Configuration automatique au démarrage"
@@ -113,7 +113,6 @@ install_dependencies() {
         "php${PHP_VERSION}-zip"
         "sqlite3"
         "vlc"
-        "mpv"
         "ffmpeg"
         "xinit"
         "x11-xserver-utils"
@@ -282,7 +281,7 @@ copy_project_files() {
  */
 
 // Version
-define('PISIGNAGE_VERSION', 'v0.8.3');
+define('PISIGNAGE_VERSION', 'v0.8.9');
 
 // Chemins
 define('BASE_DIR', '/opt/pisignage');
@@ -353,7 +352,7 @@ create_config() {
   "player": {
     "default": "vlc",
     "current": "vlc",
-    "available": ["vlc", "mpv"]
+    "available": ["vlc"]
   },
   "vlc": {
     "enabled": true,
@@ -365,7 +364,8 @@ create_config() {
     "log_file": "/opt/pisignage/logs/vlc.log"
   },
   "mpv": {
-    "enabled": true,
+    "enabled": false,
+    "note": "MPV support removed in v0.8.9 - VLC exclusive",
     "version": "0.35.0",
     "binary": "/usr/bin/mpv",
     "config_path": "/home/pi/.config/mpv/mpv.conf",
@@ -521,6 +521,30 @@ server {
 
     location / {
         try_files \$uri \$uri/ /index.php?\$query_string;
+    }
+
+    # API routes - support PATH_INFO for REST APIs (v0.8.8+)
+    location ~ ^/api/(.+\.php)(/.*)?$ {
+        fastcgi_split_path_info ^(/api/.+\.php)(/.*)?$;
+        set \$script \$fastcgi_script_name;
+        set \$path_info \$fastcgi_path_info;
+
+        fastcgi_param SCRIPT_FILENAME \$document_root\$script;
+        fastcgi_param PATH_INFO \$path_info;
+        fastcgi_param SCRIPT_NAME \$script;
+
+        include fastcgi_params;
+        fastcgi_pass unix:/var/run/php/php8.2-fpm.sock;
+
+        # Timeouts spécifiques pour PHP
+        fastcgi_read_timeout 300s;
+        fastcgi_send_timeout 300s;
+
+        # Buffers pour gérer les gros uploads
+        fastcgi_buffer_size 256k;
+        fastcgi_buffers 256 256k;
+        fastcgi_busy_buffers_size 512k;
+        fastcgi_max_temp_file_size 0;
     }
 
     location /api {
