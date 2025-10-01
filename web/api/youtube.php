@@ -350,127 +350,132 @@ function startDownload($downloadId, $url, $quality, $format, $audioOnly) {
     $outputPath = MEDIA_PATH . '/%(title)s.%(ext)s';
     $command = $ytdlpCheck['path'];
 
-    // Format selection
+    // Format selection - Updated to handle modern YouTube formats
     if ($audioOnly) {
         $command .= " -f 'bestaudio/best' --extract-audio --audio-format mp3";
     } else {
         if ($quality === 'best') {
-            $command .= " -f 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'";
+            // Try best video+audio merge, fallback to best single file with audio
+            $command .= " -f 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best'";
         } else {
             $qualityNum = intval(str_replace('p', '', $quality));
-            $command .= " -f 'bestvideo[height<=$qualityNum][ext=mp4]+bestaudio[ext=m4a]/best[height<=$qualityNum]'";
+            // Try merge at quality, fallback to single file with audio at quality, then any format at quality
+            $command .= " -f 'bestvideo[height<=$qualityNum][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=$qualityNum]+bestaudio/best[height<=$qualityNum]/best'";
         }
+        // Merge output container
+        $command .= " --merge-output-format mp4";
     }
 
     // Output template
     $command .= " -o " . escapeshellarg($outputPath);
 
-    // Progress hook
-    $progressFile = CONFIG_PATH . "/progress_$downloadId.txt";
-    $command .= " --newline --progress-template '%(progress._percent_str)s %(filename)s'";
-
     // Add URL
     $command .= " " . escapeshellarg($url);
 
-    // Redirect output to log file
+    // Log file (but don't redirect in command - the script will handle it)
     $logFile = LOGS_PATH . "/youtube_$downloadId.log";
-    $command .= " > " . escapeshellarg($logFile) . " 2>&1";
 
-    // Create progress monitoring script
-    $scriptPath = createProgressScript($downloadId, $progressFile, $logFile);
+    // Create download script with proper monitoring
+    $scriptPath = createDownloadScript($downloadId, $command, $logFile);
 
     // Update status to downloading
     updateDownloadStatus($downloadId, 'downloading', 0);
 
     // Execute download in background
-    $bgCommand = "bash $scriptPath &";
+    $bgCommand = "bash $scriptPath > /dev/null 2>&1 &";
     exec($bgCommand);
+
+    logMessage("YouTube download script created: $scriptPath for URL: $url");
 
     return true;
 }
 
-function createProgressScript($downloadId, $progressFile, $logFile) {
-    $scriptContent = <<<SCRIPT
-#!/bin/bash
+function createDownloadScript($downloadId, $ytdlpCommand, $logFile) {
+    $configPath = CONFIG_PATH;
+    $mediaPath = MEDIA_PATH;
 
-DOWNLOAD_ID="$downloadId"
-PROGRESS_FILE="$progressFile"
-LOG_FILE="$logFile"
-CONFIG_PATH="{CONFIG_PATH}"
+    // Create bash script with proper escaping
+    $scriptContent = "#!/bin/bash\n\n";
+    $scriptContent .= "DOWNLOAD_ID=\"$downloadId\"\n";
+    $scriptContent .= "LOG_FILE=\"$logFile\"\n";
+    $scriptContent .= "CONFIG_PATH=\"$configPath\"\n";
+    $scriptContent .= "MEDIA_PATH=\"$mediaPath\"\n\n";
 
-# Function to update download status via PHP
-update_status() {
-    local status=\$1
-    local progress=\$2
-    local filename=\$3
+    $scriptContent .= "# Ensure log directory exists\n";
+    $scriptContent .= "mkdir -p \"\$(dirname \"\$LOG_FILE\")\"\n\n";
 
-    php -r "
-    require_once '/opt/pisignage/web/config.php';
+    $scriptContent .= "# Update download status\n";
+    $scriptContent .= "update_status() {\n";
+    $scriptContent .= "    local status=\"\$1\"\n";
+    $scriptContent .= "    local progress=\"\${2:-0}\"\n";
+    $scriptContent .= "    local filename=\"\${3:-}\"\n";
+    $scriptContent .= "    php -r \"\n";
+    $scriptContent .= "    require_once '/opt/pisignage/web/config.php';\n";
+    $scriptContent .= "    require_once '/opt/pisignage/web/api/youtube.php';\n";
+    $scriptContent .= "    updateDownloadStatus('\$DOWNLOAD_ID', '\$status', \$progress, '\$filename');\n";
+    $scriptContent .= "    \"\n";
+    $scriptContent .= "}\n\n";
 
-    \\\$queueFile = CONFIG_PATH . '/download_queue.json';
-    \\\$queue = [];
+    $scriptContent .= "# Execute download\n";
+    $scriptContent .= "echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] Starting YouTube download: \$DOWNLOAD_ID\" >> \"\$LOG_FILE\"\n";
+    $scriptContent .= "update_status \"downloading\" 0\n\n";
 
-    if (file_exists(\\\$queueFile)) {
-        \\\$queue = json_decode(file_get_contents(\\\$queueFile), true) ?: [];
-    }
+    $scriptContent .= "# Run yt-dlp and capture output\n";
+    $scriptContent .= "$ytdlpCommand >> \"\$LOG_FILE\" 2>&1\n";
+    $scriptContent .= "YTDLP_EXIT_CODE=\$?\n\n";
 
-    if (isset(\\\$queue['\$DOWNLOAD_ID'])) {
-        \\\$queue['\$DOWNLOAD_ID']['status'] = '\$status';
-        \\\$queue['\$DOWNLOAD_ID']['updated_at'] = date('Y-m-d H:i:s');
+    $scriptContent .= "# Parse log to find downloaded filename\n";
+    $scriptContent .= "DOWNLOADED_FILE=\"\"\n";
+    $scriptContent .= "if [ -f \"\$LOG_FILE\" ]; then\n";
+    $scriptContent .= "    # Try to find merged file from [Merger] line (most reliable)\n";
+    $scriptContent .= "    MERGED_PATH=\$(grep -oP '\\[Merger\\] Merging formats into \"\\K[^\"]+' \"\$LOG_FILE\" | tail -1 2>/dev/null)\n";
+    $scriptContent .= "    if [ -n \"\$MERGED_PATH\" ] && [ -f \"\$MERGED_PATH\" ]; then\n";
+    $scriptContent .= "        DOWNLOADED_FILE=\$(basename \"\$MERGED_PATH\")\n";
+    $scriptContent .= "    fi\n\n";
+    $scriptContent .= "    # If not found, try destination filename in log\n";
+    $scriptContent .= "    if [ -z \"\$DOWNLOADED_FILE\" ]; then\n";
+    $scriptContent .= "        DEST_PATH=\$(grep -oP '\\[download\\] Destination: \\K.*' \"\$LOG_FILE\" | tail -1 2>/dev/null)\n";
+    $scriptContent .= "        if [ -n \"\$DEST_PATH\" ]; then\n";
+    $scriptContent .= "            DOWNLOADED_FILE=\$(basename \"\$DEST_PATH\")\n";
+    $scriptContent .= "            # Remove format suffix if present (.f696.mp4 -> check for final .mp4)\n";
+    $scriptContent .= "            FINAL_FILE=\"\${DOWNLOADED_FILE%%.f[0-9]*.mp4}.mp4\"\n";
+    $scriptContent .= "            if [ -f \"\$MEDIA_PATH/\$FINAL_FILE\" ]; then\n";
+    $scriptContent .= "                DOWNLOADED_FILE=\"\$FINAL_FILE\"\n";
+    $scriptContent .= "            fi\n";
+    $scriptContent .= "        fi\n";
+    $scriptContent .= "    fi\n\n";
+    $scriptContent .= "    # Last resort: find any .mp4/.webm/.mkv file created in last 2 minutes\n";
+    $scriptContent .= "    if [ -z \"\$DOWNLOADED_FILE\" ]; then\n";
+    $scriptContent .= "        FOUND_FILE=\$(find \"\$MEDIA_PATH\" -maxdepth 1 -type f \\( -name \"*.mp4\" -o -name \"*.webm\" -o -name \"*.mkv\" \\) -mmin -2 2>/dev/null | head -1)\n";
+    $scriptContent .= "        if [ -n \"\$FOUND_FILE\" ]; then\n";
+    $scriptContent .= "            DOWNLOADED_FILE=\$(basename \"\$FOUND_FILE\")\n";
+    $scriptContent .= "        fi\n";
+    $scriptContent .= "    fi\n";
+    $scriptContent .= "fi\n\n";
 
-        if ('\$progress' !== '') {
-            \\\$queue['\$DOWNLOAD_ID']['progress'] = floatval('\$progress');
-        }
+    $scriptContent .= "# Update final status\n";
+    $scriptContent .= "if [ \$YTDLP_EXIT_CODE -eq 0 ] && [ -n \"\$DOWNLOADED_FILE\" ] && [ -f \"\$MEDIA_PATH/\$DOWNLOADED_FILE\" ]; then\n";
+    $scriptContent .= "    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] Download completed: \$DOWNLOADED_FILE\" >> \"\$LOG_FILE\"\n";
+    $scriptContent .= "    update_status \"completed\" 100 \"\$DOWNLOADED_FILE\"\n";
+    $scriptContent .= "else\n";
+    $scriptContent .= "    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] Download failed with exit code: \$YTDLP_EXIT_CODE\" >> \"\$LOG_FILE\"\n";
+    $scriptContent .= "    update_status \"error\" 0\n";
+    $scriptContent .= "fi\n\n";
 
-        if ('\$filename' !== '') {
-            \\\$queue['\$DOWNLOAD_ID']['filename'] = '\$filename';
-        }
-
-        if ('\$status' === 'completed') {
-            \\\$queue['\$DOWNLOAD_ID']['completed_at'] = date('Y-m-d H:i:s');
-        }
-
-        file_put_contents(\\\$queueFile, json_encode(\\\$queue, JSON_PRETTY_PRINT));
-
-        if ('\$status' === 'completed' && '\$filename' !== '') {
-            logMessage('YouTube download completed: \$filename (ID: \$DOWNLOAD_ID)');
-        }
-    }
-    "
-}
-
-# Monitor progress
-tail -f "\$LOG_FILE" | while read line; do
-    if [[ \$line =~ ([0-9]+\.[0-9]+)%.*\/(.*) ]]; then
-        progress=\${BASH_REMATCH[1]}
-        filename=\$(basename "\${BASH_REMATCH[2]}")
-        update_status "downloading" "\$progress" "\$filename"
-    elif [[ \$line =~ "has already been downloaded" ]]; then
-        update_status "completed" "100" ""
-        break
-    elif [[ \$line =~ "ERROR" ]]; then
-        update_status "error" "" ""
-        break
-    fi
-done
-
-# Check final status
-if grep -q "has already been downloaded\|100%" "\$LOG_FILE"; then
-    update_status "completed" "100" ""
-else
-    update_status "error" "" ""
-fi
-
-# Cleanup
-rm -f "\$PROGRESS_FILE"
-rm -f "\$0"
-SCRIPT;
+    $scriptContent .= "# Self-cleanup after 5 minutes\n";
+    $scriptContent .= "sleep 300\n";
+    $scriptContent .= "rm -f \"\$0\"\n";
 
     $scriptPath = CONFIG_PATH . "/download_script_$downloadId.sh";
     file_put_contents($scriptPath, $scriptContent);
     chmod($scriptPath, 0755);
 
     return $scriptPath;
+}
+
+function createProgressScript($downloadId, $progressFile, $logFile) {
+    // DEPRECATED - Kept for compatibility
+    return createDownloadScript($downloadId, '', $logFile);
 }
 
 function cancelDownload($downloadId) {

@@ -166,6 +166,11 @@ create_structure() {
     sudo mkdir -p $INSTALL_DIR/web/{api,assets,css,js,screenshots}
     sudo mkdir -p /dev/shm/pisignage-screenshots
 
+    # Créer le répertoire cache pour yt-dlp (BUG-012 fix)
+    sudo mkdir -p /var/www/.cache
+    sudo chown -R www-data:www-data /var/www/.cache
+    sudo chmod 755 /var/www/.cache
+
     # Permissions élargies pour éviter les problèmes
     sudo chown -R www-data:www-data $INSTALL_DIR
     sudo chmod 755 $INSTALL_DIR
@@ -292,6 +297,7 @@ define('PISIGNAGE_VERSION', 'v0.8.9');
 define('BASE_DIR', '/opt/pisignage');
 define('MEDIA_DIR', BASE_DIR . '/media');
 define('MEDIA_PATH', BASE_DIR . '/media'); // Alias pour compatibilité
+define('CONFIG_PATH', BASE_DIR . '/config'); // Pour download_queue.json (YouTube)
 define('PLAYLISTS_PATH', BASE_DIR . '/playlists');
 define('SCREENSHOTS_DIR', BASE_DIR . '/web/screenshots');
 define('SCREENSHOTS_PATH', BASE_DIR . '/web/screenshots'); // Alias
@@ -319,6 +325,24 @@ function jsonResponse($success, $data = null, $message = '', $httpCode = 200) {
 
     echo json_encode($response, JSON_PRETTY_PRINT);
     exit;
+}
+
+function logMessage($message, $level = 'INFO') {
+    $logFile = LOGS_PATH . '/pisignage.log';
+    $timestamp = date('Y-m-d H:i:s');
+    $logLine = "[$timestamp] [$level] $message\n";
+    file_put_contents($logFile, $logLine, FILE_APPEND);
+}
+
+function executeCommand($command) {
+    $output = [];
+    $returnCode = 0;
+    exec($command, $output, $returnCode);
+    return [
+        'success' => $returnCode === 0,
+        'output' => $output,
+        'return_code' => $returnCode
+    ];
 }
 
 function getMediaFiles() {
