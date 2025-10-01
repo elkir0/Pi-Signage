@@ -245,8 +245,8 @@ download_bbb() {
         log_info "Big Buck Bunny déjà présent"
     else
         log_info "Téléchargement en cours..."
-        wget -q --show-progress -O "$INSTALL_DIR/media/BigBuckBunny_720p.mp4" "$BBB_URL" || \
-        wget -q --show-progress -O "$INSTALL_DIR/media/BigBuckBunny_720p.mp4" \
+        sudo wget -q --show-progress -O "$INSTALL_DIR/media/BigBuckBunny_720p.mp4" "$BBB_URL" || \
+        sudo wget -q --show-progress -O "$INSTALL_DIR/media/BigBuckBunny_720p.mp4" \
             "http://distribution.bbb3d.renderfarming.net/video/mp4/bbb_sunflower_1080p_60fps_normal.mp4"
         log_info "Big Buck Bunny téléchargé"
     fi
@@ -258,23 +258,23 @@ copy_project_files() {
 
     # Télécharger depuis GitHub
     log_info "Téléchargement de l'interface web depuis GitHub..."
-    wget -q https://raw.githubusercontent.com/elkir0/Pi-Signage/main/web/index.php \
+    sudo wget -q https://raw.githubusercontent.com/elkir0/Pi-Signage/main/web/index.php \
         -O $INSTALL_DIR/web/index.php || true
 
-    mkdir -p $INSTALL_DIR/web/api
-    wget -q https://raw.githubusercontent.com/elkir0/Pi-Signage/main/web/api/screenshot-raspi2png.php \
+    sudo mkdir -p $INSTALL_DIR/web/api
+    sudo wget -q https://raw.githubusercontent.com/elkir0/Pi-Signage/main/web/api/screenshot-raspi2png.php \
         -O $INSTALL_DIR/web/api/screenshot-raspi2png.php || true
 
-    wget -q https://raw.githubusercontent.com/elkir0/Pi-Signage/main/config/player-config.json \
+    sudo wget -q https://raw.githubusercontent.com/elkir0/Pi-Signage/main/config/player-config.json \
         -O $INSTALL_DIR/config/player-config.json || true
 
-    wget -q https://raw.githubusercontent.com/elkir0/Pi-Signage/main/CLAUDE.md \
+    sudo wget -q https://raw.githubusercontent.com/elkir0/Pi-Signage/main/CLAUDE.md \
         -O $INSTALL_DIR/CLAUDE.md || true
 
     log_info "Fichiers récupérés depuis GitHub"
 
     # Créer le fichier config.php
-    cat > $INSTALL_DIR/web/config.php << 'ENDOFCONFIG'
+    sudo tee $INSTALL_DIR/web/config.php > /dev/null << 'ENDOFCONFIG'
 <?php
 /**
  * PiSignage - Configuration centrale
@@ -347,7 +347,7 @@ ENDOFCONFIG
 create_config() {
     log_step "Configuration du système"
 
-    cat > $INSTALL_DIR/config/player-config.json << 'ENDOFFILE'
+    sudo tee $INSTALL_DIR/config/player-config.json > /dev/null << 'ENDOFFILE'
 {
   "player": {
     "default": "vlc",
@@ -388,7 +388,7 @@ ENDOFFILE
 create_vlc_script() {
     log_step "Création des scripts de contrôle"
 
-    cat > $INSTALL_DIR/scripts/start-vlc.sh << 'ENDOFFILE'
+    sudo tee $INSTALL_DIR/scripts/start-vlc.sh > /dev/null << 'ENDOFFILE'
 #!/bin/bash
 
 echo "=== PiSignage v0.8.1 - Démarrage VLC ==="
@@ -448,7 +448,7 @@ ENDOFFILE
     sudo chmod +x $INSTALL_DIR/scripts/start-vlc.sh
 
     # Script d'autostart
-    cat > $INSTALL_DIR/scripts/autostart.sh << 'ENDOFFILE'
+    sudo tee $INSTALL_DIR/scripts/autostart.sh > /dev/null << 'ENDOFFILE'
 #!/bin/bash
 
 # Attendre que le système soit prêt
@@ -664,7 +664,7 @@ ENDOFFILE
     log_info "Service de démarrage automatique configuré"
 
     # Créer le script de démarrage VLC
-    cat > $INSTALL_DIR/scripts/autostart-vlc.sh << 'ENDOFSCRIPT'
+    sudo tee $INSTALL_DIR/scripts/autostart-vlc.sh > /dev/null << 'ENDOFSCRIPT'
 #!/bin/bash
 # Script de démarrage automatique VLC pour PiSignage
 
