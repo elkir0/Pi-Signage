@@ -180,7 +180,7 @@ create_structure() {
     DB_FILE="$INSTALL_DIR/pisignage.db"
     if [ ! -f "$DB_FILE" ]; then
         log_info "Initialisation de la base de données..."
-        sqlite3 "$DB_FILE" <<EOF
+        sudo sqlite3 "$DB_FILE" <<EOF
 CREATE TABLE IF NOT EXISTS media (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     filename TEXT NOT NULL,
