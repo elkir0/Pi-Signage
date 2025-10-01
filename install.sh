@@ -102,6 +102,7 @@ install_dependencies() {
 
     # Packages essentiels uniquement
     local packages=(
+        "git"
         "nginx"
         "php${PHP_VERSION}-fpm"
         "php${PHP_VERSION}-cli"
@@ -223,17 +224,31 @@ EOF
     log_info "Structure créée dans $INSTALL_DIR"
 }
 
-# Cloner depuis GitHub (optionnel)
+# Cloner depuis GitHub
 clone_from_github() {
-    log_step "Récupération depuis GitHub (optionnel)"
+    log_step "Récupération de l'application depuis GitHub"
 
     if [ -d "$INSTALL_DIR/.git" ]; then
-        log_info "Dépôt Git déjà présent"
+        log_info "Dépôt Git déjà présent, mise à jour..."
         cd $INSTALL_DIR
-        git pull origin main 2>/dev/null || true
+        sudo git pull origin main 2>/dev/null || true
     else
-        # Si le dépôt n'existe pas, on continue avec l'installation locale
-        log_info "Installation locale"
+        # Cloner le repo complet dans un répertoire temporaire
+        log_info "Clonage du dépôt PiSignage depuis GitHub..."
+        TEMP_DIR="/tmp/pisignage-clone-$$"
+        git clone https://github.com/elkir0/Pi-Signage.git "$TEMP_DIR"
+
+        # Copier tous les fichiers web dans /opt/pisignage
+        log_info "Déploiement des fichiers de l'application..."
+        sudo cp -r "$TEMP_DIR/web"/* "$INSTALL_DIR/web/" 2>/dev/null || true
+        sudo cp -r "$TEMP_DIR/config"/* "$INSTALL_DIR/config/" 2>/dev/null || true
+        sudo cp "$TEMP_DIR/CLAUDE.md" "$INSTALL_DIR/" 2>/dev/null || true
+        sudo cp "$TEMP_DIR/README.md" "$INSTALL_DIR/" 2>/dev/null || true
+        sudo cp "$TEMP_DIR/CHANGELOG.md" "$INSTALL_DIR/" 2>/dev/null || true
+
+        # Nettoyer
+        rm -rf "$TEMP_DIR"
+        log_info "Application PiSignage déployée depuis GitHub"
     fi
 }
 
@@ -252,26 +267,9 @@ download_bbb() {
     fi
 }
 
-# Copier les fichiers depuis GitHub
-copy_project_files() {
-    log_step "Récupération des fichiers du projet"
-
-    # Télécharger depuis GitHub
-    log_info "Téléchargement de l'interface web depuis GitHub..."
-    sudo wget -q https://raw.githubusercontent.com/elkir0/Pi-Signage/main/web/index.php \
-        -O $INSTALL_DIR/web/index.php || true
-
-    sudo mkdir -p $INSTALL_DIR/web/api
-    sudo wget -q https://raw.githubusercontent.com/elkir0/Pi-Signage/main/web/api/screenshot-raspi2png.php \
-        -O $INSTALL_DIR/web/api/screenshot-raspi2png.php || true
-
-    sudo wget -q https://raw.githubusercontent.com/elkir0/Pi-Signage/main/config/player-config.json \
-        -O $INSTALL_DIR/config/player-config.json || true
-
-    sudo wget -q https://raw.githubusercontent.com/elkir0/Pi-Signage/main/CLAUDE.md \
-        -O $INSTALL_DIR/CLAUDE.md || true
-
-    log_info "Fichiers récupérés depuis GitHub"
+# Créer le fichier de configuration config.php
+create_config_php() {
+    log_step "Création du fichier config.php"
 
     # Créer le fichier config.php
     sudo tee $INSTALL_DIR/web/config.php > /dev/null << 'ENDOFCONFIG'
@@ -808,7 +806,7 @@ main() {
     create_structure
     clone_from_github
     download_bbb
-    copy_project_files
+    create_config_php
     create_config
     create_vlc_script
     configure_webserver
