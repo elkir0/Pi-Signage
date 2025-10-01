@@ -4,10 +4,10 @@
     <!-- PiSignage Modular JavaScript - Loaded in correct dependency order -->
     <script src="functions.js?v=856" defer></script>
     <script src="assets/js/core.js?v=855" defer></script>
-    <script src="assets/js/api.js?v=857" defer></script>
+    <script src="assets/js/api.js?v=869" defer></script>
     <script src="assets/js/dashboard.js?v=857" defer></script>
     <script src="assets/js/media.js?v=855" defer></script>
-    <script src="assets/js/playlists.js?v=858" defer></script>
+    <script src="assets/js/playlists.js?v=868" defer></script>
     <script src="assets/js/player.js?v=855" defer></script>
     <script src="assets/js/init.js?v=866" defer></script>
 

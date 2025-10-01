@@ -252,12 +252,8 @@ PiSignage.api = {
         },
 
         delete: function(name) {
-            return PiSignage.api.request('/api/playlist.php', {
-                method: 'DELETE',
-                body: JSON.stringify({
-                    action: 'delete',
-                    name: name
-                })
+            return PiSignage.api.request(`/api/playlist.php?name=${encodeURIComponent(name)}`, {
+                method: 'DELETE'
             });
         },
 

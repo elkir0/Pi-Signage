@@ -25,6 +25,23 @@ include 'includes/header.php';
                 </div>
             </div>
 
+            <!-- Existing Playlists Overview -->
+            <div class="playlists-overview" style="margin: 30px 0;">
+                <h2 style="color: #4a9eff; margin-bottom: 20px; font-size: 1.5rem;">
+                    📋 Playlists Existantes
+                </h2>
+                <div id="playlist-container" class="playlists-grid" style="
+                    display: grid;
+                    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+                    gap: 20px;
+                    margin-bottom: 30px;
+                ">
+                    <!-- Playlists will be loaded here dynamically -->
+                </div>
+            </div>
+
+            <hr style="border: none; border-top: 1px solid rgba(74, 158, 255, 0.2); margin: 30px 0;">
+
             <!-- Playlist Editor Interface -->
             <div id="playlist-editor" class="playlist-editor-container">
                 <!-- Media Library Panel (Left) -->

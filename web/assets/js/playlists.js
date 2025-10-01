@@ -31,6 +31,11 @@ PiSignage.playlists = {
         console.log('🎵 Initializing playlist management...');
         this.loadPlaylists();
         this.setupGlobalFunctions();
+
+        // Initialize playlist editor if on playlists.php page
+        if (window.location.pathname.includes('playlists.php')) {
+            this.initPlaylistEditor();
+        }
     },
 
     loadPlaylists: async function() {
@@ -751,6 +756,21 @@ PiSignage.playlists = {
         window.createNewPlaylist = this.resetPlaylistEditor.bind(this);
         window.loadExistingPlaylist = this.loadExistingPlaylist.bind(this);
         window.selectAndLoadPlaylist = this.selectAndLoadPlaylist.bind(this);
+
+        // Media library functions
+        window.refreshMediaLibrary = this.loadMediaLibrary.bind(this);
+        window.filterMediaLibrary = this.renderMediaLibrary.bind(this);
+        window.filterMediaType = function(type) {
+            // Update active button
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.type === type);
+            });
+            // Re-render with new filter
+            PiSignage.playlists.renderMediaLibrary();
+        };
+
+        // Playlist settings functions
+        window.updatePlaylistSettings = this.updatePropertiesPanel.bind(this);
     }
 };
 
