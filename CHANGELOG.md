@@ -5,6 +5,55 @@ All notable changes to PiSignage will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.8] - 2025-10-01
+
+### 🔧 Bug Fixes
+- **CRITICAL: Fixed Playlist Delete Functionality** (#BUG-PLAYLIST-001)
+  - Fixed API DELETE request using query string instead of JSON body
+  - Backend expects `$_GET['name']`, frontend now sends it correctly
+  - Added missing `#playlist-container` in playlists.php
+  - Delete buttons now visible and functional in playlist cards
+
+- **CRITICAL: Fixed Media Library Empty in Playlist Editor** (#BUG-PLAYLIST-002)
+  - Auto-initialize playlist editor on playlists.php load
+  - Added missing global functions: `refreshMediaLibrary`, `filterMediaLibrary`, `filterMediaType`
+  - Media library now loads automatically with 5 files
+  - Filters and search now functional
+
+### ✨ Improvements
+- **Playlist Management UI**
+  - Added "Playlists Existantes" section with responsive grid
+  - Visual cards with glassmorphism design
+  - 3 actions per playlist: Play / Edit / Delete
+  - File count and duration display
+
+- **Media Library Features**
+  - Auto-load on page init
+  - Filter by media type (videos/images/audio)
+  - Text search functionality
+  - Drag & drop + direct add button
+
+### 🎨 UI/UX
+- Responsive grid layout (auto-fill, minmax 300px)
+- Confirmation dialog before playlist deletion
+- Success/error messages with visual feedback
+- Automatic list refresh after deletion
+- Inline styles for quick deployment (future: move to CSS file)
+
+### 📦 Technical
+- **API:** v869 (`assets/js/api.js?v=869`)
+- **Playlists:** v868 (`assets/js/playlists.js?v=868`)
+- **Commits:** `87b1a5e`
+
+### 🧪 Testing
+- ✅ Delete playlist with confirmation
+- ✅ Media library loads automatically
+- ✅ Filters and search work
+- ✅ Drag & drop functional
+- ✅ No regression on create/edit/play
+
+---
+
 ## [0.8.7] - 2025-10-01
 
 ### 🔧 Bug Fixes
