@@ -246,6 +246,9 @@ clone_from_github() {
         sudo cp "$TEMP_DIR/README.md" "$INSTALL_DIR/" 2>/dev/null || true
         sudo cp "$TEMP_DIR/CHANGELOG.md" "$INSTALL_DIR/" 2>/dev/null || true
 
+        # Créer le lien symbolique youtube-simple.php (compatibilité API)
+        sudo ln -sf youtube.php "$INSTALL_DIR/web/api/youtube-simple.php"
+
         # Corriger les permissions après copie
         sudo chown -R www-data:www-data "$INSTALL_DIR/web"
 
