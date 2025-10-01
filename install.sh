@@ -115,6 +115,7 @@ install_dependencies() {
         "sqlite3"
         "vlc"
         "ffmpeg"
+        "yt-dlp"
         "xinit"
         "x11-xserver-utils"
         "xserver-xorg"
