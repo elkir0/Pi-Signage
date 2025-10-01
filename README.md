@@ -38,18 +38,20 @@ Professional digital signage solution for Raspberry Pi with modular web interfac
 
 ## Installation
 
-### Quick Install
+### Quick Install (Recommended)
 ```bash
-wget https://raw.githubusercontent.com/your-username/PiSignage/main/install.sh
+wget https://raw.githubusercontent.com/elkir0/Pi-Signage/main/install.sh
 bash install.sh
 ```
 
 ### Manual Install
 ```bash
-git clone https://github.com/your-username/PiSignage.git
-cd PiSignage
-sudo ./install.sh
+git clone https://github.com/elkir0/Pi-Signage.git
+cd Pi-Signage
+bash install.sh
 ```
+
+**Note:** The script should NOT be run with `sudo` - it will request privileges when needed.
 
 ## Usage
 
