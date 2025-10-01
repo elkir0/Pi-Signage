@@ -174,9 +174,9 @@ function detectConflicts($newSchedule, $existingSchedules, $excludeId = null) {
 
         // Check if schedules overlap
         $newStart = $newSchedule['schedule']['start_time'];
-        $newEnd = $newSchedule['schedule']['end_time'] ?? '23:59';
+        $newEnd = !empty($newSchedule['schedule']['end_time']) ? $newSchedule['schedule']['end_time'] : '23:59';
         $existingStart = $schedule['schedule']['start_time'];
-        $existingEnd = $schedule['schedule']['end_time'] ?? '23:59';
+        $existingEnd = !empty($schedule['schedule']['end_time']) ? $schedule['schedule']['end_time'] : '23:59';
 
         // Convert times to minutes for comparison
         $newStartMin = timeToMinutes($newStart);

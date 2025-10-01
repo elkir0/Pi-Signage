@@ -103,11 +103,17 @@ function setupGlobalEventBindings() {
     // Global escape key handler
     document.addEventListener('keydown', function(event) {
         if (event.key === 'Escape') {
-            // Close any open modals
-            const modals = document.querySelectorAll('.modal, #uploadModal, #editPlaylistModal');
+            // Close any open modals (HIDE them, don't remove from DOM)
+            const modals = document.querySelectorAll('.modal.show');
             modals.forEach(modal => {
+                modal.classList.remove('show');
+            });
+
+            // Legacy modals with style.display
+            const legacyModals = document.querySelectorAll('#uploadModal, #editPlaylistModal');
+            legacyModals.forEach(modal => {
                 if (modal.style.display !== 'none') {
-                    modal.remove();
+                    modal.style.display = 'none';
                 }
             });
         }

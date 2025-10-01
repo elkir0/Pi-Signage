@@ -9,7 +9,7 @@
     <script src="assets/js/media.js?v=855" defer></script>
     <script src="assets/js/playlists.js?v=858" defer></script>
     <script src="assets/js/player.js?v=855" defer></script>
-    <script src="assets/js/init.js?v=855" defer></script>
+    <script src="assets/js/init.js?v=866" defer></script>
 
     <script>
         // Minimal compatibility globals for any remaining inline onclick handlers

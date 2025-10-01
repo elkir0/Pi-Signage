@@ -468,10 +468,43 @@
          * Open add modal
          */
         openAddModal: function() {
+            console.log('[Schedule] openAddModal() called');
             this.editingScheduleId = null;
-            this.resetForm();
-            document.getElementById('modal-title').textContent = '✨ Nouveau Planning';
-            document.getElementById('schedule-modal').classList.add('show');
+
+            // Capture self reference for closures
+            const self = this;
+
+            // Wait for modal to be available (retry mechanism)
+            const tryOpenModal = (attempt = 1) => {
+                console.log(`[Schedule] tryOpenModal attempt ${attempt}`);
+                const modal = document.getElementById('schedule-modal');
+                const modalTitle = document.getElementById('modal-title');
+
+                console.log(`[Schedule] Modal found:`, !!modal, 'Title found:', !!modalTitle);
+
+                if (!modal || !modalTitle) {
+                    if (attempt < 10) {
+                        console.warn(`[Schedule] Modal not ready, retry ${attempt}/10...`);
+                        setTimeout(() => tryOpenModal(attempt + 1), 100);
+                        return;
+                    } else {
+                        console.error('[Schedule] Modal elements not found in DOM after 10 retries!');
+                        console.error('  modal:', modal);
+                        console.error('  modalTitle:', modalTitle);
+                        console.error('  Available elements:', Array.from(document.querySelectorAll('[id]')).map(el => el.id));
+                        return;
+                    }
+                }
+
+                console.log('[Schedule] Modal elements found! Opening modal...');
+                modalTitle.textContent = '✨ Nouveau Planning';
+                modal.classList.add('show');
+
+                // Reset form AFTER modal is shown
+                setTimeout(() => self.resetForm(), 50);
+            };
+
+            tryOpenModal();
         },
 
         /**
@@ -532,33 +565,48 @@
          * Reset form
          */
         resetForm: function() {
-            document.getElementById('schedule-name').value = '';
-            document.getElementById('schedule-playlist').value = '';
-            document.getElementById('schedule-description').value = '';
+            const setValueSafely = (id, value) => {
+                const el = document.getElementById(id);
+                if (el) el.value = value;
+                else console.warn(`[Schedule] Element not found: ${id}`);
+            };
 
-            document.getElementById('schedule-start-time').value = '';
-            document.getElementById('schedule-end-time').value = '';
-            document.getElementById('schedule-continuous').checked = false;
-            document.getElementById('schedule-once-only').checked = false;
+            setValueSafely('schedule-name', '');
+            setValueSafely('schedule-playlist', '');
+            setValueSafely('schedule-description', '');
+            setValueSafely('schedule-start-time', '');
+            setValueSafely('schedule-end-time', '');
+            setValueSafely('schedule-start-date', '');
+            setValueSafely('schedule-end-date', '');
+            setValueSafely('schedule-priority', '1');
 
-            document.querySelector('input[name="recurrence-type"][value="daily"]').checked = true;
+            const setCheckedSafely = (id, checked) => {
+                const el = document.getElementById(id);
+                if (el) el.checked = checked;
+                else console.warn(`[Schedule] Element not found: ${id}`);
+            };
+
+            setCheckedSafely('schedule-continuous', false);
+            setCheckedSafely('schedule-once-only', false);
+            setCheckedSafely('schedule-no-end-date', false);
+            setCheckedSafely('post-action-revert', true);
+            setCheckedSafely('post-action-stop', false);
+            setCheckedSafely('post-action-screenshot', false);
+
+            const dailyRadio = document.querySelector('input[name="recurrence-type"][value="daily"]');
+            if (dailyRadio) dailyRadio.checked = true;
             this.handleRecurrenceTypeChange('daily');
 
             document.querySelectorAll('.days-selector input').forEach(cb => cb.checked = false);
 
-            document.getElementById('schedule-start-date').value = '';
-            document.getElementById('schedule-end-date').value = '';
-            document.getElementById('schedule-no-end-date').checked = false;
+            const ignoreRadio = document.querySelector('input[name="conflict-behavior"][value="ignore"]');
+            if (ignoreRadio) ignoreRadio.checked = true;
 
-            document.getElementById('schedule-priority').value = '1';
-            document.querySelector('input[name="conflict-behavior"][value="ignore"]').checked = true;
+            const preview = document.getElementById('playlist-preview');
+            if (preview) preview.textContent = '';
 
-            document.getElementById('post-action-revert').checked = true;
-            document.getElementById('post-action-stop').checked = false;
-            document.getElementById('post-action-screenshot').checked = false;
-
-            document.getElementById('playlist-preview').textContent = '';
-            document.getElementById('duration-estimate').textContent = '-';
+            const duration = document.getElementById('duration-estimate');
+            if (duration) duration.textContent = '-';
 
             this.switchTab('general');
         },
@@ -718,7 +766,7 @@
                 schedule: {
                     type: 'recurring',
                     start_time: document.getElementById('schedule-start-time').value,
-                    end_time: document.getElementById('schedule-end-time').value,
+                    end_time: document.getElementById('schedule-end-time').value || undefined,
                     continuous: document.getElementById('schedule-continuous').checked,
                     once_only: document.getElementById('schedule-once-only').checked,
                     recurrence: {
@@ -844,13 +892,24 @@
          */
         toggleSchedule: async function(scheduleId) {
             try {
-                const response = await fetch(`/api/schedule.php/${scheduleId}/toggle`, {
-                    method: 'PATCH'
+                // Use absolute URL to prevent path resolution issues
+                const url = `${window.location.origin}/api/schedule.php/${scheduleId}/toggle`;
+
+                const response = await fetch(url, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
                 });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
 
                 const data = await response.json();
 
                 if (data.success) {
+                    showAlert('Planning modifié avec succès', 'success');
                     this.loadSchedules();
                 } else {
                     showAlert(data.message || 'Erreur lors de la modification', 'error');
