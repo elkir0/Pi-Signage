@@ -15,8 +15,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit();
 }
 
-// Data file path
+// Data file paths
 define('SCHEDULES_FILE', '/opt/pisignage/data/schedules.json');
+define('PLAYLISTS_PATH', '/opt/pisignage/data/playlists');
+
+/**
+ * Check if playlist exists
+ */
+function playlistExists($playlistName) {
+    $playlistFile = PLAYLISTS_PATH . '/' . $playlistName . '.json';
+    return file_exists($playlistFile);
+}
 
 /**
  * Load all schedules from JSON file
@@ -60,6 +69,8 @@ function validateSchedule($data) {
 
     if (empty($data['playlist'])) {
         $errors[] = "La playlist est requise";
+    } elseif (!playlistExists($data['playlist'])) {
+        $errors[] = "La playlist '{$data['playlist']}' n'existe pas. Veuillez créer la playlist ou en sélectionner une autre.";
     }
 
     if (empty($data['schedule']['start_time'])) {

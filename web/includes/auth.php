@@ -1,7 +1,8 @@
 <?php
 /**
- * PiSignage v0.8.5 - Authentication and Session Management
+ * PiSignage v0.8.9 - Authentication and Session Management
  * Handles session initialization and configuration management
+ * v0.8.9: MPV support removed - VLC exclusive for better reliability
  */
 
 // Start session if not already started
@@ -11,7 +12,7 @@ if (session_status() === PHP_SESSION_NONE) {
 
 // Configuration
 $config = [
-    'version' => '0.8.5',
+    'version' => '0.8.9',
     'media_path' => '/opt/pisignage/media/',
     'config_path' => '/opt/pisignage/config/',
     'logs_path' => '/opt/pisignage/logs/',

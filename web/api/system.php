@@ -381,31 +381,29 @@ function getUptime() {
     return "up {$days} days, {$hours} hours, {$minutes} minutes";
 }
 
-// ========== DUAL PLAYER SUPPORT FUNCTIONS ==========
+// ========== VLC PLAYER FUNCTIONS ==========
 
 function getCurrentPlayer() {
-    $result = executeCommand('/opt/pisignage/scripts/unified-player-control.sh current');
-    if ($result['success'] && !empty($result['output'])) {
-        return trim($result['output'][0]);
-    }
-    return 'mpv'; // default
+    // PiSignage v0.8.9+ uses VLC exclusively
+    return 'vlc';
 }
 
 function getPlayerStatus() {
-    $result = executeCommand('/opt/pisignage/scripts/unified-player-control.sh status');
-    if ($result['success'] && !empty($result['output'])) {
-        $status = trim($result['output'][0]);
+    // Check if VLC is running
+    $vlcRunning = shell_exec('pgrep -f "vlc.*http-host" | wc -l') > 0;
+
+    if ($vlcRunning) {
         return [
-            'status' => $status,
-            'running' => strpos(strtolower($status), 'running') !== false,
-            'player' => getCurrentPlayer()
+            'status' => 'running',
+            'running' => true,
+            'player' => 'vlc'
         ];
     }
 
     return [
-        'status' => 'offline',
+        'status' => 'stopped',
         'running' => false,
-        'player' => getCurrentPlayer()
+        'player' => 'vlc'
     ];
 }
 

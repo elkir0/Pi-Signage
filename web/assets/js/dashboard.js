@@ -240,61 +240,24 @@ PiSignage.dashboard = {
     },
 
     switchPlayer: async function() {
-        const newSelectedPlayer = document.querySelector('input[name="player"]:checked').value;
-        const currentPlayer = PiSignage.player.getCurrentPlayer();
-
-        if (newSelectedPlayer === currentPlayer) {
-            showAlert(`${newSelectedPlayer.toUpperCase()} est déjà le lecteur actif`, 'info');
-            return;
-        }
-
-        if (confirm(`Basculer vers ${newSelectedPlayer.toUpperCase()} ?\nLe lecteur ${currentPlayer.toUpperCase()} sera arrêté.`)) {
-            showAlert(`🔄 Basculement vers ${newSelectedPlayer.toUpperCase()} en cours...`, 'info');
-
-            try {
-                const data = await PiSignage.api.system.switchPlayer(newSelectedPlayer, currentPlayer);
-                if (data.success) {
-                    // Update immediately
-                    PiSignage.player.setCurrentPlayer(newSelectedPlayer);
-                    this.updatePlayerInterface();
-
-                    showAlert(`✅ Basculement vers ${newSelectedPlayer.toUpperCase()} réussi!`, 'success');
-
-                    // Refresh status after a delay
-                    setTimeout(() => {
-                        if (typeof updatePlayerStatus === 'function') {
-                            updatePlayerStatus();
-                        }
-                    }, 1500);
-                } else {
-                    showAlert(data.message || 'Erreur lors du basculement', 'error');
-                    // Revert radio button
-                    document.getElementById('player-' + currentPlayer).checked = true;
-                }
-            } catch (error) {
-                showAlert('Erreur de communication lors du basculement', 'error');
-                console.error('Switch error:', error);
-                // Revert radio button
-                document.getElementById('player-' + currentPlayer).checked = true;
-            }
-        } else {
-            // User cancelled, revert radio button
-            document.getElementById('player-' + currentPlayer).checked = true;
-        }
+        // PiSignage v0.8.9+ uses VLC exclusively - player switching removed
+        showAlert('PiSignage utilise désormais VLC exclusivement pour une expérience optimale', 'info');
+        return;
     }
 };
 
 // Global functions for backward compatibility
 window.switchPlayer = function() {
-    PiSignage.dashboard.switchPlayer();
+    // PiSignage v0.8.9+ - VLC only
+    showAlert('PiSignage utilise VLC exclusivement', 'info');
 };
 
 window.getCurrentPlayer = function() {
-    return PiSignage.dashboard.getCurrentPlayer();
+    return 'vlc'; // PiSignage v0.8.9+
 };
 
 window.updatePlayerInterface = function() {
-    PiSignage.dashboard.updatePlayerInterface();
+    // No-op in VLC-only mode
 };
 
 // CSS for stat update animation

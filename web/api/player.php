@@ -1,38 +1,41 @@
 <?php
 /**
- * PiSignage v0.8.0 - Unified Player Control API
- * Controls both VLC and MPV media players via unified script
+ * PiSignage v0.8.9 - VLC Player Control API
+ * Controls VLC media player via VLCController
  */
 
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 
+// Use the VLCController from player-control.php
+require_once __DIR__ . '/player-control.php';
+
 define('MEDIA_PATH', '/opt/pisignage/media');
-define('SCRIPTS_PATH', '/opt/pisignage/scripts');
 define('PLAYLISTS_PATH', '/opt/pisignage/config');
-define('LOGS_PATH', '/opt/pisignage/logs');
-define('UNIFIED_SCRIPT', '/opt/pisignage/scripts/unified-player-control.sh');
 
 $method = $_SERVER['REQUEST_METHOD'];
 $input = json_decode(file_get_contents('php://input'), true);
+
+// Initialize VLC controller
+$vlc = new VLCController();
 
 switch ($method) {
     case 'GET':
         // Get current player status
         if (isset($_GET['action']) && $_GET['action'] === 'current') {
-            // Get current player
-            $current_player = exec(UNIFIED_SCRIPT . ' current 2>&1');
             echo json_encode([
                 'success' => true,
-                'current_player' => trim($current_player)
+                'current_player' => 'vlc',
+                'player' => 'vlc'
             ]);
         } else {
-            // Get player status
-            $status = exec(UNIFIED_SCRIPT . ' status 2>&1');
+            // Get VLC status
+            $status = $vlc->getStatus();
             echo json_encode([
                 'success' => true,
                 'status' => $status,
-                'running' => strpos($status, 'running') !== false
+                'running' => ($status['state'] ?? '') !== 'stopped',
+                'player' => 'vlc'
             ]);
         }
         break;
@@ -46,67 +49,46 @@ switch ($method) {
         $action = $input['action'];
         $success = false;
         $message = '';
-        $output = [];
-        $retval = 0;
 
         switch ($action) {
             case 'play':
             case 'start':
-                // Start current player with all media files
-                $output = [];
-                exec(UNIFIED_SCRIPT . ' play 2>&1', $output, $retval);
-                $success = ($retval === 0);
-                $message = !empty($output) ? implode("\n", $output) : 'Player started';
+                $result = $vlc->play();
+                $success = $result;
+                $message = $result ? 'Player started' : 'Failed to start player';
                 break;
 
             case 'stop':
-                // Stop current player
-                $output = [];
-                exec(UNIFIED_SCRIPT . ' stop 2>&1', $output, $retval);
-                $success = ($retval === 0);
-                $message = !empty($output) ? implode("\n", $output) : 'Player stopped';
+                $result = $vlc->stop();
+                $success = $result;
+                $message = $result ? 'Player stopped' : 'Failed to stop player';
                 break;
 
             case 'restart':
-                // Restart current player
-                $output = [];
-                exec(UNIFIED_SCRIPT . ' restart 2>&1', $output, $retval);
-                $success = ($retval === 0);
-                $message = !empty($output) ? implode("\n", $output) : 'Player restarted';
+                $vlc->stop();
+                sleep(1);
+                $result = $vlc->play();
+                $success = $result;
+                $message = $result ? 'Player restarted' : 'Failed to restart player';
                 break;
 
             case 'pause':
-                // Pause current player
-                $output = [];
-                exec(UNIFIED_SCRIPT . ' pause 2>&1', $output, $retval);
-                $success = true;
-                $message = !empty($output) ? implode("\n", $output) : 'Player paused/resumed';
+                $result = $vlc->pause();
+                $success = $result;
+                $message = $result ? 'Player paused/resumed' : 'Failed to pause player';
                 break;
 
             case 'next':
-                // Next track
-                $output = [];
-                exec(UNIFIED_SCRIPT . ' next 2>&1', $output, $retval);
-                $success = true;
-                $message = !empty($output) ? implode("\n", $output) : 'Next track';
+                $result = $vlc->next();
+                $success = $result;
+                $message = $result ? 'Next track' : 'Failed to skip to next';
                 break;
 
             case 'previous':
             case 'prev':
-                // Previous track
-                $output = [];
-                exec(UNIFIED_SCRIPT . ' prev 2>&1', $output, $retval);
-                $success = true;
-                $message = !empty($output) ? implode("\n", $output) : 'Previous track';
-                break;
-
-            case 'switch':
-            case 'switch_player':
-                // Switch between VLC and MPV
-                $output = [];
-                exec(UNIFIED_SCRIPT . ' switch 2>&1', $output, $retval);
-                $success = ($retval === 0);
-                $message = !empty($output) ? implode("\n", $output) : 'Player switched';
+                $result = $vlc->previous();
+                $success = $result;
+                $message = $result ? 'Previous track' : 'Failed to go to previous';
                 break;
 
             case 'play-file':
@@ -120,20 +102,22 @@ switch ($method) {
                 $filepath = MEDIA_PATH . '/' . $filename;
 
                 if (!file_exists($filepath)) {
-                    echo json_encode(['success' => false, 'message' => 'File not found']);
+                    echo json_encode(['success' => false, 'message' => 'File not found: ' . $filename]);
                     exit;
                 }
 
-                // Stop current MPV and play specific file
-                exec('pkill -f mpv 2>/dev/null');
+                // Stop current playback and play specific file via VLC
+                $vlc->stop();
                 sleep(1);
 
-                $cmd = "mpv --fullscreen --loop-playlist=inf --really-quiet " .
-                       escapeshellarg($filepath) . " > " . LOGS_PATH . "/mpv.log 2>&1 &";
-                exec($cmd, $output, $retval);
+                // Add file to VLC playlist and play
+                $result = $vlc->addToPlaylist($filepath);
+                if ($result) {
+                    $vlc->play();
+                }
 
-                $success = true;
-                $message = "Playing: $filename";
+                $success = $result;
+                $message = $result ? "Playing: $filename" : "Failed to play: $filename";
                 break;
 
             case 'play-playlist':
@@ -147,55 +131,59 @@ switch ($method) {
                 $playlistFile = PLAYLISTS_PATH . '/' . $playlistName . '.json';
 
                 if (!file_exists($playlistFile)) {
-                    echo json_encode(['success' => false, 'message' => 'Playlist not found']);
+                    echo json_encode(['success' => false, 'message' => 'Playlist not found: ' . $playlistName]);
                     exit;
                 }
 
                 $playlist = json_decode(file_get_contents($playlistFile), true);
 
                 if (!$playlist || !isset($playlist['files'])) {
-                    echo json_encode(['success' => false, 'message' => 'Invalid playlist']);
+                    echo json_encode(['success' => false, 'message' => 'Invalid playlist format']);
                     exit;
                 }
 
-                // Stop current MPV
-                exec('pkill -f mpv 2>/dev/null');
+                // Stop current playback
+                $vlc->stop();
                 sleep(1);
 
-                // Build file list
-                $files = [];
+                // Clear VLC playlist
+                $vlc->clearPlaylist();
+
+                // Add files to VLC playlist
+                $addedCount = 0;
                 foreach ($playlist['files'] as $file) {
                     $filepath = MEDIA_PATH . '/' . basename($file);
                     if (file_exists($filepath)) {
-                        $files[] = escapeshellarg($filepath);
+                        if ($vlc->addToPlaylist($filepath)) {
+                            $addedCount++;
+                        }
                     }
                 }
 
-                if (empty($files)) {
+                if ($addedCount === 0) {
                     echo json_encode(['success' => false, 'message' => 'No valid files in playlist']);
                     exit;
                 }
 
-                // Play playlist
-                $cmd = "mpv --fullscreen --loop-playlist=inf --really-quiet " .
-                       implode(' ', $files) . " > " . LOGS_PATH . "/mpv.log 2>&1 &";
-                exec($cmd, $output, $retval);
+                // Start playback
+                $vlc->play();
 
                 $success = true;
-                $message = "Playing playlist: $playlistName";
+                $message = "Playing playlist: $playlistName ($addedCount files)";
                 break;
 
             case 'volume':
-                // Volume control via unified script
                 if (!isset($input['value'])) {
                     echo json_encode(['success' => false, 'message' => 'Volume value required']);
                     exit;
                 }
+
                 $volume = intval($input['value']);
-                $output = [];
-                exec(UNIFIED_SCRIPT . " volume $volume 2>&1", $output, $retval);
-                $success = ($retval === 0);
-                $message = !empty($output) ? implode("\n", $output) : "Volume set to $volume%";
+                $volume = max(0, min(100, $volume)); // Clamp 0-100
+
+                $result = $vlc->setVolume($volume);
+                $success = $result;
+                $message = $result ? "Volume set to $volume%" : "Failed to set volume";
                 break;
 
             default:
@@ -206,11 +194,11 @@ switch ($method) {
         echo json_encode([
             'success' => $success,
             'message' => $message,
-            'action' => $action
+            'action' => $action,
+            'player' => 'vlc'
         ]);
         break;
 
     default:
         echo json_encode(['success' => false, 'message' => 'Method not allowed']);
 }
-?>

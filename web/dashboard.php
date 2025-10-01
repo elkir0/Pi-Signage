@@ -46,29 +46,16 @@ include 'includes/header.php';
                     <!-- Sélecteur de lecteur vidéo -->
                     <div class="player-selector">
                         <div class="selector-title">Choisir le lecteur :</div>
-                        <div class="player-options">
-                            <label class="player-option">
-                                <input type="radio" name="player" value="vlc" id="player-vlc" checked>
-                                <div class="option-content">
-                                    <div class="option-icon">🎛️</div>
-                                    <div class="option-details">
-                                        <div class="option-name">VLC</div>
-                                        <div class="option-desc">Fonctionnalités avancées</div>
-                                    </div>
+                        <!-- PiSignage v0.8.9+ uses VLC exclusively -->
+                        <div class="player-info">
+                            <div class="option-content">
+                                <div class="option-icon">🎛️</div>
+                                <div class="option-details">
+                                    <div class="option-name">Lecteur: VLC Media Player</div>
+                                    <div class="option-desc">Contrôle complet, playlists, screenshots</div>
                                 </div>
-                            </label>
-                            <label class="player-option">
-                                <input type="radio" name="player" value="mpv" id="player-mpv">
-                                <div class="option-content">
-                                    <div class="option-icon">🚀</div>
-                                    <div class="option-details">
-                                        <div class="option-name">MPV</div>
-                                        <div class="option-desc">Performance optimale</div>
-                                    </div>
-                                </div>
-                            </label>
+                            </div>
                         </div>
-                        <button class="btn-switch" onclick="switchPlayer()">Basculer Lecteur</button>
                     </div>
 
                     <!-- Statut du lecteur -->

@@ -5,6 +5,74 @@ All notable changes to PiSignage will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.9] - 2025-10-01
+
+### 🎯 **MAJOR: MPV Support Removed - VLC Exclusive**
+
+After comprehensive architecture analysis, **MPV support has been completely removed** from PiSignage. This decision was made after discovering that MPV was 90% non-functional and would require 36+ hours of development to implement properly.
+
+#### Reasons for Removal
+1. **MPV was critically broken:**
+   - ❌ No playback controls (play/pause/stop/next/prev)
+   - ❌ No volume control
+   - ❌ No status monitoring
+   - ❌ No screenshot integration
+   - ❌ No IPC/socket communication implemented
+
+2. **VLC is superior for digital signage:**
+   - ✅ Mature HTTP API with full control
+   - ✅ Real-time status via JSON
+   - ✅ Screenshot via FFmpeg extraction
+   - ✅ Battle-tested on Raspberry Pi
+   - ✅ Already fully integrated
+
+3. **Code quality:**
+   - Removed 400+ lines of broken/untested code
+   - Simplified codebase (1 player instead of 2)
+   - Reduced maintenance burden
+   - Prevented user confusion
+
+#### Changes Made
+
+**Backend (API):**
+- `api/player.php`: Completely refactored to use VLCController exclusively
+  - Removed hardcoded MPV `pkill` and `mpv` shell commands
+  - All actions now route through VLCController class
+  - Proper error handling and response messages
+- `api/system.php`: Updated `getCurrentPlayer()` to always return 'vlc'
+  - Removed reference to non-existent `unified-player-control.sh`
+  - Simplified player status detection
+
+**Frontend (UI):**
+- `dashboard.php`: Removed player switcher UI (radio buttons for VLC/MPV)
+  - Replaced with informational display: "Lecteur: VLC Media Player"
+- `dashboard.js`: Disabled `switchPlayer()` function
+  - Shows info message: "PiSignage utilise VLC exclusivement"
+  - `getCurrentPlayer()` always returns 'vlc'
+
+**Configuration:**
+- `includes/auth.php`: Updated version to 0.8.9
+- Added changelog note about MPV removal
+
+**Infrastructure:**
+- Fixed nginx configuration to support REST API PATH_INFO (from v0.8.8)
+  - Resolves DELETE/PATCH requests for schedule API
+  - Prevents 302 redirects to dashboard.php
+
+#### Migration Notes
+
+**No action required** for existing users - VLC was already the default and recommended player. If you were using MPV, it will automatically fall back to VLC.
+
+#### Documentation
+
+See `/opt/pisignage/docs/MPV-VLC.md` for complete technical analysis including:
+- Feature-by-feature compatibility matrix
+- Architectural assessment
+- Effort estimates for full MPV implementation
+- Decision justification
+
+---
+
 ## [0.8.8] - 2025-10-01
 
 ### 🔧 Bug Fixes

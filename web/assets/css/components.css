@@ -1330,3 +1330,36 @@ textarea.form-control {
     padding: 20px;
     min-height: 400px;
 }
+/* Schedule Warnings - Missing Playlists */
+.schedule-item.schedule-warning {
+    border-left: 4px solid #ff9800;
+    background: rgba(255, 152, 0, 0.05);
+}
+
+.playlist-missing-warning {
+    background: #fff3cd;
+    border: 1px solid #ff9800;
+    border-radius: 6px;
+    padding: 10px 15px;
+    margin: 10px 15px;
+    color: #856404;
+    font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.schedule-playlist.text-danger {
+    color: #dc3545;
+}
+
+.schedule-item.schedule-warning .toggle-switch input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.schedule-item.schedule-warning .toggle-switch input:disabled + .toggle-slider {
+    background: #666;
+    cursor: not-allowed;
+}

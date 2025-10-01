@@ -1011,6 +1011,7 @@
                 const response = await fetch(url, {
                     method: 'DELETE',
                     cache: 'no-cache',
+                    redirect: 'error', // Don't follow redirects - treat as error
                     headers: {
                         'Cache-Control': 'no-cache',
                         'Pragma': 'no-cache'

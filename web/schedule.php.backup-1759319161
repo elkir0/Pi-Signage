@@ -5,6 +5,105 @@ include 'includes/header.php';
 ?>
 
 <?php include 'includes/navigation.php'; ?>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Schedule Section -->
+        <div id="schedule" class="content-section active">
+            <div class="header">
+                <h1 class="page-title">Programmation</h1>
+                <div class="header-actions">
+                    <button class="btn btn-glass" onclick="PiSignage.Schedule.refresh()">
+                        🔄 Actualiser
+                    </button>
+                    <button class="btn btn-primary" onclick="PiSignage.Schedule.openAddModal()">
+                        ➕ Nouveau Planning
+                    </button>
+                </div>
+            </div>
+
+            <!-- Statistics -->
+            <div class="card">
+                <div class="schedule-stats">
+                    <div class="stat-item">
+                        <span class="stat-value" id="stat-active">0</span>
+                        <span class="stat-label">✅ Actifs</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="stat-inactive">0</span>
+                        <span class="stat-label">⏸️ Inactifs</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="stat-running">0</span>
+                        <span class="stat-label">▶️ En cours</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="stat-upcoming">0</span>
+                        <span class="stat-label">⏳ À venir</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- View Mode Selector -->
+            <div class="card">
+                <div class="view-selector">
+                    <button class="view-btn active" data-view="list" onclick="PiSignage.Schedule.switchView('list')">
+                        📋 Liste
+                    </button>
+                    <button class="view-btn" data-view="calendar" onclick="PiSignage.Schedule.switchView('calendar')">
+                        📅 Calendrier
+                    </button>
+                    <button class="view-btn" data-view="timeline" onclick="PiSignage.Schedule.switchView('timeline')">
+                        ⏰ Chronologie
+                    </button>
+                </div>
+            </div>
+
+            <!-- Schedules Container -->
+            <div class="card">
+                <h3 class="card-title">
+                    <span id="view-icon">📋</span>
+                    <span id="view-title">Liste des plannings</span>
+                </h3>
+
+                <!-- List View -->
+                <div id="schedule-list" class="schedule-view active">
+                    <!-- Schedule items will be loaded here -->
+                    <div class="empty-state" id="empty-state">
+                        <div class="empty-icon">📅</div>
+                        <h3>Aucun planning configuré</h3>
+                        <p>Créez votre premier planning pour automatiser la diffusion de vos playlists</p>
+                        <button class="btn btn-primary" onclick="PiSignage.Schedule.openAddModal()">
+                            ➕ Créer un planning
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Calendar View -->
+                <div id="schedule-calendar" class="schedule-view">
+                    <div class="calendar-header">
+                        <button class="btn btn-sm btn-glass" onclick="PiSignage.Schedule.prevMonth()">◀</button>
+                        <h3 id="calendar-month-year">Octobre 2025</h3>
+                        <button class="btn btn-sm btn-glass" onclick="PiSignage.Schedule.nextMonth()">▶</button>
+                    </div>
+                    <div id="calendar-grid" class="calendar-grid">
+                        <!-- Calendar will be rendered here -->
+                    </div>
+                    <div id="calendar-events" class="calendar-events">
+                        <!-- Events for selected date -->
+                    </div>
+                </div>
+
+                <!-- Timeline View -->
+                <div id="schedule-timeline" class="schedule-view">
+                    <div class="timeline-container">
+                        <!-- Timeline will be rendered here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Add/Edit Schedule Modal -->
     <div id="schedule-modal" class="modal">
         <div class="modal-content schedule-modal-content">
@@ -247,105 +346,6 @@ include 'includes/header.php';
         </div>
     </div>
 
-    <!-- Main Content -->
-    <div class="main-content">
-        <!-- Schedule Section -->
-        <div id="schedule" class="content-section active">
-            <div class="header">
-                <h1 class="page-title">Programmation</h1>
-                <div class="header-actions">
-                    <button class="btn btn-glass" onclick="PiSignage.Schedule.refresh()">
-                        🔄 Actualiser
-                    </button>
-                    <button class="btn btn-primary" onclick="PiSignage.Schedule.openAddModal()">
-                        ➕ Nouveau Planning
-                    </button>
-                </div>
-            </div>
-
-            <!-- Statistics -->
-            <div class="card">
-                <div class="schedule-stats">
-                    <div class="stat-item">
-                        <span class="stat-value" id="stat-active">0</span>
-                        <span class="stat-label">✅ Actifs</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-value" id="stat-inactive">0</span>
-                        <span class="stat-label">⏸️ Inactifs</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-value" id="stat-running">0</span>
-                        <span class="stat-label">▶️ En cours</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-value" id="stat-upcoming">0</span>
-                        <span class="stat-label">⏳ À venir</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- View Mode Selector -->
-            <div class="card">
-                <div class="view-selector">
-                    <button class="view-btn active" data-view="list" onclick="PiSignage.Schedule.switchView('list')">
-                        📋 Liste
-                    </button>
-                    <button class="view-btn" data-view="calendar" onclick="PiSignage.Schedule.switchView('calendar')">
-                        📅 Calendrier
-                    </button>
-                    <button class="view-btn" data-view="timeline" onclick="PiSignage.Schedule.switchView('timeline')">
-                        ⏰ Chronologie
-                    </button>
-                </div>
-            </div>
-
-            <!-- Schedules Container -->
-            <div class="card">
-                <h3 class="card-title">
-                    <span id="view-icon">📋</span>
-                    <span id="view-title">Liste des plannings</span>
-                </h3>
-
-                <!-- List View -->
-                <div id="schedule-list" class="schedule-view active">
-                    <!-- Schedule items will be loaded here -->
-                    <div class="empty-state" id="empty-state">
-                        <div class="empty-icon">📅</div>
-                        <h3>Aucun planning configuré</h3>
-                        <p>Créez votre premier planning pour automatiser la diffusion de vos playlists</p>
-                        <button class="btn btn-primary" onclick="PiSignage.Schedule.openAddModal()">
-                            ➕ Créer un planning
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Calendar View -->
-                <div id="schedule-calendar" class="schedule-view">
-                    <div class="calendar-header">
-                        <button class="btn btn-sm btn-glass" onclick="PiSignage.Schedule.prevMonth()">◀</button>
-                        <h3 id="calendar-month-year">Octobre 2025</h3>
-                        <button class="btn btn-sm btn-glass" onclick="PiSignage.Schedule.nextMonth()">▶</button>
-                    </div>
-                    <div id="calendar-grid" class="calendar-grid">
-                        <!-- Calendar will be rendered here -->
-                    </div>
-                    <div id="calendar-events" class="calendar-events">
-                        <!-- Events for selected date -->
-                    </div>
-                </div>
-
-                <!-- Timeline View -->
-                <div id="schedule-timeline" class="schedule-view">
-                    <div class="timeline-container">
-                        <!-- Timeline will be rendered here -->
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-
-    <script src="assets/js/schedule-v873.js" defer></script>
+    <script src="assets/js/schedule.js?v=861"></script>
 
 <?php include 'includes/footer.php'; ?>
