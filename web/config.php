@@ -11,6 +11,7 @@ define('BASE_DIR', '/opt/pisignage');
 define('MEDIA_DIR', BASE_DIR . '/media');
 define('MEDIA_PATH', BASE_DIR . '/media'); // Alias pour compatibilité
 define('PLAYLISTS_PATH', BASE_DIR . '/playlists');
+define('CONFIG_PATH', BASE_DIR . '/config'); // Configuration files
 define('SCREENSHOTS_DIR', BASE_DIR . '/web/screenshots');
 define('SCREENSHOTS_PATH', BASE_DIR . '/web/screenshots'); // Alias
 define('LOGS_DIR', BASE_DIR . '/logs');

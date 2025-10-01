@@ -8,24 +8,28 @@
 require_once '../config.php';
 require_once 'media.php';
 
-$method = $_SERVER['REQUEST_METHOD'];
-$input = json_decode(file_get_contents('php://input'), true);
+// Only execute request handling if this file is called directly (not included)
+if (basename($_SERVER['SCRIPT_FILENAME']) === 'youtube.php' ||
+    basename($_SERVER['SCRIPT_FILENAME']) === 'youtube-simple.php') {
+    $method = $_SERVER['REQUEST_METHOD'];
+    $input = json_decode(file_get_contents('php://input'), true);
 
-switch ($method) {
-    case 'GET':
-        handleGetDownloads();
-        break;
+    switch ($method) {
+        case 'GET':
+            handleGetDownloads();
+            break;
 
-    case 'POST':
-        handleDownloadVideo($input);
-        break;
+        case 'POST':
+            handleDownloadVideo($input);
+            break;
 
-    case 'DELETE':
-        handleCancelDownload($input);
-        break;
+        case 'DELETE':
+            handleCancelDownload($input);
+            break;
 
-    default:
-        jsonResponse(false, null, 'Method not allowed');
+        default:
+            jsonResponse(false, null, 'Method not allowed');
+    }
 }
 
 function handleGetDownloads() {

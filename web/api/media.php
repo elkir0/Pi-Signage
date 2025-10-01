@@ -6,24 +6,27 @@
 
 require_once '../config.php';
 
-$method = $_SERVER['REQUEST_METHOD'];
-$input = json_decode(file_get_contents('php://input'), true);
+// Only execute request handling if this file is called directly (not included)
+if (basename($_SERVER['SCRIPT_FILENAME']) === 'media.php') {
+    $method = $_SERVER['REQUEST_METHOD'];
+    $input = json_decode(file_get_contents('php://input'), true);
 
-switch ($method) {
-    case 'GET':
-        handleGetMedia();
-        break;
+    switch ($method) {
+        case 'GET':
+            handleGetMedia();
+            break;
 
-    case 'POST':
-        handleMediaAction($input);
-        break;
+        case 'POST':
+            handleMediaAction($input);
+            break;
 
-    case 'DELETE':
-        handleDeleteMedia($input);
-        break;
+        case 'DELETE':
+            handleDeleteMedia($input);
+            break;
 
-    default:
-        jsonResponse(false, null, 'Method not allowed');
+        default:
+            jsonResponse(false, null, 'Method not allowed');
+    }
 }
 
 function handleGetMedia() {
