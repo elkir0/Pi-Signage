@@ -5,6 +5,46 @@ All notable changes to PiSignage will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.7] - 2025-10-01
+
+### 🔧 Bug Fixes
+- **CRITICAL: Fixed Schedule Module Modal System** ([#BUG-SCHEDULE-001](RAPPORT-FIX-MODAL-SYSTEM.md))
+  - Fixed ESC key handler permanently removing modals from DOM
+  - Changed `modal.remove()` to `modal.classList.remove('show')`
+  - Modals now reusable after closing with ESC
+
+- **CRITICAL: Fixed Modal CSS Display Logic** ([#BUG-SCHEDULE-002](RAPPORT-FIX-MODAL-SYSTEM.md))
+  - Fixed `.modal` CSS showing all modals by default (`display: flex`)
+  - Added proper hide/show state: `display: none` default, `.show` class for visibility
+  - Removed "Conflit détecté" popup blocking screen at page load
+
+### ✨ Improvements
+- **Schedule Module Robustness**
+  - Added retry mechanism (10 attempts) for modal access
+  - Enhanced error logging for debugging
+  - Secure form reset with null-safe helpers
+  - Fixed closure `this` context capture
+
+- **API Improvements**
+  - Better handling of empty `end_time` in schedule conflict detection
+  - Default to `23:59` when `end_time` is not specified
+
+### 🎨 UI/UX
+- Smooth modal animations with `opacity` transitions (0.3s ease)
+- No more screen-blocking modals on page load
+- Improved user feedback with detailed console logging
+
+### 📦 Technical
+- **CSS:** v867 (`assets/css/main.css?v=867`)
+- **JS:** v866 (`assets/js/init.js?v=866`), v865 (`assets/js/schedule.js?v=865`)
+- **Commits:** `18e17ec`, `07568df`
+- **Documentation:** Added `RAPPORT-FIX-MODAL-SYSTEM.md` with full debugging session details
+
+### 🧪 Testing
+- ✅ All Puppeteer tests pass
+- ✅ Backward compatible with legacy modals (playlists.php, media.php)
+- ✅ No performance impact (< 5ms difference)
+
 ## [0.8.5] - 2025-09-28
 
 ### 🚀 Major Features
