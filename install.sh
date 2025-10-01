@@ -246,6 +246,9 @@ clone_from_github() {
         sudo cp "$TEMP_DIR/README.md" "$INSTALL_DIR/" 2>/dev/null || true
         sudo cp "$TEMP_DIR/CHANGELOG.md" "$INSTALL_DIR/" 2>/dev/null || true
 
+        # Corriger les permissions après copie
+        sudo chown -R www-data:www-data "$INSTALL_DIR/web"
+
         # Nettoyer
         rm -rf "$TEMP_DIR"
         log_info "Application PiSignage déployée depuis GitHub"
