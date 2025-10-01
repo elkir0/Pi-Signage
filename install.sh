@@ -166,15 +166,15 @@ create_structure() {
 
     # Permissions élargies pour éviter les problèmes
     sudo chown -R www-data:www-data $INSTALL_DIR
-    chmod 755 $INSTALL_DIR
+    sudo chmod 755 $INSTALL_DIR
     # Permissions spécifiques pour les répertoires critiques
-    chmod 777 $INSTALL_DIR/logs
-    chmod 777 $INSTALL_DIR/media
-    chmod 755 $INSTALL_DIR/web
-    chmod 755 $INSTALL_DIR/scripts
-    chmod 755 $INSTALL_DIR/config
-    chmod 755 $INSTALL_DIR/data
-    chmod 777 $INSTALL_DIR/web/screenshots
+    sudo chmod 777 $INSTALL_DIR/logs
+    sudo chmod 777 $INSTALL_DIR/media
+    sudo chmod 755 $INSTALL_DIR/web
+    sudo chmod 755 $INSTALL_DIR/scripts
+    sudo chmod 755 $INSTALL_DIR/config
+    sudo chmod 755 $INSTALL_DIR/data
+    sudo chmod 777 $INSTALL_DIR/web/screenshots
 
     # Initialiser la base de données SQLite
     DB_FILE="$INSTALL_DIR/pisignage.db"
@@ -216,7 +216,7 @@ CREATE TABLE IF NOT EXISTS logs (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 EOF
-        chmod 666 "$DB_FILE"
+        sudo chmod 666 "$DB_FILE"
         log_info "Base de données initialisée"
     fi
 
@@ -445,7 +445,7 @@ else
 fi
 ENDOFFILE
 
-    chmod +x $INSTALL_DIR/scripts/start-vlc.sh
+    sudo chmod +x $INSTALL_DIR/scripts/start-vlc.sh
 
     # Script d'autostart
     cat > $INSTALL_DIR/scripts/autostart.sh << 'ENDOFFILE'
@@ -473,7 +473,7 @@ while true; do
 done
 ENDOFFILE
 
-    chmod +x $INSTALL_DIR/scripts/autostart.sh
+    sudo chmod +x $INSTALL_DIR/scripts/autostart.sh
 
     log_info "Scripts créés"
 }
@@ -674,7 +674,7 @@ sleep 10
 # Créer le répertoire runtime si nécessaire
 export XDG_RUNTIME_DIR=/run/user/1000
 mkdir -p $XDG_RUNTIME_DIR
-chown pi:pi $XDG_RUNTIME_DIR
+sudo chown pi:pi $XDG_RUNTIME_DIR
 
 # Arrêter toute instance VLC existante proprement
 systemctl --user stop pisignage-vlc.service 2>/dev/null || true
@@ -689,7 +689,7 @@ echo "Service VLC unifié démarré avec succès"
 echo "Interface HTTP disponible sur: http://localhost:8080"
 echo "Mot de passe: pisignage"
 ENDOFSCRIPT
-    chmod +x $INSTALL_DIR/scripts/autostart-vlc.sh
+    sudo chmod +x $INSTALL_DIR/scripts/autostart-vlc.sh
 
     # Créer le service systemd unifié pour VLC avec interface HTTP
     sudo tee /etc/systemd/system/pisignage-vlc.service > /dev/null << ENDOFSERVICE
