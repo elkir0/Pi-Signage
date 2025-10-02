@@ -17,7 +17,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 // Data file paths
 define('SCHEDULES_FILE', '/opt/pisignage/data/schedules.json');
-define('PLAYLISTS_PATH', '/opt/pisignage/data/playlists');
+define('PLAYLISTS_PATH', '/opt/pisignage/config');
 
 /**
  * Check if playlist exists
