@@ -1,0 +1,38 @@
+{
+    "dl_20251001194839_8462525b": {
+        "id": "dl_20251001194839_8462525b",
+        "url": "https:\/\/www.youtube.com\/watch?v=LXb3EKWsInQ",
+        "quality": "360p",
+        "format": "mp4",
+        "audio_only": false,
+        "status": "error",
+        "started_at": "2025-10-01 19:48:39",
+        "progress": 0,
+        "updated_at": "2025-10-01 19:48:40",
+        "filename": ""
+    },
+    "dl_20251001194944_08d5d45d": {
+        "id": "dl_20251001194944_08d5d45d",
+        "url": "https:\/\/www.youtube.com\/watch?v=LXb3EKWsInQ",
+        "quality": "360p",
+        "format": "mp4",
+        "audio_only": false,
+        "status": "error",
+        "started_at": "2025-10-01 19:49:44",
+        "progress": 0,
+        "updated_at": "2025-10-01 19:49:45",
+        "filename": ""
+    },
+    "dl_20251001195044_0570eb7c": {
+        "id": "dl_20251001195044_0570eb7c",
+        "url": "https:\/\/www.youtube.com\/watch?v=LXb3EKWsInQ",
+        "quality": "360p",
+        "format": "mp4",
+        "audio_only": false,
+        "status": "error",
+        "started_at": "2025-10-01 19:50:44",
+        "progress": 0,
+        "updated_at": "2025-10-01 19:50:50",
+        "filename": ""
+    }
+}

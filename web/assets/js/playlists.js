@@ -649,6 +649,12 @@ PiSignage.playlists = {
         this.renderPlaylistItems();
         this.updatePlaylistStats();
         this.updatePropertiesPanel();
+
+        // Show visual feedback
+        if (typeof showAlert === 'function') {
+            showAlert('✨ Nouvelle playlist créée - Prête à être éditée', 'success');
+        }
+        console.log('✨ Éditeur de playlist réinitialisé');
     },
 
     setPlaylistModified: function(modified) {
@@ -777,7 +783,13 @@ PiSignage.playlists = {
 // Ensure global functions are available immediately when script loads
 // This handles onclick bindings in HTML before DOMContentLoaded
 if (typeof window !== 'undefined') {
-    PiSignage.playlists.setupGlobalFunctions();
+    console.log('🔧 Setting up global functions for playlists...');
+    if (typeof PiSignage !== 'undefined' && PiSignage.playlists) {
+        PiSignage.playlists.setupGlobalFunctions();
+        console.log('✅ Global playlist functions ready:', typeof window.createNewPlaylist);
+    } else {
+        console.error('❌ PiSignage.playlists not ready for global function setup');
+    }
 }
 
 // CSS for playlist styling
