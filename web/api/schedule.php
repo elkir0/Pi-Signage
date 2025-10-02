@@ -4,6 +4,8 @@
  * Manages playlist scheduling with recurrence, priorities, and conflict detection
  */
 
+require_once '../config.php';
+
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, PATCH');
@@ -17,7 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 // Data file paths
 define('SCHEDULES_FILE', '/opt/pisignage/data/schedules.json');
-define('PLAYLISTS_PATH', '/opt/pisignage/config');
+// PLAYLISTS_PATH is now defined in config.php
 
 /**
  * Check if playlist exists
