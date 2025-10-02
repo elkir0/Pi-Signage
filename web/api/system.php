@@ -5,7 +5,6 @@
  */
 
 require_once "/opt/pisignage/web/config.php";
-require_once "config.php";
 
 $method = $_SERVER['REQUEST_METHOD'];
 $input = json_decode(file_get_contents('php://input'), true);
