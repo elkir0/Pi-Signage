@@ -779,7 +779,7 @@ configure_sudo() {
     sudo tee /etc/sudoers.d/pisignage > /dev/null << 'SUDOERS'
 # PiSignage sudo permissions
 pi ALL=(ALL) NOPASSWD: /sbin/shutdown, /sbin/reboot, /bin/systemctl
-www-data ALL=(ALL) NOPASSWD: /usr/bin/amixer
+www-data ALL=(ALL) NOPASSWD: /usr/bin/amixer, /usr/bin/raspi-config
 SUDOERS
 
     # Ajouter www-data au groupe video (accès framebuffer pour screenshots)

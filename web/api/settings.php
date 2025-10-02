@@ -102,15 +102,24 @@ function updateAudioOutput($input) {
         return;
     }
 
-    // Apply audio output change via amixer
+    // Apply audio output change via raspi-config
+    // 0 = auto, 1 = headphone/jack, 2 = hdmi
     $device = ($audioOutput === 'hdmi') ? 2 : 1;
-    $command = "sudo amixer cset numid=3 $device 2>&1";
+    $command = "sudo raspi-config nonint do_audio $device 2>&1";
     exec($command, $output, $returnCode);
 
     if ($returnCode === 0) {
         jsonResponse(true, ['audio_output' => $audioOutput], 'Sortie audio changée: ' . strtoupper($audioOutput));
     } else {
-        jsonResponse(false, null, 'Erreur lors du changement de sortie audio: ' . implode("\n", $output));
+        // Fallback: try alternative method with amixer if available
+        $fallbackCommand = "pactl set-card-profile 0 output:" . ($audioOutput === 'hdmi' ? 'hdmi-stereo' : 'analog-stereo') . " 2>&1";
+        exec($fallbackCommand, $fallbackOutput, $fallbackCode);
+
+        if ($fallbackCode === 0) {
+            jsonResponse(true, ['audio_output' => $audioOutput], 'Sortie audio changée: ' . strtoupper($audioOutput));
+        } else {
+            jsonResponse(false, null, 'Erreur lors du changement de sortie audio. Sortie sauvegardée mais non appliquée.');
+        }
     }
 }
 
