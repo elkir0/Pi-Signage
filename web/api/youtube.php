@@ -1,8 +1,14 @@
 <?php
 /**
- * PiSignage v0.8.0 - YouTube Download API
- * Téléchargement de vidéos YouTube avec yt-dlp
- * Compatible PHP 7.4 pour Raspberry Pi Bullseye
+ * PiSignage v0.8.9 - YouTube Download API
+ *
+ * YouTube video downloader using yt-dlp with queue management and progress tracking.
+ * Supports quality selection, audio extraction, and background download processing.
+ *
+ * @package    PiSignage
+ * @subpackage API
+ * @version    0.8.9
+ * @since      0.8.0
  */
 
 require_once '../config.php';
@@ -32,6 +38,13 @@ if (basename($_SERVER['SCRIPT_FILENAME']) === 'youtube.php' ||
     }
 }
 
+/**
+ * Handle GET requests for download data.
+ *
+ * Supports queue, status, info, and check_ytdlp actions.
+ *
+ * @since 0.8.0
+ */
 function handleGetDownloads() {
     $action = $_GET['action'] ?? 'queue';
 
@@ -71,6 +84,12 @@ function handleGetDownloads() {
     }
 }
 
+/**
+ * Start YouTube video download.
+ *
+ * @param array $input Request data with url, quality, format, audio_only
+ * @since 0.8.0
+ */
 function handleDownloadVideo($input) {
     if (!isset($input['url']) || empty($input['url'])) {
         jsonResponse(false, null, 'URL is required');
@@ -125,6 +144,12 @@ function handleDownloadVideo($input) {
     }
 }
 
+/**
+ * Cancel active download.
+ *
+ * @param array $input Request data with download ID
+ * @since 0.8.0
+ */
 function handleCancelDownload($input) {
     if (!isset($input['id'])) {
         jsonResponse(false, null, 'Download ID required');
@@ -141,6 +166,12 @@ function handleCancelDownload($input) {
     }
 }
 
+/**
+ * Check yt-dlp installation status.
+ *
+ * @return array Installation info with available, path, version
+ * @since 0.8.0
+ */
 function checkYtDlpInstallation() {
     $ytdlpPath = '/usr/local/bin/yt-dlp';
     $alternative = '/usr/bin/yt-dlp';
@@ -185,6 +216,13 @@ function checkYtDlpInstallation() {
     ];
 }
 
+/**
+ * Get yt-dlp version.
+ *
+ * @param string $path Path to yt-dlp executable
+ * @return string Version string
+ * @since 0.8.0
+ */
 function getYtDlpVersion($path) {
     $result = executeCommand("$path --version 2>/dev/null");
     if ($result['success'] && !empty($result['output'])) {
@@ -193,6 +231,13 @@ function getYtDlpVersion($path) {
     return 'Unknown';
 }
 
+/**
+ * Validate YouTube URL format.
+ *
+ * @param string $url URL to validate
+ * @return bool True if valid YouTube URL
+ * @since 0.8.0
+ */
 function isValidYouTubeUrl($url) {
     $patterns = [
         '/^https?:\/\/(www\.)?(youtube\.com|youtu\.be)/',
@@ -210,10 +255,23 @@ function isValidYouTubeUrl($url) {
     return false;
 }
 
+/**
+ * Generate unique download ID.
+ *
+ * @return string Download ID with timestamp
+ * @since 0.8.0
+ */
 function generateDownloadId() {
     return 'dl_' . date('YmdHis') . '_' . substr(md5(uniqid()), 0, 8);
 }
 
+/**
+ * Get video metadata from YouTube.
+ *
+ * @param string $url YouTube video URL
+ * @return array|false Video info or false on failure
+ * @since 0.8.0
+ */
 function getVideoInfo($url) {
     $ytdlpCheck = checkYtDlpInstallation();
     if (!$ytdlpCheck['available']) {
@@ -245,6 +303,13 @@ function getVideoInfo($url) {
     return false;
 }
 
+/**
+ * Extract available quality formats.
+ *
+ * @param array $formats yt-dlp format list
+ * @return array Quality options (e.g., ["1080p", "720p"])
+ * @since 0.8.0
+ */
 function extractAvailableFormats($formats) {
     $availableFormats = [];
 
@@ -263,6 +328,12 @@ function extractAvailableFormats($formats) {
     return $availableFormats;
 }
 
+/**
+ * Save download to queue file.
+ *
+ * @param array $downloadParams Download parameters
+ * @since 0.8.0
+ */
 function saveDownloadToQueue($downloadParams) {
     $queueFile = CONFIG_PATH . '/download_queue.json';
     $queue = [];
@@ -275,6 +346,12 @@ function saveDownloadToQueue($downloadParams) {
     file_put_contents($queueFile, json_encode($queue, JSON_PRETTY_PRINT));
 }
 
+/**
+ * Get download queue with auto-cleanup.
+ *
+ * @return array Download queue items
+ * @since 0.8.0
+ */
 function getDownloadQueue() {
     $queueFile = CONFIG_PATH . '/download_queue.json';
 
@@ -299,6 +376,13 @@ function getDownloadQueue() {
     return [];
 }
 
+/**
+ * Get status of specific download.
+ *
+ * @param string $downloadId Download ID
+ * @return array|null Download status or null if not found
+ * @since 0.8.0
+ */
 function getDownloadStatus($downloadId) {
     $queueFile = CONFIG_PATH . '/download_queue.json';
 
@@ -313,6 +397,15 @@ function getDownloadStatus($downloadId) {
     return null;
 }
 
+/**
+ * Update download status in queue.
+ *
+ * @param string $downloadId Download ID
+ * @param string $status Status (queued, downloading, completed, error)
+ * @param int|null $progress Progress percentage
+ * @param string|null $filename Downloaded filename
+ * @since 0.8.0
+ */
 function updateDownloadStatus($downloadId, $status, $progress = null, $filename = null) {
     $queueFile = CONFIG_PATH . '/download_queue.json';
     $queue = [];
@@ -341,6 +434,17 @@ function updateDownloadStatus($downloadId, $status, $progress = null, $filename 
     }
 }
 
+/**
+ * Start background download process.
+ *
+ * @param string $downloadId Download ID
+ * @param string $url YouTube URL
+ * @param string $quality Quality (best, 1080p, 720p, etc.)
+ * @param string $format Output format (mp4, mp3)
+ * @param bool $audioOnly Extract audio only
+ * @return bool True if started successfully
+ * @since 0.8.0
+ */
 function startDownload($downloadId, $url, $quality, $format, $audioOnly) {
     $ytdlpCheck = checkYtDlpInstallation();
     if (!$ytdlpCheck['available']) {
@@ -390,6 +494,15 @@ function startDownload($downloadId, $url, $quality, $format, $audioOnly) {
     return true;
 }
 
+/**
+ * Create bash script for background download.
+ *
+ * @param string $downloadId Download ID
+ * @param string $ytdlpCommand yt-dlp command to execute
+ * @param string $logFile Log file path
+ * @return string Script path
+ * @since 0.8.0
+ */
 function createDownloadScript($downloadId, $ytdlpCommand, $logFile) {
     $configPath = CONFIG_PATH;
     $mediaPath = MEDIA_PATH;
@@ -473,11 +586,28 @@ function createDownloadScript($downloadId, $ytdlpCommand, $logFile) {
     return $scriptPath;
 }
 
+/**
+ * Create progress tracking script (DEPRECATED).
+ *
+ * @deprecated 0.8.9 Use createDownloadScript instead
+ * @param string $downloadId Download ID
+ * @param string $progressFile Progress file path
+ * @param string $logFile Log file path
+ * @return string Script path
+ * @since 0.8.0
+ */
 function createProgressScript($downloadId, $progressFile, $logFile) {
     // DEPRECATED - Kept for compatibility
     return createDownloadScript($downloadId, '', $logFile);
 }
 
+/**
+ * Cancel active download and cleanup.
+ *
+ * @param string $downloadId Download ID
+ * @return bool True on success
+ * @since 0.8.0
+ */
 function cancelDownload($downloadId) {
     // Kill process if running
     $result = executeCommand("pkill -f 'yt-dlp.*$downloadId'");
@@ -498,7 +628,11 @@ function cancelDownload($downloadId) {
 }
 
 
-// Cleanup old downloads on startup
+/**
+ * Remove old downloads from queue (7+ days).
+ *
+ * @since 0.8.0
+ */
 function cleanupOldDownloads() {
     $queueFile = CONFIG_PATH . '/download_queue.json';
 

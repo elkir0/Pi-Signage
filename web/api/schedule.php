@@ -1,7 +1,14 @@
 <?php
 /**
- * PiSignage Schedule API
- * Manages playlist scheduling with recurrence, priorities, and conflict detection
+ * PiSignage v0.8.9 - Schedule Management API
+ *
+ * Manages playlist scheduling with recurrence patterns, priorities, and conflict detection.
+ * Supports daily, weekly, monthly, and one-time schedules with post-playback actions.
+ *
+ * @package    PiSignage
+ * @subpackage API
+ * @version    0.8.9
+ * @since      0.8.0
  */
 
 require_once '../config.php';
@@ -22,7 +29,11 @@ define('SCHEDULES_FILE', '/opt/pisignage/data/schedules.json');
 // PLAYLISTS_PATH is now defined in config.php
 
 /**
- * Check if playlist exists
+ * Check if playlist file exists.
+ *
+ * @param string $playlistName Playlist name without extension
+ * @return bool True if playlist exists
+ * @since 0.8.0
  */
 function playlistExists($playlistName) {
     $playlistFile = PLAYLISTS_PATH . '/' . $playlistName . '.json';
@@ -30,7 +41,10 @@ function playlistExists($playlistName) {
 }
 
 /**
- * Load all schedules from JSON file
+ * Load all schedules from storage.
+ *
+ * @return array Array of schedule objects
+ * @since 0.8.0
  */
 function loadSchedules() {
     if (!file_exists(SCHEDULES_FILE)) {
@@ -44,7 +58,11 @@ function loadSchedules() {
 }
 
 /**
- * Save schedules to JSON file
+ * Save schedules to storage.
+ *
+ * @param array $schedules Array of schedule objects
+ * @return bool True on success
+ * @since 0.8.0
  */
 function saveSchedules($schedules) {
     $json = json_encode($schedules, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
@@ -52,14 +70,23 @@ function saveSchedules($schedules) {
 }
 
 /**
- * Generate unique ID
+ * Generate unique schedule ID.
+ *
+ * @return string Unique ID with 'sched_' prefix
+ * @since 0.8.0
  */
 function generateId() {
     return uniqid('sched_', true);
 }
 
 /**
- * Validate schedule data
+ * Validate schedule data.
+ *
+ * Checks required fields, time formats, and playlist existence.
+ *
+ * @param array $data Schedule data to validate
+ * @return array Array of error messages (empty if valid)
+ * @since 0.8.0
  */
 function validateSchedule($data) {
     $errors = [];
@@ -106,7 +133,13 @@ function validateSchedule($data) {
 }
 
 /**
- * Calculate next run time for a schedule
+ * Calculate next run time for a schedule.
+ *
+ * Handles daily, weekly, monthly, and one-time recurrence patterns.
+ *
+ * @param array $schedule Schedule object with recurrence settings
+ * @return string ISO 8601 datetime string
+ * @since 0.8.0
  */
 function calculateNextRun($schedule) {
     $now = new DateTime();
@@ -174,7 +207,13 @@ function calculateNextRun($schedule) {
 }
 
 /**
- * Check for conflicts between schedules
+ * Detect time and recurrence conflicts between schedules.
+ *
+ * @param array $newSchedule Schedule to check
+ * @param array $existingSchedules Array of existing schedules
+ * @param string|null $excludeId Schedule ID to exclude from conflict check
+ * @return array Array of conflicting schedules with details
+ * @since 0.8.0
  */
 function detectConflicts($newSchedule, $existingSchedules, $excludeId = null) {
     $conflicts = [];
@@ -215,7 +254,11 @@ function detectConflicts($newSchedule, $existingSchedules, $excludeId = null) {
 }
 
 /**
- * Convert time string (HH:MM) to minutes
+ * Convert time string to minutes since midnight.
+ *
+ * @param string $time Time in HH:MM format
+ * @return int Minutes since midnight
+ * @since 0.8.0
  */
 function timeToMinutes($time) {
     list($hour, $minute) = explode(':', $time);
@@ -223,7 +266,12 @@ function timeToMinutes($time) {
 }
 
 /**
- * Check if two schedules overlap on the same days
+ * Check if two schedules have overlapping recurrence days.
+ *
+ * @param array $schedule1 First schedule object
+ * @param array $schedule2 Second schedule object
+ * @return bool True if schedules may occur on same days
+ * @since 0.8.0
  */
 function schedulesOverlapDays($schedule1, $schedule2) {
     $rec1 = $schedule1['schedule']['recurrence'];
@@ -252,7 +300,10 @@ function schedulesOverlapDays($schedule1, $schedule2) {
 }
 
 /**
- * Get request body data
+ * Parse JSON request body.
+ *
+ * @return array Decoded request data
+ * @since 0.8.0
  */
 function getRequestData() {
     $input = file_get_contents('php://input');
@@ -260,7 +311,11 @@ function getRequestData() {
 }
 
 /**
- * Send JSON response
+ * Send JSON response and exit.
+ *
+ * @param array $data Response data
+ * @param int $statusCode HTTP status code
+ * @since 0.8.0
  */
 function sendResponse($data, $statusCode = 200) {
     http_response_code($statusCode);

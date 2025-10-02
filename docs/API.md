@@ -1,6 +1,6 @@
-# Documentation API - PiSignage v0.8.5
+# Documentation API - PiSignage v0.8.9
 
-## Nouveautés v0.8.5
+## Nouveautés v0.8.9
 
 - **Performance améliorée**: Réponses API 80% plus rapides
 - **Fiabilité renforcée**: Architecture modulaire éliminant les conflits JavaScript
@@ -9,9 +9,9 @@
 
 ## Vue d'ensemble
 
-PiSignage v0.8.5 expose une API REST complète permettant de contrôler l'ensemble des fonctionnalités via des requêtes HTTP. L'API supporte les formats JSON et les uploads multipart/form-data.
+PiSignage v0.8.9 expose une API REST complète permettant de contrôler l'ensemble des fonctionnalités via des requêtes HTTP. L'API supporte les formats JSON et les uploads multipart/form-data.
 
-**Améliorations v0.8.5**:
+**Améliorations v0.8.9**:
 - Réponses plus rapides grâce à l'architecture modulaire
 - Gestion d'erreurs améliorée avec messages détaillés
 - Validation d'entrée renforcée
@@ -49,7 +49,7 @@ Retourne les informations système complètes.
   "data": {
     "hostname": "raspberrypi",
     "ip": "192.168.1.100",
-    "version": "0.8.1",
+    "version": "0.8.9",
     "php_version": "8.2.7",
     "platform": "Linux",
     "cpu_usage": 15.4,
@@ -630,8 +630,12 @@ Les webhooks peuvent être configurés dans `/opt/pisignage/config/webhooks.json
 - Les logs peuvent contenir des informations sensibles
 - Configurez HTTPS en production
 
-Cette documentation couvre l'API complète de PiSignage v0.8.5. Pour des questions spécifiques, consultez les logs ou ouvrez une issue sur GitHub.
+Cette documentation couvre l'API complète de PiSignage v0.8.9. Pour des questions spécifiques, consultez les logs ou ouvrez une issue sur GitHub.
 
-## Migration depuis v0.8.3
+## Migration depuis versions précédentes
 
-Toutes les intégrations API existantes continuent de fonctionner sans modification. La seule différence est une performance améliorée et une fiabilité accrue.
+Toutes les intégrations API existantes continuent de fonctionner sans modification. Les versions 0.8.9 apportent:
+- **VLC exclusif**: Support MPV complètement retiré pour stabilité maximale
+- **Authentification renforcée**: Système d'auth sur toutes les pages
+- **Contrôle audio amélioré**: Gestion volume complète via VLC
+- **Performance optimisée**: Architecture modulaire MPA

@@ -1,4 +1,4 @@
-# Guide de Déploiement - PiSignage v0.8.5
+# Guide de Déploiement - PiSignage v0.8.9
 
 ## 🎯 Déploiement Rapide
 
@@ -308,13 +308,15 @@ Raspberry Pi (192.168.1.105)
 
 ## ✅ État Actuel
 
-- **Version**: PiSignage v0.8.5
-- **Module**: Scheduler 100% implémenté
+- **Version**: PiSignage v0.8.9
+- **Architecture**: VLC-Exclusive, Modular MPA
+- **Modules**: 9/9 implémentés et testés (100%)
+- **Authentication**: Activée sur toutes les pages
 - **Git**: Synchronisé avec GitHub (elkir0/Pi-Signage)
 - **IP Production**: 192.168.1.105
-- **Statut**: READY TO DEPLOY
+- **Statut**: PRODUCTION-READY ✅
 
 ---
 
 **Document créé**: 30 Septembre 2025
-**Dernière mise à jour**: 30 Septembre 2025
+**Dernière mise à jour**: 1 Octobre 2025 (v0.8.9)

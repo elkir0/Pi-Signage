@@ -420,7 +420,7 @@ create_vlc_script() {
     sudo tee $INSTALL_DIR/scripts/start-vlc.sh > /dev/null << 'ENDOFFILE'
 #!/bin/bash
 
-echo "=== PiSignage v0.8.1 - Démarrage VLC ==="
+echo "=== PiSignage v0.8.9 - Démarrage VLC ==="
 
 # Arrêt gracieux des lecteurs existants
 systemctl --user stop pisignage-vlc.service 2>/dev/null || true
@@ -552,7 +552,7 @@ server {
         try_files \$uri \$uri/ /index.php?\$query_string;
     }
 
-    # API routes - support PATH_INFO for REST APIs (v0.8.8+)
+    # API routes - support PATH_INFO for REST APIs (v0.8.9)
     location ~ ^/api/(.+\.php)(/.*)?$ {
         fastcgi_split_path_info ^(/api/.+\.php)(/.*)?$;
         set \$script \$fastcgi_script_name;

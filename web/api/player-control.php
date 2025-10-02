@@ -1,17 +1,35 @@
 <?php
 /**
- * PiSignage v0.8.3 - Enhanced Player Control API
- * Real-time control with VLC HTTP interface integration
+ * PiSignage v0.8.9 - Player Control API
+ *
+ * Real-time VLC player control via HTTP interface (localhost:8080, password: pisignage).
+ * Supports playback control, playlist management, volume, and system monitoring.
+ *
+ * @package    PiSignage
+ * @subpackage API
+ * @version    0.8.9
+ * @since      0.8.0
  */
 
 require_once '../config.php';
 
-// Helper functions directly included to avoid file dependency issues
+/**
+ * Get CPU usage percentage.
+ *
+ * @return float CPU load percentage
+ * @since 0.8.0
+ */
 function getCpuUsage() {
     $load = sys_getloadavg();
     return round($load[0] * 25, 1); // Simple approximation
 }
 
+/**
+ * Get system memory usage.
+ *
+ * @return array Memory stats with total, used, and percent
+ * @since 0.8.0
+ */
 function getMemoryUsage() {
     $free = shell_exec('free -b');
     $free = (string)trim($free);
@@ -28,6 +46,12 @@ function getMemoryUsage() {
     ];
 }
 
+/**
+ * Get Raspberry Pi CPU temperature.
+ *
+ * @return float|null Temperature in Celsius or null if unavailable
+ * @since 0.8.0
+ */
 function getRaspberryPiTemperature() {
     if (file_exists('/sys/class/thermal/thermal_zone0/temp')) {
         $temp = intval(file_get_contents('/sys/class/thermal/thermal_zone0/temp'));
@@ -36,6 +60,12 @@ function getRaspberryPiTemperature() {
     return null;
 }
 
+/**
+ * Get system uptime.
+ *
+ * @return string Human-readable uptime
+ * @since 0.8.0
+ */
 function getUptime() {
     $uptime = shell_exec('uptime -p');
     return trim($uptime);
@@ -51,6 +81,11 @@ define('VLC_HOST', 'localhost');
 define('VLC_PORT', '8080');
 define('VLC_PASSWORD', 'pisignage');
 
+/**
+ * VLC HTTP interface controller.
+ *
+ * @since 0.8.0
+ */
 class VLCController {
     private $baseUrl;
     private $auth;
@@ -61,7 +96,12 @@ class VLCController {
     }
 
     /**
-     * Send command to VLC HTTP interface
+     * Send command to VLC HTTP interface.
+     *
+     * @param string $command VLC command name
+     * @param array $params Command parameters
+     * @return array Response with success status
+     * @since 0.8.0
      */
     private function sendCommand($command, $params = []) {
         $url = $this->baseUrl . '/requests/status.json?command=' . $command;
@@ -99,7 +139,12 @@ class VLCController {
     }
 
     /**
-     * Fallback to shell commands if VLC HTTP is unavailable
+     * Fallback to shell commands via netcat.
+     *
+     * @param string $command VLC command
+     * @param array $params Command parameters
+     * @return array Response with success status
+     * @since 0.8.0
      */
     private function fallbackToShell($command, $params) {
         $result = ['success' => false, 'message' => 'Command not implemented'];
@@ -131,7 +176,10 @@ class VLCController {
     }
 
     /**
-     * Get detailed player status
+     * Get detailed player status.
+     *
+     * @return array Player state, position, volume, and playlist
+     * @since 0.8.0
      */
     public function getStatus() {
         $url = $this->baseUrl . '/requests/status.json';
@@ -167,7 +215,10 @@ class VLCController {
     }
 
     /**
-     * Get status from VLC process
+     * Get status from VLC process when HTTP unavailable.
+     *
+     * @return array Basic player status
+     * @since 0.8.0
      */
     private function getProcessStatus() {
         $isRunning = false;
@@ -200,7 +251,11 @@ class VLCController {
     }
 
     /**
-     * Extract current file information
+     * Extract current file from VLC status.
+     *
+     * @param array $status VLC status response
+     * @return string|null Current filename
+     * @since 0.8.0
      */
     private function extractCurrentFile($status) {
         if (isset($status['information']['category']['meta']['filename'])) {
@@ -215,7 +270,11 @@ class VLCController {
     }
 
     /**
-     * Extract playlist information
+     * Extract playlist from VLC status.
+     *
+     * @param array $status VLC status response
+     * @return array Playlist items
+     * @since 0.8.0
      */
     private function extractPlaylistInfo($status) {
         $playlist = [];
@@ -239,38 +298,86 @@ class VLCController {
     }
 
     /**
-     * Player control methods
+     * Play current media.
+     *
+     * @return array Response with success status
+     * @since 0.8.0
      */
     public function play() {
         return $this->sendCommand('pl_play');
     }
 
+    /**
+     * Pause playback.
+     *
+     * @return array Response with success status
+     * @since 0.8.0
+     */
     public function pause() {
         return $this->sendCommand('pl_pause');
     }
 
+    /**
+     * Stop playback.
+     *
+     * @return array Response with success status
+     * @since 0.8.0
+     */
     public function stop() {
         return $this->sendCommand('pl_stop');
     }
 
+    /**
+     * Play next item in playlist.
+     *
+     * @return array Response with success status
+     * @since 0.8.0
+     */
     public function next() {
         return $this->sendCommand('pl_next');
     }
 
+    /**
+     * Play previous item in playlist.
+     *
+     * @return array Response with success status
+     * @since 0.8.0
+     */
     public function previous() {
         return $this->sendCommand('pl_previous');
     }
 
+    /**
+     * Seek to position in seconds.
+     *
+     * @param int $position Position in seconds
+     * @return array Response with success status
+     * @since 0.8.0
+     */
     public function seek($position) {
         return $this->sendCommand('seek', ['val' => $position]);
     }
 
+    /**
+     * Set volume level.
+     *
+     * @param int $volume Volume 0-100
+     * @return array Response with success status
+     * @since 0.8.9
+     */
     public function setVolume($volume) {
         // Convert 0-100 to VLC's 0-256 scale
         $vlcVolume = intval($volume * 2.56);
         return $this->sendCommand('volume', ['val' => $vlcVolume]);
     }
 
+    /**
+     * Play specific media file.
+     *
+     * @param string $file Filename in media directory
+     * @return array Response with success status
+     * @since 0.8.0
+     */
     public function playFile($file) {
         $fullPath = MEDIA_DIR . '/' . basename($file);
         if (!file_exists($fullPath)) {
@@ -280,6 +387,13 @@ class VLCController {
         return $this->sendCommand('in_play', ['input' => $fullPath]);
     }
 
+    /**
+     * Add file to playlist.
+     *
+     * @param string $file Filename in media directory
+     * @return array Response with success status
+     * @since 0.8.0
+     */
     public function addToPlaylist($file) {
         $fullPath = MEDIA_DIR . '/' . basename($file);
         if (!file_exists($fullPath)) {
@@ -289,20 +403,47 @@ class VLCController {
         return $this->sendCommand('in_enqueue', ['input' => $fullPath]);
     }
 
+    /**
+     * Clear VLC playlist.
+     *
+     * @return array Response with success status
+     * @since 0.8.0
+     */
     public function clearPlaylist() {
         return $this->sendCommand('pl_empty');
     }
 
+    /**
+     * Enable or disable loop mode.
+     *
+     * @param bool $enabled Loop enabled
+     * @return array Response with success status
+     * @since 0.8.0
+     */
     public function setLoop($enabled) {
         $mode = $enabled ? 'on' : 'off';
         return $this->sendCommand('pl_loop', ['val' => $mode]);
     }
 
+    /**
+     * Enable or disable random mode.
+     *
+     * @param bool $enabled Random enabled
+     * @return array Response with success status
+     * @since 0.8.0
+     */
     public function setRandom($enabled) {
         $mode = $enabled ? 'on' : 'off';
         return $this->sendCommand('pl_random', ['val' => $mode]);
     }
 
+    /**
+     * Enable or disable fullscreen mode.
+     *
+     * @param bool $enabled Fullscreen enabled
+     * @return array Response with success status
+     * @since 0.8.0
+     */
     public function setFullscreen($enabled) {
         return $this->sendCommand('fullscreen', ['val' => $enabled ? '1' : '0']);
     }
@@ -432,10 +573,12 @@ if ($method === 'GET' && $action === 'status') {
 }
 
 /**
- * Helper functions are now defined at the top of the file
+ * Load PiSignage playlist into VLC.
+ *
+ * @param string $playlistName Playlist name without extension
+ * @return array Response with success status and loaded playlist
+ * @since 0.8.0
  */
-
-
 function loadPlaylistToVLC($playlistName) {
     $playlistFile = PLAYLISTS_PATH . '/' . $playlistName . '.json';
 

@@ -1,6 +1,6 @@
 <?php
 /**
- * PiSignage v0.8.0 - System API
+ * PiSignage v0.8.9 - System API
  * Provides system information and controls
  */
 

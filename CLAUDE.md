@@ -1,10 +1,10 @@
-alors# Claude Development Protocol - PiSignage v0.8.5
+alors# Claude Development Protocol - PiSignage v0.8.9
 
 ## Project Overview
 
-PiSignage is a professional digital signage solution optimized for Raspberry Pi hardware. Version 0.8.5 represents a complete architectural transformation from a monolithic SPA to a modular MPA system.
+PiSignage is a professional digital signage solution optimized for Raspberry Pi hardware. Version 0.8.9 represents a complete architectural transformation from a monolithic SPA to a modular MPA system with VLC-exclusive player support.
 
-## Current Architecture (v0.8.5)
+## Current Architecture (v0.8.9)
 
 ### Modular Multi-Page Application
 - **9 PHP pages**: dashboard.php, media.php, playlists.php, player.php, settings.php, logs.php, screenshot.php, youtube.php, schedule.php

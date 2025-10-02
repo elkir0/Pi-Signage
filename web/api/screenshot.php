@@ -1,8 +1,15 @@
 <?php
 /**
- * PiSignage v0.8.0 - Screenshot API
- * API de capture d'écran optimisée pour Raspberry Pi
- * Support: raspi2png > scrot > fbgrab avec cache et rate limiting
+ * PiSignage v0.8.9 - Screenshot Capture API
+ *
+ * Optimized screenshot capture for Raspberry Pi with multiple capture methods.
+ * Supports raspi2png, scrot, fbgrab, grim (Wayland), gnome-screenshot, and ffmpeg-vlc.
+ * Features RAM caching, rate limiting, and format/quality control.
+ *
+ * @package    PiSignage
+ * @subpackage API
+ * @version    0.8.9
+ * @since      0.8.0
  */
 
 require_once dirname(__DIR__) . '/config.php';
@@ -16,7 +23,9 @@ define('SCREENSHOT_QUALITY_MAX', 100);
 define('SCREENSHOT_QUALITY_DEFAULT', 85);
 
 /**
- * Classe de gestion des captures d'écran
+ * Screenshot capture manager with multi-method support.
+ *
+ * @since 0.8.0
  */
 class ScreenshotManager {
     private $cacheDir;
@@ -33,7 +42,9 @@ class ScreenshotManager {
     }
 
     /**
-     * Initialise le cache en RAM (/dev/shm)
+     * Initialize RAM cache directory.
+     *
+     * @since 0.8.0
      */
     private function initializeCache() {
         if (!file_exists($this->cacheDir)) {
@@ -51,7 +62,9 @@ class ScreenshotManager {
     }
 
     /**
-     * Détecte les méthodes de capture disponibles par ordre de préférence
+     * Detect available capture methods in priority order.
+     *
+     * @since 0.8.0
      */
     private function detectAvailableMethods() {
         // Détection de la session Wayland ou X11
@@ -120,7 +133,10 @@ class ScreenshotManager {
     }
 
     /**
-     * Vérifie le rate limiting
+     * Check rate limiting (5 second minimum between captures).
+     *
+     * @return bool True if allowed
+     * @since 0.8.0
      */
     private function checkRateLimit() {
         if (!file_exists($this->lastCaptureFile)) {
@@ -134,14 +150,18 @@ class ScreenshotManager {
     }
 
     /**
-     * Met à jour le timestamp de dernière capture
+     * Update last capture timestamp.
+     *
+     * @since 0.8.0
      */
     private function updateLastCaptureTime() {
         file_put_contents($this->lastCaptureFile, time());
     }
 
     /**
-     * Nettoie le cache si nécessaire
+     * Cleanup cache if exceeds 50MB.
+     *
+     * @since 0.8.0
      */
     private function cleanupCache() {
         $files = glob($this->cacheDir . '/screenshot_*.{png,jpg,jpeg}', GLOB_BRACE);
@@ -178,7 +198,12 @@ class ScreenshotManager {
     }
 
     /**
-     * Génère le nom de fichier pour la capture
+     * Generate screenshot filename.
+     *
+     * @param string $format File format (png, jpg, jpeg)
+     * @param int|null $quality Quality level
+     * @return string Generated filename
+     * @since 0.8.0
      */
     private function generateFilename($format = 'png', $quality = null) {
         $timestamp = date('YmdHis');
@@ -187,7 +212,12 @@ class ScreenshotManager {
     }
 
     /**
-     * Capture avec raspi2png (méthode optimale pour Raspberry Pi)
+     * Capture with raspi2png (optimal for Raspberry Pi GPU).
+     *
+     * @param string $outputFile Output file path
+     * @param int|null $quality Quality 0-100
+     * @return array Result with success, method, time
+     * @since 0.8.0
      */
     private function captureWithRaspi2png($outputFile, $quality = null) {
         $cmd = "raspi2png -p '$outputFile'";
@@ -209,7 +239,12 @@ class ScreenshotManager {
     }
 
     /**
-     * Capture avec scrot
+     * Capture with scrot (X11).
+     *
+     * @param string $outputFile Output file path
+     * @param int|null $quality Quality 0-100
+     * @return array Result with success, method, time
+     * @since 0.8.0
      */
     private function captureWithScrot($outputFile, $quality = null) {
         $qualityParam = $quality ? " -q $quality" : '';
@@ -227,7 +262,12 @@ class ScreenshotManager {
     }
 
     /**
-     * Capture avec fbgrab
+     * Capture with fbgrab (framebuffer).
+     *
+     * @param string $outputFile Output file path
+     * @param int|null $quality Quality 0-100
+     * @return array Result with success, method, time
+     * @since 0.8.0
      */
     private function captureWithFbgrab($outputFile, $quality = null) {
         // fbgrab produit toujours du PNG, conversion si nécessaire
@@ -271,7 +311,12 @@ class ScreenshotManager {
     }
 
     /**
-     * Capture avec ImageMagick import
+     * Capture with ImageMagick import (X11).
+     *
+     * @param string $outputFile Output file path
+     * @param int|null $quality Quality 0-100
+     * @return array Result with success, method, time
+     * @since 0.8.0
      */
     private function captureWithImport($outputFile, $quality = null) {
         $qualityParam = $quality ? " -quality $quality" : '';
@@ -289,7 +334,12 @@ class ScreenshotManager {
     }
 
     /**
-     * Capture avec grim (Wayland standard)
+     * Capture with grim (Wayland native).
+     *
+     * @param string $outputFile Output file path
+     * @param int|null $quality Quality 0-100
+     * @return array Result with success, method, time
+     * @since 0.8.0
      */
     private function captureWithGrim($outputFile, $quality = null) {
         $format = pathinfo($outputFile, PATHINFO_EXTENSION);
@@ -325,7 +375,12 @@ class ScreenshotManager {
     }
 
     /**
-     * Capture avec FFmpeg depuis VLC
+     * Capture VLC playback using FFmpeg.
+     *
+     * @param string $outputFile Output file path
+     * @param int|null $quality Quality 0-100
+     * @return array Result with success, method, time
+     * @since 0.8.9
      */
     private function captureWithFfmpegVlc($outputFile, $quality = null) {
         // Vérifier si VLC est actif via HTTP
@@ -378,7 +433,12 @@ class ScreenshotManager {
     }
 
     /**
-     * Capture avec GNOME D-Bus (compatible Wayland)
+     * Capture with GNOME D-Bus (Wayland/X11).
+     *
+     * @param string $outputFile Output file path
+     * @param int|null $quality Quality 0-100
+     * @return array Result with success, method, time
+     * @since 0.8.0
      */
     private function captureWithGnomeScreenshot($outputFile, $quality = null) {
         // Génération d'un nom temporaire pour GNOME
@@ -420,7 +480,11 @@ class ScreenshotManager {
     }
 
     /**
-     * Effectue la capture d'écran
+     * Capture screenshot with specified options.
+     *
+     * @param array $options Options: format, quality, method, base64
+     * @return array Response with success, data, message
+     * @since 0.8.0
      */
     public function capture($options = []) {
         // Validation du rate limiting
@@ -561,7 +625,11 @@ class ScreenshotManager {
     }
 
     /**
-     * Liste les captures récentes
+     * List recent screenshots.
+     *
+     * @param int $limit Maximum number of results
+     * @return array Screenshot list with metadata
+     * @since 0.8.0
      */
     public function listRecent($limit = 10) {
         $files = glob($this->cacheDir . '/screenshot_*.{png,jpg,jpeg}', GLOB_BRACE);
@@ -585,7 +653,10 @@ class ScreenshotManager {
     }
 
     /**
-     * Retourne les informations sur les méthodes disponibles
+     * Get available capture methods information.
+     *
+     * @return array Methods info with name, description, speed, quality
+     * @since 0.8.0
      */
     public function getMethodsInfo() {
         $info = [];

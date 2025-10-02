@@ -1,8 +1,8 @@
-# Migration Guide: PiSignage v0.8.3 to v0.8.5
+# Migration Guide: PiSignage v0.8.x to v0.8.9
 
 ## Overview
 
-This guide helps you migrate from PiSignage v0.8.3 (monolithic SPA) to v0.8.5 (modular MPA) while maintaining 100% compatibility with your existing setup.
+This guide helps you migrate from PiSignage v0.8.0-v0.8.8 to v0.8.9 (VLC-exclusive, modular MPA) while maintaining compatibility with your existing setup.
 
 ## Table of Contents
 - [Pre-Migration Checklist](#pre-migration-checklist)
@@ -54,15 +54,15 @@ sudo systemctl stop pisignage nginx
 
 # Create timestamped backup
 BACKUP_DATE=$(date +%Y%m%d_%H%M%S)
-sudo cp -r /opt/pisignage /opt/pisignage-backup-v0.8.3-${BACKUP_DATE}
+sudo cp -r /opt/pisignage /opt/pisignage-backup-v0.8.8-${BACKUP_DATE}
 
 # Backup database (if using MySQL/SQLite)
 # sudo mysqldump pisignage > /opt/pisignage-backup-v0.8.3-${BACKUP_DATE}/database.sql
 
 # Document current nginx configuration
-sudo cp /etc/nginx/sites-available/pisignage /opt/pisignage-backup-v0.8.3-${BACKUP_DATE}/nginx-config
+sudo cp /etc/nginx/sites-available/pisignage /opt/pisignage-backup-v0.8.8-${BACKUP_DATE}/nginx-config
 
-echo "Backup created at: /opt/pisignage-backup-v0.8.3-${BACKUP_DATE}"
+echo "Backup created at: /opt/pisignage-backup-v0.8.8-${BACKUP_DATE}"
 ```
 
 ### Test Current Functionality
@@ -117,7 +117,7 @@ git fetch origin
 # Check available versions
 git tag --sort=-version:refname
 
-# Update to v0.8.5
+# Update to v0.8.9
 git checkout main
 git pull origin main
 
@@ -271,7 +271,7 @@ Create a verification script to test all functionality:
 PI_IP="localhost"  # Change to your Pi's IP if testing remotely
 ERRORS=0
 
-echo "PiSignage v0.8.5 Migration Verification"
+echo "PiSignage v0.8.9 Migration Verification"
 echo "========================================"
 
 # Test web interface
@@ -393,7 +393,13 @@ Complete this checklist to verify all functionality:
 
 ---
 
-## New Features in v0.8.5
+## New Features in v0.8.9
+
+### Major Changes in v0.8.9
+- **VLC Exclusive Player**: MPV support completely removed for maximum stability
+- **Authentication System**: Full auth implementation across all pages
+- **Audio Control**: Complete volume management via VLC HTTP API
+- **Modular Architecture**: Optimized MPA for Raspberry Pi performance
 
 ### Navigation Improvements
 The new modular structure provides:
@@ -421,7 +427,7 @@ The new modular structure provides:
 ## URL Changes
 
 ### New URL Structure
-| Function | v0.8.3 | v0.8.5 |
+| Function | v0.8.0-v0.8.3 | v0.8.9 |
 |----------|---------|---------|
 | Main interface | `/` or `/index.php` | `/dashboard.php` (redirected from `/`) |
 | Media management | `/#media` | `/media.php` |
@@ -617,7 +623,7 @@ sudo chmod +x /opt/pisignage/scripts/*.sh
 # Restart services
 sudo systemctl restart php8.2-fpm nginx pisignage
 
-echo "Rollback complete. System restored to v0.8.3"
+echo "Rollback complete. System restored to previous version"
 ```
 
 ### Verify Rollback
@@ -681,13 +687,15 @@ free -h
 
 ## Migration Success
 
-Congratulations! You've successfully migrated to PiSignage v0.8.5. You now have:
+Congratulations! You've successfully migrated to PiSignage v0.8.9. You now have:
 
+- **VLC-exclusive player** for maximum stability and reliability
+- **Authentication system** securing all pages
 - **80% faster performance** on Raspberry Pi
 - **Reliable navigation** without JavaScript errors
 - **Modular architecture** for easier maintenance
 - **Enhanced user interface** with modern design
-- **100% compatibility** with existing setup
+- **Complete audio control** via VLC HTTP API
 
 Enjoy the improved performance and stability of your digital signage system!
 

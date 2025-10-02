@@ -1,4 +1,15 @@
 <?php
+/**
+ * PiSignage v0.8.9 - Playlist Management API
+ *
+ * Handles playlist creation, modification, deletion, and retrieval operations.
+ *
+ * @package    PiSignage
+ * @subpackage API
+ * @version    0.8.9
+ * @since      0.8.0
+ */
+
 require_once "/opt/pisignage/web/config.php";
 
 $method = $_SERVER['REQUEST_METHOD'];
@@ -21,6 +32,13 @@ switch ($method) {
         jsonResponse(false, null, 'Method not allowed');
 }
 
+/**
+ * Handle GET requests for playlist data.
+ *
+ * Supports 'list' and 'info' actions.
+ *
+ * @since 0.8.0
+ */
 function handleGetPlaylists() {
     global $db;
     $action = $_GET['action'] ?? 'list';
@@ -71,6 +89,12 @@ function handleGetPlaylists() {
     }
 }
 
+/**
+ * Create new playlist.
+ *
+ * @param array $input Request data with name, duration, and items
+ * @since 0.8.0
+ */
 function handleCreatePlaylist($input) {
     if (!$input || !isset($input['name'])) {
         jsonResponse(false, null, 'Playlist name required');
@@ -103,6 +127,12 @@ function handleCreatePlaylist($input) {
     }
 }
 
+/**
+ * Update existing playlist.
+ *
+ * @param array $input Request data with name and fields to update
+ * @since 0.8.0
+ */
 function handleUpdatePlaylist($input) {
     if (!$input || !isset($input['name'])) {
         jsonResponse(false, null, 'Playlist name required');
@@ -135,6 +165,11 @@ function handleUpdatePlaylist($input) {
     }
 }
 
+/**
+ * Delete playlist by name.
+ *
+ * @since 0.8.0
+ */
 function handleDeletePlaylist() {
     $name = $_GET['name'] ?? null;
     if (!$name) {

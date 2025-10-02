@@ -14,7 +14,7 @@ window.PiSignage = window.PiSignage || {
     api: {},
     utils: {},
     config: {
-        version: '0.8.3',
+        version: '0.8.9',
         currentSection: 'dashboard',
         currentPlayer: 'vlc',
         selectedPlayer: 'vlc'

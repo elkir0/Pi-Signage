@@ -1,7 +1,14 @@
 <?php
 /**
- * PiSignage v0.8.0 - Media Management API
- * Handles media file operations
+ * PiSignage v0.8.9 - Media Management API
+ *
+ * Handles media file operations including upload, deletion, renaming, and metadata extraction.
+ * Supports video, audio, and image files with thumbnail generation.
+ *
+ * @package    PiSignage
+ * @subpackage API
+ * @version    0.8.9
+ * @since      0.8.0
  */
 
 require_once '../config.php';
@@ -29,6 +36,13 @@ if (basename($_SERVER['SCRIPT_FILENAME']) === 'media.php') {
     }
 }
 
+/**
+ * Handle GET requests for media data.
+ *
+ * Supports list, info, and thumbnails actions.
+ *
+ * @since 0.8.0
+ */
 function handleGetMedia() {
     $action = $_GET['action'] ?? 'list';
 
@@ -64,6 +78,12 @@ function handleGetMedia() {
     }
 }
 
+/**
+ * Handle POST actions on media files.
+ *
+ * @param array $input Request data with action and parameters
+ * @since 0.8.0
+ */
 function handleMediaAction($input) {
     if (!isset($input['action'])) {
         jsonResponse(false, null, 'Action parameter required');
@@ -93,6 +113,12 @@ function handleMediaAction($input) {
     }
 }
 
+/**
+ * Delete media file with playlist usage check.
+ *
+ * @param array $input Request data with filename
+ * @since 0.8.0
+ */
 function handleDeleteMedia($input) {
     if (!isset($input['filename'])) {
         jsonResponse(false, null, 'Filename parameter required');
@@ -146,6 +172,12 @@ function handleDeleteMedia($input) {
     }
 }
 
+/**
+ * Rename media file and update playlist references.
+ *
+ * @param array $input Request data with old_name and new_name
+ * @since 0.8.0
+ */
 function handleRenameMedia($input) {
     if (!isset($input['old_name']) || !isset($input['new_name'])) {
         jsonResponse(false, null, 'Old name and new name parameters required');
@@ -189,6 +221,12 @@ function handleRenameMedia($input) {
     }
 }
 
+/**
+ * Duplicate media file with auto-generated name.
+ *
+ * @param array $input Request data with filename
+ * @since 0.8.0
+ */
 function handleDuplicateMedia($input) {
     if (!isset($input['filename'])) {
         jsonResponse(false, null, 'Filename parameter required');
@@ -238,6 +276,12 @@ function handleDuplicateMedia($input) {
     }
 }
 
+/**
+ * Generate thumbnail for media file.
+ *
+ * @param array $input Request data with filename
+ * @since 0.8.0
+ */
 function handleGenerateThumbnail($input) {
     if (!isset($input['filename'])) {
         jsonResponse(false, null, 'Filename parameter required');
@@ -259,6 +303,15 @@ function handleGenerateThumbnail($input) {
     }
 }
 
+/**
+ * Get detailed media file information.
+ *
+ * Extracts metadata including duration, resolution, and file properties.
+ *
+ * @param string $filepath Full path to media file
+ * @return array File information and metadata
+ * @since 0.8.0
+ */
 function getMediaFileInfo($filepath) {
     $filename = basename($filepath);
     $pathInfo = pathinfo($filename);
@@ -296,6 +349,13 @@ function getMediaFileInfo($filepath) {
     return $info;
 }
 
+/**
+ * Get video duration using ffprobe.
+ *
+ * @param string $filepath Full path to video file
+ * @return string Formatted duration (HH:MM:SS or MM:SS)
+ * @since 0.8.0
+ */
 function getVideoDuration($filepath) {
     $command = "ffprobe -v quiet -show_entries format=duration -of csv=p=0 " . escapeshellarg($filepath);
     $result = executeCommand($command);
@@ -308,6 +368,13 @@ function getVideoDuration($filepath) {
     return 'Unknown';
 }
 
+/**
+ * Get video resolution using ffprobe.
+ *
+ * @param string $filepath Full path to video file
+ * @return string Resolution in WIDTHxHEIGHT format
+ * @since 0.8.0
+ */
 function getVideoResolution($filepath) {
     $command = "ffprobe -v quiet -select_streams v:0 -show_entries stream=width,height -of csv=s=x:p=0 " . escapeshellarg($filepath);
     $result = executeCommand($command);
@@ -319,10 +386,24 @@ function getVideoResolution($filepath) {
     return 'Unknown';
 }
 
+/**
+ * Get audio duration.
+ *
+ * @param string $filepath Full path to audio file
+ * @return string Formatted duration
+ * @since 0.8.0
+ */
 function getAudioDuration($filepath) {
     return getVideoDuration($filepath); // Same method works for audio
 }
 
+/**
+ * Format seconds to HH:MM:SS or MM:SS.
+ *
+ * @param int $seconds Duration in seconds
+ * @return string Formatted duration string
+ * @since 0.8.0
+ */
 function formatDuration($seconds) {
     $hours = floor($seconds / 3600);
     $minutes = floor(($seconds % 3600) / 60);
@@ -335,12 +416,28 @@ function formatDuration($seconds) {
     }
 }
 
+/**
+ * Format bytes to human-readable size.
+ *
+ * @param int $bytes File size in bytes
+ * @return string Formatted size (e.g., "1.5 MB")
+ * @since 0.8.0
+ */
 function formatFileSize($bytes) {
     $units = ['B', 'KB', 'MB', 'GB', 'TB'];
     $factor = floor((strlen($bytes) - 1) / 3);
     return sprintf("%.2f", $bytes / pow(1024, $factor)) . ' ' . $units[$factor];
 }
 
+/**
+ * Generate thumbnail for video or image.
+ *
+ * Uses ffmpeg for video, GD for images.
+ *
+ * @param string $filepath Full path to media file
+ * @return string|false Thumbnail path or false on failure
+ * @since 0.8.0
+ */
 function generateThumbnail($filepath) {
     $filename = basename($filepath);
     $thumbnailDir = MEDIA_PATH . '/thumbnails';
@@ -369,6 +466,14 @@ function generateThumbnail($filepath) {
     return false;
 }
 
+/**
+ * Create image thumbnail using GD library.
+ *
+ * @param string $sourcePath Source image path
+ * @param string $thumbnailPath Destination thumbnail path
+ * @return string|false Thumbnail path or false on failure
+ * @since 0.8.0
+ */
 function createImageThumbnail($sourcePath, $thumbnailPath) {
     $imageInfo = getimagesize($sourcePath);
     if (!$imageInfo) return false;
@@ -416,6 +521,13 @@ function createImageThumbnail($sourcePath, $thumbnailPath) {
     return $success ? $thumbnailPath : false;
 }
 
+/**
+ * Update media filename references in all playlists.
+ *
+ * @param string $oldFilename Original filename
+ * @param string $newFilename New filename
+ * @since 0.8.0
+ */
 function updatePlaylistReferences($oldFilename, $newFilename) {
     $playlists = glob(PLAYLISTS_PATH . '/*.json');
 
@@ -440,6 +552,12 @@ function updatePlaylistReferences($oldFilename, $newFilename) {
     }
 }
 
+/**
+ * Get all generated thumbnails.
+ *
+ * @return array Array mapping filenames to thumbnail paths
+ * @since 0.8.0
+ */
 function getMediaThumbnails() {
     $thumbnailDir = MEDIA_PATH . '/thumbnails';
     $thumbnails = [];

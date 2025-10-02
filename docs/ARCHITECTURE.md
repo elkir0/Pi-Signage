@@ -1,8 +1,8 @@
-# PiSignage v0.8.5 Architecture Guide
+# PiSignage v0.8.9 Architecture Guide
 
 ## Overview
 
-PiSignage v0.8.5 represents a complete architectural transformation from a monolithic Single-Page Application (SPA) to a modular Multi-Page Application (MPA) optimized for Raspberry Pi performance.
+PiSignage v0.8.9 represents a complete architectural transformation from a monolithic Single-Page Application (SPA) to a modular Multi-Page Application (MPA) optimized for Raspberry Pi performance.
 
 ## Table of Contents
 - [Architecture Philosophy](#architecture-philosophy)
@@ -21,7 +21,7 @@ PiSignage v0.8.5 represents a complete architectural transformation from a monol
 
 ### From Monolith to Modular
 
-**v0.8.3 Problems:**
+**v0.8.0-v0.8.3 Problems:**
 ```
 index.php (4,724 lines)
 ├── 1,630 lines of CSS (34%)
@@ -37,7 +37,7 @@ index.php (4,724 lines)
 - **Maintenance burden**: Changes risk breaking everything
 - **Performance degradation**: 200KB initial load on Raspberry Pi
 
-**v0.8.5 Solution:**
+**v0.8.9 Solution:**
 ```
 Modular MPA Architecture
 ├── 9 focused PHP pages (~500 lines each)
@@ -159,7 +159,7 @@ include 'includes/footer.php';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PiSignage v0.8.5 - Digital Signage</title>
+    <title>PiSignage v0.8.9 - Digital Signage</title>
 
     <!-- CSS imports in dependency order -->
     <link rel="stylesheet" href="assets/css/main.css">
@@ -325,7 +325,7 @@ window.PiSignage = window.PiSignage || {};
 
 // Core utilities
 PiSignage.core = {
-    version: '0.8.5',
+    version: '0.8.9',
 
     // Safe DOM ready function
     ready: function(fn) {
@@ -427,7 +427,7 @@ All API responses use consistent JSON structure:
   "data": { /* Response data */ },
   "message": "Human-readable message",
   "timestamp": "2025-09-28T14:30:00Z",
-  "version": "0.8.5"
+  "version": "0.8.9"
 }
 ```
 
@@ -628,10 +628,10 @@ function validateUpload($file) {
 ```php
 <?php
 /**
- * PiSignage v0.8.5 - Page Template
+ * PiSignage v0.8.9 - Page Template
  *
  * @author PiSignage Team
- * @version 0.8.5
+ * @version 0.8.9
  * @description Brief description of page functionality
  */
 
@@ -660,7 +660,7 @@ class PageName {
  * PiSignage Module - Module Name
  *
  * @namespace PiSignage.modules.moduleName
- * @version 0.8.5
+ * @version 0.8.9
  */
 PiSignage.modules.moduleName = {
     /**
@@ -794,7 +794,7 @@ done
 
 ## Conclusion
 
-The PiSignage v0.8.5 architecture represents a fundamental shift towards modularity, performance, and maintainability. By adopting modern web development practices while optimizing for Raspberry Pi constraints, we've created a system that is:
+The PiSignage v0.8.9 architecture represents a fundamental shift towards modularity, performance, and maintainability. By adopting modern web development practices while optimizing for Raspberry Pi constraints, we've created a system that is:
 
 - **80% faster** than the previous version
 - **73% more memory efficient**

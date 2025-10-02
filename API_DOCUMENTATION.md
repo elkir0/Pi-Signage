@@ -1,17 +1,19 @@
-sur laaon vaalors je ne tu dois # PiSignage v0.8.5 API Documentation
+# PiSignage v0.8.9 API Documentation
 
-> **Note**: API endpoints remain 100% compatible with v0.8.3. The modular v0.8.5 architecture provides the same REST API with improved performance and reliability.
+> **Note**: API endpoints remain 100% compatible with previous versions. The v0.8.9 architecture provides the same REST API with improved performance, reliability, and VLC-exclusive player control.
 
 ## Base URL
 ```
 http://{raspberry_pi_ip}/api/
 ```
 
-## What's New in v0.8.5
+## What's New in v0.8.9
 
+- **VLC-Exclusive Player**: All player controls now use VLC HTTP API exclusively (MPV removed)
 - **Improved Performance**: API responses are 80% faster due to modular architecture
 - **Enhanced Reliability**: No more JavaScript conflicts affecting API calls
 - **Better Error Handling**: More detailed error messages and proper HTTP status codes
+- **Authentication**: All endpoints now protected by authentication system
 - **Maintained Compatibility**: All existing API integrations continue to work without changes
 
 ## Response Format
@@ -185,10 +187,11 @@ Controls the player.
 **Request Body:**
 ```json
 {
-  "action": "play|pause|stop|next|previous",
-  "player": "vlc|mpv"
+  "action": "play|pause|stop|next|previous"
 }
 ```
+
+**Note**: `player` parameter is no longer needed as VLC is the exclusive player in v0.8.9.
 
 ### GET /api/player.php?action=current
 Returns the current player configuration.
@@ -394,11 +397,11 @@ Downloads a YouTube video.
 
 ## Authentication
 
-Currently no authentication required (local network only).
-For production deployment, consider implementing API keys or JWT tokens.
+Authentication is now required on all pages via session-based system.
 
-### Security Enhancements in v0.8.5
-- Improved input validation on all endpoints
-- Enhanced file upload security
-- Better error handling that doesn't expose system internals
-- Rate limiting capabilities (configurable)
+### Security Enhancements in v0.8.9
+- **Authentication system**: Session-based auth protecting all pages
+- **Improved input validation**: All endpoints validate input data
+- **Enhanced file upload security**: Type and size validation
+- **Better error handling**: No exposure of system internals
+- **Rate limiting capabilities**: Configurable (recommended for production)
