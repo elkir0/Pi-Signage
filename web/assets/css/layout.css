@@ -282,6 +282,8 @@
     gap: 20px;
     height: calc(100vh - 140px);
     margin-top: 20px;
+    max-width: 100%;
+    overflow-x: auto;
 }
 
 .playlist-panel {
@@ -294,21 +296,23 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    flex-shrink: 0;
 }
 
 .media-library-panel {
-    width: 30%;
-    min-width: 280px;
+    flex: 0 0 280px;
+    max-width: 30%;
 }
 
 .workspace-panel {
-    width: 45%;
-    min-width: 400px;
+    flex: 1 1 auto;
+    min-width: 350px;
+    max-width: 45%;
 }
 
 .properties-panel {
-    width: 25%;
-    min-width: 250px;
+    flex: 0 0 250px;
+    max-width: 25%;
 }
 
 .panel-header {

@@ -774,6 +774,12 @@ PiSignage.playlists = {
     }
 };
 
+// Ensure global functions are available immediately when script loads
+// This handles onclick bindings in HTML before DOMContentLoaded
+if (typeof window !== 'undefined') {
+    PiSignage.playlists.setupGlobalFunctions();
+}
+
 // CSS for playlist styling
 const playlistStyles = document.createElement('style');
 playlistStyles.textContent = `
