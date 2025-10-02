@@ -10,6 +10,7 @@
     <script src="assets/js/playlists.js?v=874" defer></script>
     <script src="assets/js/player.js?v=855" defer></script>
     <script src="assets/js/schedule.js?v=875" defer></script>
+    <script src="assets/js/settings.js?v=876" defer></script>
     <script src="assets/js/init.js?v=866" defer></script>
 
     <script>

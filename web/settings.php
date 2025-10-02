@@ -17,6 +17,49 @@ include 'includes/header.php';
             <div class="grid grid-2">
                 <div class="card">
                     <h3 class="card-title">
+                        <span>🔊</span>
+                        Sortie Audio
+                    </h3>
+                    <div class="form-group">
+                        <label class="form-label">Sélectionner la sortie audio</label>
+                        <select class="form-control" id="audio-output">
+                            <option value="hdmi">HDMI</option>
+                            <option value="jack">Jack 3.5mm</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-primary" onclick="saveAudioConfig()">
+                        💾 Appliquer
+                    </button>
+                </div>
+
+                <div class="card">
+                    <h3 class="card-title">
+                        <span>🔒</span>
+                        Sécurité
+                    </h3>
+                    <form id="password-form" onsubmit="return false;">
+                        <div class="form-group">
+                            <label class="form-label">Ancien mot de passe</label>
+                            <input type="password" class="form-control" id="old-password" placeholder="Ancien mot de passe" autocomplete="current-password">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Nouveau mot de passe</label>
+                            <input type="password" class="form-control" id="new-password" placeholder="Nouveau mot de passe (min. 6 caractères)" autocomplete="new-password">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Confirmer le mot de passe</label>
+                            <input type="password" class="form-control" id="confirm-password" placeholder="Confirmer le nouveau mot de passe" autocomplete="new-password">
+                        </div>
+                        <button type="button" class="btn btn-primary" onclick="changePassword()">
+                            🔑 Changer le mot de passe
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="grid grid-2">
+                <div class="card">
+                    <h3 class="card-title">
                         <span>🖥️</span>
                         Affichage
                     </h3>

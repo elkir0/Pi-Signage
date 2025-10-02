@@ -61,6 +61,14 @@ Open browser and navigate to:
 http://[raspberry-pi-ip]
 ```
 
+**Default Login Credentials:**
+- Username: `admin`
+- Password: `signage2025`
+
+⚠️ **IMPORTANT**: Change the password immediately after first login (Settings > Security)
+
+See [Authentication Documentation](docs/AUTHENTICATION.md) for more details.
+
 ### Default Directories
 - Media files: `/opt/pisignage/media/`
 - Configuration: `/opt/pisignage/config/`

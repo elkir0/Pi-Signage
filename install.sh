@@ -775,13 +775,17 @@ ENDOFSERVICE
 configure_sudo() {
     log_step "Configuration des permissions"
 
-    echo "$USER ALL=(ALL) NOPASSWD: /sbin/shutdown, /sbin/reboot, /bin/systemctl" | \
-        sudo tee /etc/sudoers.d/pisignage > /dev/null
+    # Configure sudo permissions for pi user and www-data
+    sudo tee /etc/sudoers.d/pisignage > /dev/null << 'SUDOERS'
+# PiSignage sudo permissions
+pi ALL=(ALL) NOPASSWD: /sbin/shutdown, /sbin/reboot, /bin/systemctl
+www-data ALL=(ALL) NOPASSWD: /usr/bin/amixer
+SUDOERS
 
     # Ajouter www-data au groupe video (accès framebuffer pour screenshots)
     sudo usermod -aG video www-data
 
-    log_info "Permissions configurées (www-data ajouté au groupe video)"
+    log_info "Permissions configurées (www-data: video group + amixer sudo)"
 }
 
 # Test de l'installation

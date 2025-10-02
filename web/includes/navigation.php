@@ -53,5 +53,9 @@
                 <span>📋</span>
                 <span>Logs</span>
             </a>
+            <a href="#" class="nav-item" onclick="event.preventDefault(); logout();">
+                <span>🚪</span>
+                <span>Déconnexion</span>
+            </a>
         </div>
     </div>
