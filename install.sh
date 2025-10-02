@@ -778,7 +778,10 @@ configure_sudo() {
     echo "$USER ALL=(ALL) NOPASSWD: /sbin/shutdown, /sbin/reboot, /bin/systemctl" | \
         sudo tee /etc/sudoers.d/pisignage > /dev/null
 
-    log_info "Permissions configurées"
+    # Ajouter www-data au groupe video (accès framebuffer pour screenshots)
+    sudo usermod -aG video www-data
+
+    log_info "Permissions configurées (www-data ajouté au groupe video)"
 }
 
 # Test de l'installation
