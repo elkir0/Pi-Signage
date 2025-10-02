@@ -67,7 +67,8 @@ class VLCController {
         $url = $this->baseUrl . '/requests/status.json?command=' . $command;
 
         foreach ($params as $key => $value) {
-            $url .= '&' . $key . '=' . urlencode($value);
+            // Use rawurlencode to encode spaces as %20 (not +) for VLC compatibility
+            $url .= '&' . $key . '=' . rawurlencode($value);
         }
 
         $context = stream_context_create([

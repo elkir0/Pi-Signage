@@ -1,0 +1,38 @@
+[Unit]
+Description=PiSignage VLC Media Player with HTTP Interface
+After=network.target display-manager.service
+Requires=network.target
+
+[Service]
+Type=simple
+User=pi
+Group=video
+Environment="DISPLAY=:0"
+Environment="HOME=/home/pi"
+Environment="XDG_RUNTIME_DIR=/run/user/1000"
+WorkingDirectory=/opt/pisignage
+
+# Start VLC with HTTP interface but NO initial playlist
+# This allows full control via HTTP API
+ExecStart=/usr/bin/vlc \
+    --intf http \
+    --extraintf dummy \
+    --http-host 0.0.0.0 \
+    --http-port 8080 \
+    --http-password pisignage \
+    --fullscreen \
+    --no-video-title-show \
+    --video-on-top \
+    --no-osd
+
+# Graceful shutdown
+ExecStop=/bin/kill -TERM $MAINPID
+TimeoutStopSec=15
+KillMode=mixed
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:/opt/pisignage/logs/vlc.log
+StandardError=append:/opt/pisignage/logs/vlc.log
+
+[Install]
+WantedBy=multi-user.target
