@@ -657,6 +657,24 @@ PiSignage.playlists = {
         console.log('✨ Éditeur de playlist réinitialisé');
     },
 
+    updatePlaylistName: function() {
+        const nameInput = document.getElementById('playlist-name-input');
+        if (nameInput) {
+            const newName = nameInput.value.trim();
+            this.currentPlaylist.name = newName;
+
+            // Update display
+            const nameDisplay = document.getElementById('playlist-name-display');
+            if (nameDisplay) {
+                nameDisplay.textContent = newName || 'Nouvelle Playlist';
+            }
+
+            // Update save button state
+            this.setPlaylistModified(true);
+            console.log('📝 Playlist name updated:', newName);
+        }
+    },
+
     setPlaylistModified: function(modified) {
         this.playlistModified = modified;
         const saveBtn = document.getElementById('save-playlist-btn');
@@ -762,6 +780,7 @@ PiSignage.playlists = {
         window.createNewPlaylist = this.resetPlaylistEditor.bind(this);
         window.loadExistingPlaylist = this.loadExistingPlaylist.bind(this);
         window.selectAndLoadPlaylist = this.selectAndLoadPlaylist.bind(this);
+        window.updatePlaylistName = this.updatePlaylistName.bind(this);
 
         // Media library functions
         window.refreshMediaLibrary = this.loadMediaLibrary.bind(this);

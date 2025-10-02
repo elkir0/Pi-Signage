@@ -106,7 +106,7 @@ include 'includes/header.php';
                             <h4>Playlist</h4>
                             <div class="form-group">
                                 <label>Nom:</label>
-                                <input type="text" id="playlist-name-input" placeholder="Nom de la playlist" onchange="updatePlaylistName()">
+                                <input type="text" id="playlist-name-input" placeholder="Nom de la playlist" oninput="updatePlaylistName()">
                             </div>
                             <div class="form-group">
                                 <label>
