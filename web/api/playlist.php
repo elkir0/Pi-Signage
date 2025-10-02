@@ -24,7 +24,7 @@ switch ($method) {
 function handleGetPlaylists() {
     global $db;
     $action = $_GET['action'] ?? 'list';
-    
+
     switch ($action) {
         case 'list':
             // Mode dégradé sans DB
@@ -40,7 +40,32 @@ function handleGetPlaylists() {
             }
             jsonResponse(true, $playlists);
             break;
-            
+
+        case 'info':
+            // Get specific playlist info
+            $name = $_GET['name'] ?? null;
+            if (!$name) {
+                jsonResponse(false, null, 'Playlist name required');
+                return;
+            }
+
+            $name = sanitizeFilename($name);
+            $filename = PLAYLISTS_PATH . '/' . $name . '.json';
+
+            if (!file_exists($filename)) {
+                jsonResponse(false, null, 'Playlist not found: ' . $name);
+                return;
+            }
+
+            $playlist = json_decode(file_get_contents($filename), true);
+            if (!$playlist) {
+                jsonResponse(false, null, 'Invalid playlist format');
+                return;
+            }
+
+            jsonResponse(true, $playlist);
+            break;
+
         default:
             jsonResponse(false, null, 'Unknown action');
     }
