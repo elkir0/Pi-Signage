@@ -4,10 +4,15 @@
  * Manages Chromium kiosk configuration for Trixie/Wayland
  *
  * Endpoints:
+ *   GET  /api/kiosk          -> Returns kiosk status
+ *   GET  /api/kiosk/status   -> Returns kiosk status (alias)
+ *   GET  /api/kiosk/health   -> Health check endpoint
  *   GET  /api/kiosk/url      -> Returns current kiosk URL
  *   PUT  /api/kiosk/url      -> Updates kiosk URL and reloads
  *   GET  /api/kiosk/flags    -> Returns current Chromium flags
  *   PUT  /api/kiosk/flags    -> Updates Chromium flags and reloads
+ *   PUT  /api/kiosk/enable   -> Enable/disable kiosk mode
+ *   PUT  /api/kiosk/mode     -> Switch between Chromium player and VLC
  *   POST /api/kiosk/restart  -> Restarts Chromium kiosk
  */
 
@@ -48,13 +53,32 @@ if ($pathInfo === '/url') {
     } else {
         jsonResponse(false, null, 'Method not allowed for /restart (use POST)', 405);
     }
-} else {
-    // Default: return kiosk status
+} elseif ($pathInfo === '/status' || $pathInfo === '' || $pathInfo === '/') {
     if ($method === 'GET') {
         handleGetStatus();
     } else {
-        jsonResponse(false, null, 'Invalid endpoint. Use /url, /flags, or /restart', 404);
+        jsonResponse(false, null, 'Method not allowed for /status (use GET)', 405);
     }
+} elseif ($pathInfo === '/health') {
+    if ($method === 'GET') {
+        handleGetHealth();
+    } else {
+        jsonResponse(false, null, 'Method not allowed for /health (use GET)', 405);
+    }
+} elseif ($pathInfo === '/enable') {
+    if ($method === 'PUT') {
+        handlePutEnable($input);
+    } else {
+        jsonResponse(false, null, 'Method not allowed for /enable (use PUT)', 405);
+    }
+} elseif ($pathInfo === '/mode') {
+    if ($method === 'PUT') {
+        handlePutMode($input);
+    } else {
+        jsonResponse(false, null, 'Method not allowed for /mode (use PUT)', 405);
+    }
+} else {
+    jsonResponse(false, null, 'Invalid endpoint', 404);
 }
 
 /**
@@ -194,16 +218,21 @@ function handleRestart() {
 }
 
 /**
- * GET /api/kiosk (default)
+ * GET /api/kiosk (default) or GET /api/kiosk/status
  * Returns kiosk status and configuration
  */
 function handleGetStatus() {
+    $useChromiumPlayer = isChromiumPlayerEnabled();
+
     $status = [
         'enabled' => isKioskEnabled(),
+        'useChromiumPlayer' => $useChromiumPlayer,
         'url' => file_exists(KIOSK_URL_FILE) ? trim(file_get_contents(KIOSK_URL_FILE)) : null,
         'flags' => file_exists(KIOSK_FLAGS_FILE) ? trim(file_get_contents(KIOSK_FLAGS_FILE)) : null,
-        'chromium_running' => isChromiumRunning(),
-        'autostart_exists' => file_exists($_SERVER['HOME'] . '/.config/labwc/autostart'),
+        'chromiumRunning' => isChromiumRunning(),
+        'chromiumPlayer' => $useChromiumPlayer ? 'active' : 'vlc-fallback',
+        'autostartExists' => file_exists($_SERVER['HOME'] . '/.config/labwc/autostart'),
+        'lastUpdate' => date('Y-m-d H:i:s'),
     ];
 
     jsonResponse(true, $status, 'Kiosk status');
@@ -247,4 +276,159 @@ function isKioskEnabled() {
 function isChromiumRunning() {
     exec('pgrep -f "/usr/bin/chromium"', $output, $returnCode);
     return $returnCode === 0;
+}
+
+/**
+ * Check if Chromium Player mode is enabled
+ */
+function isChromiumPlayerEnabled() {
+    if (!file_exists(KIOSK_FEATURE_FLAGS_FILE)) {
+        return true; // Default: enabled
+    }
+
+    $content = file_get_contents(KIOSK_FEATURE_FLAGS_FILE);
+    return strpos($content, 'USE_CHROMIUM_PLAYER=0') === false;
+}
+
+/**
+ * Update feature flag in feature_flags file
+ */
+function updateFeatureFlag($flag, $value) {
+    // Ensure config directory exists
+    if (!is_dir(KIOSK_CONFIG_DIR)) {
+        mkdir(KIOSK_CONFIG_DIR, 0755, true);
+    }
+
+    // Read existing flags or create default
+    if (file_exists(KIOSK_FEATURE_FLAGS_FILE)) {
+        $content = file_get_contents(KIOSK_FEATURE_FLAGS_FILE);
+        $lines = explode("\n", $content);
+    } else {
+        $lines = [
+            '# PiSignage Feature Flags',
+            'ENABLE_KIOSK=1',
+            'USE_CHROMIUM_PLAYER=1',
+        ];
+    }
+
+    // Update or add flag
+    $flagPattern = "/^" . preg_quote($flag, '/') . "=/";
+    $flagLine = "$flag=$value";
+    $found = false;
+
+    foreach ($lines as $i => $line) {
+        if (preg_match($flagPattern, $line)) {
+            $lines[$i] = $flagLine;
+            $found = true;
+            break;
+        }
+    }
+
+    if (!$found) {
+        $lines[] = $flagLine;
+    }
+
+    // Write back
+    $content = implode("\n", $lines);
+    if (file_put_contents(KIOSK_FEATURE_FLAGS_FILE, $content) === false) {
+        return ['success' => false, 'message' => 'Failed to write feature flags'];
+    }
+
+    return ['success' => true, 'message' => 'Feature flag updated'];
+}
+
+/**
+ * GET /api/kiosk/health
+ * Health check endpoint
+ */
+function handleGetHealth() {
+    $kioskEnabled = isKioskEnabled();
+    $chromiumRunning = isChromiumRunning();
+    $autostartExists = file_exists($_SERVER['HOME'] . '/.config/labwc/autostart');
+
+    $healthy = true;
+    $issues = [];
+
+    if ($kioskEnabled && !$chromiumRunning) {
+        $healthy = false;
+        $issues[] = 'Chromium not running despite kiosk being enabled';
+    }
+
+    if ($kioskEnabled && !$autostartExists) {
+        $healthy = false;
+        $issues[] = 'Autostart file missing';
+    }
+
+    jsonResponse(true, [
+        'healthy' => $healthy,
+        'issues' => $issues,
+        'checks' => [
+            'kioskEnabled' => $kioskEnabled,
+            'chromiumRunning' => $chromiumRunning,
+            'autostartExists' => $autostartExists,
+        ]
+    ], $healthy ? 'Kiosk healthy' : 'Kiosk has issues');
+}
+
+/**
+ * PUT /api/kiosk/enable
+ * Enable or disable kiosk mode
+ */
+function handlePutEnable($input) {
+    if (!isset($input['enabled']) || !is_bool($input['enabled'])) {
+        jsonResponse(false, null, 'Missing or invalid field: enabled (must be boolean)', 400);
+        return;
+    }
+
+    $enabled = $input['enabled'];
+    $value = $enabled ? '1' : '0';
+
+    $result = updateFeatureFlag('ENABLE_KIOSK', $value);
+
+    if (!$result['success']) {
+        jsonResponse(false, null, $result['message'], 500);
+        return;
+    }
+
+    logMessage("Kiosk mode " . ($enabled ? 'enabled' : 'disabled') . " via API", 'INFO');
+
+    // Re-apply kiosk configuration
+    $applyResult = applyKioskConfig();
+
+    jsonResponse(true, [
+        'enabled' => $enabled,
+        'applied' => $applyResult['success'],
+    ], 'Kiosk mode ' . ($enabled ? 'enabled' : 'disabled'));
+}
+
+/**
+ * PUT /api/kiosk/mode
+ * Switch between Chromium Player and VLC fallback
+ */
+function handlePutMode($input) {
+    if (!isset($input['useChromiumPlayer']) || !is_bool($input['useChromiumPlayer'])) {
+        jsonResponse(false, null, 'Missing or invalid field: useChromiumPlayer (must be boolean)', 400);
+        return;
+    }
+
+    $useChromiumPlayer = $input['useChromiumPlayer'];
+    $value = $useChromiumPlayer ? '1' : '0';
+
+    $result = updateFeatureFlag('USE_CHROMIUM_PLAYER', $value);
+
+    if (!$result['success']) {
+        jsonResponse(false, null, $result['message'], 500);
+        return;
+    }
+
+    logMessage("Chromium Player mode " . ($useChromiumPlayer ? 'enabled' : 'disabled') . " via API", 'INFO');
+
+    // Re-apply kiosk configuration
+    $applyResult = applyKioskConfig();
+
+    jsonResponse(true, [
+        'useChromiumPlayer' => $useChromiumPlayer,
+        'mode' => $useChromiumPlayer ? 'chromium-player' : 'vlc-fallback',
+        'applied' => $applyResult['success'],
+    ], 'Player mode switched to ' . ($useChromiumPlayer ? 'Chromium HTML5' : 'VLC fallback'));
 }
