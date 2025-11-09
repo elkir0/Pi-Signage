@@ -31,19 +31,37 @@ if [ -f "${CFG_DIR}/feature_flags" ]; then
     fi
 fi
 
-# Read configuration or use defaults
-if [ -f "${CFG_DIR}/kiosk_url" ]; then
-    URL=$(cat "${CFG_DIR}/kiosk_url")
+# Determine URL based on USE_CHROMIUM_PLAYER flag
+USE_CHROMIUM_PLAYER="${USE_CHROMIUM_PLAYER:-1}"
+
+if [ "${USE_CHROMIUM_PLAYER}" = "1" ]; then
+    # Chromium Player mode: use local player page
+    URL="http://127.0.0.1/player"
+    log_info "Chromium Player mode enabled (USE_CHROMIUM_PLAYER=1)"
+    log_info "URL set to: ${URL}"
 else
-    URL="https://time.is"
-    log_info "Using default URL: ${URL}"
+    # Dashboard/Custom URL mode: read from config or use default
+    if [ -f "${CFG_DIR}/kiosk_url" ]; then
+        URL=$(cat "${CFG_DIR}/kiosk_url")
+    else
+        URL="https://time.is"
+        log_info "Using default URL: ${URL}"
+    fi
+    log_info "Dashboard mode (USE_CHROMIUM_PLAYER=0)"
 fi
 
 if [ -f "${CFG_DIR}/kiosk_flags" ]; then
     FLAGS=$(cat "${CFG_DIR}/kiosk_flags")
 else
-    FLAGS="--incognito --noerrdialogs --disable-translate --no-first-run"
-    log_info "Using default Chromium flags"
+    # Default flags optimized for Chromium Player + Wayland
+    FLAGS="--ozone-platform=wayland"
+    FLAGS="${FLAGS} --enable-features=VaapiVideoDecoder,UseOzonePlatform"
+    FLAGS="${FLAGS} --autoplay-policy=no-user-gesture-required"
+    FLAGS="${FLAGS} --disable-infobars --noerrdialogs"
+    FLAGS="${FLAGS} --disable-translate --no-first-run"
+    FLAGS="${FLAGS} --ignore-gpu-blocklist"
+    FLAGS="${FLAGS} --incognito"
+    log_info "Using default Chromium flags (Wayland + hardware accel)"
 fi
 
 # Wait for network (max 20 seconds)
