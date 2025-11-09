@@ -27,6 +27,28 @@ log_warn() { echo -e "${YELLOW}[⚠]${NC} $1"; }
 log_error() { echo -e "${RED}[✗]${NC} $1"; }
 log_step() { echo -e "\n${BLUE}═══ $1 ═══${NC}\n"; }
 
+# Detect OS version
+detect_os_version() {
+    if [ -f /etc/os-release ]; then
+        # shellcheck disable=SC1091
+        . /etc/os-release
+        OS_VERSION_ID="${VERSION_ID:-unknown}"
+        OS_VERSION_CODENAME="${VERSION_CODENAME:-unknown}"
+        log_info "Detected OS: ${NAME:-Unknown} ${VERSION_ID:-?} (${VERSION_CODENAME:-?})"
+
+        # Check if Trixie/Debian 13
+        if [ "$VERSION_CODENAME" = "trixie" ] || [ "$VERSION_ID" = "13" ]; then
+            IS_TRIXIE=1
+            log_info "Trixie (Debian 13) detected - Wayland kiosk mode available"
+        else
+            IS_TRIXIE=0
+        fi
+    else
+        log_warn "Cannot detect OS version (/etc/os-release missing)"
+        IS_TRIXIE=0
+    fi
+}
+
 # Vérifier si root
 check_root() {
     if [[ $EUID -eq 0 ]]; then
@@ -128,6 +150,17 @@ install_dependencies() {
         "jq"
         "socat"
     )
+
+    # Trixie-specific packages for Wayland kiosk mode
+    if [ "${IS_TRIXIE:-0}" = "1" ]; then
+        log_info "Adding Trixie/Wayland kiosk packages..."
+        packages+=(
+            "chromium-browser"
+            "labwc"
+            "greetd"
+            "plymouth"
+        )
+    fi
 
     log_info "Installation des packages essentiels..."
     for package in "${packages[@]}"; do
@@ -411,6 +444,58 @@ create_config() {
 ENDOFFILE
 
     log_info "Configuration créée"
+}
+
+# Configuration Kiosk pour Trixie
+configure_kiosk_trixie() {
+    if [ "${IS_TRIXIE:-0}" = "0" ]; then
+        log_info "Skipping kiosk configuration (not Trixie)"
+        return 0
+    fi
+
+    log_step "Configuration du mode Kiosk Chromium (Trixie)"
+
+    # Create kiosk config directory
+    sudo mkdir -p "$INSTALL_DIR/config"
+
+    # Create default kiosk URL config
+    if [ ! -f "$INSTALL_DIR/config/kiosk_url" ]; then
+        echo "https://time.is" | sudo tee "$INSTALL_DIR/config/kiosk_url" >/dev/null
+        log_info "Created default kiosk_url: https://time.is"
+    fi
+
+    # Create default kiosk flags
+    if [ ! -f "$INSTALL_DIR/config/kiosk_flags" ]; then
+        echo "--incognito --noerrdialogs --disable-translate --no-first-run" | \
+            sudo tee "$INSTALL_DIR/config/kiosk_flags" >/dev/null
+        log_info "Created default kiosk_flags"
+    fi
+
+    # Create feature flags (kiosk enabled by default)
+    if [ ! -f "$INSTALL_DIR/config/feature_flags" ]; then
+        echo "ENABLE_KIOSK=1" | sudo tee "$INSTALL_DIR/config/feature_flags" >/dev/null
+        log_info "Created feature_flags (ENABLE_KIOSK=1)"
+    fi
+
+    # Copy labwc rc.xml template to user's home if exists
+    if [ -f "templates/.config/labwc/rc.xml" ]; then
+        mkdir -p "$HOME/.config/labwc"
+        cp "templates/.config/labwc/rc.xml" "$HOME/.config/labwc/rc.xml"
+        log_info "Installed labwc rc.xml configuration"
+    fi
+
+    # Run kiosk-apply script to generate autostart
+    if [ -x "$INSTALL_DIR/scripts/kiosk-apply" ]; then
+        log_info "Running kiosk-apply to generate autostart..."
+        bash "$INSTALL_DIR/scripts/kiosk-apply" || log_warn "kiosk-apply returned error (may be normal)"
+    elif [ -x "scripts/kiosk-apply" ]; then
+        log_info "Running kiosk-apply from current directory..."
+        bash scripts/kiosk-apply || log_warn "kiosk-apply returned error (may be normal)"
+    else
+        log_warn "kiosk-apply script not found or not executable"
+    fi
+
+    log_info "Kiosk configuration completed"
 }
 
 # Création du script de démarrage VLC
@@ -839,6 +924,7 @@ test_installation() {
 main() {
     check_root
     show_banner
+    detect_os_version
     update_system
     install_dependencies
     create_structure
@@ -846,6 +932,7 @@ main() {
     download_bbb
     create_config_php
     create_config
+    configure_kiosk_trixie
     create_vlc_script
     configure_webserver
     configure_sudo
