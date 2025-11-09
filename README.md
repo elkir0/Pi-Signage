@@ -32,9 +32,26 @@ Professional digital signage solution for Raspberry Pi with modular web interfac
 
 - Raspberry Pi 3/4/5
 - Raspbian OS (Bullseye or newer)
+  - **Trixie (Debian 13)** supported with Wayland kiosk mode
 - 2GB+ RAM recommended
 - Network connectivity
 - Display connected via HDMI
+
+### 🆕 Trixie / Wayland Kiosk Mode
+
+**New in feature/trixie-kiosk-chromium branch:**
+
+Pi-Signage now supports **Raspberry Pi OS Trixie (Debian 13)** with a modern Wayland-based kiosk mode:
+
+- ✅ **Chromium Browser Kiosk** - Full-screen web dashboard display
+- ✅ **Wayland Compositor (labwc)** - Modern, lightweight display server
+- ✅ **Remote Configuration** - Change kiosk URL/flags via REST API
+- ✅ **Clean Boot Experience** - greetd + plymouth for seamless startup
+- ✅ **Backward Compatible** - VLC player and existing API remain functional
+
+**Target Hardware:** Raspberry Pi 4 / Pi 5
+
+**See:** [UPGRADE_TRIXIE.md](UPGRADE_TRIXIE.md) for complete installation and configuration guide.
 
 ## Installation
 
