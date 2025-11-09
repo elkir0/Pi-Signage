@@ -1,9 +1,19 @@
-# PiSignage v0.8.9
+# PiSignage v0.11.0
 
 Professional digital signage solution for Raspberry Pi with modular web interface and advanced media management.
 
-## 🚀 What's New in v0.8.9
+## 🚀 What's New in v0.11.0
 
+### 🎬 **Chromium HTML5 Player + Playlist System**
+- **HTML5 Video Playback**: Native `<video>` element with hardware acceleration in Chromium
+- **Playlist Management**: JSON-based playlist with REST API and web UI
+- **Kiosk Control UI**: Complete management dashboard at `/kiosk.php`
+- **Feature Flags**: Switch between Chromium Player and VLC fallback with `USE_CHROMIUM_PLAYER`
+- **Format Support**: MP4 (H.264/AAC), WebM (VP9/Opus), MKV with auto-advance and error handling
+- **Wake Lock API**: Prevents screen sleep during playback
+- **100% Backward Compatible**: VLC remains functional as fallback mode
+
+### Previous (v0.8.9)
 - **VLC Exclusive Player**: Removed MPV support for better reliability and maintainability
 - **Simplified Architecture**: -400 lines of code with cleaner, more focused implementation
 - **Enhanced Stability**: Mature VLC HTTP API provides robust playback control

@@ -497,6 +497,342 @@ wlr-randr --output HDMI-A-2 --mode 1920x1080 --pos 1920,0
 
 ---
 
+## Chromium HTML5 Player
+
+**Version:** 0.11.0+
+**Feature:** Native HTML5 video playback in Chromium instead of VLC
+
+### Overview
+
+Pi-Signage now includes a **Chromium HTML5 Player** mode that replaces VLC for media playback. This provides:
+
+- ✅ **HTML5 `<video>` playback** with hardware acceleration
+- ✅ **Playlist management** via JSON configuration
+- ✅ **Web-based control** through Kiosk Control UI
+- ✅ **Autoplay, loop, mute** configurable per item
+- ✅ **Wake Lock API** to prevent screen sleep
+- ✅ **Support for MP4, WebM, MKV** formats
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ greetd → labwc → Chromium kiosk (http://127.0.0.1/player) │
+│                                                          │
+│  Player Page (HTML5):                                   │
+│  • Reads /opt/pisignage/content/playlist.json           │
+│  • <video> element with autoplay/loop                   │
+│  • Auto-advance, error handling, retry logic            │
+│  • Wake Lock, cursor hiding                             │
+│                                                          │
+│  Backend APIs:                                          │
+│  • GET /api/playlist - Fetch playlist                   │
+│  • PUT /api/playlist - Update playlist                  │
+│  • POST /api/playlist/validate - Check URLs             │
+│  • POST /api/playlist/upload - Upload media             │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Feature Flags
+
+Control player mode with `/opt/pisignage/config/feature_flags`:
+
+```bash
+# Enable Chromium kiosk mode (default: 1)
+ENABLE_KIOSK=1
+
+# Use Chromium HTML5 player (default: 1)
+USE_CHROMIUM_PLAYER=1  # Chromium plays playlist
+USE_CHROMIUM_PLAYER=0  # VLC fallback mode
+```
+
+**Apply changes:**
+```bash
+bash /opt/pisignage/scripts/kiosk-apply
+sudo systemctl restart greetd
+```
+
+### Playlist Configuration
+
+**Location:** `/opt/pisignage/content/playlist.json`
+
+**Format:**
+```json
+{
+  "version": 1,
+  "items": [
+    {
+      "url": "file:///opt/pisignage/content/video.mp4",
+      "mute": false,
+      "loop": false,
+      "fit": "contain",
+      "duration": 0
+    },
+    {
+      "url": "http://example.com/stream.mp4",
+      "mute": true,
+      "loop": false,
+      "fit": "cover",
+      "duration": 30
+    }
+  ],
+  "autoLoop": true,
+  "autoplay": true
+}
+```
+
+**Fields:**
+- `url`: File path (`file://`) or HTTP(S) URL
+- `mute`: Boolean, mute audio
+- `loop`: Boolean, loop this item indefinitely
+- `fit`: `contain` (preserve aspect) or `cover` (fill screen)
+- `duration`: Seconds (0 = auto-detect from video)
+- `autoLoop`: Restart playlist when finished
+- `autoplay`: Start playing immediately on load
+
+### Kiosk Control UI
+
+**Access:** `http://<pi-ip>/kiosk.php`
+
+**Features:**
+1. **Mode Switching**
+   - Toggle Kiosk ON/OFF
+   - Switch between Chromium Player and VLC fallback
+
+2. **Playlist Management**
+   - Add/edit/delete items
+   - Reorder with ↑↓ buttons
+   - Upload media files (max 500MB)
+   - Validate URLs accessibility
+
+3. **Configuration**
+   - Set kiosk URL (for dashboard mode)
+   - Edit Chromium flags
+   - Auto-refresh status (5s interval)
+
+4. **Actions**
+   - Restart Chromium
+   - Reload playlist
+   - Preview player in new window
+
+### API Endpoints
+
+**Base:** `/api`
+
+#### Playlist API (`/api/playlist`)
+
+```bash
+# Get current playlist
+curl http://localhost/api/playlist
+
+# Update playlist
+curl -X PUT http://localhost/api/playlist \
+  -H "Content-Type: application/json" \
+  -d @playlist.json
+
+# Validate playlist (checks URL accessibility)
+curl -X POST http://localhost/api/playlist/validate \
+  -H "Content-Type: application/json" \
+  -d @playlist.json
+
+# Signal player to reload
+curl -X POST http://localhost/api/playlist/refresh
+
+# Upload media file
+curl -X POST http://localhost/api/playlist/upload \
+  -F "file=@video.mp4"
+```
+
+#### Kiosk API (`/api/kiosk`)
+
+```bash
+# Get kiosk status (includes player mode)
+curl http://localhost/api/kiosk
+
+# Enable/disable kiosk mode
+curl -X PUT http://localhost/api/kiosk/enable \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": true}'
+
+# Switch player mode
+curl -X PUT http://localhost/api/kiosk/mode \
+  -H "Content-Type: application/json" \
+  -d '{"useChromiumPlayer": true}'
+
+# Health check
+curl http://localhost/api/kiosk/health
+```
+
+### Chromium Flags for Player
+
+**Recommended flags** (automatically set by `kiosk-apply`):
+
+```
+--ozone-platform=wayland
+--enable-features=VaapiVideoDecoder,UseOzonePlatform
+--autoplay-policy=no-user-gesture-required
+--disable-infobars
+--noerrdialogs
+--disable-translate
+--no-first-run
+--ignore-gpu-blocklist
+--incognito
+```
+
+**Location:** `/opt/pisignage/config/kiosk_flags`
+
+**Note:** Hardware acceleration (VaapiVideoDecoder) works on Pi 4/5 with Mesa drivers.
+
+### Troubleshooting
+
+#### Video not playing
+
+**Check autoplay policy:**
+- HTML5 video autoplay may require `mute: true` on first item
+- Chromium flag `--autoplay-policy=no-user-gesture-required` should be set
+
+**Check file accessibility:**
+```bash
+# Validate playlist URLs
+curl -X POST http://localhost/api/playlist/validate \
+  -H "Content-Type: application/json" \
+  -d @/opt/pisignage/content/playlist.json
+```
+
+**Check player logs:**
+```bash
+# Open browser console (if accessible)
+# Or check Chromium logs:
+journalctl -u greetd -n 100
+```
+
+#### Player shows blank screen
+
+**Verify playlist exists:**
+```bash
+cat /opt/pisignage/content/playlist.json
+```
+
+**Check Chromium is running:**
+```bash
+pgrep -f chromium
+```
+
+**Restart Chromium:**
+```bash
+curl -X POST http://localhost/api/kiosk/restart
+# OR
+sudo systemctl restart greetd
+```
+
+#### Switching between Player and Dashboard mode
+
+**Player mode** (default):
+```bash
+# Edit feature flags
+sudo nano /opt/pisignage/config/feature_flags
+
+# Set:
+USE_CHROMIUM_PLAYER=1
+
+# Apply:
+bash /opt/pisignage/scripts/kiosk-apply
+sudo systemctl restart greetd
+```
+
+**Dashboard mode** (show custom URL):
+```bash
+# Edit feature flags
+sudo nano /opt/pisignage/config/feature_flags
+
+# Set:
+USE_CHROMIUM_PLAYER=0
+
+# Set custom URL:
+echo "https://grafana.local" | sudo tee /opt/pisignage/config/kiosk_url
+
+# Apply:
+bash /opt/pisignage/scripts/kiosk-apply
+sudo systemctl restart greetd
+```
+
+### Supported Media Formats
+
+| Format | Container | Video Codec | Audio Codec | Tested |
+|--------|-----------|-------------|-------------|--------|
+| **MP4** | MPEG-4 | H.264 | AAC | ✅ |
+| **WebM** | WebM | VP8, VP9 | Vorbis, Opus | ✅ |
+| **MKV** | Matroska | H.264, VP9 | AAC, Opus | ✅ |
+| **MOV** | QuickTime | H.264 | AAC | ⚠️ May require conversion |
+
+**Note:** Hardware acceleration requires H.264 baseline/main profile for best performance.
+
+### Keyboard Shortcuts (Player Page)
+
+- **Ctrl+D** - Toggle debug overlay
+- **Ctrl+R** - Reload playlist
+- **Ctrl+N** - Skip to next video
+
+### Example Workflows
+
+#### 1. Simple Video Loop
+
+```json
+{
+  "version": 1,
+  "items": [
+    {
+      "url": "file:///opt/pisignage/content/promo.mp4",
+      "mute": false,
+      "loop": true,
+      "fit": "contain",
+      "duration": 0
+    }
+  ],
+  "autoLoop": false,
+  "autoplay": true
+}
+```
+
+#### 2. Multi-Video Rotation
+
+```json
+{
+  "version": 1,
+  "items": [
+    {"url": "file:///opt/pisignage/content/video1.mp4", "duration": 30, "fit": "cover"},
+    {"url": "file:///opt/pisignage/content/video2.mp4", "duration": 45, "fit": "cover"},
+    {"url": "http://cdn.example.com/ad.mp4", "duration": 0, "mute": true}
+  ],
+  "autoLoop": true,
+  "autoplay": true
+}
+```
+
+#### 3. Mixed Local and Remote
+
+```json
+{
+  "version": 1,
+  "items": [
+    {"url": "file:///opt/pisignage/content/local.mp4", "fit": "contain"},
+    {"url": "https://cdn.example.com/stream.mp4", "fit": "contain", "mute": true}
+  ],
+  "autoLoop": true,
+  "autoplay": true
+}
+```
+
+### Performance Tips
+
+1. **Use H.264 video** for hardware acceleration
+2. **Keep resolution ≤ 1080p** for Pi 4, ≤ 4K for Pi 5
+3. **Limit playlist size** to < 50 items for smooth operation
+4. **Use local files** when possible (faster loading)
+5. **Enable mute** for silent displays (better autoplay compatibility)
+
+---
+
 ## Support & Resources
 
 - **GitHub Issues:** https://github.com/elkir0/Pi-Signage/issues
@@ -511,7 +847,7 @@ wlr-randr --output HDMI-A-2 --mode 1920x1080 --pos 1920,0
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 1.0 | 2025-01-09 | Initial Trixie/Wayland kiosk implementation |
+| 1.0 | 2025-11-09 | Initial Trixie/Wayland kiosk implementation |
 
 ---
 
