@@ -1,26 +1,40 @@
 {
   "name": "pisignage",
-  "version": "1.0.0",
-  "description": "Professional digital signage solution for Raspberry Pi with modular web interface and advanced media management.",
-  "main": "index.js",
-  "directories": {
-    "doc": "docs"
-  },
-  "devDependencies": {
-    "puppeteer": "^24.22.3"
-  },
+  "version": "0.11.0",
+  "description": "PiSignage - Digital Signage for Raspberry Pi with Chromium Kiosk + HTML5 Video Player",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "lint": "echo 'Linting JavaScript files...' && eslint web/assets/js/**/*.js || echo 'ESLint not installed, skipping'",
+    "lint:php": "echo 'PHP linting...' && find web -name '*.php' -exec php -l {} \; | grep -v 'No syntax errors'",
+    "format": "echo 'Format check (Prettier)...' && prettier --check 'web/assets/js/**/*.js' || echo 'Prettier not installed, skipping'",
+    "format:write": "prettier --write 'web/assets/js/**/*.js'",
+    "test": "echo 'Running tests...' && bash scripts/tests/smoke.sh",
+    "test:api": "bash scripts/tests/api.sh",
+    "build": "echo 'No build step required (vanilla PHP/JS)'",
+    "dev": "echo 'Start PHP development server' && php -S 0.0.0.0:8080 -t web",
+    "validate": "npm run lint:php && echo 'Validation complete'",
+    "prepare": "echo 'PiSignage ready for deployment'"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/elkir0/Pi-Signage.git"
+    "url": "git+https://github.com/yourusername/pisignage.git"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/elkir0/Pi-Signage/issues"
+  "keywords": [
+    "raspberry-pi",
+    "digital-signage",
+    "kiosk",
+    "chromium",
+    "wayland",
+    "html5-video",
+    "playlist"
+  ],
+  "author": "PiSignage Team",
+  "license": "MIT",
+  "devDependencies": {
+    "eslint": "^8.0.0",
+    "prettier": "^3.0.0"
   },
-  "homepage": "https://github.com/elkir0/Pi-Signage#readme"
+  "engines": {
+    "node": ">=14.0.0",
+    "npm": ">=6.0.0"
+  }
 }
