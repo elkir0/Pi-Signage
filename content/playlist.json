@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "items": [
+    {
+      "url": "file:///opt/pisignage/media/BigBuckBunny_720p.mp4",
+      "mute": false,
+      "loop": false,
+      "fit": "contain",
+      "duration": 0
+    }
+  ],
+  "autoLoop": true,
+  "autoplay": true
+}

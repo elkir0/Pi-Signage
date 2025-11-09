@@ -1,195 +1,310 @@
 <?php
 /**
- * PiSignage v0.8.9 - Playlist Management API
+ * PiSignage Playlist API
+ * Gestion de la playlist pour le Chromium Player HTML5
  *
- * Handles playlist creation, modification, deletion, and retrieval operations.
- *
- * @package    PiSignage
- * @subpackage API
- * @version    0.8.9
- * @since      0.8.0
+ * Endpoints:
+ * - GET  /api/playlist           - Récupérer la playlist actuelle
+ * - PUT  /api/playlist           - Mettre à jour la playlist
+ * - POST /api/playlist/validate  - Valider la structure de la playlist
+ * - POST /api/playlist/refresh   - Notifier le player de recharger
+ * - POST /api/playlist/upload    - Upload un média (optionnel)
  */
 
-require_once "/opt/pisignage/web/config.php";
+header('Content-Type: application/json');
 
-$method = $_SERVER['REQUEST_METHOD'];
-$input = json_decode(file_get_contents('php://input'), true);
+// Configuration
+define('PLAYLIST_FILE', '/opt/pisignage/content/playlist.json');
+define('MEDIA_DIR', '/opt/pisignage/content/');
+define('ADMIN_TOKEN_FILE', '/opt/pisignage/config/admin_token');
 
-switch ($method) {
-    case 'GET':
-        handleGetPlaylists();
-        break;
-    case 'POST':
-        handleCreatePlaylist($input);
-        break;
-    case 'PUT':
-        handleUpdatePlaylist($input);
-        break;
-    case 'DELETE':
-        handleDeletePlaylist();
-        break;
-    default:
-        jsonResponse(false, null, 'Method not allowed');
+// Fonction utilitaire pour les réponses JSON
+function jsonResponse($success, $data = null, $message = '', $code = 200) {
+    http_response_code($code);
+    echo json_encode([
+        'success' => $success,
+        'data' => $data,
+        'message' => $message,
+        'timestamp' => date('Y-m-d H:i:s')
+    ]);
+    exit;
 }
 
-/**
- * Handle GET requests for playlist data.
- *
- * Supports 'list' and 'info' actions.
- *
- * @since 0.8.0
- */
-function handleGetPlaylists() {
-    global $db;
-    $action = $_GET['action'] ?? 'list';
+// Vérification du token admin pour les opérations d'écriture
+function requireAdminToken() {
+    if (!file_exists(ADMIN_TOKEN_FILE)) {
+        error_log('[PiSignage Playlist API] WARNING: No admin token file found. Running in permissive mode.');
+        return; // Mode permissif
+    }
 
-    switch ($action) {
-        case 'list':
-            // Mode dégradé sans DB
-            $playlists = [];
-            if (is_dir(PLAYLISTS_PATH)) {
-                $jsonFiles = glob(PLAYLISTS_PATH . '/*.json');
-                foreach ($jsonFiles as $file) {
-                    $playlist = json_decode(file_get_contents($file), true);
-                    if ($playlist) {
-                        $playlists[] = $playlist;
-                    }
+    $expectedToken = trim(file_get_contents(ADMIN_TOKEN_FILE));
+    $providedToken = $_SERVER['HTTP_X_ADMIN_TOKEN'] ?? '';
+
+    if ($providedToken !== $expectedToken) {
+        jsonResponse(false, null, 'Unauthorized: Invalid admin token', 401);
+    }
+}
+
+// Validation de la structure de la playlist
+function validatePlaylist($playlist) {
+    $errors = [];
+
+    if (!isset($playlist['version']) || !is_numeric($playlist['version'])) {
+        $errors[] = 'Missing or invalid version field';
+    }
+
+    if (!isset($playlist['items']) || !is_array($playlist['items'])) {
+        $errors[] = 'Missing or invalid items array';
+    } else {
+        foreach ($playlist['items'] as $index => $item) {
+            if (!isset($item['url']) || empty($item['url'])) {
+                $errors[] = "Item $index: Missing URL";
+            }
+
+            // Valider le format de l'URL
+            if (isset($item['url'])) {
+                $url = $item['url'];
+                if (!filter_var($url, FILTER_VALIDATE_URL) &&
+                    !preg_match('/^file:\/\/\//', $url)) {
+                    $errors[] = "Item $index: Invalid URL format: $url";
                 }
             }
-            jsonResponse(true, $playlists);
-            break;
 
-        case 'info':
-            // Get specific playlist info
-            $name = $_GET['name'] ?? null;
-            if (!$name) {
-                jsonResponse(false, null, 'Playlist name required');
-                return;
+            // Valider les booléens
+            if (isset($item['mute']) && !is_bool($item['mute'])) {
+                $errors[] = "Item $index: 'mute' must be boolean";
+            }
+            if (isset($item['loop']) && !is_bool($item['loop'])) {
+                $errors[] = "Item $index: 'loop' must be boolean";
             }
 
-            $name = sanitizeFilename($name);
-            $filename = PLAYLISTS_PATH . '/' . $name . '.json';
-
-            if (!file_exists($filename)) {
-                jsonResponse(false, null, 'Playlist not found: ' . $name);
-                return;
+            // Valider fit
+            if (isset($item['fit']) && !in_array($item['fit'], ['contain', 'cover'])) {
+                $errors[] = "Item $index: 'fit' must be 'contain' or 'cover'";
             }
 
-            $playlist = json_decode(file_get_contents($filename), true);
-            if (!$playlist) {
-                jsonResponse(false, null, 'Invalid playlist format');
-                return;
+            // Valider duration
+            if (isset($item['duration']) && !is_numeric($item['duration'])) {
+                $errors[] = "Item $index: 'duration' must be numeric";
             }
-
-            jsonResponse(true, $playlist);
-            break;
-
-        default:
-            jsonResponse(false, null, 'Unknown action');
-    }
-}
-
-/**
- * Create new playlist.
- *
- * @param array $input Request data with name, duration, and items
- * @since 0.8.0
- */
-function handleCreatePlaylist($input) {
-    if (!$input || !isset($input['name'])) {
-        jsonResponse(false, null, 'Playlist name required');
-        return;
+        }
     }
 
-    $name = sanitizeFilename($input['name']);
-    $duration = $input['duration'] ?? 60;
-    $items = $input['items'] ?? [];
+    if (!isset($playlist['autoLoop']) || !is_bool($playlist['autoLoop'])) {
+        $errors[] = 'Missing or invalid autoLoop field';
+    }
 
-    $playlist = [
-        'name' => $name,
-        'duration' => intval($duration),
-        'items' => $items,
-        'created' => date('Y-m-d H:i:s'),
-        'modified' => date('Y-m-d H:i:s')
+    if (!isset($playlist['autoplay']) || !is_bool($playlist['autoplay'])) {
+        $errors[] = 'Missing or invalid autoplay field';
+    }
+
+    return [
+        'valid' => empty($errors),
+        'errors' => $errors
     ];
-
-    $filename = PLAYLISTS_PATH . '/' . $name . '.json';
-
-    if (file_exists($filename)) {
-        jsonResponse(false, null, 'Playlist already exists');
-        return;
-    }
-
-    if (file_put_contents($filename, json_encode($playlist, JSON_PRETTY_PRINT))) {
-        jsonResponse(true, $playlist, 'Playlist created successfully');
-    } else {
-        jsonResponse(false, null, 'Failed to create playlist');
-    }
 }
 
-/**
- * Update existing playlist.
- *
- * @param array $input Request data with name and fields to update
- * @since 0.8.0
- */
-function handleUpdatePlaylist($input) {
-    if (!$input || !isset($input['name'])) {
-        jsonResponse(false, null, 'Playlist name required');
-        return;
+// Vérifier l'accessibilité des URLs
+function checkUrlAccessibility($url) {
+    if (preg_match('/^file:\/\/\/(.+)$/', $url, $matches)) {
+        // Fichier local
+        $filePath = '/' . $matches[1];
+        return [
+            'accessible' => file_exists($filePath),
+            'message' => file_exists($filePath) ? 'File exists' : 'File not found'
+        ];
+    } elseif (preg_match('/^https?:\/\//', $url)) {
+        // URL HTTP/HTTPS - HEAD request
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_NOBODY, true);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        return [
+            'accessible' => ($httpCode >= 200 && $httpCode < 400),
+            'message' => "HTTP $httpCode"
+        ];
     }
 
-    $name = sanitizeFilename($input['name']);
-    $filename = PLAYLISTS_PATH . '/' . $name . '.json';
+    return [
+        'accessible' => false,
+        'message' => 'Unknown URL scheme'
+    ];
+}
 
-    if (!file_exists($filename)) {
-        jsonResponse(false, null, 'Playlist not found');
-        return;
-    }
+// Router selon la méthode HTTP et le PATH_INFO
+$method = $_SERVER['REQUEST_METHOD'];
+$pathInfo = $_SERVER['PATH_INFO'] ?? '';
 
-    $playlist = json_decode(file_get_contents($filename), true);
-    if (!$playlist) {
-        jsonResponse(false, null, 'Invalid playlist format');
-        return;
-    }
+switch ("$method:$pathInfo") {
 
-    // Update fields
-    if (isset($input['duration'])) $playlist['duration'] = intval($input['duration']);
-    if (isset($input['items'])) $playlist['items'] = $input['items'];
-    $playlist['modified'] = date('Y-m-d H:i:s');
+    // GET /api/playlist - Récupérer la playlist
+    case 'GET:':
+    case 'GET:/':
+        if (!file_exists(PLAYLIST_FILE)) {
+            jsonResponse(false, null, 'Playlist file not found', 404);
+        }
 
-    if (file_put_contents($filename, json_encode($playlist, JSON_PRETTY_PRINT))) {
+        $playlist = json_decode(file_get_contents(PLAYLIST_FILE), true);
+        if ($playlist === null) {
+            jsonResponse(false, null, 'Invalid JSON in playlist file', 500);
+        }
+
+        jsonResponse(true, $playlist, 'Playlist retrieved successfully');
+        break;
+
+    // PUT /api/playlist - Mettre à jour la playlist
+    case 'PUT:':
+    case 'PUT:/':
+        requireAdminToken();
+
+        $input = file_get_contents('php://input');
+        $playlist = json_decode($input, true);
+
+        if ($playlist === null) {
+            jsonResponse(false, null, 'Invalid JSON in request body', 400);
+        }
+
+        // Valider la structure
+        $validation = validatePlaylist($playlist);
+        if (!$validation['valid']) {
+            jsonResponse(false, ['errors' => $validation['errors']],
+                        'Playlist validation failed', 400);
+        }
+
+        // Créer le répertoire si nécessaire
+        $dir = dirname(PLAYLIST_FILE);
+        if (!is_dir($dir)) {
+            mkdir($dir, 0755, true);
+        }
+
+        // Sauvegarder
+        $result = file_put_contents(PLAYLIST_FILE, json_encode($playlist, JSON_PRETTY_PRINT));
+
+        if ($result === false) {
+            jsonResponse(false, null, 'Failed to write playlist file', 500);
+        }
+
         jsonResponse(true, $playlist, 'Playlist updated successfully');
-    } else {
-        jsonResponse(false, null, 'Failed to update playlist');
-    }
+        break;
+
+    // POST /api/playlist/validate - Valider la playlist
+    case 'POST:/validate':
+        $input = file_get_contents('php://input');
+        $playlist = json_decode($input, true);
+
+        if ($playlist === null) {
+            jsonResponse(false, null, 'Invalid JSON in request body', 400);
+        }
+
+        // Validation de structure
+        $validation = validatePlaylist($playlist);
+        if (!$validation['valid']) {
+            jsonResponse(false, ['errors' => $validation['errors']],
+                        'Playlist structure invalid', 400);
+        }
+
+        // Vérifier l'accessibilité des URLs
+        $urlChecks = [];
+        foreach ($playlist['items'] as $index => $item) {
+            $check = checkUrlAccessibility($item['url']);
+            $urlChecks[] = [
+                'index' => $index,
+                'url' => $item['url'],
+                'accessible' => $check['accessible'],
+                'message' => $check['message']
+            ];
+        }
+
+        $allAccessible = array_reduce($urlChecks, function($carry, $check) {
+            return $carry && $check['accessible'];
+        }, true);
+
+        jsonResponse(true, [
+            'structureValid' => true,
+            'urlChecks' => $urlChecks,
+            'allAccessible' => $allAccessible
+        ], 'Playlist validation complete');
+        break;
+
+    // POST /api/playlist/refresh - Notifier le player
+    case 'POST:/refresh':
+        requireAdminToken();
+
+        // Créer un fichier de signal pour le player
+        $signalFile = '/tmp/pisignage-playlist-refresh';
+        touch($signalFile);
+
+        jsonResponse(true, [
+            'signalFile' => $signalFile,
+            'timestamp' => time()
+        ], 'Player refresh signal sent');
+        break;
+
+    // POST /api/playlist/upload - Upload un média
+    case 'POST:/upload':
+        requireAdminToken();
+
+        if (!isset($_FILES['file'])) {
+            jsonResponse(false, null, 'No file uploaded', 400);
+        }
+
+        $file = $_FILES['file'];
+
+        // Validation
+        if ($file['error'] !== UPLOAD_ERR_OK) {
+            jsonResponse(false, null, 'Upload error: ' . $file['error'], 400);
+        }
+
+        // Vérifier le type MIME
+        $allowedTypes = [
+            'video/mp4',
+            'video/webm',
+            'video/ogg',
+            'video/quicktime',
+            'video/x-matroska'
+        ];
+
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $mimeType = finfo_file($finfo, $file['tmp_name']);
+        finfo_close($finfo);
+
+        if (!in_array($mimeType, $allowedTypes)) {
+            jsonResponse(false, null, "Unsupported file type: $mimeType", 400);
+        }
+
+        // Vérifier la taille (max 500MB)
+        if ($file['size'] > 500 * 1024 * 1024) {
+            jsonResponse(false, null, 'File too large (max 500MB)', 400);
+        }
+
+        // Sécuriser le nom de fichier
+        $filename = preg_replace('/[^a-zA-Z0-9._-]/', '_', basename($file['name']));
+        $targetPath = MEDIA_DIR . $filename;
+
+        // Créer le répertoire si nécessaire
+        if (!is_dir(MEDIA_DIR)) {
+            mkdir(MEDIA_DIR, 0755, true);
+        }
+
+        // Déplacer le fichier
+        if (!move_uploaded_file($file['tmp_name'], $targetPath)) {
+            jsonResponse(false, null, 'Failed to save uploaded file', 500);
+        }
+
+        jsonResponse(true, [
+            'filename' => $filename,
+            'path' => $targetPath,
+            'url' => "file://$targetPath",
+            'size' => $file['size'],
+            'mimeType' => $mimeType
+        ], 'File uploaded successfully');
+        break;
+
+    default:
+        jsonResponse(false, null, 'Invalid endpoint or method', 404);
 }
-
-/**
- * Delete playlist by name.
- *
- * @since 0.8.0
- */
-function handleDeletePlaylist() {
-    $name = $_GET['name'] ?? null;
-    if (!$name) {
-        jsonResponse(false, null, 'Playlist name required');
-        return;
-    }
-
-    $name = sanitizeFilename($name);
-    $filename = PLAYLISTS_PATH . '/' . $name . '.json';
-
-    if (!file_exists($filename)) {
-        jsonResponse(false, null, 'Playlist not found');
-        return;
-    }
-
-    if (unlink($filename)) {
-        jsonResponse(true, null, 'Playlist deleted successfully');
-    } else {
-        jsonResponse(false, null, 'Failed to delete playlist');
-    }
-}
-
-?>
