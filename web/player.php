@@ -1,189 +1,439 @@
 <?php
-require_once 'includes/auth.php';
-requireAuth();
-include 'includes/header.php';
+/**
+ * PiSignage Chromium HTML5 Player
+ * Page minimaliste pour lecture vidéo fullscreen avec playlist
+ *
+ * Features:
+ * - HTML5 <video> fullscreen autoplay
+ * - Gestion playlist JSON (autoLoop, autoplay)
+ * - Support MP4 (H.264/AAC) et WebM (VP9/Opus)
+ * - Wake Lock API (empêche veille écran)
+ * - Masquage curseur
+ * - Auto-retry sur erreur
+ * - Enchaînement automatique
+ */
 ?>
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PiSignage Player</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-<?php include 'includes/navigation.php'; ?>
+        body {
+            background: #000;
+            overflow: hidden;
+            cursor: none; /* Masquer curseur */
+            -webkit-user-select: none;
+            user-select: none;
+        }
 
-    <!-- Main Content -->
-    <div class="main-content">
-        <!-- Enhanced Player Section -->
-        <div id="player" class="content-section active">
-            <div class="header">
-                <h1 class="page-title">Contrôle du Lecteur</h1>
-                <div class="header-actions">
-                    <button class="btn btn-glass" onclick="refreshPlayerStatus()">
-                        🔄 Actualiser
-                    </button>
-                    <button class="btn btn-glass" onclick="takeQuickScreenshot('player')">
-                        📸 Capture
-                    </button>
-                </div>
-            </div>
+        #player-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
 
-            <!-- Now Playing Card -->
-            <div class="card now-playing-card">
-                <div class="now-playing-header">
-                    <div class="now-playing-info">
-                        <h3 class="now-playing-title" id="now-playing-title">Aucun média en lecture</h3>
-                        <p class="now-playing-meta" id="now-playing-meta">
-                            <span class="player-state" id="player-state">Arrêté</span>
-                            <span class="player-type">VLC</span>
-                        </p>
-                    </div>
-                    <div class="now-playing-status">
-                        <div class="status-indicator" id="status-indicator">
-                            <span class="status-dot"></span>
-                            <span id="status-text">Hors ligne</span>
-                        </div>
-                    </div>
-                </div>
+        #video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain; /* Default, sera mis à jour dynamiquement */
+        }
 
-                <!-- Player Status (hidden element for Puppeteer tests compatibility) -->
-                <span id="player-status" style="display:none;" aria-hidden="true">Arrêté</span>
+        #loading {
+            position: absolute;
+            color: #fff;
+            font-family: monospace;
+            font-size: 1.5rem;
+            text-align: center;
+            z-index: 10;
+        }
 
-                <!-- Progress Bar -->
-                <div class="progress-section">
-                    <span class="time-current" id="time-current">00:00</span>
-                    <div class="progress-bar-container">
-                        <div class="progress-bar-bg">
-                            <div class="progress-bar-fill" id="progress-fill" style="width: 0%"></div>
-                            <input type="range" class="progress-bar-input" id="seek-bar"
-                                   min="0" max="100" value="0"
-                                   onchange="seekTo(this.value)"
-                                   oninput="updateSeekPreview(this.value)">
-                        </div>
-                    </div>
-                    <span class="time-total" id="time-total">00:00</span>
-                </div>
+        #error {
+            position: absolute;
+            color: #f44;
+            font-family: monospace;
+            font-size: 1rem;
+            text-align: center;
+            z-index: 10;
+            display: none;
+            padding: 20px;
+            background: rgba(0,0,0,0.8);
+            border-radius: 8px;
+        }
 
-                <!-- Transport Controls -->
-                <div class="transport-controls">
-                    <button class="control-btn secondary" id="shuffle-btn" onclick="toggleShuffle()" title="Aléatoire">
-                        🔀
-                    </button>
-                    <button class="control-btn" id="previous-btn" onclick="playerControl('previous')" title="Précédent">
-                        ⏮️
-                    </button>
-                    <button class="control-btn primary" id="play-pause-btn" data-action="play" onclick="togglePlayPause()" title="Lecture/Pause">
-                        ▶️
-                    </button>
-                    <button class="control-btn" id="stop-btn" onclick="playerControl('stop')" title="Arrêt">
-                        ⏹️
-                    </button>
-                    <button class="control-btn" id="next-btn" onclick="playerControl('next')" title="Suivant">
-                        ⏭️
-                    </button>
-                    <button class="control-btn secondary" id="loop-btn" onclick="toggleLoop()" title="Répéter">
-                        🔁
-                    </button>
-                </div>
+        /* Debug overlay - masqué par défaut, visible sur Ctrl+D */
+        #debug {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.8);
+            color: #0f0;
+            font-family: monospace;
+            font-size: 0.8rem;
+            padding: 10px;
+            border-radius: 4px;
+            z-index: 100;
+            display: none;
+            max-width: 400px;
+            word-wrap: break-word;
+        }
+    </style>
+</head>
+<body>
 
-                <!-- Volume Control -->
-                <div class="volume-section">
-                    <button class="volume-btn" id="mute-btn" onclick="toggleMute()" title="Muet">
-                        🔊
-                    </button>
-                    <div class="volume-slider-container">
-                        <input type="range" class="volume-slider" id="volume-slider"
-                               min="0" max="100" value="50"
-                               oninput="setVolume(this.value)">
-                        <div class="volume-fill" id="volume-fill" style="width: 50%"></div>
-                    </div>
-                    <span class="volume-value" id="volume-value">50%</span>
-                </div>
-            </div>
-
-            <!-- Playlist Control Card -->
-            <div class="card">
-                <h3 class="card-title">
-                    <span>🎵</span>
-                    Gestion des Playlists
-                </h3>
-
-                <div class="playlist-control-grid">
-                    <!-- Playlist Selector -->
-                    <div class="playlist-selector-section">
-                        <div class="form-group">
-                            <label class="form-label">Playlist active</label>
-                            <select class="form-control" id="playlist-select" onchange="previewPlaylist()">
-                                <option value="">-- Sélectionner une playlist --</option>
-                            </select>
-                        </div>
-
-                        <div class="playlist-actions">
-                            <button class="btn btn-primary" onclick="loadPlaylist()">
-                                ▶️ Charger
-                            </button>
-                            <button class="btn btn-glass" onclick="showPlaylistQueue()">
-                                📋 File d'attente
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Current Queue -->
-                    <div class="queue-section" id="queue-section" style="display: none;">
-                        <h4>File d'attente actuelle</h4>
-                        <div class="queue-list" id="queue-list">
-                            <!-- Queue items will be loaded here -->
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Quick Media Control -->
-            <div class="card">
-                <h3 class="card-title">
-                    <span>📂</span>
-                    Lecture rapide
-                </h3>
-
-                <div class="quick-play-grid">
-                    <div class="form-group">
-                        <label class="form-label">Fichier média</label>
-                        <select class="form-control" id="media-select">
-                            <option value="">-- Sélectionner un fichier --</option>
-                        </select>
-                    </div>
-
-                    <div class="quick-play-actions">
-                        <button class="btn btn-primary" onclick="playMediaFile()">
-                            ▶️ Lire maintenant
-                        </button>
-                        <button class="btn btn-secondary" onclick="addMediaToQueue()">
-                            ➕ Ajouter à la file
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- System Stats -->
-            <div class="card">
-                <h3 class="card-title">
-                    <span>📊</span>
-                    Statistiques système
-                </h3>
-                <div class="system-stats-grid">
-                    <div class="stat-item">
-                        <label>CPU</label>
-                        <span id="player-cpu">--</span>
-                    </div>
-                    <div class="stat-item">
-                        <label>Mémoire</label>
-                        <span id="player-memory">--</span>
-                    </div>
-                    <div class="stat-item">
-                        <label>Température</label>
-                        <span id="player-temp">--</span>
-                    </div>
-                    <div class="stat-item">
-                        <label>Uptime</label>
-                        <span id="player-uptime">--</span>
-                    </div>
-                </div>
-            </div>
-        </div>
+<div id="player-container">
+    <div id="loading">Loading playlist...</div>
+    <div id="error"></div>
+    <video id="video" playsinline></video>
+    <div id="debug">
+        <div>Status: <span id="debug-status">initializing</span></div>
+        <div>Playlist items: <span id="debug-playlist-items">0</span></div>
+        <div>Current index: <span id="debug-current-index">-</span></div>
+        <div>Current URL: <span id="debug-current-url">-</span></div>
+        <div>Errors: <span id="debug-errors">0</span></div>
+        <div>Wake Lock: <span id="debug-wakelock">-</span></div>
     </div>
+</div>
 
-<?php include 'includes/footer.php'; ?>
+<script>
+/**
+ * PiSignage Chromium HTML5 Player
+ * Gestion complète de la playlist avec auto-retry et Wake Lock
+ */
+
+class PiSignagePlayer {
+    constructor() {
+        this.video = document.getElementById('video');
+        this.loading = document.getElementById('loading');
+        this.errorDiv = document.getElementById('error');
+        this.debug = document.getElementById('debug');
+        
+        this.playlist = null;
+        this.currentIndex = 0;
+        this.errorCount = 0;
+        this.maxRetries = 3;
+        this.wakeLock = null;
+        this.pollInterval = null;
+
+        // Debug mode (Ctrl+D pour afficher)
+        this.debugMode = false;
+
+        this.init();
+    }
+
+    async init() {
+        console.log('[PiSignage Player] Initializing...');
+        this.setupEventListeners();
+        this.setupKeyboardShortcuts();
+        await this.loadPlaylist();
+        await this.requestWakeLock();
+        this.startPolling();
+    }
+
+    setupEventListeners() {
+        // Événements vidéo
+        this.video.addEventListener('loadedmetadata', () => {
+            console.log('[Video] Metadata loaded:', this.video.duration, 'seconds');
+            this.updateDebug('status', 'playing');
+        });
+
+        this.video.addEventListener('canplay', () => {
+            console.log('[Video] Can play');
+            this.hideLoading();
+        });
+
+        this.video.addEventListener('playing', () => {
+            console.log('[Video] Playing');
+            this.hideError();
+        });
+
+        this.video.addEventListener('ended', () => {
+            console.log('[Video] Ended');
+            this.handleVideoEnded();
+        });
+
+        this.video.addEventListener('error', (e) => {
+            console.error('[Video] Error:', e);
+            this.handleVideoError();
+        });
+
+        this.video.addEventListener('stalled', () => {
+            console.warn('[Video] Stalled');
+        });
+
+        this.video.addEventListener('waiting', () => {
+            console.log('[Video] Waiting for data...');
+        });
+
+        // Visibilité page (réacquérir Wake Lock si nécessaire)
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                this.requestWakeLock();
+            }
+        });
+    }
+
+    setupKeyboardShortcuts() {
+        document.addEventListener('keydown', (e) => {
+            // Ctrl+D: Toggle debug overlay
+            if (e.ctrlKey && e.key === 'd') {
+                e.preventDefault();
+                this.debugMode = !this.debugMode;
+                this.debug.style.display = this.debugMode ? 'block' : 'none';
+            }
+            // Ctrl+R: Reload playlist
+            if (e.ctrlKey && e.key === 'r') {
+                e.preventDefault();
+                this.reloadPlaylist();
+            }
+            // Ctrl+N: Next video
+            if (e.ctrlKey && e.key === 'n') {
+                e.preventDefault();
+                this.playNext();
+            }
+        });
+    }
+
+    async loadPlaylist() {
+        try {
+            console.log('[Playlist] Loading from /api/playlist...');
+            this.showLoading('Loading playlist...');
+
+            const response = await fetch('/api/playlist');
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const result = await response.json();
+            if (!result.success) {
+                throw new Error(result.message || 'Failed to load playlist');
+            }
+
+            this.playlist = result.data;
+            console.log('[Playlist] Loaded:', this.playlist);
+
+            this.updateDebug('playlist-items', this.playlist.items.length);
+
+            if (!this.playlist.items || this.playlist.items.length === 0) {
+                throw new Error('Playlist is empty');
+            }
+
+            // Démarrer lecture si autoplay
+            if (this.playlist.autoplay) {
+                this.playItem(0);
+            } else {
+                this.hideLoading();
+            }
+
+        } catch (error) {
+            console.error('[Playlist] Load error:', error);
+            this.showError(`Failed to load playlist: ${error.message}`);
+        }
+    }
+
+    async reloadPlaylist() {
+        console.log('[Playlist] Reloading...');
+        await this.loadPlaylist();
+    }
+
+    playItem(index) {
+        if (!this.playlist || !this.playlist.items) {
+            console.error('[Player] No playlist loaded');
+            return;
+        }
+
+        if (index < 0 || index >= this.playlist.items.length) {
+            console.error('[Player] Invalid index:', index);
+            return;
+        }
+
+        this.currentIndex = index;
+        const item = this.playlist.items[index];
+
+        console.log(`[Player] Playing item ${index}:`, item);
+
+        this.updateDebug('current-index', index);
+        this.updateDebug('current-url', item.url);
+
+        // Appliquer paramètres
+        this.video.muted = item.mute !== undefined ? item.mute : false;
+        this.video.loop = item.loop !== undefined ? item.loop : false;
+        this.video.style.objectFit = item.fit || 'contain';
+
+        // Charger source
+        this.video.src = item.url;
+
+        // Jouer
+        this.video.play().catch(err => {
+            console.error('[Player] Play error:', err);
+            // Si autoplay échoue (politique navigateur), retry avec mute
+            if (!this.video.muted) {
+                console.warn('[Player] Autoplay failed, retrying with mute');
+                this.video.muted = true;
+                this.video.play().catch(e => {
+                    console.error('[Player] Play with mute failed:', e);
+                    this.handleVideoError();
+                });
+            } else {
+                this.handleVideoError();
+            }
+        });
+
+        // Gérer duration custom (pour images statiques ou override)
+        if (item.duration && item.duration > 0) {
+            setTimeout(() => {
+                if (this.currentIndex === index) {
+                    console.log(`[Player] Custom duration ${item.duration}s elapsed`);
+                    this.handleVideoEnded();
+                }
+            }, item.duration * 1000);
+        }
+
+        this.errorCount = 0; // Reset error count on successful load
+    }
+
+    handleVideoEnded() {
+        console.log('[Player] Video ended, checking next...');
+
+        // Si loop individuel activé, on ne passe pas au suivant
+        if (this.video.loop) {
+            console.log('[Player] Loop enabled, video will replay automatically');
+            return;
+        }
+
+        // Passer au suivant
+        this.playNext();
+    }
+
+    playNext() {
+        if (!this.playlist) return;
+
+        const nextIndex = this.currentIndex + 1;
+
+        if (nextIndex < this.playlist.items.length) {
+            // Élément suivant dans la liste
+            this.playItem(nextIndex);
+        } else if (this.playlist.autoLoop) {
+            // Recommencer au début si autoLoop
+            console.log('[Player] End of playlist, looping back to start');
+            this.playItem(0);
+        } else {
+            // Fin de playlist sans loop
+            console.log('[Player] End of playlist, stopping');
+            this.showLoading('Playlist finished');
+        }
+    }
+
+    handleVideoError() {
+        this.errorCount++;
+        this.updateDebug('errors', this.errorCount);
+
+        console.error(`[Player] Video error (${this.errorCount}/${this.maxRetries})`);
+
+        if (this.errorCount < this.maxRetries) {
+            // Retry même élément
+            console.log('[Player] Retrying current item...');
+            setTimeout(() => {
+                this.video.load();
+                this.video.play().catch(e => console.error('[Player] Retry play failed:', e));
+            }, 2000);
+        } else {
+            // Max retries atteint, passer au suivant
+            console.error('[Player] Max retries reached, skipping to next item');
+            this.showError(`Failed to play: ${this.playlist.items[this.currentIndex].url}`, 3000);
+            this.errorCount = 0;
+            this.playNext();
+        }
+    }
+
+    async requestWakeLock() {
+        if (!('wakeLock' in navigator)) {
+            console.warn('[Wake Lock] Not supported');
+            this.updateDebug('wakelock', 'not supported');
+            return;
+        }
+
+        try {
+            this.wakeLock = await navigator.wakeLock.request('screen');
+            console.log('[Wake Lock] Acquired');
+            this.updateDebug('wakelock', 'active');
+
+            this.wakeLock.addEventListener('release', () => {
+                console.log('[Wake Lock] Released');
+                this.updateDebug('wakelock', 'released');
+            });
+        } catch (err) {
+            console.error('[Wake Lock] Error:', err);
+            this.updateDebug('wakelock', 'error');
+        }
+    }
+
+    startPolling() {
+        // Poll /tmp/pisignage-playlist-refresh pour détecter rechargements
+        this.pollInterval = setInterval(async () => {
+            try {
+                const response = await fetch('/api/playlist');
+                if (response.ok) {
+                    const result = await response.json();
+                    if (result.success && result.data.version !== this.playlist.version) {
+                        console.log('[Playlist] Version changed, reloading...');
+                        await this.reloadPlaylist();
+                    }
+                }
+            } catch (err) {
+                // Silent fail pour polling
+            }
+        }, 10000); // Poll toutes les 10 secondes
+    }
+
+    showLoading(message = 'Loading...') {
+        this.loading.textContent = message;
+        this.loading.style.display = 'block';
+    }
+
+    hideLoading() {
+        this.loading.style.display = 'none';
+    }
+
+    showError(message, timeout = null) {
+        this.errorDiv.textContent = message;
+        this.errorDiv.style.display = 'block';
+        if (timeout) {
+            setTimeout(() => this.hideError(), timeout);
+        }
+    }
+
+    hideError() {
+        this.errorDiv.style.display = 'none';
+    }
+
+    updateDebug(key, value) {
+        const element = document.getElementById(`debug-${key}`);
+        if (element) {
+            element.textContent = value;
+        }
+    }
+}
+
+// Initialiser le player au chargement de la page
+window.addEventListener('DOMContentLoaded', () => {
+    console.log('[PiSignage] Initializing player...');
+    new PiSignagePlayer();
+});
+</script>
+
+</body>
+</html>
