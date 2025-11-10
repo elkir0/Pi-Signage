@@ -1,10 +1,159 @@
-# Claude Development Protocol - PiSignage v0.8.9
+# Claude Development Protocol - PiSignage v0.11.0
 
 ## Project Overview
 
-PiSignage is a professional digital signage solution optimized for Raspberry Pi hardware. Version 0.8.9 represents a complete architectural transformation from a monolithic SPA to a modular MPA system with VLC-exclusive player support.
+PiSignage is a professional digital signage solution optimized for Raspberry Pi hardware. Version 0.11.0 includes:
+- **Chromium Kiosk Mode**: Wayland-based full-screen browser for HTML5 content
+- **VLC Media Player**: Traditional video playback with HTTP API control
+- **Dual Volume Control**: Independent VLC and system (ALSA) audio management
+- **Modern Web Interface**: Redesigned UI with consistent design patterns
+- **100% Reliable Playback**: Fixed single-file playback with 4-step verification
 
-## Current Architecture (v0.8.9)
+## Development Environment & Stack
+
+### Hardware Target
+- **Primary**: Raspberry Pi 4/5 (2GB+ RAM)
+- **OS**: Raspberry Pi OS Trixie (Debian 13) with Wayland
+- **Network**: Raspberry Pi at 192.168.1.62
+
+### Technology Stack
+
+#### Backend
+- **PHP 8.4**: Web application backend (php8.4-fpm)
+- **Nginx**: Web server with FastCGI
+- **VLC 3.x**: Media player with HTTP API (port 9999)
+- **Chromium**: Kiosk browser for HTML5 content
+
+#### Frontend
+- **Vanilla JavaScript**: No frameworks, modular ES6+ patterns
+- **PiSignage Namespace**: Global `window.PiSignage` object for all modules
+- **CSS Modules**: 6 modular stylesheets (main, core, layout, components, responsive, modern-ui)
+- **RESTful APIs**: JSON-based communication layer
+
+#### System Components
+- **ALSA**: System-level audio control via amixer
+- **Wayland (labwc)**: Display server for kiosk mode
+- **greetd**: Auto-login session manager
+- **systemd**: Service management
+
+### Development Workflow with MCP
+
+#### MCP (Model Context Protocol) Integration
+
+This project uses **MCP servers** to enhance Claude Code CLI capabilities:
+
+1. **Filesystem MCP**: Access to local and remote files
+2. **SSH MCP**: Direct Raspberry Pi command execution
+3. **Web Testing MCP** (Playwright - To be configured): Browser automation and testing
+
+#### Current MCP Usage Patterns
+
+**Remote Development on Raspberry Pi:**
+```bash
+# Deploy files to Pi
+scp /local/path/file.php pi@192.168.1.62:/tmp/
+ssh pi@192.168.1.62 'sudo cp /tmp/file.php /opt/pisignage/web/ && sudo chown www-data:www-data /opt/pisignage/web/file.php'
+
+# Test endpoints directly on Pi
+ssh pi@192.168.1.62 'curl -s http://localhost/api/endpoint.php'
+
+# Check logs
+ssh pi@192.168.1.62 'tail -50 /var/log/nginx/error.log'
+```
+
+**Memory Optimization:**
+- Use `grep` and `sed` commands on Pi instead of reading large files
+- Fix code directly on Pi when possible (cache busting, quick patches)
+- Pull only modified files back to local repo
+
+#### GitHub Integration
+- **Repository**: https://github.com/elkir0/Pi-Signage
+- **Branch**: `feature/webadmin-kiosk-chromium-player`
+- **Auth Token**: Stored in environment (ghp_...)
+- **Workflow**: Local changes → Deploy to Pi → Test → Git commit → Push to GitHub
+
+## Recent Development Session (v0.11.0 - Nov 2025)
+
+### Issues Resolved
+
+#### BUG-013: Single File Playback Reliability
+- **Problem**: Unreliable single file playback, files not starting consistently
+- **Solution**: 4-step verification process in `player-control.php`
+  1. Clear existing playlist
+  2. Add file to playlist
+  3. Verify file was added
+  4. Start playback with retry logic
+- **Files Modified**: `web/api/player-control.php`
+
+#### BUG-014: Playlist Editing HTTP 500 Error
+- **Problem**: Editing playlists returned HTTP 500, missing function
+- **Root Cause**: `sanitizeFilename()` function missing from `config.php`
+- **Solution**:
+  - Added function to `config.php` (deployed to Pi)
+  - Created `Default_Playlist.json` for filename mapping
+- **Files Modified**: `web/config.php`
+
+#### BUG-015: YouTube Download 404 Errors
+- **Problem**: YouTube downloads failing with 404 errors after file cleanup
+- **Root Cause**: JavaScript calling deleted `/api/youtube-simple.php`
+- **Solution**: Updated API paths in `api.js` to `/api/youtube.php`
+- **Files Modified**: `web/assets/js/api.js`
+- **Note**: Browser cache required force refresh (Ctrl+F5)
+
+#### BUG-016: Player Control UI Design Inconsistency
+- **Problem**: Player control page using different design (Bootstrap 5) - "LAIDE"
+- **Solution**: Complete redesign to match site design
+  - Removed Bootstrap 5 CDN
+  - Implemented card-based layout
+  - Uses site's includes (header.php, footer.php, navigation.php)
+  - Consistent styling with media.php and other pages
+- **Files Modified**: `web/player-control-ui.php`
+
+### New Features (v0.11.0)
+
+#### Dual Volume Control
+- **VLC Player Volume**: 0-320 range (125% max boost) via HTTP API
+- **System Volume (ALSA)**: 0-100% range via amixer commands
+- **Independent Mute**: Separate mute buttons for VLC and system
+- **API Endpoints Added to system.php**:
+  - `GET /api/system.php?action=get_volume`
+  - `POST /api/system.php?action=set_volume`
+  - `POST /api/system.php?action=toggle_mute`
+- **UI Components**: Dual slider controls with real-time feedback
+
+### Development Insights
+
+#### Cache Management
+- Browser caches JavaScript with version parameter (`?v=869`)
+- Direct Pi modifications require version bump or force refresh
+- Use `sed` on Pi for emergency fixes to avoid cache issues
+
+#### Filename Sanitization Pattern
+```php
+function sanitizeFilename($filename) {
+    // Remove special characters
+    $filename = preg_replace('/[^a-zA-Z0-9\-\_\.]/', '_', $filename);
+    // Prevent double dots
+    $filename = preg_replace('/\.+/', '.', $filename);
+    // Prevent empty names
+    if (empty($filename) || $filename === '.') {
+        $filename = 'file_' . time();
+    }
+    return $filename;
+}
+```
+
+#### Design Consistency Checklist
+When creating new pages, ensure:
+- [ ] Uses `includes/auth.php` for authentication
+- [ ] Uses `includes/header.php` for head section
+- [ ] Uses `includes/navigation.php` for sidebar
+- [ ] Uses `includes/footer.php` for closing tags
+- [ ] Card-based layout with `.card`, `.card-header`, `.card-body`
+- [ ] Consistent button styles (`.btn`, `.btn-primary`, etc.)
+- [ ] No external CSS frameworks (Bootstrap, Tailwind, etc.)
+
+## Current Architecture (v0.11.0)
 
 ### Modular Multi-Page Application
 - **9 PHP pages**: dashboard.php, media.php, playlists.php, player.php, settings.php, logs.php, screenshot.php, youtube.php, schedule.php
