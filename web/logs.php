@@ -33,6 +33,9 @@ include 'includes/header.php';
                     <button class="btn btn-secondary" onclick="toggleAutoRefresh()">
                         <span id="auto-refresh-icon">⏸️</span> Auto
                     </button>
+                    <button class="btn btn-danger" onclick="rotateLogs()">
+                        🔄 Rotation & Nettoyage
+                    </button>
                 </div>
             </div>
 
@@ -327,6 +330,46 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+async function rotateLogs() {
+    if (!confirm('Lancer la rotation et le nettoyage des logs ?\n\n' +
+                 'Cela va:\n' +
+                 '- Compresser les gros logs (>10MB)\n' +
+                 '- Supprimer les vieux logs YouTube (>7j)\n' +
+                 '- Nettoyer les logs Nginx (>50MB)\n' +
+                 '- Libérer de l\'espace disque')) {
+        return;
+    }
+
+    const originalText = event.target.textContent;
+    event.target.textContent = '⏳ Rotation en cours...';
+    event.target.disabled = true;
+
+    try {
+        const response = await fetch('/api/logs.php', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({action: 'rotate'})
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            alert('✅ Rotation des logs terminée avec succès!\n\nActualisez la page pour voir les nouvelles tailles.');
+            setTimeout(() => {
+                location.reload();
+            }, 1000);
+        } else {
+            alert('❌ Erreur lors de la rotation: ' + (data.message || 'Erreur inconnue'));
+        }
+    } catch (error) {
+        console.error('Rotation error:', error);
+        alert('❌ Erreur de communication avec le serveur');
+    } finally {
+        event.target.textContent = originalText;
+        event.target.disabled = false;
+    }
 }
 </script>
 
