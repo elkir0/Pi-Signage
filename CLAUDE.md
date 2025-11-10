@@ -72,6 +72,82 @@ ssh pi@192.168.1.62 'tail -50 /var/log/nginx/error.log'
 - **Auth Token**: Stored in environment (ghp_...)
 - **Workflow**: Local changes → Deploy to Pi → Test → Git commit → Push to GitHub
 
+#### Playwright MCP Server (Browser Testing & Automation)
+
+**Location**: `~/.mcp/playwright/`
+
+A containerized Playwright server providing browser automation, screenshot capture, console monitoring, and accessibility testing.
+
+**Quick Start:**
+```bash
+# Start MCP server
+mcp start
+
+# Test PiSignage UI
+mcp navigate http://192.168.1.62
+mcp screenshot
+mcp console
+mcp a11y
+
+# Screenshots saved to ~/.mcp/playwright/workspace/screenshots/
+```
+
+**Available Commands:**
+- `mcp start/stop/restart` - Container management
+- `mcp status` - Check if MCP is running
+- `mcp navigate <url>` - Navigate browser to URL
+- `mcp screenshot` - Capture full-page screenshot
+- `mcp console` - Get console logs (errors, warnings, info)
+- `mcp network` - Get network requests
+- `mcp eval '<script>'` - Execute JavaScript
+- `mcp a11y` - Run accessibility audit with axe-core
+
+**HTTP API** (for programmatic access):
+```bash
+curl -X POST http://localhost:3000 \
+  -H "Content-Type: application/json" \
+  -d '{"command": "navigate", "params": {"url": "http://192.168.1.62"}}'
+```
+
+**Integration Examples:**
+
+*Test all PiSignage pages:*
+```bash
+for page in dashboard.php media.php playlists.php player-control-ui.php settings.php; do
+  mcp navigate "http://192.168.1.62/$page"
+  mcp screenshot
+  mcp console | jq '.logs[] | select(.type=="error")'
+done
+```
+
+*Automated UI testing:*
+```bash
+# Navigate and verify
+mcp navigate http://192.168.1.62/dashboard.php
+
+# Check for JavaScript errors
+ERRORS=$(mcp console | jq -r '.logs[] | select(.type=="error") | .text')
+if [ -n "$ERRORS" ]; then
+  echo "❌ Errors found: $ERRORS"
+else
+  echo "✅ No errors"
+fi
+
+# Run accessibility audit
+mcp a11y | jq '.violations'
+```
+
+**Features:**
+- Multi-browser support (Chromium, Firefox, WebKit)
+- Full-page screenshot capture
+- Console log filtering by type (error, warning, info)
+- Network request monitoring
+- JavaScript execution in page context
+- Accessibility auditing with axe-core
+- Element interaction (click, type, wait)
+
+**Documentation**: `~/.mcp/playwright/README.md`
+
 ## Recent Development Session (v0.11.0 - Nov 2025)
 
 ### Issues Resolved
