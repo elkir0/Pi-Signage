@@ -100,6 +100,8 @@
     <video id="video" playsinline></video>
     <div id="debug">
         <div>Status: <span id="debug-status">initializing</span></div>
+        <div>FPS: <span id="debug-fps">0</span></div>
+        <div>Video: <span id="debug-video-info">-</span></div>
         <div>Playlist items: <span id="debug-playlist-items">0</span></div>
         <div>Current index: <span id="debug-current-index">-</span></div>
         <div>Current URL: <span id="debug-current-url">-</span></div>
@@ -131,6 +133,12 @@ class PiSignagePlayer {
         // Debug mode (Ctrl+D pour afficher)
         this.debugMode = false;
 
+        // FPS counter
+        this.fps = 0;
+        this.frameCount = 0;
+        this.lastFpsUpdate = Date.now();
+        this.animationFrameId = null;
+
         this.init();
     }
 
@@ -141,6 +149,7 @@ class PiSignagePlayer {
         await this.loadPlaylist();
         await this.requestWakeLock();
         this.startPolling();
+        this.startFpsCounter();
     }
 
     setupEventListeners() {
@@ -193,6 +202,11 @@ class PiSignagePlayer {
                 e.preventDefault();
                 this.debugMode = !this.debugMode;
                 this.debug.style.display = this.debugMode ? 'block' : 'none';
+                if (this.debugMode) {
+                    // Force immediate update when enabling debug
+                    this.updateDebug('fps', this.fps);
+                    this.updateVideoInfo();
+                }
             }
             // Ctrl+R: Reload playlist
             if (e.ctrlKey && e.key === 'r') {
@@ -397,6 +411,45 @@ class PiSignagePlayer {
                 // Silent fail pour polling
             }
         }, 10000); // Poll toutes les 10 secondes
+    }
+
+    startFpsCounter() {
+        const updateFps = () => {
+            this.frameCount++;
+            const now = Date.now();
+            const delta = now - this.lastFpsUpdate;
+
+            // Update FPS every second
+            if (delta >= 1000) {
+                this.fps = Math.round((this.frameCount * 1000) / delta);
+                this.frameCount = 0;
+                this.lastFpsUpdate = now;
+
+                if (this.debugMode) {
+                    this.updateDebug('fps', this.fps);
+                    this.updateVideoInfo();
+                }
+            }
+
+            this.animationFrameId = requestAnimationFrame(updateFps);
+        };
+
+        updateFps();
+    }
+
+    updateVideoInfo() {
+        if (!this.video.videoWidth) {
+            this.updateDebug('video-info', '-');
+            return;
+        }
+
+        const width = this.video.videoWidth;
+        const height = this.video.videoHeight;
+        const duration = Math.round(this.video.duration);
+        const currentTime = Math.round(this.video.currentTime);
+
+        const info = `${width}x${height} | ${currentTime}s/${duration}s`;
+        this.updateDebug('video-info', info);
     }
 
     showLoading(message = 'Loading...') {
