@@ -27,6 +27,31 @@ if ($method === 'GET' && isset($_GET['action']) && $_GET['action'] === 'get_play
     exit;
 }
 
+// ALSA Volume Control (v0.11.0)
+if ($method === 'GET' && isset($_GET['action']) && $_GET['action'] === 'get_volume') {
+    $volume = exec("amixer sget Master | grep -oP '\\d+%' | head -1 | tr -d '%'");
+    jsonResponse(true, ['volume' => intval($volume)]);
+    exit;
+}
+
+if ($method === 'POST' && isset($input['action']) && $input['action'] === 'set_volume') {
+    $volume = intval($input['volume'] ?? 100);
+    $volume = max(0, min(100, $volume)); // Clamp 0-100
+    exec("amixer sset Master {$volume}%");
+    jsonResponse(true, ['volume' => $volume, 'message' => "Volume set to {$volume}%"]);
+    exit;
+}
+
+if ($method === 'POST' && isset($input['action']) && $input['action'] === 'toggle_mute') {
+    $output = [];
+    exec("amixer sget Master | grep -oP '\\[on\\]|\\[off\\]' | head -1", $output);
+    $currentState = trim($output[0] ?? '[on]');
+    $newState = ($currentState === '[on]') ? 'off' : 'on';
+    exec("amixer sset Master {$newState}");
+    jsonResponse(true, ['muted' => ($newState === 'off'), 'message' => 'Mute toggled']);
+    exit;
+}
+
 switch ($method) {
     case 'GET':
         handleGetSystemInfo();
