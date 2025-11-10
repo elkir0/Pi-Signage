@@ -273,7 +273,7 @@ PiSignage.api = {
     // YouTube API calls
     youtube: {
         download: function(url, quality = 'best') {
-            return PiSignage.api.request('/api/youtube-simple.php', {
+            return PiSignage.api.request('/api/youtube.php', {
                 method: 'POST',
                 body: JSON.stringify({
                     url: url,
@@ -283,7 +283,7 @@ PiSignage.api = {
         },
 
         getStatus: function() {
-            return PiSignage.api.request('/api/youtube-simple.php?action=status');
+            return PiSignage.api.request('/api/youtube.php?action=status');
         }
     },
 

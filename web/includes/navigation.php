@@ -29,7 +29,7 @@
 
         <div class="nav-section">
             <div class="nav-title">Contrôle</div>
-            <a href="player.php" class="nav-item <?= getCurrentPage() === 'player' ? 'active' : '' ?>">
+            <a href="player-control-ui.php" class="nav-item <?= getCurrentPage() === 'player-control-ui' ? 'active' : '' ?>">
                 <span>▶️</span>
                 <span>Lecteur</span>
             </a>
