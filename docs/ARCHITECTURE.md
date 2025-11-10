@@ -6,6 +6,7 @@ PiSignage v0.8.9 represents a complete architectural transformation from a monol
 
 ## Table of Contents
 - [Architecture Philosophy](#architecture-philosophy)
+- [Display Stack Architecture](#display-stack-architecture)
 - [File Structure](#file-structure)
 - [Component Architecture](#component-architecture)
 - [CSS Architecture](#css-architecture)
@@ -52,6 +53,149 @@ Modular MPA Architecture
 - **Better caching**: Browser can cache individual modules
 - **Developer experience**: Easier to understand and modify
 - **Performance**: 80% faster loading times
+
+---
+
+## Display Stack Architecture
+
+### Traditional Stack (Raspberry Pi OS Bullseye/Bookworm)
+
+The traditional PiSignage architecture uses VLC player for media playback on standard Raspberry Pi OS:
+
+```
+Raspberry Pi OS (Bullseye/Bookworm)
+├── X11 Display Server
+├── Desktop Environment (LXDE/Pixel)
+├── VLC Player (fullscreen media playback)
+│   ├── HTTP API on port 8080
+│   ├── Direct framebuffer rendering
+│   └── Hardware-accelerated decoding
+└── Web Interface (nginx + PHP)
+    └── API controls VLC via HTTP
+```
+
+**Characteristics:**
+- VLC player exclusive (MPV removed in v0.8.9)
+- X11-based display stack
+- Manual VLC window management
+- HTTP API for player control
+
+### Trixie/Wayland Stack (Raspberry Pi OS Trixie - Debian 13)
+
+For Raspberry Pi OS Trixie, PiSignage adds a modern Wayland-based kiosk mode using Chromium for dashboard display:
+
+```
+Raspberry Pi OS Trixie (Debian 13)
+├── Wayland Display Server
+├── greetd (Session Manager)
+│   └── Auto-login configuration
+├── labwc (Wayland Compositor)
+│   ├── Minimal footprint (~10MB RAM)
+│   ├── rc.xml configuration
+│   ├── autostart script execution
+│   └── Chromium kiosk management
+├── Chromium Browser (Kiosk Mode)
+│   ├── Full-screen web dashboard display
+│   ├── Hardware acceleration
+│   └── Configurable flags
+├── VLC Player (Media Playback)
+│   └── HTTP API on port 8080
+└── Web Interface (nginx + PHP)
+    ├── Kiosk API (/api/kiosk.php)
+    └── Player API (/api/player.php)
+```
+
+**Key Components:**
+
+#### greetd
+- Modern session manager replacing traditional display managers
+- Configured for auto-login without password
+- Starts labwc compositor automatically
+- Configuration: `/etc/greetd/config.toml`
+
+#### labwc
+- Lightweight Wayland compositor designed for single-purpose displays
+- Reads configuration from `~/.config/labwc/rc.xml`
+- Executes autostart script at session start
+- Minimal resource usage ideal for Raspberry Pi
+
+#### Chromium Kiosk Mode
+- Full-screen browser for dashboard display
+- Launched via labwc autostart with custom flags
+- Network wait logic (20s max) ensures connectivity
+- Configurable URL and flags via REST API
+
+#### Configuration Flow
+
+```
+/opt/pisignage/config/
+├── feature_flags         # ENABLE_KIOSK=0|1
+├── kiosk_url            # Target URL (default: https://time.is)
+└── kiosk_flags          # Chromium flags
+
+        ↓
+
+scripts/kiosk-apply      # POSIX sh script
+├── Reads config files
+├── Waits for network
+├── Generates ~/.config/labwc/autostart
+└── Exit (labwc reads autostart)
+
+        ↓
+
+labwc session starts
+├── Sources autostart
+└── Launches Chromium with flags
+```
+
+**REST API Control:**
+
+```bash
+# Change kiosk URL
+curl -X PUT http://[pi-ip]/api/kiosk.php/url \
+  -d '{"url":"https://grafana.local"}'
+
+# Update Chromium flags
+curl -X PUT http://[pi-ip]/api/kiosk.php/flags \
+  -d '{"flags":"--incognito --force-device-scale-factor=1.5"}'
+
+# Restart kiosk
+curl -X POST http://[pi-ip]/api/kiosk.php/restart
+```
+
+**Feature Flags:**
+
+Enable/disable kiosk mode without uninstalling:
+
+```bash
+# Disable kiosk mode
+echo "ENABLE_KIOSK=0" | sudo tee /opt/pisignage/config/feature_flags
+sudo reboot
+
+# Re-enable kiosk mode
+echo "ENABLE_KIOSK=1" | sudo tee /opt/pisignage/config/feature_flags
+sudo reboot
+```
+
+### Stack Comparison
+
+| Feature | Traditional (X11) | Trixie (Wayland) |
+|---------|------------------|------------------|
+| Display Server | X11 | Wayland |
+| Compositor | Desktop Environment | labwc |
+| Media Player | VLC | VLC |
+| Kiosk Browser | N/A | Chromium |
+| Session Manager | LightDM/autologin | greetd |
+| RAM Usage | ~150MB | ~110MB |
+| Remote Kiosk API | N/A | ✅ Full REST API |
+| Auto-restart | Manual | Automatic via labwc |
+
+**When to use each:**
+
+- **Traditional Stack**: Raspberry Pi OS Bullseye/Bookworm, simple media playback requirements
+- **Trixie Stack**: Raspberry Pi OS Trixie (Debian 13), need for web dashboard display, remote management, modern Wayland benefits
+
+For complete Trixie installation and configuration, see [UPGRADE_TRIXIE.md](../UPGRADE_TRIXIE.md).
 
 ---
 
@@ -284,7 +428,7 @@ All JavaScript code is organized under the `PiSignage` namespace to prevent glob
 window.PiSignage = {
     // Core functionality
     core: {
-        version: '0.8.5',
+        version: '0.8.9',
         init: function() { /* Initialization */ },
         utils: {
             formatBytes: function(bytes) { /* Utility functions */ },
@@ -461,7 +605,8 @@ All API responses use consistent JSON structure:
 ├── youtube.php       # YouTube video download
 ├── logs.php          # System logs access
 ├── performance.php   # Performance metrics
-└── scheduler.php     # Playlist scheduling
+├── scheduler.php     # Playlist scheduling
+└── kiosk.php         # Kiosk mode management (Trixie only)
 ```
 
 ---

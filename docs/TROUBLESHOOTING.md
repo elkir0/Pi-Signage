@@ -1,52 +1,52 @@
-# Guide de dépannage - PiSignage v0.8.5
+# Guide de dépannage - PiSignage v0.8.9
 
 ## Vue d'ensemble
 
-Ce guide présente les solutions aux problèmes les plus fréquents rencontrés lors de l'utilisation de PiSignage v0.8.5. Grâce à l'architecture modulaire v0.8.5, de nombreux problèmes JavaScript et de navigation ont été éliminés, mais ce guide reste essentiel pour le dépannage général.
+Ce guide présente les solutions aux problèmes les plus fréquents rencontrés lors de l'utilisation de PiSignage v0.8.9. Grâce à l'architecture modulaire et à l'utilisation exclusive de VLC, de nombreux problèmes ont été éliminés, mais ce guide reste essentiel pour le dépannage général.
 
-### Améliorations v0.8.5
+### Améliorations v0.8.9
+- **VLC exclusif**: Support MPV complètement retiré pour stabilité maximale
 - **80% moins d'erreurs JavaScript** grâce à l'architecture modulaire
 - **Navigation plus fiable** entre les sections
 - **Performances améliorées** de 80% sur Raspberry Pi
-- **Maintenance simplifiée** avec modules séparés
+- **Authentification complète** sur toutes les pages
+- **Support Trixie**: Mode kiosk Chromium + Wayland (optionnel)
 
 ---
 
-## Nouveaux problèmes et solutions v0.8.5
+## Problèmes spécifiques v0.8.9
 
 ### Navigation entre pages qui ne fonctionne pas
-**Note**: Ce problème était fréquent en v0.8.3 mais devrait être éliminé en v0.8.5
 
 **Symptômes observés :**
-- Erreurs "showSection is not defined" (ancien problème v0.8.3)
 - Navigation entre pages qui échoue
+- Pages qui ne se chargent pas correctement
 
-**Solution v0.8.5 :**
+**Solution v0.8.9 :**
 ```bash
-# Vérifier que vous êtes bien en v0.8.5
-cat /opt/pisignage/VERSION
+# Vérifier que vous êtes bien en v0.8.9
+grep version /opt/pisignage/web/assets/js/core.js
 
 # Vider le cache du navigateur
 # Ctrl+Shift+Delete ou Cmd+Shift+Delete
 
-# Accès direct aux nouvelles URLs modulaires
+# Accès direct aux pages modulaires
 http://[IP-PI]/dashboard.php
 http://[IP-PI]/media.php
 http://[IP-PI]/playlists.php
 http://[IP-PI]/player.php
+http://[IP-PI]/settings.php
 ```
 
-### Performance dégradée après migration v0.8.3 → v0.8.5
-**Note**: v0.8.5 devrait être 80% plus rapide. Si ce n'est pas le cas:
+### Performance dégradée après migration
 
 **Diagnostic :**
 ```bash
-# Vérifier la version réelle
-cat /opt/pisignage/VERSION
-git log --oneline -5
-
 # Tester le chargement des pages
 time curl -s http://localhost/dashboard.php > /dev/null
+
+# Vérifier processus VLC
+ps aux | grep vlc
 ```
 
 **Solution :**
@@ -56,6 +56,9 @@ sudo systemctl restart nginx php8.2-fpm
 
 # Forcer le rechargement CSS/JS
 rm -rf /opt/pisignage/web/assets/cache/* 2>/dev/null
+
+# Redémarrer le lecteur VLC
+sudo systemctl restart pisignage
 ```
 
 ---
@@ -257,85 +260,17 @@ vcgencmd get_config int | grep gpu_mem
 # La valeur doit être d'au moins 64MB
 ```
 
-### MPV ne fonctionne pas correctement
+### ~~MPV ne fonctionne pas correctement~~
 
-**Symptômes observés :**
-- MPV se ferme immédiatement après le lancement
-- Aucune sortie vidéo n'apparaît à l'écran
+> **Note v0.8.9**: Support MPV complètement retiré. PiSignage utilise maintenant VLC exclusivement. Cette section est conservée uniquement pour référence historique.
 
-**Phase de diagnostic :**
-```bash
-# Vérifier l'installation et les capacités de MPV
-mpv --version
-mpv --vo=help
+~~Cette section n'est plus applicable depuis v0.8.9.~~
 
-# Test de lecture avec un fichier spécifique
-export DISPLAY=:0
-mpv --vo=drm --hwdec=auto /opt/pisignage/media/BigBuckBunny_720p.mp4 --really-quiet --length=5
-```
+### ~~Le basculement entre VLC et MPV ne fonctionne pas~~
 
-**Procédures de résolution :**
+> **Note v0.8.9**: Le basculement entre lecteurs a été supprimé. PiSignage v0.8.9 utilise VLC exclusivement pour une meilleure stabilité et performance.
 
-**Configuration optimisée de MPV :**
-```bash
-mkdir -p /home/pi/.config/mpv
-cat > /home/pi/.config/mpv/mpv.conf << 'EOF'
-vo=drm
-hwdec=drm-copy
-fullscreen=yes
-loop-playlist=inf
-quiet=yes
-no-terminal=yes
-no-input-default-bindings=yes
-EOF
-```
-
-**Vérification du support DRM :**
-```bash
-ls -la /dev/dri/
-# Le répertoire doit contenir au minimum card0
-```
-
-**Test des différentes sorties vidéo :**
-```bash
-mpv --vo=gpu --gpu-context=drm /opt/pisignage/media/BigBuckBunny_720p.mp4
-```
-
-### Le basculement entre VLC et MPV ne fonctionne pas
-
-**Symptômes observés :**
-- L'interface continue d'afficher le même lecteur
-- Les commandes de changement de lecteur échouent
-
-**Phase de diagnostic :**
-```bash
-# Examiner la configuration actuelle
-cat /opt/pisignage/config/player-config.json | jq .
-
-# Tester manuellement le script de basculement
-/opt/pisignage/scripts/player-manager-v0.8.1.sh switch
-```
-
-**Procédures de résolution :**
-
-**Restauration de la configuration par défaut :**
-```bash
-cp /opt/pisignage/config/player-config.json /opt/pisignage/config/player-config.json.backup
-wget -O /opt/pisignage/config/player-config.json \
-    https://raw.githubusercontent.com/elkir0/Pi-Signage/main/config/player-config.json
-```
-
-**Correction des permissions sur les scripts :**
-```bash
-chmod +x /opt/pisignage/scripts/*.sh
-chown pi:pi /opt/pisignage/scripts/*.sh
-```
-
-**Test individuel des lecteurs :**
-```bash
-sudo -u pi cvlc --intf dummy --version
-sudo -u pi mpv --version
-```
+~~Cette section n'est plus applicable depuis v0.8.9.~~
 
 ---
 
@@ -473,7 +408,7 @@ vcgencmd display_power
 tvservice -s
 
 # Contrôler les processus de lecture vidéo
-ps aux | grep -E "(vlc|mpv)"
+ps aux | grep vlc
 
 # Tenter une réactivation manuelle de l'affichage
 export DISPLAY=:0
@@ -533,15 +468,8 @@ aspect-ratio=16:9
 EOF
 ```
 
-**Configuration du ratio d'aspect pour MPV :**
-```bash
-cat > /home/pi/.config/mpv/mpv.conf << 'EOF'
-vo=drm
-fullscreen=yes
-video-aspect-override=16:9
-keepaspect=yes
-EOF
-```
+~~**Configuration du ratio d'aspect pour MPV :**~~
+> **Note v0.8.9**: MPV n'est plus supporté. Utilisez uniquement la configuration VLC ci-dessus.
 
 ### Absence de son
 
@@ -648,16 +576,8 @@ sout-mux-caching=3000
 EOF
 ```
 
-**Optimisation des paramètres de cache pour MPV :**
-```bash
-cat > /home/pi/.config/mpv/mpv.conf << 'EOF'
-vo=drm
-hwdec=drm-copy
-cache=yes
-demuxer-max-bytes=50M
-cache-default=8000
-EOF
-```
+~~**Optimisation des paramètres de cache pour MPV :**~~
+> **Note v0.8.9**: MPV n'est plus supporté. Utilisez uniquement l'optimisation VLC ci-dessus.
 
 **Overclocking modéré (uniquement pour Raspberry Pi 3) :**
 ```bash
@@ -707,6 +627,161 @@ sudo systemctl restart nginx
 
 ---
 
+## Problèmes spécifiques Trixie/Kiosk Mode
+
+> **Note**: Cette section s'applique uniquement à Raspberry Pi OS Trixie (Debian 13) avec le mode kiosk Chromium activé.
+
+### Chromium kiosk ne se lance pas
+
+**Symptômes observés :**
+- Écran noir au démarrage
+- Chromium ne démarre pas automatiquement
+- Session labwc sans navigateur
+
+**Phase de diagnostic :**
+```bash
+# Vérifier si kiosk est activé
+cat /opt/pisignage/config/feature_flags
+
+# Vérifier processus Chromium
+ps aux | grep chromium
+
+# Vérifier configuration labwc
+cat ~/.config/labwc/autostart
+
+# Vérifier logs session
+journalctl --user -xe
+```
+
+**Procédures de résolution :**
+
+**Régénérer configuration kiosk :**
+```bash
+# Régénérer autostart labwc
+/opt/pisignage/scripts/kiosk-apply
+
+# Redémarrer session (méthode propre)
+sudo systemctl restart greetd
+
+# Ou tuer Chromium pour relance automatique
+pkill -f "/usr/bin/chromium"
+```
+
+**Vérifier configuration réseau :**
+```bash
+# Chromium attend réseau (20s max)
+# Vérifier connectivité
+ping -c 3 1.1.1.1
+
+# Vérifier URL kiosk
+cat /opt/pisignage/config/kiosk_url
+
+# Tester URL manuellement
+curl -I $(cat /opt/pisignage/config/kiosk_url)
+```
+
+### Kiosk API ne répond pas
+
+**Symptômes observés :**
+- Erreurs 404 ou 500 sur `/api/kiosk.php`
+- Impossibilité de changer URL/flags via API
+
+**Phase de diagnostic :**
+```bash
+# Tester endpoint status
+curl http://localhost/api/kiosk.php
+
+# Vérifier permissions
+ls -la /opt/pisignage/web/api/kiosk.php
+ls -la /opt/pisignage/config/kiosk_*
+
+# Vérifier logs PHP
+sudo tail -f /var/log/nginx/error.log
+```
+
+**Procédures de résolution :**
+
+**Corriger permissions :**
+```bash
+sudo chown www-data:www-data /opt/pisignage/web/api/kiosk.php
+sudo chown www-data:www-data /opt/pisignage/config/kiosk_*
+sudo chmod 644 /opt/pisignage/web/api/kiosk.php
+sudo chmod 644 /opt/pisignage/config/kiosk_*
+```
+
+**Tester endpoints individuellement :**
+```bash
+# GET status
+curl http://localhost/api/kiosk.php
+
+# GET URL
+curl http://localhost/api/kiosk.php/url
+
+# GET flags
+curl http://localhost/api/kiosk.php/flags
+```
+
+### Problèmes d'affichage Wayland
+
+**Symptômes observés :**
+- Résolution incorrecte
+- Artefacts graphiques
+- Performance dégradée
+
+**Phase de diagnostic :**
+```bash
+# Vérifier session Wayland
+echo $WAYLAND_DISPLAY
+
+# Vérifier processus labwc
+ps aux | grep labwc
+
+# Vérifier flags Chromium actuels
+cat /opt/pisignage/config/kiosk_flags
+```
+
+**Procédures de résolution :**
+
+**Ajuster flags Chromium pour performance :**
+```bash
+# Via API
+curl -X PUT http://localhost/api/kiosk.php/flags \
+  -H "Content-Type: application/json" \
+  -d '{"flags":"--incognito --noerrdialogs --disable-gpu-vsync"}'
+
+# Ou manuellement
+echo "--incognito --noerrdialogs --disable-gpu-vsync" | \
+  sudo tee /opt/pisignage/config/kiosk_flags
+
+/opt/pisignage/scripts/kiosk-apply
+pkill -f chromium
+```
+
+**Ajuster pour affichage 4K :**
+```bash
+# Augmenter scale factor
+curl -X PUT http://localhost/api/kiosk.php/flags \
+  -H "Content-Type: application/json" \
+  -d '{"flags":"--incognito --force-device-scale-factor=1.5 --high-dpi-support=1"}'
+```
+
+### Désactiver temporairement kiosk mode
+
+**Pour revenir au mode VLC player uniquement :**
+```bash
+# Désactiver kiosk
+echo "ENABLE_KIOSK=0" | sudo tee /opt/pisignage/config/feature_flags
+
+# Redémarrer
+sudo reboot
+
+# Pour réactiver plus tard
+echo "ENABLE_KIOSK=1" | sudo tee /opt/pisignage/config/feature_flags
+sudo reboot
+```
+
+---
+
 ## Outils de diagnostic
 
 ### Script de diagnostic automatique
@@ -717,7 +792,7 @@ Ce script génère un rapport complet de l'état du système :
 # Création du script de diagnostic
 cat > /opt/pisignage/scripts/diagnostic.sh << 'EOF'
 #!/bin/bash
-echo "=== Rapport de diagnostic PiSignage v0.8.5 ==="
+echo "=== Rapport de diagnostic PiSignage v0.8.9 ==="
 echo "Date du diagnostic: $(date)"
 echo "Temps de fonctionnement: $(uptime)"
 echo ""
@@ -736,9 +811,8 @@ systemctl is-active php8.2-fpm && echo "✓ PHP-FPM: Actif" || echo "✗ PHP-FPM
 systemctl is-active pisignage && echo "✓ PiSignage: Actif" || echo "✗ PiSignage: Inactif"
 echo ""
 
-echo "=== Lecteurs vidéo ==="
+echo "=== Lecteur vidéo ==="
 pgrep vlc > /dev/null && echo "✓ VLC: En fonctionnement" || echo "✗ VLC: Arrêté"
-pgrep mpv > /dev/null && echo "✓ MPV: En fonctionnement" || echo "✗ MPV: Arrêté"
 echo ""
 
 echo "=== Configuration réseau ==="
@@ -818,7 +892,6 @@ Voici l'emplacement des principaux fichiers de logs pour le diagnostic :
 - **Serveur web Nginx** : `/var/log/nginx/error.log`
 - **Processeur PHP-FPM** : `/var/log/php8.2-fpm.log`
 - **Lecteur VLC** : `/opt/pisignage/logs/vlc.log`
-- **Lecteur MPV** : `/opt/pisignage/logs/mpv.log`
 - **Système PiSignage** : `/opt/pisignage/logs/pisignage.log`
 
 ### Commandes de maintenance courantes
@@ -831,13 +904,16 @@ sudo systemctl restart nginx php8.2-fpm pisignage
 sudo systemctl status nginx php8.2-fpm pisignage
 
 # Arrêt forcé des processus de lecture bloqués
-sudo pkill -9 vlc mpv
+sudo pkill -9 vlc
 
 # Test de fonctionnement de l'interface web
 curl -I http://localhost
 
-# Surveillance en temps réel des lecteurs vidéo
-watch -n 5 'ps aux | grep -E "(vlc|mpv)" | grep -v grep'
+# Surveillance en temps réel du lecteur vidéo
+watch -n 5 'ps aux | grep vlc | grep -v grep'
+
+# Vérifier API VLC (contrôle audio/vidéo)
+curl http://localhost:8080/requests/status.json
 ```
 
 ### Ressources de support

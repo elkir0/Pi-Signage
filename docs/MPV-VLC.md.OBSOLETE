@@ -1,0 +1,57 @@
+# ⚠️ FICHIER OBSOLÈTE - NE PLUS UTILISER
+
+> **Ce rapport d'analyse est OBSOLÈTE depuis PiSignage v0.8.9**
+
+## Contexte historique
+
+Ce document analysait le système dual-player VLC/MPV de v0.8.5 et identifiait les problèmes critiques avec l'implémentation MPV.
+
+**Recommandation de l'époque** : "Option B - Remove MPV support entirely"
+
+## ✅ Recommandation APPLIQUÉE dans v0.8.9
+
+La recommandation de ce rapport a été **complètement mise en œuvre** :
+
+- ✅ **MPV retiré** complètement du code
+- ✅ **VLC exclusif** pour la lecture médias
+- ✅ **Code simplifié** - Plus de complexité dual-player
+- ✅ **Meilleure stabilité** - Un seul player, bien intégré
+
+## Architecture actuelle v0.8.9
+
+**Pour médias vidéo/image :**
+- VLC avec HTTP API complète (port 8080)
+- Contrôle unifié via `/api/player.php`
+- Toutes fonctionnalités opérationnelles
+
+**Pour dashboards web (Trixie uniquement) :**
+- Chromium en mode kiosk
+- Contrôle via `/api/kiosk.php`
+- Stack Wayland + labwc
+
+## Documentation à jour
+
+1. **Architecture** → `docs/ARCHITECTURE.md`
+   - Section "Display Stack Architecture"
+
+2. **API Player** → `API_DOCUMENTATION.md`
+   - Endpoints VLC uniquement
+   - Endpoints Kiosk (Trixie)
+
+3. **Troubleshooting** → `docs/TROUBLESHOOTING.md`
+   - Sections MPV marquées comme obsolètes
+
+## Valeur historique
+
+Ce document reste intéressant pour :
+- Comprendre pourquoi MPV a été retiré
+- Historique des décisions techniques
+- Leçons apprises sur la complexité dual-player
+
+**Mais ne doit PLUS être utilisé comme référence technique.**
+
+---
+
+**Date d'obsolescence** : v0.8.9 (novembre 2025)
+**Raison** : MPV retiré, analyse v0.8.5 non pertinente
+**Action** : Recommandation du rapport appliquée avec succès

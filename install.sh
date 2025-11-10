@@ -53,11 +53,15 @@ detect_os_version() {
                 log_warn "    For full Chromium kiosk support, re-flash with:"
                 log_warn "    'Raspberry Pi OS with desktop' from raspberrypi.com"
                 echo ""
-                read -p "Continue anyway? (y/N) " -n 1 -r
-                echo
-                if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-                    log_error "Installation aborted by user"
-                    exit 1
+                if [ -z "$AUTO_MODE" ]; then
+                    read -p "Continue anyway? (y/N) " -n 1 -r
+                    echo
+                    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                        log_error "Installation aborted by user"
+                        exit 1
+                    fi
+                else
+                    log_warn "Auto mode: Continuing despite Desktop requirement warning"
                 fi
             else
                 log_info "Desktop edition detected - full Wayland support available"
@@ -944,8 +948,13 @@ test_installation() {
 
 # Fonction principale
 main() {
+    # Set AUTO_MODE if --auto flag is passed
+    if [ "$1" = "--auto" ]; then
+        export AUTO_MODE=1
+    fi
+
     check_root
-    show_banner
+    show_banner "$1"
     detect_os_version
     update_system
     install_dependencies

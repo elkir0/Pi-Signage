@@ -1,0 +1,41 @@
+# ⚠️ FICHIER OBSOLÈTE - NE PLUS UTILISER
+
+> **Ce document est OBSOLÈTE depuis PiSignage v0.8.9**
+
+## Raison de l'obsolescence
+
+Le système dual-player (VLC/MPV) décrit dans ce document **a été complètement retiré dans v0.8.9**.
+
+**PiSignage v0.8.9 utilise maintenant :**
+- **VLC exclusivement** pour la lecture de médias vidéo/image
+- **Chromium Kiosk** (Trixie uniquement) pour l'affichage de dashboards web
+
+## Migration v0.8.9
+
+Pour la nouvelle architecture, consultez :
+
+### Documentation à jour
+
+1. **Architecture générale** → `docs/ARCHITECTURE.md`
+   - Section "Display Stack Architecture" détaille la nouvelle approche
+
+2. **API Player** → `API_DOCUMENTATION.md` ou `docs/API.md`
+   - Section "Endpoints lecteur" (VLC uniquement)
+   - Section "Endpoints Kiosk Mode" (Chromium pour Trixie)
+
+3. **Guide développeur** → `CLAUDE.md`
+   - Section "Raspberry Pi OS Trixie & Kiosk Mode"
+
+4. **Upgrade Trixie** → `UPGRADE_TRIXIE.md`
+   - Installation complète Chromium kiosk sur Trixie
+
+## Actions recommandées
+
+1. ✅ **Ne plus référencer ce document**
+2. ✅ **Utiliser la documentation v0.8.9 ci-dessus**
+3. ✅ **Supprimer ou archiver ce fichier**
+
+---
+
+**Date d'obsolescence** : v0.8.9 (novembre 2025)
+**Raison** : Support MPV retiré, VLC exclusif, ajout Chromium kiosk

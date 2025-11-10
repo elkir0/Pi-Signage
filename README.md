@@ -4,14 +4,27 @@ Professional digital signage solution for Raspberry Pi with modular web interfac
 
 ## 🚀 What's New in v0.11.0
 
-### 🎬 **Chromium HTML5 Player + Playlist System**
-- **HTML5 Video Playback**: Native `<video>` element with hardware acceleration in Chromium
-- **Playlist Management**: JSON-based playlist with REST API and web UI
-- **Kiosk Control UI**: Complete management dashboard at `/kiosk.php`
-- **Feature Flags**: Switch between Chromium Player and VLC fallback with `USE_CHROMIUM_PLAYER`
-- **Format Support**: MP4 (H.264/AAC), WebM (VP9/Opus), MKV with auto-advance and error handling
-- **Wake Lock API**: Prevents screen sleep during playback
-- **100% Backward Compatible**: VLC remains functional as fallback mode
+### 🎭 **Display Mode Switcher**
+- **Toggle Between Modes**: Switch between VLC (stable, default) and Chromium kiosk (HTML5, advanced) via web UI or API
+- **Production Ready**: VLC mode for reliable 24/7 operation, Chromium for web content and advanced features
+- **Seamless Switching**: One-click mode change with automatic service management
+- **Web UI Control**: New Display Mode page (`/display-mode.php`) for easy configuration
+- **HDMI Audio Default**: System-wide HDMI audio output configuration
+
+### 🔧 **BUG-013 Fix - Single File Playback**
+- **100% Reliable**: Fixed unreliable single file playback with 4-step verification process
+- **Smart Retry**: Automatic retry logic ensures playback starts every time
+- **Playlist Management**: Proper playlist clearing prevents conflicts
+- **API Enhancement**: `player-control.php` now includes enhanced reliability
+
+### 📚 **Comprehensive Documentation**
+- **API Documentation**: Complete REST API reference with examples ([API_DOCUMENTATION.md](API_DOCUMENTATION.md))
+- **Architecture Guide**: Full system architecture documentation ([ARCHITECTURE.md](ARCHITECTURE.md))
+- **Migration Guide**: Step-by-step upgrade instructions ([MIGRATION.md](MIGRATION.md))
+
+### 🧹 **Code Cleanup**
+- **Legacy Removal**: Removed unused index-pi.php (2,620 lines) and youtube-simple.php
+- **Cleaner Codebase**: Improved maintainability and reduced technical debt
 
 ### Previous (v0.8.9)
 - **VLC Exclusive Player**: Removed MPV support for better reliability and maintainability

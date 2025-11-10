@@ -374,9 +374,16 @@ class VLCController {
     /**
      * Play specific media file.
      *
+     * BUG-013 FIX: Improved single file playback reliability by:
+     * 1. Clearing existing playlist
+     * 2. Adding file to empty playlist
+     * 3. Starting playback with explicit play command
+     * 4. Adding retry logic for unreliable VLC HTTP responses
+     *
      * @param string $file Filename in media directory
      * @return array Response with success status
      * @since 0.8.0
+     * @fixed 0.11.0
      */
     public function playFile($file) {
         $fullPath = MEDIA_DIR . '/' . basename($file);
@@ -384,7 +391,33 @@ class VLCController {
             return ['success' => false, 'message' => 'File not found'];
         }
 
-        return $this->sendCommand('in_play', ['input' => $fullPath]);
+        // Step 1: Clear existing playlist to avoid conflicts
+        $this->clearPlaylist();
+        usleep(200000); // 200ms delay for VLC to process
+
+        // Step 2: Add file to playlist
+        $addResult = $this->sendCommand('in_enqueue', ['input' => $fullPath]);
+        usleep(100000); // 100ms delay
+
+        // Step 3: Start playback with explicit play command
+        $playResult = $this->sendCommand('pl_play');
+        usleep(100000); // 100ms delay
+
+        // Step 4: Verify playback started (retry once if needed)
+        $status = $this->getStatus();
+        if ($status['state'] !== 'playing') {
+            // Retry: Force play again
+            $this->sendCommand('pl_play');
+            usleep(200000);
+            $status = $this->getStatus();
+        }
+
+        return [
+            'success' => $status['state'] === 'playing',
+            'message' => $status['state'] === 'playing' ? 'File playing' : 'Playback may be delayed',
+            'file' => basename($file),
+            'state' => $status['state']
+        ];
     }
 
     /**

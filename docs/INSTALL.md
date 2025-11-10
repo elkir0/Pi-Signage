@@ -30,7 +30,16 @@ Ce document vous accompagne dans l'installation de PiSignage v0.8.9 sur votre Ra
 - Connexion réseau (Ethernet recommandé, Wi-Fi possible)
 
 ### Système d'exploitation
-Raspberry Pi OS Bookworm est requis, de préférence en version 64 bits pour les modèles compatibles. La version Lite est suffisante car PiSignage n'a pas besoin d'environnement de bureau complet. Une installation fraîche est recommandée pour éviter les conflits avec des configurations existantes.
+
+**Raspberry Pi OS Bookworm (Debian 12)** est le système de référence, de préférence en version 64 bits pour les modèles compatibles. La version Lite est suffisante car PiSignage n'a pas besoin d'environnement de bureau complet.
+
+**Raspberry Pi OS Trixie (Debian 13)** est également supporté avec fonctionnalités avancées :
+- Mode kiosk Chromium avec Wayland
+- API REST complète pour contrôle à distance du kiosk
+- Stack moderne greetd + labwc
+- Voir [UPGRADE_TRIXIE.md](../UPGRADE_TRIXIE.md) pour installation complète
+
+Une installation fraîche est recommandée pour éviter les conflits avec des configurations existantes.
 
 ### Préparation du système
 Avant de commencer l'installation, préparez votre carte SD avec Raspberry Pi Imager. Activez SSH si vous souhaitez administrer le système à distance. Si vous utilisez le Wi-Fi, configurez-le directement dans l'imager ou après le premier démarrage.
@@ -65,7 +74,7 @@ Le script automatise l'ensemble du processus d'installation :
 1. Mise à jour complète du système (peut prendre 30-60 minutes sur un système neuf)
 2. Installation des composants nécessaires :
    - Serveur web Nginx avec PHP 8.2
-   - Lecteurs vidéo VLC et MPV
+   - Lecteur vidéo VLC (exclusif dans v0.8.9)
    - Outils système pour les captures d'écran
 3. Création de l'arborescence dans /opt/pisignage
 4. Configuration du serveur web et des services système
@@ -113,7 +122,7 @@ Installez tous les paquets requis en une seule commande :
 
 ```bash
 sudo apt install -y nginx php8.2-fpm php8.2-cli php8.2-json \
-    php8.2-curl vlc mpv git wget curl unzip
+    php8.2-curl vlc git wget curl unzip
 ```
 
 Pour un monitoring avancé du système, vous pouvez également installer :
@@ -313,20 +322,9 @@ EOF
 
 ### Configuration MPV
 
-```bash
-# Créer la configuration MPV pour pi
-sudo -u pi mkdir -p /home/pi/.config/mpv
-sudo -u pi tee /home/pi/.config/mpv/mpv.conf > /dev/null << 'EOF'
-# Configuration optimisée Raspberry Pi
-vo=drm
-hwdec=auto
-fullscreen=yes
-loop-playlist=inf
-quiet=yes
-no-terminal=yes
-no-input-default-bindings=yes
-EOF
-```
+> **Note**: Support MPV complètement retiré dans v0.8.9. Cette section est conservée uniquement pour référence historique. PiSignage utilise maintenant VLC exclusivement pour une meilleure stabilité et compatibilité.
+
+~~Cette configuration n'est plus nécessaire depuis v0.8.9.~~
 
 ### Validation de l'installation
 
@@ -383,7 +381,6 @@ Assurez-vous que tous les composants sont correctement installés :
 
 ```bash
 cvlc --version
-mpv --version
 php -v
 nginx -t
 ```
@@ -401,13 +398,13 @@ Testez l'API pour confirmer que tout fonctionne :
 curl -s http://localhost/api/system.php
 ```
 
-### Test des lecteurs vidéo
+### Test du lecteur vidéo
 
-Vérifiez que les lecteurs peuvent lire la vidéo de test :
+Vérifiez que VLC peut lire la vidéo de test :
 
 ```bash
-# Test rapide avec MPV (5 secondes)
-mpv --vo=drm --hwdec=auto /opt/pisignage/media/BigBuckBunny_720p.mp4 --really-quiet --length=5
+# Test rapide avec VLC (5 secondes)
+cvlc --play-and-exit --run-time=5 /opt/pisignage/media/BigBuckBunny_720p.mp4
 ```
 
 ## Résolution des problèmes courants
@@ -439,15 +436,17 @@ sudo systemctl status nginx
 sudo systemctl status php8.2-fpm
 ```
 
-### Problèmes avec les lecteurs vidéo
+### Problèmes avec le lecteur vidéo
 ```bash
 # Test manuel VLC
 export DISPLAY=:0
-cvlc --intf dummy /opt/pisignage/media/BigBuckBunny_720p.mp4
+cvlc --intf dummy --fullscreen --loop /opt/pisignage/media/BigBuckBunny_720p.mp4
 
-# Test manuel MPV
-export DISPLAY=:0
-mpv --vo=drm /opt/pisignage/media/BigBuckBunny_720p.mp4
+# Vérifier les processus VLC
+ps aux | grep vlc
+
+# Logs VLC via API HTTP
+curl http://localhost:8080/requests/status.json
 ```
 
 ### Réinstallation complète
