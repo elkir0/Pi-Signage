@@ -40,6 +40,28 @@ detect_os_version() {
         if [ "$VERSION_CODENAME" = "trixie" ] || [ "$VERSION_ID" = "13" ]; then
             IS_TRIXIE=1
             log_info "Trixie (Debian 13) detected - Wayland kiosk mode available"
+
+            # Check if Desktop edition (required for Wayland)
+            if ! dpkg -l 2>/dev/null | grep -qE "task-desktop|task-gnome|task-lxde|task-xfce"; then
+                log_warn "⚠️  WARNING: Raspberry Pi OS Lite detected!"
+                log_warn "    Wayland kiosk mode REQUIRES Desktop edition"
+                log_warn "    Lite edition lacks critical graphics infrastructure"
+                log_warn ""
+                log_warn "    Installation will continue, but Wayland features will fail."
+                log_warn "    VLC player will still work for basic media playback."
+                log_warn ""
+                log_warn "    For full Chromium kiosk support, re-flash with:"
+                log_warn "    'Raspberry Pi OS with desktop' from raspberrypi.com"
+                echo ""
+                read -p "Continue anyway? (y/N) " -n 1 -r
+                echo
+                if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                    log_error "Installation aborted by user"
+                    exit 1
+                fi
+            else
+                log_info "Desktop edition detected - full Wayland support available"
+            fi
         else
             IS_TRIXIE=0
         fi
