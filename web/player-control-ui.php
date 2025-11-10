@@ -240,45 +240,54 @@ document.getElementById('system-volume-slider').addEventListener('input', functi
 async function updatePlayerStatus() {
     try {
         const response = await fetch('/api/player-control.php?action=status');
-        const data = await response.json();
+        const result = await response.json();
 
-        if (data.success) {
+        if (result.success && result.data) {
+            const data = result.data;
             const state = data.state || 'unknown';
             isPlaying = (state === 'playing');
 
             // Update state badge
             const stateBadge = document.getElementById('player-state');
-            const stateText = state === 'playing' ? 'En Lecture' :
-                             state === 'paused' ? 'En Pause' :
-                             state === 'stopped' ? 'Arrêté' : 'Inconnu';
-            stateBadge.textContent = stateText;
-            stateBadge.className = 'badge ' + (state === 'playing' ? 'badge-success' : state === 'paused' ? 'badge-warning' : 'badge-secondary');
-
-            // Update play/pause button
-            document.getElementById('play-pause-icon').textContent = isPlaying ? '⏸️' : '▶️';
-            document.getElementById('play-pause-text').textContent = isPlaying ? 'Pause' : 'Play';
-
-            // Update current file
-            document.getElementById('current-file').textContent = data.current_file || 'Aucun fichier';
-
-            // Update time and progress
-            const time = data.time || 0;
-            const length = data.length || 0;
-            document.getElementById('current-time').textContent = formatTime(time);
-            document.getElementById('duration').textContent = formatTime(length);
-
-            const progress = length > 0 ? (time / length) * 100 : 0;
-            document.getElementById('progress-bar').style.width = progress + '%';
-
-            // Update VLC volume if not currently adjusting
-            if (!document.getElementById('vlc-volume-slider').matches(':active')) {
-                vlcVolume = data.volume || 256;
-                document.getElementById('vlc-volume-slider').value = vlcVolume;
-                const volumePercent = Math.round((vlcVolume / 256) * 100);
-                document.getElementById('vlc-volume-display').textContent = volumePercent + '%';
+            if (stateBadge) {
+                const stateText = state === 'playing' ? 'En Lecture' :
+                                 state === 'paused' ? 'En Pause' :
+                                 state === 'stopped' ? 'Arrêté' : 'Inconnu';
+                stateBadge.textContent = stateText;
+                stateBadge.className = 'badge ' + (state === 'playing' ? 'badge-success' : state === 'paused' ? 'badge-warning' : 'badge-secondary');
             }
 
-            logEvent(`Status: ${stateText}`);
+            // Update play/pause button
+            const playPauseIcon = document.getElementById('play-pause-icon');
+            const playPauseText = document.getElementById('play-pause-text');
+            if (playPauseIcon) playPauseIcon.textContent = isPlaying ? '⏸️' : '▶️';
+            if (playPauseText) playPauseText.textContent = isPlaying ? 'Pause' : 'Play';
+
+            // Update current file
+            const currentFileEl = document.getElementById('current-file');
+            if (currentFileEl) currentFileEl.textContent = data.current_file || 'Aucun fichier';
+
+            // Update time and progress
+            const time = data.position || 0;
+            const length = data.duration || 0;
+            const currentTimeEl = document.getElementById('current-time');
+            const durationEl = document.getElementById('duration');
+            if (currentTimeEl) currentTimeEl.textContent = formatTime(time);
+            if (durationEl) durationEl.textContent = formatTime(length);
+
+            const progress = length > 0 ? (time / length) * 100 : 0;
+            const progressBar = document.getElementById('progress-bar');
+            if (progressBar) progressBar.style.width = progress + '%';
+
+            // Update VLC volume if not currently adjusting
+            const vlcVolumeSlider = document.getElementById('vlc-volume-slider');
+            const vlcVolumeDisplay = document.getElementById('vlc-volume-display');
+            if (vlcVolumeSlider && !vlcVolumeSlider.matches(':active')) {
+                vlcVolume = data.volume || 256;
+                vlcVolumeSlider.value = vlcVolume;
+                const volumePercent = Math.round((vlcVolume / 256) * 100);
+                if (vlcVolumeDisplay) vlcVolumeDisplay.textContent = volumePercent + '%';
+            }
         }
     } catch (error) {
         console.error('Error updating status:', error);
