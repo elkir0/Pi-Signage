@@ -43,6 +43,7 @@ Professional digital signage solution for Raspberry Pi with modular web interfac
 - Raspberry Pi 3/4/5
 - Raspbian OS (Bullseye or newer)
   - **Trixie (Debian 13)** supported with Wayland kiosk mode
+  - ⚠️ **For Trixie: Desktop edition REQUIRED** (not Lite)
 - 2GB+ RAM recommended
 - Network connectivity
 - Display connected via HDMI
@@ -60,6 +61,10 @@ Pi-Signage now supports **Raspberry Pi OS Trixie (Debian 13)** with a modern Way
 - ✅ **Backward Compatible** - VLC player and existing API remain functional
 
 **Target Hardware:** Raspberry Pi 4 / Pi 5
+
+**Requirements:**
+- ⚠️ **Desktop edition REQUIRED** - Raspberry Pi OS with desktop
+- Lite edition lacks Wayland graphics infrastructure and will fail
 
 **See:** [UPGRADE_TRIXIE.md](UPGRADE_TRIXIE.md) for complete installation and configuration guide.
 

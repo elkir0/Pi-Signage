@@ -44,8 +44,11 @@ This upgrade adds **Chromium kiosk mode on Wayland** support for Pi-Signage runn
 - MicroSD card (16GB+ recommended)
 
 ### Software
-- **Raspberry Pi OS Trixie** (Debian 13)
-  Download: https://www.raspberrypi.com/software/operating-systems/
+- **Raspberry Pi OS Trixie (Debian 13) - DESKTOP EDITION**
+  - ⚠️ **IMPORTANT:** Desktop edition is REQUIRED (not Lite)
+  - Lite edition lacks critical Wayland/graphics infrastructure
+  - Download: https://www.raspberrypi.com/software/operating-systems/
+  - Look for "Raspberry Pi OS with desktop" (64-bit recommended)
 - Fresh installation or existing Pi-Signage v0.8.9+
 
 ### Verification
@@ -375,6 +378,35 @@ journalctl --user -u labwc -n 50
    ```bash
    sudo systemctl restart greetd
    ```
+
+### Swapchain / Graphics Errors (Lite Edition)
+
+**Symptoms:**
+- greetd service fails repeatedly with "start-limit-hit"
+- labwc logs show: `Swapchain for output 'HDMI-A-1' failed test`
+- Error: `Failed to create allocator` or `unable to create backend`
+
+**Root Cause:**
+You are running **Raspberry Pi OS Lite** which lacks critical Wayland/graphics infrastructure.
+
+**Solution:**
+⚠️ **Re-flash with Desktop edition:**
+
+1. Download: https://www.raspberrypi.com/software/operating-systems/
+2. Choose "Raspberry Pi OS with desktop" (64-bit recommended)
+3. Flash to SD card using Raspberry Pi Imager
+4. Boot and run install.sh again
+
+**Diagnosis Commands:**
+```bash
+# Check for swapchain errors:
+journalctl -u greetd -n 100 | grep -i swapchain
+
+# Verify OS edition:
+dpkg -l | grep -E "task-desktop|task-gnome|task-lxde"
+
+# If empty output = Lite edition (not supported)
+```
 
 ### Network Timeout
 
