@@ -148,6 +148,247 @@ mcp a11y | jq '.violations'
 
 **Documentation**: `~/.mcp/playwright/README.md`
 
+### Autonomous Testing with Playwright MCP
+
+**When to Use Playwright MCP in Future Sessions:**
+
+The Playwright MCP enables Claude Code to perform autonomous UI testing, visual verification, and console monitoring. Use it proactively when:
+
+1. **After implementing UI changes**: Verify the changes render correctly
+2. **Before committing code**: Check for JavaScript errors and accessibility issues
+3. **When debugging UI bugs**: Capture screenshots and console logs for analysis
+4. **When user reports UI issues**: Reproduce and document the issue with evidence
+
+**Autonomous Testing Workflow:**
+
+```bash
+# 1. Ensure MCP is running
+~/.mcp/playwright/mcp-cli.sh status || ~/.mcp/playwright/mcp-cli.sh start
+
+# 2. Navigate to the page under test
+~/.mcp/playwright/mcp-cli.sh navigate http://192.168.1.62/page.php
+
+# 3. Capture screenshot for visual verification
+~/.mcp/playwright/mcp-cli.sh screenshot
+
+# 4. Check console for errors
+~/.mcp/playwright/mcp-cli.sh console | jq '.logs[] | select(.type=="error")'
+
+# 5. Run accessibility audit
+~/.mcp/playwright/mcp-cli.sh a11y | jq '.violations'
+
+# 6. Analyze results and report findings
+```
+
+**Complete Testing Script Example:**
+
+```bash
+#!/bin/bash
+# test-pisignage-ui.sh - Autonomous UI testing
+
+MCP_CLI=~/.mcp/playwright/mcp-cli.sh
+BASE_URL="http://192.168.1.62"
+PAGES=(
+  "dashboard.php"
+  "media.php"
+  "playlists.php"
+  "player-control-ui.php"
+  "settings.php"
+  "youtube.php"
+)
+
+# Ensure MCP is running
+$MCP_CLI status > /dev/null 2>&1 || $MCP_CLI start
+
+echo "🧪 Starting PiSignage UI Test Suite"
+echo "=================================="
+
+for page in "${PAGES[@]}"; do
+  echo ""
+  echo "Testing: $page"
+  echo "---"
+
+  # Navigate
+  NAV_RESULT=$($MCP_CLI navigate "$BASE_URL/$page")
+  STATUS=$(echo "$NAV_RESULT" | jq -r '.status')
+
+  if [ "$STATUS" != "200" ]; then
+    echo "❌ Navigation failed (HTTP $STATUS)"
+    continue
+  fi
+
+  echo "✅ Page loaded (HTTP $STATUS)"
+
+  # Screenshot
+  SCREENSHOT=$($MCP_CLI screenshot)
+  SCREENSHOT_FILE=$(echo "$SCREENSHOT" | jq -r '.filename')
+  echo "📸 Screenshot: $SCREENSHOT_FILE"
+
+  # Console errors
+  ERRORS=$($MCP_CLI console | jq -r '.logs[] | select(.type=="error") | .text')
+  if [ -n "$ERRORS" ]; then
+    echo "❌ Console Errors Found:"
+    echo "$ERRORS" | sed 's/^/   /'
+  else
+    echo "✅ No console errors"
+  fi
+
+  # Accessibility
+  A11Y_VIOLATIONS=$($MCP_CLI a11y | jq -r '.violations | length')
+  if [ "$A11Y_VIOLATIONS" -gt 0 ]; then
+    echo "⚠️  Accessibility violations: $A11Y_VIOLATIONS"
+    $MCP_CLI a11y | jq -r '.violations[] | "   - \(.id): \(.description)"'
+  else
+    echo "✅ No accessibility violations"
+  fi
+done
+
+echo ""
+echo "=================================="
+echo "✅ Test suite completed"
+echo "📁 Screenshots: ~/.mcp/playwright/workspace/screenshots/"
+```
+
+**Integration with Claude Code Workflow:**
+
+When Claude Code makes UI changes, it should:
+
+1. **Deploy changes** to the Raspberry Pi
+2. **Run MCP tests** to verify functionality
+3. **Capture evidence** (screenshots, console logs)
+4. **Report findings** to the user with visual proof
+5. **Fix issues** if errors are detected
+6. **Re-test** after fixes
+
+**MCP Commands Reference for Claude Code:**
+
+```bash
+# Container Management
+~/.mcp/playwright/mcp-cli.sh start      # Start MCP if not running
+~/.mcp/playwright/mcp-cli.sh status     # Check if MCP is running
+~/.mcp/playwright/mcp-cli.sh stop       # Stop MCP container
+~/.mcp/playwright/mcp-cli.sh restart    # Restart MCP container
+~/.mcp/playwright/mcp-cli.sh logs       # View MCP container logs
+
+# Browser Testing
+~/.mcp/playwright/mcp-cli.sh navigate <url>          # Navigate to URL
+~/.mcp/playwright/mcp-cli.sh screenshot              # Capture screenshot
+~/.mcp/playwright/mcp-cli.sh console                 # Get all console logs
+~/.mcp/playwright/mcp-cli.sh network                 # Get network requests
+~/.mcp/playwright/mcp-cli.sh eval '<js-code>'        # Execute JavaScript
+~/.mcp/playwright/mcp-cli.sh a11y                    # Accessibility audit
+```
+
+**Programmatic HTTP API Usage:**
+
+For complex testing scenarios, use the HTTP API directly:
+
+```bash
+# Navigate and wait for network idle
+curl -X POST http://localhost:3000 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "command": "navigate",
+    "params": {
+      "url": "http://192.168.1.62/dashboard.php",
+      "options": {
+        "waitUntil": "networkidle",
+        "timeout": 30000
+      }
+    }
+  }'
+
+# Filter console logs for errors only
+curl -X POST http://localhost:3000 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "command": "console",
+    "params": {
+      "filter": {
+        "type": "error"
+      }
+    }
+  }'
+
+# Execute JavaScript and get result
+curl -X POST http://localhost:3000 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "command": "evaluate",
+    "params": {
+      "script": "document.querySelectorAll(\".error\").length"
+    }
+  }'
+```
+
+**Best Practices for Autonomous Testing:**
+
+1. **Always check MCP status** before running tests
+2. **Use jq for JSON parsing** to extract specific data
+3. **Capture screenshots** for visual verification
+4. **Filter console logs** to focus on errors
+5. **Run accessibility audits** to ensure inclusive design
+6. **Save test results** for documentation
+7. **Report findings clearly** to the user with evidence
+
+**Screenshot Analysis:**
+
+Screenshots are saved to `~/.mcp/playwright/workspace/screenshots/` and can be:
+- Viewed locally on Mac
+- Transferred to user for review
+- Used for visual regression testing
+- Included in bug reports with timestamps
+
+**Console Log Analysis:**
+
+Console logs include:
+- **Errors**: JavaScript errors, API failures
+- **Warnings**: Deprecation warnings, performance issues
+- **Info**: Debug messages, status updates
+- **Network**: Failed requests, 404s, 500s
+
+**Accessibility Audit Results:**
+
+The `a11y` command uses axe-core to check for:
+- Missing alt text on images
+- Insufficient color contrast
+- Missing ARIA labels
+- Keyboard navigation issues
+- Semantic HTML violations
+
+**Example: Debugging a Reported Issue**
+
+```bash
+# User reports: "Player control page shows errors in console"
+
+# 1. Navigate to the problematic page
+~/.mcp/playwright/mcp-cli.sh navigate http://192.168.1.62/player-control-ui.php
+
+# 2. Capture current state
+~/.mcp/playwright/mcp-cli.sh screenshot
+
+# 3. Get console errors
+ERRORS=$(~/.mcp/playwright/mcp-cli.sh console | jq -r '.logs[] | select(.type=="error")')
+
+# 4. Analyze errors
+echo "$ERRORS" | jq -r '.text'
+# Output: "Uncaught ReferenceError: someFunction is not defined"
+
+# 5. Fix the issue in code
+# ... make changes ...
+
+# 6. Deploy and re-test
+scp file.js pi@192.168.1.62:/opt/pisignage/web/assets/js/
+~/.mcp/playwright/mcp-cli.sh navigate http://192.168.1.62/player-control-ui.php
+~/.mcp/playwright/mcp-cli.sh console | jq '.logs[] | select(.type=="error")'
+# Output: {"logs": [], "count": 0} ✅
+
+# 7. Capture proof of fix
+~/.mcp/playwright/mcp-cli.sh screenshot
+```
+
+This autonomous testing capability significantly improves code quality and debugging efficiency.
+
 ## Recent Development Session (v0.11.0 - Nov 2025)
 
 ### Issues Resolved
