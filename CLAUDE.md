@@ -426,6 +426,90 @@ This autonomous testing capability significantly improves code quality and debug
   - Consistent styling with media.php and other pages
 - **Files Modified**: `web/player-control-ui.php`
 
+#### BUG-017: Player Control UI Console Errors
+- **Problem**: TypeError: Cannot read properties of undefined (reading 'updateStatus')
+- **Root Cause**: Missing PiSignage.player object initialization in player-control-ui.php
+- **Solution**: Removed duplicate initialization code, relied on global init.js
+- **Files Modified**: `web/player-control-ui.php`
+- **Testing**: Playwright verified no console errors
+
+#### BUG-018: Duplicate Default Playlists
+- **Problem**: Two "Default" playlists showing in UI (Default and default)
+- **Root Cause**: Filesystem has both `Default_Playlist.json` and `default.json`
+- **Solution**: Documented filesystem reality, UI correctly shows both files
+- **Status**: Not a bug - correct behavior
+
+#### BUG-019: Playlist Modal Makes Page Unusable
+- **Problem**: Clicking "Modifier" on playlist makes entire page unresponsive
+- **Root Cause**: Modal overlay with z-index: 10000 intercepted ALL pointer events, even its own buttons
+- **Solution**:
+  - Removed inline onclick handlers
+  - Added proper JavaScript event listeners after modal creation
+  - Background click handler checks `e.target.id === 'editPlaylistModal'`
+  - ESC key handler for keyboard accessibility
+  - Proper cleanup in closeEditModal()
+- **Files Modified**: `web/assets/js/playlists.js` (lines 158-274)
+- **Testing**: X button, Annuler button, ESC key all work correctly
+- **User Feedback**: "super ça fonctionne correctement"
+
+#### BUG-020: Settings Reboot Button Not Working
+- **Problem**: Reboot button in settings.php doesn't restart Raspberry Pi
+- **Root Cause**: JavaScript functions not defined (only backend API existed)
+- **Solution**: Added complete 127-line JavaScript section with:
+  - `systemAction()` for reboot/shutdown/clear-cache
+  - `restartCurrentPlayer()` for VLC restart
+  - `saveAudioConfig()`, `saveDisplayConfig()`, `saveNetworkConfig()`
+  - `changePassword()` with validation
+  - `showAlert()` helper function
+- **Files Modified**: `web/settings.php` (lines 132-257)
+- **Testing**: API call succeeded, had to cancel real reboot with `sudo shutdown -c`
+
+#### BUG-021: Logs Page Showing Nothing
+- **Problem**: logs.php displayed completely blank page
+- **Root Cause**: No JavaScript functions defined to load or display logs
+- **Solution**: Added comprehensive 305-line logging interface with:
+  - Multi-source selector (PiSignage, System, VLC, Nginx errors/access, All)
+  - Line count selector (50/100/200/500 lines)
+  - Color-coded log levels (ERROR=red, WARNING=yellow, INFO=blue)
+  - Stats display (sources count, error count, total size)
+  - Real-time filter with instant search
+  - Auto-refresh toggle (5s interval)
+  - Available sources list with file sizes and dates
+  - Scroll to top/bottom buttons
+- **Files Modified**: `web/logs.php` (complete rewrite)
+- **Testing**: 75 log lines displayed, 9 sources detected, 50MB total
+- **Features**: Filters, auto-refresh, multi-source support all functional
+
+#### BUG-022: Log Files Growing Too Large
+- **Problem**: Logs at 50MB+ (Nginx access.log was 52MB), risking disk space issues
+- **Root Cause**: No automatic log rotation or cleanup system in place
+- **Solution**: Created comprehensive automated log rotation system with:
+  - **Size-based rotation:**
+    - PiSignage logs >10MB → rotate + gzip compress
+    - Nginx logs >50MB → rotate + gzip compress
+  - **Age-based cleanup:**
+    - YouTube download logs >7 days → delete
+    - Rotated logs >30 days → delete
+    - Old Nginx logs >14 days → delete
+  - **Automated daily execution:**
+    - Cron job installed to `/etc/cron.daily/pisignage-rotate-logs`
+    - Runs automatically at 3am daily
+    - Logs output to `/opt/pisignage/logs/rotation.log`
+  - **Manual UI trigger:**
+    - "Rotation & Nettoyage" button in logs.php
+    - Confirmation dialog explaining actions
+    - Progress indicator during rotation
+    - Auto-refresh after success
+- **Files Added**:
+  - `scripts/rotate-logs.sh` (155 lines) - Main rotation script with colored output
+  - `scripts/setup-log-rotation-cron.sh` (57 lines) - Installation script
+- **Files Modified**: `web/logs.php` (added rotation button and rotateLogs() function)
+- **Testing Results**:
+  - Before: Nginx logs = 63MB (access.log = 52MB)
+  - After: Nginx logs = 13MB (access.log.1.gz = 649KB)
+  - Space saved: 50MB immediately
+- **Deployment**: Scripts deployed to Pi, cron installed, fully functional
+
 ### New Features (v0.11.0)
 
 #### Dual Volume Control
@@ -444,6 +528,60 @@ This autonomous testing capability significantly improves code quality and debug
 - Browser caches JavaScript with version parameter (`?v=869`)
 - Direct Pi modifications require version bump or force refresh
 - Use `sed` on Pi for emergency fixes to avoid cache issues
+- Playwright MCP container cache: Use `~/.mcp/playwright/mcp-cli.sh restart` to clear
+
+#### Modal Event Handling Pattern
+When creating modal overlays that block page interaction:
+```javascript
+// ❌ WRONG: pointer-events CSS approach
+modal.style.pointerEvents = 'none';  // Allows unwanted click-through
+modalContent.style.pointerEvents = 'auto';
+
+// ✅ CORRECT: JavaScript event handler approach
+const modal = document.getElementById('myModal');
+
+// Background click handler
+const backgroundClickHandler = function(e) {
+    if (e.target.id === 'myModal') {  // Only if clicking overlay
+        closeModal();
+    }
+};
+modal.addEventListener('click', backgroundClickHandler);
+modal._backgroundClickHandler = backgroundClickHandler;  // Store for cleanup
+
+// ESC key handler
+const escapeHandler = function(e) {
+    if (e.key === 'Escape') {
+        closeModal();
+    }
+};
+document.addEventListener('keydown', escapeHandler);
+modal._escapeHandler = escapeHandler;  // Store for cleanup
+
+// Cleanup function
+function closeModal() {
+    const modal = document.getElementById('myModal');
+    if (modal) {
+        // Remove event handlers to prevent memory leaks
+        if (modal._escapeHandler) {
+            document.removeEventListener('keydown', modal._escapeHandler);
+        }
+        if (modal._backgroundClickHandler) {
+            modal.removeEventListener('click', modal._backgroundClickHandler);
+        }
+        modal.remove();
+    }
+}
+```
+
+#### Log Rotation Best Practices
+When implementing log management on Raspberry Pi:
+- **Size thresholds**: 10MB for app logs, 50MB for system logs (Nginx)
+- **Age thresholds**: 7 days for temporary logs, 30 days for rotated archives
+- **Compression**: Always use gzip for rotated logs (50MB → 649KB = 98.7% savings)
+- **Cron timing**: Schedule at 3am to avoid peak usage
+- **Logging the logger**: Log rotation events to system.log for audit trail
+- **Manual trigger**: Provide UI button for emergency cleanup
 
 #### Filename Sanitization Pattern
 ```php
