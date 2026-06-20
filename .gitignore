@@ -81,6 +81,11 @@ venv/
 # System files
 Thumbs.db
 desktop.ini
+.metadata_never_index
+
+# Syncthing
+.stfolder/
+.stversions/
 
 # Build artifacts
 build/
