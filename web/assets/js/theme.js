@@ -43,4 +43,4 @@ PiSignage.theme = {
 };
 
 document.addEventListener('DOMContentLoaded', () => PiSignage.theme.init());
-console.log('✅ PiSignage theme module loaded');
+console.log('PiSignage theme module loaded');

@@ -410,4 +410,4 @@ window.systemAction = async function(action) {
     }
 };
 
-console.log('✅ PiSignage API module loaded - All communication functions ready');
+console.log('PiSignage API module loaded - All communication functions ready');

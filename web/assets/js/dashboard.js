@@ -155,4 +155,4 @@ PiSignage.dashboard = {
     }
 };
 
-console.log('✅ PiSignage Dashboard module loaded');
+console.log('PiSignage Dashboard module loaded');

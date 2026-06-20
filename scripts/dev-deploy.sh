@@ -8,7 +8,7 @@ ROOT=/opt/pisignage/web
 cd "$(dirname "$0")/../web"
 
 if [ "${1:-}" = "--all" ]; then
-  tar --exclude='media' -czf /tmp/pisig-deploy.tgz .
+  tar --exclude='media' --exclude='screenshots' --exclude='.DS_Store' -czf /tmp/pisig-deploy.tgz .
 else
   tar -czf /tmp/pisig-deploy.tgz "$@"
 fi

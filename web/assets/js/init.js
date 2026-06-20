@@ -32,7 +32,7 @@ document.addEventListener('DOMContentLoaded', function () {
     setupSettingsHandlers();
     setupLogsHandlers();
 
-    console.log('✅ PiSignage initialized (page: ' + (page || 'n/a') + ')');
+    console.log('PiSignage initialized (page: ' + (page || 'n/a') + ')');
 });
 
 /* ===================== Screenshot ===================== */
@@ -211,4 +211,4 @@ window.addEventListener('beforeunload', function () {
     try { if (PiSignage.intervals && PiSignage.intervals.stopAll) PiSignage.intervals.stopAll(); } catch (e) {}
 });
 
-console.log('✅ PiSignage Init module loaded');
+console.log('PiSignage Init module loaded');

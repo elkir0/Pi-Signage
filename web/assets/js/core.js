@@ -40,7 +40,7 @@ if (typeof selectedPlayer === 'undefined') {
 
 // CRITICAL: Global showSection function for navigation
 window.showSection = function(section) {
-    console.log('🧭 Navigating to section:', section);
+    console.log('Navigating to section:', section);
 
     // Update sections
     document.querySelectorAll('.content-section').forEach(el => {
@@ -104,7 +104,7 @@ PiSignage.navigation = {
 
 // Global alert/notification system - CRITICAL: Must remain global
 window.showAlert = function(message, type = 'info') {
-    console.log(`📢 Alert [${type}]:`, message);
+    console.log(`Alert [${type}]:`, message);
 
     const alertDiv = document.createElement('div');
     alertDiv.className = `alert alert-${type}`;
@@ -255,7 +255,7 @@ PiSignage.intervals = {
                 PiSignage.dashboard.refreshStats();
             }
         }, interval);
-        console.log('📊 Stats refresh interval started');
+        console.log('Stats refresh interval started');
     },
 
     startPlayerStatusRefresh: function(interval = 3000) {
@@ -269,7 +269,7 @@ PiSignage.intervals = {
                 PiSignage.player.updateStatus();
             }
         }, interval);
-        console.log('🎮 Player status refresh interval started');
+        console.log('Player status refresh interval started');
     },
 
     stopAll: function() {
@@ -281,7 +281,7 @@ PiSignage.intervals = {
             clearInterval(this.player);
             this.player = null;
         }
-        console.log('⏹️ All intervals stopped');
+        console.log('⏹All intervals stopped');
     }
 };
 
@@ -312,4 +312,4 @@ alertStyles.textContent = `
 `;
 document.head.appendChild(alertStyles);
 
-console.log('✅ PiSignage Core module loaded - Navigation and utilities ready');
+console.log('PiSignage Core module loaded - Navigation and utilities ready');

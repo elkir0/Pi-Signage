@@ -27,8 +27,26 @@ PiSignage.playlists = {
     draggedElement: null,
     playlistModified: false,
 
+    /* Inline SVG helpers (design-system, no emoji). viewBox 0 0 24 24, stroke=currentColor. */
+    _svg: function(inner) {
+        return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+             + 'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + inner + '</svg>';
+    },
+
+    _icons: {
+        video: '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>',
+        audio: '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a9 9 0 0 1 0 14"/>',
+        image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/>',
+        file:  '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',
+        plus:  '<path d="M12 5v14M5 12h14"/>',
+        trash: '<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M10 11v6M14 11v6"/>',
+        play:  '<polygon points="6 4 20 12 6 20 6 4" fill="currentColor" stroke="none"/>',
+        edit:  '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/>',
+        drag:  '<circle cx="9" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="9" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="9" cy="18" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="18" r="1.4" fill="currentColor" stroke="none"/>',
+        playlist: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>'
+    },
+
     init: function() {
-        console.log('🎵 Initializing playlist management...');
         this.loadPlaylists();
         this.setupGlobalFunctions();
 
@@ -45,13 +63,12 @@ PiSignage.playlists = {
                 this.currentPlaylists = data.data || [];
                 this.renderPlaylistsList();
                 this.updatePlaylistSelects();
-                console.log(`🎵 Loaded ${this.currentPlaylists.length} playlists`);
             } else {
                 console.error('Failed to load playlists:', data.message);
             }
         } catch (error) {
             console.error('Error loading playlists:', error);
-            showAlert('Erreur de chargement des playlists', 'error');
+            PiSignage.ui.toast('Erreur de chargement des playlists', 'error');
         }
     },
 
@@ -61,8 +78,9 @@ PiSignage.playlists = {
 
         if (this.currentPlaylists.length === 0) {
             container.innerHTML = `
-                <div class="empty-state" style="text-align: center; padding: 40px; color: #666;">
-                    <h3>🎵 Aucune playlist</h3>
+                <div class="empty-state" style="grid-column:1/-1">
+                    ${this._svg(this._icons.playlist)}
+                    <h3>Aucune playlist</h3>
                     <p>Créez votre première playlist pour organiser vos médias</p>
                 </div>
             `;
@@ -84,13 +102,13 @@ PiSignage.playlists = {
                 </div>
                 <div class="playlist-actions">
                     <button class="btn btn-primary btn-sm" onclick="PiSignage.playlists.playPlaylist('${playlist.name}')" title="Lire cette playlist">
-                        ▶️ Lire
+                        ${this._svg(this._icons.play)}Lire
                     </button>
                     <button class="btn btn-glass btn-sm" onclick="PiSignage.playlists.editPlaylist('${playlist.name}')" title="Modifier cette playlist">
-                        ✏️ Modifier
+                        ${this._svg(this._icons.edit)}Modifier
                     </button>
                     <button class="btn btn-danger btn-sm" onclick="PiSignage.playlists.deletePlaylist('${playlist.name}')" title="Supprimer cette playlist">
-                        🗑️ Supprimer
+                        ${this._svg(this._icons.trash)}Supprimer
                     </button>
                 </div>
             `;
@@ -130,14 +148,14 @@ PiSignage.playlists = {
         try {
             const data = await PiSignage.api.playlists.create(name, selectedFiles);
             if (data.success) {
-                showAlert('Playlist créée!', 'success');
+                PiSignage.ui.toast('Playlist créée', 'success');
                 this.loadPlaylists();
             } else {
-                showAlert('Erreur: ' + data.message, 'error');
+                PiSignage.ui.toast('Erreur : ' + data.message, 'error');
             }
         } catch (error) {
             console.error('Create playlist error:', error);
-            showAlert('Erreur de création', 'error');
+            PiSignage.ui.toast('Erreur de création', 'error');
         }
     },
 
@@ -147,99 +165,59 @@ PiSignage.playlists = {
             if (data.success && data.data) {
                 this.showEditModal(data.data);
             } else {
-                showAlert('Erreur lors du chargement de la playlist', 'error');
+                PiSignage.ui.toast('Erreur lors du chargement de la playlist', 'error');
             }
         } catch (error) {
             console.error('Edit playlist error:', error);
-            showAlert('Erreur de chargement', 'error');
+            PiSignage.ui.toast('Erreur de chargement', 'error');
         }
     },
 
     showEditModal: function(playlist) {
+        // Clean up any stale instance first
+        this.closeEditModal();
+
+        const esc = (s) => String(s).replace(/[&<>"']/g, c => (
+            { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+        ));
+
         const modalHTML = `
-            <div id="editPlaylistModal" class="modal" style="
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background: rgba(0,0,0,0.7);
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                z-index: 10000;
-            ">
-                <div class="modal-content" style="
-                    background: #2a2d3a;
-                    padding: 30px;
-                    border-radius: 15px;
-                    width: 600px;
-                    max-width: 90%;
-                    max-height: 80vh;
-                    overflow-y: auto;
-                    position: relative;
-                ">
-                    <span class="close" style="
-                        position: absolute;
-                        top: 15px;
-                        right: 20px;
-                        font-size: 24px;
-                        cursor: pointer;
-                        color: #ccc;
-                    " onclick="PiSignage.playlists.closeEditModal()">&times;</span>
-
-                    <h2 style="margin: 0 0 20px; color: #4a9eff;">✏️ Modifier Playlist: ${playlist.name}</h2>
-
-                    <div style="margin-bottom: 20px;">
-                        <label style="display: block; margin-bottom: 5px; color: #ccc;">Nom de la playlist:</label>
-                        <input type="text" id="edit-playlist-name" value="${playlist.name}" style="
-                            width: 100%;
-                            padding: 10px;
-                            background: #1a1a2e;
-                            border: 1px solid #4a9eff;
-                            border-radius: 5px;
-                            color: white;
-                            font-size: 14px;
-                        ">
+            <div id="editPlaylistModal" class="modal" data-remove-on-close="1">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3>Modifier la playlist : ${esc(playlist.name)}</h3>
+                        <button class="btn-close" type="button" onclick="PiSignage.playlists.closeEditModal()">
+                            ${this._svg('<path d="M18 6 6 18M6 6l12 12"/>')}
+                        </button>
                     </div>
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label>Nom de la playlist</label>
+                            <input type="text" id="edit-playlist-name" class="form-control" value="${esc(playlist.name)}">
+                        </div>
 
-                    <div style="margin-bottom: 20px;">
-                        <label style="display: block; margin-bottom: 5px; color: #ccc;">Fichiers dans la playlist:</label>
-                        <div id="edit-playlist-items" style="
-                            max-height: 200px;
-                            overflow-y: auto;
-                            border: 1px solid #4a9eff;
-                            padding: 15px;
-                            border-radius: 5px;
-                            background: rgba(26, 26, 46, 0.5);
-                        ">
-                            ${playlist.items.map(item => `
-                                <div style="margin-bottom: 8px; display: flex; align-items: center;">
-                                    <input type="checkbox" id="item-${item}" value="${item}" checked style="margin-right: 10px;">
-                                    <label for="item-${item}" style="color: white; flex: 1;">${item}</label>
-                                </div>
-                            `).join('')}
+                        <div class="form-group">
+                            <label>Fichiers dans la playlist</label>
+                            <div id="edit-playlist-items" style="max-height:200px;overflow-y:auto;border:1px solid var(--border);padding:12px;border-radius:var(--radius-sm);background:var(--surface-2)">
+                                ${playlist.items.map(item => `
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" value="${esc(item)}" checked>
+                                        <span style="flex:1">${esc(item)}</span>
+                                    </label>
+                                `).join('')}
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Ajouter des fichiers</label>
+                            <select id="add-files-select" class="form-control" multiple style="height:120px">
+                                <!-- Will be populated with available files -->
+                            </select>
                         </div>
                     </div>
-
-                    <div style="margin-bottom: 20px;">
-                        <label style="display: block; margin-bottom: 5px; color: #ccc;">Ajouter des fichiers:</label>
-                        <select id="add-files-select" multiple style="
-                            width: 100%;
-                            height: 120px;
-                            background: #1a1a2e;
-                            border: 1px solid #4a9eff;
-                            color: white;
-                            border-radius: 5px;
-                            padding: 5px;
-                        ">
-                            <!-- Will be populated with available files -->
-                        </select>
-                    </div>
-
-                    <div style="text-align: right;">
-                        <button class="btn btn-primary" onclick="PiSignage.playlists.savePlaylistChanges('${playlist.name}')">💾 Sauvegarder</button>
-                        <button class="btn btn-secondary" onclick="PiSignage.playlists.closeEditModal()">Annuler</button>
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" type="button" onclick="PiSignage.playlists.closeEditModal()">Annuler</button>
+                        <button class="btn btn-primary" type="button" onclick="PiSignage.playlists.savePlaylistChanges('${esc(playlist.name)}')">Sauvegarder</button>
                     </div>
                 </div>
             </div>
@@ -250,27 +228,8 @@ PiSignage.playlists = {
         // Populate available files
         this.populateAvailableFiles(playlist.items);
 
-        // Get modal reference
-        const modal = document.getElementById('editPlaylistModal');
-        if (!modal) return;
-
-        // Add click handler to close on background click
-        const backgroundClickHandler = function(e) {
-            if (e.target.id === 'editPlaylistModal') {
-                PiSignage.playlists.closeEditModal();
-            }
-        };
-        modal.addEventListener('click', backgroundClickHandler);
-        modal._backgroundClickHandler = backgroundClickHandler;
-
-        // Add ESC key handler to close modal
-        const escapeHandler = function(e) {
-            if (e.key === 'Escape') {
-                PiSignage.playlists.closeEditModal();
-            }
-        };
-        document.addEventListener('keydown', escapeHandler);
-        modal._escapeHandler = escapeHandler;
+        // Open via the shared UI helper (handles background click + ESC + cleanup).
+        PiSignage.ui.openModal('editPlaylistModal');
     },
 
     populateAvailableFiles: async function(currentItems) {
@@ -297,14 +256,9 @@ PiSignage.playlists = {
     closeEditModal: function() {
         const modal = document.getElementById('editPlaylistModal');
         if (modal) {
-            // Remove event handlers
-            if (modal._escapeHandler) {
-                document.removeEventListener('keydown', modal._escapeHandler);
-            }
-            if (modal._backgroundClickHandler) {
-                modal.removeEventListener('click', modal._backgroundClickHandler);
-            }
-            modal.remove();
+            // ui.closeModal removes the ESC/background handlers and, because the
+            // modal carries data-remove-on-close="1", pulls it out of the DOM.
+            PiSignage.ui.closeModal(modal);
         }
     },
 
@@ -324,32 +278,32 @@ PiSignage.playlists = {
         try {
             const data = await PiSignage.api.playlists.update(originalName, newName, allItems);
             if (data.success) {
-                showAlert('Playlist modifiée!', 'success');
+                PiSignage.ui.toast('Playlist modifiée', 'success');
                 this.closeEditModal();
                 this.loadPlaylists();
             } else {
-                showAlert('Erreur: ' + data.message, 'error');
+                PiSignage.ui.toast('Erreur : ' + data.message, 'error');
             }
         } catch (error) {
             console.error('Save playlist error:', error);
-            showAlert('Erreur de sauvegarde', 'error');
+            PiSignage.ui.toast('Erreur de sauvegarde', 'error');
         }
     },
 
     deletePlaylist: async function(name) {
-        if (!confirm(`Supprimer la playlist "${name}"?`)) return;
+        if (!PiSignage.ui.confirm(`Supprimer la playlist « ${name} » ?`)) return;
 
         try {
             const data = await PiSignage.api.playlists.delete(name);
             if (data.success) {
-                showAlert('Playlist supprimée!', 'success');
+                PiSignage.ui.toast('Playlist supprimée', 'success');
                 this.loadPlaylists();
             } else {
-                showAlert('Erreur: ' + data.message, 'error');
+                PiSignage.ui.toast('Erreur : ' + data.message, 'error');
             }
         } catch (error) {
             console.error('Delete playlist error:', error);
-            showAlert('Erreur de suppression', 'error');
+            PiSignage.ui.toast('Erreur de suppression', 'error');
         }
     },
 
@@ -358,7 +312,7 @@ PiSignage.playlists = {
             const currentPlayer = PiSignage.player.getCurrentPlayer();
             const data = await PiSignage.api.player.playPlaylist(name, currentPlayer);
             if (data.success) {
-                showAlert(`Playlist ${name} lancée!`, 'success');
+                PiSignage.ui.toast(`Playlist « ${name} » lancée`, 'success');
                 // Update player status
                 setTimeout(() => {
                     if (typeof updatePlayerStatus === 'function') {
@@ -366,17 +320,16 @@ PiSignage.playlists = {
                     }
                 }, 500);
             } else {
-                showAlert('Erreur: ' + data.message, 'error');
+                PiSignage.ui.toast('Erreur : ' + data.message, 'error');
             }
         } catch (error) {
             console.error('Play playlist error:', error);
-            showAlert('Erreur de lecture', 'error');
+            PiSignage.ui.toast('Erreur de lecture', 'error');
         }
     },
 
     // Advanced Playlist Editor Functions
     initPlaylistEditor: function() {
-        console.log('🎬 Initializing advanced playlist editor...');
         this.loadMediaLibrary();
         this.resetPlaylistEditor();
         this.setupEventListeners();
@@ -423,8 +376,8 @@ PiSignage.playlists = {
                         <div class="media-item-meta">${duration} ${size}</div>
                     </div>
                     <div class="media-item-actions">
-                        <button class="btn-add" onclick="PiSignage.playlists.addMediaToPlaylist('${file.name}')" title="Ajouter à la playlist">
-                            +
+                        <button class="icon-btn" onclick="PiSignage.playlists.addMediaToPlaylist('${file.name}')" title="Ajouter à la playlist">
+                            ${this._svg(this._icons.plus)}
                         </button>
                     </div>
                 </div>
@@ -446,13 +399,7 @@ PiSignage.playlists = {
     },
 
     getMediaIcon: function(type) {
-        const icons = {
-            video: '🎬',
-            audio: '🎵',
-            image: '🖼️',
-            file: '📄'
-        };
-        return icons[type] || icons.file;
+        return this._svg(this._icons[type] || this._icons.file);
     },
 
     setupEventListeners: function() {
@@ -551,21 +498,21 @@ PiSignage.playlists = {
 
             return `
                 <div class="playlist-item" data-index="${index}" onclick="PiSignage.playlists.selectPlaylistItem(${index})">
-                    <div class="drag-handle">⋮⋮</div>
+                    <div class="drag-handle" title="Déplacer">${this._svg(this._icons.drag)}</div>
                     <div class="playlist-item-icon ${mediaType}">
                         ${icon}
                     </div>
                     <div class="playlist-item-content">
                         <div class="playlist-item-name" title="${item.file}">${item.file}</div>
                         <div class="playlist-item-details">
-                            <span>Durée: ${item.duration}s</span>
-                            <span>Transition: ${item.transition}</span>
-                            <span>Position: ${index + 1}</span>
+                            <span>Durée : ${item.duration}s</span>
+                            <span>Transition : ${item.transition}</span>
+                            <span>Position : ${index + 1}</span>
                         </div>
                     </div>
                     <div class="playlist-item-actions">
-                        <button class="btn btn-sm btn-danger" onclick="PiSignage.playlists.removePlaylistItem(${index})" title="Supprimer">
-                            🗑️
+                        <button class="icon-btn" onclick="event.stopPropagation();PiSignage.playlists.removePlaylistItem(${index})" title="Supprimer">
+                            ${this._svg(this._icons.trash)}
                         </button>
                     </div>
                 </div>
@@ -613,6 +560,60 @@ PiSignage.playlists = {
         } else {
             propertiesSection.style.display = 'none';
         }
+    },
+
+    /* Per-item property editors (wired to the right-hand "Propriétés" panel). */
+    updateItemDuration: function() {
+        const item = this.currentPlaylist.items[this.selectedItem];
+        const el = document.getElementById('item-duration');
+        if (!item || !el) return;
+        item.duration = Math.max(1, parseInt(el.value, 10) || 1);
+        this.renderPlaylistItems();
+        this.updatePlaylistStats();
+        this.setPlaylistModified(true);
+        this.selectPlaylistItem(this.selectedItem);
+    },
+
+    updateItemTransition: function() {
+        const item = this.currentPlaylist.items[this.selectedItem];
+        const el = document.getElementById('item-transition');
+        if (!item || !el) return;
+        item.transition = el.value;
+        this.renderPlaylistItems();
+        this.setPlaylistModified(true);
+        this.selectPlaylistItem(this.selectedItem);
+    },
+
+    updateTransitionDuration: function() {
+        const item = this.currentPlaylist.items[this.selectedItem];
+        const el = document.getElementById('transition-duration');
+        if (!item || !el) return;
+        item.transition_duration = Math.max(0, parseInt(el.value, 10) || 0);
+        this.setPlaylistModified(true);
+    },
+
+    previewPlaylist: function() {
+        if (!this.currentPlaylist.items.length) {
+            PiSignage.ui.toast('Aucun élément à prévisualiser', 'warning');
+            return;
+        }
+        if (this.currentPlaylist.name) {
+            this.playPlaylist(this.currentPlaylist.name);
+        } else {
+            PiSignage.ui.toast('Sauvegardez la playlist avant de la prévisualiser', 'info');
+        }
+    },
+
+    clearPlaylist: function() {
+        if (!this.currentPlaylist.items.length) return;
+        if (!PiSignage.ui.confirm('Vider la playlist en cours ?')) return;
+        this.currentPlaylist.items = [];
+        this.selectedItem = null;
+        this.renderPlaylistItems();
+        this.updatePlaylistStats();
+        this.updatePropertiesPanel();
+        this.setPlaylistModified(true);
+        PiSignage.ui.toast('Playlist vidée', 'success');
     },
 
     removePlaylistItem: function(index) {
@@ -675,17 +676,14 @@ PiSignage.playlists = {
         if (nameInput) nameInput.value = '';
 
         const nameDisplay = document.getElementById('playlist-name-display');
-        if (nameDisplay) nameDisplay.textContent = 'Nouvelle Playlist';
+        if (nameDisplay) nameDisplay.textContent = 'Nouvelle playlist';
 
         this.renderPlaylistItems();
         this.updatePlaylistStats();
         this.updatePropertiesPanel();
 
         // Show visual feedback
-        if (typeof showAlert === 'function') {
-            showAlert('✨ Nouvelle playlist créée - Prête à être éditée', 'success');
-        }
-        console.log('✨ Éditeur de playlist réinitialisé');
+        PiSignage.ui.toast('Nouvelle playlist prête à être éditée', 'success');
     },
 
     updatePlaylistName: function() {
@@ -697,12 +695,11 @@ PiSignage.playlists = {
             // Update display
             const nameDisplay = document.getElementById('playlist-name-display');
             if (nameDisplay) {
-                nameDisplay.textContent = newName || 'Nouvelle Playlist';
+                nameDisplay.textContent = newName || 'Nouvelle playlist';
             }
 
             // Update save button state
             this.setPlaylistModified(true);
-            console.log('📝 Playlist name updated:', newName);
         }
     },
 
@@ -728,54 +725,51 @@ PiSignage.playlists = {
         }
 
         if (this.currentPlaylist.items.length === 0) {
-            showAlert('La playlist doit contenir au moins un élément', 'warning');
+            PiSignage.ui.toast('La playlist doit contenir au moins un élément', 'warning');
             return;
         }
 
         try {
             const data = await PiSignage.api.playlists.save(this.currentPlaylist);
             if (data.success) {
-                showAlert(`Playlist "${this.currentPlaylist.name}" sauvegardée!`, 'success');
+                PiSignage.ui.toast(`Playlist « ${this.currentPlaylist.name} » sauvegardée`, 'success');
                 this.setPlaylistModified(false);
                 this.loadPlaylists(); // Refresh main playlist list
             } else {
-                showAlert('Erreur: ' + (data.message || 'Échec de la sauvegarde'), 'error');
+                PiSignage.ui.toast('Erreur : ' + (data.message || 'Échec de la sauvegarde'), 'error');
             }
         } catch (error) {
             console.error('Save error:', error);
-            showAlert('Erreur de connexion lors de la sauvegarde', 'error');
+            PiSignage.ui.toast('Erreur de connexion lors de la sauvegarde', 'error');
         }
     },
 
     // Function to show playlist selection modal
     loadExistingPlaylist: function() {
         if (this.currentPlaylists.length === 0) {
-            showAlert('Aucune playlist disponible', 'info');
+            PiSignage.ui.toast('Aucune playlist disponible', 'info');
             return;
         }
 
-        // Create modal for playlist selection
-        const modal = document.createElement('div');
-        modal.className = 'modal show';
-        modal.style.cssText = 'display: flex; align-items: center; justify-content: center; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000;';
+        const esc = (s) => String(s).replace(/[&<>"']/g, c => (
+            { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+        ));
 
-        modal.innerHTML = `
-            <div class="modal-content" style="background: white; padding: 30px; border-radius: 8px; max-width: 500px; width: 90%;">
-                <h3>Charger une Playlist</h3>
-                <div class="playlist-list" style="max-height: 400px; overflow-y: auto; margin: 20px 0;">
-                    ${this.currentPlaylists.map(playlist => `
-                        <div class="playlist-item" style="padding: 10px; margin: 5px 0; border: 1px solid #ddd; border-radius: 4px; cursor: pointer;"
-                             onclick="PiSignage.playlists.selectAndLoadPlaylist('${playlist.name}')">
-                            <strong>${playlist.name}</strong>
-                            <span style="float: right;">${playlist.items ? playlist.items.length : 0} éléments</span>
-                        </div>
-                    `).join('')}
+        // Reuse the static modal shell from playlists.php; only fill its list body.
+        const modal = document.getElementById('load-playlist-modal');
+        const list = document.getElementById('existing-playlists-list');
+        if (!modal || !list) return;
+
+        list.innerHTML = this.currentPlaylists.map(playlist => `
+            <div class="existing-playlist-item" onclick="PiSignage.playlists.selectAndLoadPlaylist('${esc(playlist.name)}')">
+                <div class="existing-playlist-info">
+                    <h4>${esc(playlist.name)}</h4>
+                    <span class="existing-playlist-meta">${playlist.items ? playlist.items.length : 0} éléments</span>
                 </div>
-                <button class="btn btn-secondary" onclick="this.closest('.modal').remove()">Annuler</button>
             </div>
-        `;
+        `).join('');
 
-        document.body.appendChild(modal);
+        PiSignage.ui.openModal(modal);
     },
 
     selectAndLoadPlaylist: function(playlistName) {
@@ -794,8 +788,8 @@ PiSignage.playlists = {
             this.renderPlaylistItems();
             this.renderMediaLibrary();
             this.updatePropertiesPanel();
-            document.querySelector('.modal.show')?.remove();
-            showAlert(`Playlist "${playlistName}" chargée`, 'success');
+            PiSignage.ui.closeModal('load-playlist-modal');
+            PiSignage.ui.toast(`Playlist « ${playlistName} » chargée`, 'success');
         }
     },
 
@@ -812,6 +806,13 @@ PiSignage.playlists = {
         window.loadExistingPlaylist = this.loadExistingPlaylist.bind(this);
         window.selectAndLoadPlaylist = this.selectAndLoadPlaylist.bind(this);
         window.updatePlaylistName = this.updatePlaylistName.bind(this);
+
+        // Item property editors + workspace actions (wired in playlists.php markup)
+        window.updateItemDuration = this.updateItemDuration.bind(this);
+        window.updateItemTransition = this.updateItemTransition.bind(this);
+        window.updateTransitionDuration = this.updateTransitionDuration.bind(this);
+        window.previewPlaylist = this.previewPlaylist.bind(this);
+        window.clearPlaylist = this.clearPlaylist.bind(this);
 
         // Media library functions
         window.refreshMediaLibrary = this.loadMediaLibrary.bind(this);
@@ -833,111 +834,25 @@ PiSignage.playlists = {
 // Ensure global functions are available immediately when script loads
 // This handles onclick bindings in HTML before DOMContentLoaded
 if (typeof window !== 'undefined') {
-    console.log('🔧 Setting up global functions for playlists...');
     if (typeof PiSignage !== 'undefined' && PiSignage.playlists) {
         PiSignage.playlists.setupGlobalFunctions();
-        console.log('✅ Global playlist functions ready:', typeof window.createNewPlaylist);
     } else {
-        console.error('❌ PiSignage.playlists not ready for global function setup');
+        console.error('PiSignage.playlists not ready for global function setup');
     }
 }
 
-// CSS for playlist styling
+// Layout/structure for the playlist editor lives in pages.css (design tokens,
+// light/dark aware). Only the transient drag-over highlight is added here,
+// expressed via CSS variables so it tracks both themes.
 const playlistStyles = document.createElement('style');
 playlistStyles.textContent = `
-    .playlist-card {
-        transition: transform 0.2s, box-shadow 0.2s;
-    }
-
-    .playlist-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-    }
-
-    .playlist-header {
-        margin-bottom: 15px;
-    }
-
-    .playlist-info {
-        display: flex;
-        gap: 15px;
-        font-size: 12px;
-        color: #ccc;
-        margin-top: 5px;
-    }
-
-    .playlist-actions {
-        display: flex;
-        gap: 10px;
-        justify-content: flex-end;
-    }
-
-    .media-item {
-        cursor: grab;
-        transition: transform 0.2s;
-    }
-
-    .media-item:hover {
-        transform: scale(1.02);
-    }
-
-    .media-item.dragging {
-        opacity: 0.5;
-        cursor: grabbing;
-    }
-
-    .playlist-item {
-        display: flex;
-        align-items: center;
-        padding: 10px;
-        border: 1px solid #444;
-        border-radius: 5px;
-        margin-bottom: 5px;
-        cursor: pointer;
-        transition: background-color 0.2s;
-    }
-
-    .playlist-item:hover {
-        background-color: rgba(74, 158, 255, 0.1);
-    }
-
-    .playlist-item.selected {
-        background-color: rgba(74, 158, 255, 0.2);
-        border-color: #4a9eff;
-    }
-
-    .drag-handle {
-        margin-right: 10px;
-        color: #666;
-        cursor: grab;
-    }
-
-    .playlist-item-icon {
-        margin-right: 10px;
-        font-size: 18px;
-    }
-
-    .playlist-item-content {
-        flex: 1;
-    }
-
-    .playlist-item-name {
-        font-weight: bold;
-        margin-bottom: 5px;
-    }
-
-    .playlist-item-details {
-        font-size: 12px;
-        color: #ccc;
-        display: flex;
-        gap: 15px;
-    }
-
-    #playlist-drop-zone.drag-over {
-        border-color: #4a9eff;
-        background-color: rgba(74, 158, 255, 0.1);
-    }
+    .playlist-card { transition: transform .2s, box-shadow .2s; }
+    .playlist-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
+    .playlist-header { margin-bottom: 15px; }
+    .playlist-info { display: flex; gap: 15px; font-size: 12px; color: var(--text-dim); margin-top: 5px; }
+    .playlist-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+    #playlist-drop-zone.drag-over { border: 2px dashed var(--accent); border-radius: var(--radius-sm); background-color: var(--accent-soft); }
 `;
 document.head.appendChild(playlistStyles);
 
-console.log('✅ PiSignage Playlists module loaded - Playlist management and editor ready');
+console.log('PiSignage Playlists module loaded');

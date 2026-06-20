@@ -63,24 +63,46 @@
 
         #loading {
             position: absolute;
-            color: #fff;
-            font-family: monospace;
-            font-size: 1.5rem;
+            color: #e6ebf2;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 1.05rem;
+            font-weight: 500;
+            letter-spacing: .2px;
             text-align: center;
             z-index: 10;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        #loading::before {
+            content: "";
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #34d399;
+            box-shadow: 0 0 14px #34d399;
+            animation: ps-pulse 1.4s ease-in-out infinite;
+        }
+
+        @keyframes ps-pulse {
+            0%, 100% { opacity: .35; transform: scale(.85); }
+            50%      { opacity: 1;   transform: scale(1.1); }
         }
 
         #error {
             position: absolute;
-            color: #f44;
-            font-family: monospace;
-            font-size: 1rem;
+            color: #f87171;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 0.95rem;
+            font-weight: 500;
             text-align: center;
             z-index: 10;
             display: none;
-            padding: 20px;
-            background: rgba(0,0,0,0.8);
-            border-radius: 8px;
+            padding: 18px 22px;
+            background: rgba(10,15,26,0.9);
+            border: 1px solid rgba(248,113,113,0.35);
+            border-radius: 12px;
         }
 
         /* Debug overlay - masqué par défaut, visible sur Ctrl+D */

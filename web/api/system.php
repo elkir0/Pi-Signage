@@ -10,10 +10,53 @@ require_once "/opt/pisignage/web/config.php";
 $method = $_SERVER['REQUEST_METHOD'];
 $input = json_decode(file_get_contents('php://input'), true);
 
+/**
+ * Human-readable byte formatter.
+ * Defined here (guarded) because system.php only includes config.php, which does
+ * NOT provide formatFileSize() — it lives in api/media.php. getMemoryInfo()/
+ * getDiskInfo() below reference it, so its absence caused a fatal error (HTTP 500)
+ * on GET /api/system.php?action=status and ?action=stats. See "api_bugs_found".
+ */
+if (!function_exists('formatFileSize')) {
+    function formatFileSize($bytes) {
+        $bytes = (float) $bytes;
+        if ($bytes <= 0) {
+            return '0 B';
+        }
+        $units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        $i = (int) floor(log($bytes, 1024));
+        $i = max(0, min($i, count($units) - 1));
+        return round($bytes / pow(1024, $i), ($i >= 3) ? 1 : 0) . ' ' . $units[$i];
+    }
+}
+
+/**
+ * Local IP fallback (defined in api/config.php, which is not included here).
+ * Guarded to avoid redeclaration if config.php is ever pulled in.
+ */
+if (!function_exists('getLocalIP')) {
+    function getLocalIP() {
+        $result = executeCommand("hostname -I | awk '{print $1}'");
+        if ($result['success'] && !empty($result['output'])) {
+            $ip = trim($result['output'][0]);
+            if ($ip !== '') {
+                return $ip;
+            }
+        }
+        return $_SERVER['SERVER_ADDR'] ?? '127.0.0.1';
+    }
+}
+
 // Gestion spécifique pour l'action stats via GET
 if ($method === 'GET' && isset($_GET['action']) && $_GET['action'] === 'stats') {
     $systemInfo = getSystemStats();
     jsonResponse(true, $systemInfo);
+    exit;
+}
+
+// Gestion spécifique pour l'action status via GET (info système complète)
+if ($method === 'GET' && isset($_GET['action']) && $_GET['action'] === 'status') {
+    handleGetSystemInfo();
     exit;
 }
 

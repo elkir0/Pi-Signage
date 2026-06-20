@@ -88,4 +88,4 @@ window.showAlert = (message, type = 'info') => PiSignage.ui.toast(message, type)
 window.showNotification = window.showAlert;
 window.toggleSidebar = () => PiSignage.ui.toggleSidebar();
 
-console.log('✅ PiSignage UI module loaded — toasts ready');
+console.log('PiSignage UI module loaded — toasts ready');
