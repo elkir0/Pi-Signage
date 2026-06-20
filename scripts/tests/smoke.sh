@@ -46,12 +46,11 @@ fi
 echo "Test 2: labwc rc.xml template..."
 if [ -f "templates/.config/labwc/rc.xml" ]; then
     log_pass "templates/.config/labwc/rc.xml exists"
-    # Verify it contains key directives
-    if grep -q "<hideCursor/>" "templates/.config/labwc/rc.xml" && \
-       grep -q "<disable/>" "templates/.config/labwc/rc.xml"; then
-        log_pass "rc.xml contains hideCursor and idle disable directives"
+    # Verify it contains a valid Chromium windowRule (schema-compliant)
+    if grep -q 'windowRule identifier="chromium-browser"' "templates/.config/labwc/rc.xml"; then
+        log_pass "rc.xml contains chromium windowRule directive"
     else
-        log_fail "rc.xml missing required directives"
+        log_fail "rc.xml missing chromium windowRule directive"
     fi
 else
     log_fail "templates/.config/labwc/rc.xml not found"
@@ -100,7 +99,9 @@ mkdir -p "$HOME/.config/labwc"
 sed "s|/opt/pisignage/config|$MOCK_CFG_DIR|g" scripts/kiosk-apply > /tmp/kiosk-apply-test-$$
 chmod +x /tmp/kiosk-apply-test-$$
 
-# Run the modified script
+# Run the modified script en mode dashboard (USE_CHROMIUM_PLAYER=0) pour que le mock
+# kiosk_url (https://time.is) soit réellement lu ; le défaut 1 forcerait 127.0.0.1/player.
+export USE_CHROMIUM_PLAYER=0
 if bash /tmp/kiosk-apply-test-$$ 2>&1 | tee /tmp/kiosk-apply-output-$$; then
     if [ -f "$HOME/.config/labwc/autostart" ]; then
         log_pass "autostart file created successfully"
@@ -138,7 +139,7 @@ else
     log_fail "install.sh missing configure_kiosk_trixie function"
 fi
 
-if grep -q "chromium-browser" install.sh && \
+if grep -Eq "chromium(-browser)?" install.sh && \
    grep -q "labwc" install.sh && \
    grep -q "greetd" install.sh; then
     log_pass "install.sh includes required Trixie packages"

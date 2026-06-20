@@ -4,9 +4,13 @@
     Raspberry Pi OS Trixie (Debian 13) - Wayland Compositor
 
     Features:
-    - Disable screen idle/blanking
-    - Hide mouse cursor
     - Minimal keyboard shortcuts for emergency access
+    - Chromium window forced fullscreen via windowRules
+
+    Note: idle/blanking is handled by the absence of an idle daemon
+    (do not run swayidle in autostart); cursor hiding is handled by
+    labwc's native cursor mechanism. The non-schema <hideCursor/> and
+    <idle><disable/></idle> elements were removed (silently ignored by labwc).
 -->
 <labwc_config>
 
@@ -16,17 +20,11 @@
     <cornerRadius>0</cornerRadius>
   </theme>
 
-  <!-- Hide mouse cursor for kiosk mode -->
+  <!-- Cursor theme (kiosk mode) -->
   <cursor>
     <theme>Adwaita</theme>
     <size>24</size>
   </cursor>
-  <hideCursor/>
-
-  <!-- Disable screen idle and power management -->
-  <idle>
-    <disable/>
-  </idle>
 
   <!-- Window placement and behavior -->
   <placement>
@@ -62,8 +60,15 @@
 
   <!-- Window rules -->
   <windowRules>
-    <!-- Make Chromium always fullscreen and on top -->
+    <!-- Make Chromium always fullscreen and on top.
+         Deux règles pour couvrir les deux app-id possibles selon le paquet/version :
+         'chromium-browser' (paquet RPi historique) et 'chromium' (paquet Debian/Trixie).
+         À confirmer sur le Pi via les logs labwc, puis ne garder que le bon. -->
     <windowRule identifier="chromium-browser">
+      <action name="Maximize"/>
+      <action name="Fullscreen"/>
+    </windowRule>
+    <windowRule identifier="chromium">
       <action name="Maximize"/>
       <action name="Fullscreen"/>
     </windowRule>

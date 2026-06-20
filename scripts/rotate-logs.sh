@@ -1,7 +1,16 @@
 #!/bin/bash
 #
-# PiSignage Log Rotation and Cleanup Script
-# Runs daily to keep log sizes manageable
+# PiSignage Log Rotation - compatibility wrapper
+#
+# Rotation is now handled by the standard logrotate config installed at
+# /etc/logrotate.d/pisignage (see setup-log-rotation-cron.sh), driven by a
+# systemd timer (pisignage-logrotate.timer). This script is kept only as a
+# compatibility entry point so the web UI (web/api/logs.php) and any existing
+# callers can still trigger an immediate rotation.
+#
+# It simply forces a logrotate run against the PiSignage config. If logrotate
+# or the config is unavailable, it falls back to a minimal in-place rotation so
+# the manual "Rotation & Nettoyage" button never hard-fails.
 #
 # Usage: ./rotate-logs.sh [--force]
 #
@@ -9,9 +18,8 @@
 set -e
 
 LOGS_DIR="/opt/pisignage/logs"
-MAX_LOG_SIZE_MB=10
-MAX_AGE_DAYS=7
-NGINX_MAX_SIZE_MB=50
+LOGROTATE_CONF="/etc/logrotate.d/pisignage"
+LOGROTATE_STATE="/var/lib/logrotate/pisignage.status"
 
 # Colors for output
 RED='\033[0;31m'
@@ -31,144 +39,43 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# Check if running as root or with sudo
-if [ "$EUID" -ne 0 ] && [ -z "$SUDO_USER" ]; then
-    log_warn "This script should be run with sudo for Nginx log rotation"
-fi
+# Manual triggers always force rotation regardless of size thresholds.
+FORCE_FLAG="--force"
 
-log_info "Starting PiSignage log rotation..."
+log_info "Starting PiSignage log rotation (logrotate wrapper)..."
 
-# 1. Rotate large PiSignage logs
-log_info "Checking PiSignage logs..."
-
-for logfile in "$LOGS_DIR"/*.log; do
-    if [ -f "$logfile" ]; then
+if command -v logrotate >/dev/null 2>&1 && [ -f "$LOGROTATE_CONF" ]; then
+    log_info "Using logrotate config: $LOGROTATE_CONF"
+    if logrotate $FORCE_FLAG --state "$LOGROTATE_STATE" "$LOGROTATE_CONF"; then
+        log_info "logrotate completed successfully"
+    else
+        log_warn "logrotate returned non-zero; some logs may not have rotated"
+    fi
+else
+    # Fallback: minimal in-place rotation when logrotate/config is missing.
+    log_warn "logrotate or $LOGROTATE_CONF unavailable - using built-in fallback"
+    for logfile in "$LOGS_DIR"/*.log; do
+        [ -f "$logfile" ] || continue
         filename=$(basename "$logfile")
-
-        # Skip youtube download logs (handled separately)
-        if [[ "$filename" == youtube_* ]]; then
-            continue
-        fi
-
+        # Skip youtube download logs (short-lived, cleaned by age elsewhere)
+        case "$filename" in
+            youtube_*) continue ;;
+        esac
         size_mb=$(du -m "$logfile" | cut -f1)
-
-        if [ "$size_mb" -gt "$MAX_LOG_SIZE_MB" ]; then
-            log_warn "$filename is ${size_mb}MB (> ${MAX_LOG_SIZE_MB}MB) - rotating..."
-
-            # Create rotated filename with timestamp
+        if [ "$size_mb" -gt 10 ]; then
             rotated="${logfile}.$(date +%Y%m%d-%H%M%S)"
-
-            # Rotate and compress
             mv "$logfile" "$rotated"
             touch "$logfile"
-            chown www-data:www-data "$logfile"
-            gzip "$rotated"
-
-            log_info "Rotated to $(basename "$rotated").gz"
-        else
-            log_info "$filename: ${size_mb}MB (OK)"
+            chown www-data:www-data "$logfile" 2>/dev/null || true
+            gzip "$rotated" 2>/dev/null || true
+            log_info "Rotated $filename (${size_mb}MB) -> $(basename "$rotated").gz"
         fi
-    fi
-done
-
-# 2. Clean old YouTube download logs (>7 days)
-log_info "Cleaning old YouTube download logs (>${MAX_AGE_DAYS} days)..."
-
-youtube_deleted=0
-for logfile in "$LOGS_DIR"/youtube_*.log; do
-    if [ -f "$logfile" ]; then
-        age_days=$(( ($(date +%s) - $(stat -c %Y "$logfile")) / 86400 ))
-
-        if [ "$age_days" -gt "$MAX_AGE_DAYS" ]; then
-            log_warn "Deleting $(basename "$logfile") (${age_days} days old)"
-            rm -f "$logfile"
-            ((youtube_deleted++))
-        fi
-    fi
-done
-
-log_info "Deleted $youtube_deleted old YouTube logs"
-
-# 3. Clean old rotated logs (>30 days)
-log_info "Cleaning old rotated logs (>30 days)..."
-
-rotated_deleted=0
-for logfile in "$LOGS_DIR"/*.log.*; do
-    if [ -f "$logfile" ]; then
-        age_days=$(( ($(date +%s) - $(stat -c %Y "$logfile")) / 86400 ))
-
-        if [ "$age_days" -gt 30 ]; then
-            log_warn "Deleting $(basename "$logfile") (${age_days} days old)"
-            rm -f "$logfile"
-            ((rotated_deleted++))
-        fi
-    fi
-done
-
-log_info "Deleted $rotated_deleted old rotated logs"
-
-# 4. Rotate Nginx logs if too large
-log_info "Checking Nginx logs..."
-
-nginx_access="/var/log/nginx/access.log"
-nginx_error="/var/log/nginx/error.log"
-
-if [ -f "$nginx_access" ]; then
-    size_mb=$(du -m "$nginx_access" | cut -f1)
-
-    if [ "$size_mb" -gt "$NGINX_MAX_SIZE_MB" ]; then
-        log_warn "Nginx access.log is ${size_mb}MB (> ${NGINX_MAX_SIZE_MB}MB) - rotating..."
-
-        # Use logrotate-like approach
-        if [ -f "${nginx_access}.1" ]; then
-            mv "${nginx_access}.1" "${nginx_access}.2"
-        fi
-
-        cp "$nginx_access" "${nginx_access}.1"
-        truncate -s 0 "$nginx_access"
-
-        # Compress old log
-        gzip -f "${nginx_access}.1" 2>/dev/null || true
-
-        # Reload nginx to reopen log files
-        if command -v systemctl &> /dev/null; then
-            systemctl reload nginx 2>/dev/null || true
-        fi
-
-        log_info "Nginx access log rotated and truncated"
-    else
-        log_info "Nginx access.log: ${size_mb}MB (OK)"
-    fi
+    done
 fi
 
-# 5. Clean very old Nginx rotated logs (>14 days)
-log_info "Cleaning old Nginx rotated logs (>14 days)..."
+# Log this rotation event for the audit trail (also surfaced in the logs UI).
+mkdir -p "$LOGS_DIR" 2>/dev/null || true
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] [INFO] Log rotation triggered (logrotate wrapper)" >> "$LOGS_DIR/system.log" 2>/dev/null || true
 
-nginx_deleted=0
-for logfile in /var/log/nginx/*.log.[0-9]* /var/log/nginx/*.log.*.gz; do
-    if [ -f "$logfile" ]; then
-        age_days=$(( ($(date +%s) - $(stat -c %Y "$logfile")) / 86400 ))
-
-        if [ "$age_days" -gt 14 ]; then
-            log_warn "Deleting $(basename "$logfile") (${age_days} days old)"
-            rm -f "$logfile"
-            ((nginx_deleted++))
-        fi
-    fi
-done
-
-log_info "Deleted $nginx_deleted old Nginx logs"
-
-# 6. Summary
-log_info "=== Log Rotation Summary ==="
-pisignage_size=$(du -sh "$LOGS_DIR" | cut -f1)
-nginx_size=$(du -sh /var/log/nginx 2>/dev/null | cut -f1 || echo "N/A")
-
-log_info "PiSignage logs: $pisignage_size"
-log_info "Nginx logs: $nginx_size"
-log_info "Rotation completed successfully!"
-
-# Log this rotation event
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] [INFO] Log rotation completed - PiSignage: $pisignage_size, Nginx: $nginx_size" >> "$LOGS_DIR/system.log"
-
+log_info "Rotation completed."
 exit 0
