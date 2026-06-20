@@ -12,9 +12,14 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+// Asset cache-busting version (bump when CSS/JS change). Single source of truth.
+if (!defined('ASSET_VERSION')) {
+    define('ASSET_VERSION', '0.12.0');
+}
+
 // Configuration
 $config = [
-    'version' => '0.11.0',
+    'version' => '0.12.0',
     'media_path' => '/opt/pisignage/media/',
     'config_path' => '/opt/pisignage/config/',
     'logs_path' => '/opt/pisignage/logs/',
