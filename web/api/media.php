@@ -1,16 +1,17 @@
 <?php
 /**
- * PiSignage v0.8.9 - Media Management API
+ * PiSignage v0.11.0 - Media Management API
  *
  * Handles media file operations including upload, deletion, renaming, and metadata extraction.
  * Supports video, audio, and image files with thumbnail generation.
  *
  * @package    PiSignage
  * @subpackage API
- * @version    0.8.9
+ * @version    0.11.0
  * @since      0.8.0
  */
 
+require_once __DIR__ . '/_guard.php';
 require_once '../config.php';
 
 // Only execute request handling if this file is called directly (not included)

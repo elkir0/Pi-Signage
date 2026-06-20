@@ -16,6 +16,7 @@
  *   POST /api/kiosk/restart  -> Restarts Chromium kiosk
  */
 
+require_once __DIR__ . '/_guard.php';
 require_once "/opt/pisignage/web/config.php";
 
 // Configuration paths
@@ -110,6 +111,13 @@ function handlePutUrl($input) {
     // Validate URL
     if (!filter_var($url, FILTER_VALIDATE_URL)) {
         jsonResponse(false, null, 'Invalid URL format', 400);
+        return;
+    }
+
+    // Restrict to http/https only (blocks file:/javascript:/data:)
+    $scheme = parse_url($url, PHP_URL_SCHEME);
+    if (!in_array($scheme, ['http', 'https'], true)) {
+        jsonResponse(false, null, 'Schéma URL non autorisé', 400);
         return;
     }
 

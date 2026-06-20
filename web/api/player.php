@@ -1,11 +1,13 @@
 <?php
 /**
- * PiSignage v0.8.9 - VLC Player Control API
+ * PiSignage v0.11.0 - VLC Player Control API
  * Controls VLC media player via VLCController
  */
 
+// Garde d'authentification central (session requise pour toutes les méthodes).
+require_once __DIR__ . '/_guard.php';
+
 header('Content-Type: application/json');
-header('Access-Control-Allow-Origin: *');
 
 // Use the VLCController from player-control.php
 require_once __DIR__ . '/player-control.php';

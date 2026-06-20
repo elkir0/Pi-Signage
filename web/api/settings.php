@@ -4,16 +4,10 @@
  * Manages system settings: audio output, password, etc.
  */
 
-require_once '../includes/auth.php';
+require_once __DIR__ . '/_guard.php';
 require_once '../config.php';
 
 header('Content-Type: application/json');
-
-// Require authentication for settings API
-if (!isAuthenticated()) {
-    echo json_encode(['success' => false, 'message' => 'Authentication required']);
-    exit;
-}
 
 $method = $_SERVER['REQUEST_METHOD'];
 $input = json_decode(file_get_contents('php://input'), true);
@@ -65,7 +59,7 @@ function loadSettings() {
         // Default settings
         $defaultSettings = [
             'audio_output' => 'hdmi',
-            'version' => '0.8.9'
+            'version' => '0.11.0'
         ];
         file_put_contents($settingsFile, json_encode($defaultSettings, JSON_PRETTY_PRINT));
         chmod($settingsFile, 0644);

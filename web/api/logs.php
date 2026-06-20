@@ -4,6 +4,7 @@
  * Provides access to system logs
  */
 
+require_once __DIR__ . '/_guard.php';
 require_once '../config.php';
 
 $method = $_SERVER['REQUEST_METHOD'];

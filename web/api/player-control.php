@@ -1,15 +1,18 @@
 <?php
 /**
- * PiSignage v0.8.9 - Player Control API
+ * PiSignage v0.11.0 - Player Control API
  *
  * Real-time VLC player control via HTTP interface (localhost:8080, password: pisignage).
  * Supports playback control, playlist management, volume, and system monitoring.
  *
  * @package    PiSignage
  * @subpackage API
- * @version    0.8.9
+ * @version    0.11.0
  * @since      0.8.0
  */
+
+// Garde d'authentification central (session requise pour toutes les méthodes).
+require_once __DIR__ . '/_guard.php';
 
 require_once '../config.php';
 
@@ -72,14 +75,25 @@ function getUptime() {
 }
 
 header('Content-Type: application/json');
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
 
 // VLC Configuration
 define('VLC_HOST', 'localhost');
 define('VLC_PORT', '8080');
-define('VLC_PASSWORD', 'pisignage');
+
+// Mot de passe HTTP VLC externalisé : lu depuis un fichier de config si présent,
+// sinon valeur câblée réelle « pisignage » (alignée sur le service VLC, port 8080).
+if (!defined('VLC_HTTP_PASSWORD_FILE')) {
+    define('VLC_HTTP_PASSWORD_FILE', '/opt/pisignage/config/vlc_password');
+}
+$__vlcPass = 'pisignage';
+if (is_readable(VLC_HTTP_PASSWORD_FILE)) {
+    $__filePass = trim((string)file_get_contents(VLC_HTTP_PASSWORD_FILE));
+    if ($__filePass !== '') {
+        $__vlcPass = $__filePass;
+    }
+}
+define('VLC_PASSWORD', $__vlcPass);
+unset($__vlcPass, $__filePass);
 
 /**
  * VLC HTTP interface controller.
@@ -126,8 +140,8 @@ class VLCController {
         $response = @file_get_contents($url, false, $context);
 
         if ($response === false) {
-            // Fallback to shell command if HTTP interface is not available
-            return $this->fallbackToShell($command, $params);
+            // API HTTP VLC (port 8080) injoignable : pas de fallback RC netcat (reliquat X11/desktop supprimé).
+            return ['success' => false, 'message' => 'VLC HTTP interface unavailable'];
         }
 
         $vlcResponse = json_decode($response, true);
@@ -136,43 +150,6 @@ class VLCController {
             return ['success' => true, 'data' => $vlcResponse];
         }
         return ['success' => false, 'message' => 'Invalid VLC response'];
-    }
-
-    /**
-     * Fallback to shell commands via netcat.
-     *
-     * @param string $command VLC command
-     * @param array $params Command parameters
-     * @return array Response with success status
-     * @since 0.8.0
-     */
-    private function fallbackToShell($command, $params) {
-        $result = ['success' => false, 'message' => 'Command not implemented'];
-
-        switch ($command) {
-            case 'pl_play':
-                exec('echo "play" | nc localhost 4212 2>&1', $output, $returnVar);
-                $result = ['success' => $returnVar === 0];
-                break;
-
-            case 'pl_pause':
-                exec('echo "pause" | nc localhost 4212 2>&1', $output, $returnVar);
-                $result = ['success' => $returnVar === 0];
-                break;
-
-            case 'pl_stop':
-                exec('echo "stop" | nc localhost 4212 2>&1', $output, $returnVar);
-                $result = ['success' => $returnVar === 0];
-                break;
-
-            case 'volume':
-                $vol = intval($params['val'] ?? 100);
-                exec("echo 'volume $vol' | nc localhost 4212 2>&1", $output, $returnVar);
-                $result = ['success' => $returnVar === 0, 'volume' => $vol];
-                break;
-        }
-
-        return $result;
     }
 
     /**

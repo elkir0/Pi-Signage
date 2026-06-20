@@ -4,7 +4,7 @@
  */
 
 // Version
-define('PISIGNAGE_VERSION', 'v0.8.9');
+define('PISIGNAGE_VERSION', 'v0.11.0');
 
 // Chemins
 define('BASE_DIR', '/opt/pisignage');
@@ -34,13 +34,12 @@ define('SCREENSHOT_COOLDOWN', 5); // Secondes entre captures
 function jsonResponse($success, $data = null, $message = '', $httpCode = 200) {
     http_response_code($httpCode);
     header('Content-Type: application/json');
-    header('Access-Control-Allow-Origin: *');
     echo json_encode([
         'success' => $success,
         'data' => $data,
         'message' => $message,
         'timestamp' => date('Y-m-d H:i:s')
-    ]);
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
 
@@ -154,7 +153,16 @@ function logMessage($message, $level = 'INFO') {
 }
 
 // Fonction pour exécuter des commandes système
-function executeCommand($command) {
+function executeCommand($command, $background = false) {
+    if ($background) {
+        // Lancer en arrière-plan (ex: reboot/shutdown) et retourner immédiatement
+        exec($command . ' > /dev/null 2>&1 &');
+        return [
+            'success' => true,
+            'output' => [],
+            'return_code' => 0
+        ];
+    }
     $output = [];
     $returnVar = 0;
     exec($command . ' 2>&1', $output, $returnVar);

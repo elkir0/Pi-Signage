@@ -1,16 +1,21 @@
 <?php
 /**
- * PiSignage v0.8.9 - YouTube Download API
+ * PiSignage v0.11.0 - YouTube Download API
  *
  * YouTube video downloader using yt-dlp with queue management and progress tracking.
  * Supports quality selection, audio extraction, and background download processing.
  *
  * @package    PiSignage
  * @subpackage API
- * @version    0.8.9
+ * @version    0.11.0
  * @since      0.8.0
  */
 
+// Auth guard for HTTP requests only; the detached CLI download worker re-includes
+// this file to call updateDownloadStatus() and must not be blocked by the session check.
+if (php_sapi_name() !== 'cli') {
+    require_once __DIR__ . '/_guard.php';
+}
 require_once '../config.php';
 require_once 'media.php';
 
@@ -212,7 +217,7 @@ function checkYtDlpInstallation() {
         'available' => false,
         'path' => null,
         'version' => null,
-        'suggestion' => 'Install yt-dlp: pip3 install yt-dlp'
+        'suggestion' => 'Install/update yt-dlp: yt-dlp -U'
     ];
 }
 
@@ -452,153 +457,224 @@ function startDownload($downloadId, $url, $quality, $format, $audioOnly) {
     }
 
     $outputPath = MEDIA_PATH . '/%(title)s.%(ext)s';
-    $command = $ytdlpCheck['path'];
 
-    // Format selection - Updated to handle modern YouTube formats
+    // Build the yt-dlp invocation as an argument array (no shell interpolation).
+    $ytdlpArgs = [$ytdlpCheck['path']];
+
     if ($audioOnly) {
-        $command .= " -f 'bestaudio/best' --extract-audio --audio-format mp3";
+        $ytdlpArgs[] = '-f';
+        $ytdlpArgs[] = 'bestaudio/best';
+        $ytdlpArgs[] = '--extract-audio';
+        $ytdlpArgs[] = '--audio-format';
+        $ytdlpArgs[] = 'mp3';
     } else {
         if ($quality === 'best') {
             // Try best video+audio merge, fallback to best single file with audio
-            $command .= " -f 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best'";
+            $ytdlpArgs[] = '-f';
+            $ytdlpArgs[] = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best';
         } else {
             $qualityNum = intval(str_replace('p', '', $quality));
             // Try merge at quality, fallback to single file with audio at quality, then any format at quality
-            $command .= " -f 'bestvideo[height<=$qualityNum][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=$qualityNum]+bestaudio/best[height<=$qualityNum]/best'";
+            $ytdlpArgs[] = '-f';
+            $ytdlpArgs[] = "bestvideo[height<=$qualityNum][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=$qualityNum]+bestaudio/best[height<=$qualityNum]/best";
         }
         // Merge output container
-        $command .= " --merge-output-format mp4";
+        $ytdlpArgs[] = '--merge-output-format';
+        $ytdlpArgs[] = 'mp4';
     }
 
     // Output template
-    $command .= " -o " . escapeshellarg($outputPath);
+    $ytdlpArgs[] = '-o';
+    $ytdlpArgs[] = $outputPath;
 
-    // Add URL
-    $command .= " " . escapeshellarg($url);
+    // Add URL (passed as a discrete argv element, never interpolated into a shell)
+    $ytdlpArgs[] = $url;
 
-    // Log file (but don't redirect in command - the script will handle it)
+    // Log file
     $logFile = LOGS_PATH . "/youtube_$downloadId.log";
 
-    // Create download script with proper monitoring
-    $scriptPath = createDownloadScript($downloadId, $command, $logFile);
+    // Create a detached PHP worker that runs yt-dlp via proc_open (array form, no shell)
+    $started = launchDownloadWorker($downloadId, $ytdlpArgs, $logFile);
+
+    if (!$started) {
+        return false;
+    }
 
     // Update status to downloading
     updateDownloadStatus($downloadId, 'downloading', 0);
 
-    // Execute download in background
-    $bgCommand = "bash $scriptPath > /dev/null 2>&1 &";
-    exec($bgCommand);
-
-    logMessage("YouTube download script created: $scriptPath for URL: $url");
+    logMessage("YouTube download worker launched (ID: $downloadId) for URL: $url");
 
     return true;
 }
 
 /**
- * Create bash script for background download.
+ * Launch a detached PHP worker that downloads via yt-dlp without any shell interpolation.
+ *
+ * The yt-dlp invocation is passed as an argument array; the worker runs it with
+ * proc_open() (array form) so the URL/quality can never be interpreted by a shell.
  *
  * @param string $downloadId Download ID
- * @param string $ytdlpCommand yt-dlp command to execute
- * @param string $logFile Log file path
- * @return string Script path
- * @since 0.8.0
+ * @param array  $ytdlpArgs  yt-dlp argv (first element = executable path)
+ * @param string $logFile    Log file path
+ * @return bool True if the worker was launched
+ * @since 0.11.0
  */
-function createDownloadScript($downloadId, $ytdlpCommand, $logFile) {
-    $configPath = CONFIG_PATH;
-    $mediaPath = MEDIA_PATH;
+function launchDownloadWorker($downloadId, array $ytdlpArgs, $logFile) {
+    // Persist the job parameters as JSON (no shell interpolation, no secrets in argv).
+    $jobFile = CONFIG_PATH . "/download_job_$downloadId.json";
+    $job = [
+        'download_id' => $downloadId,
+        'ytdlp_args'  => array_values($ytdlpArgs),
+        'log_file'    => $logFile,
+        'media_path'  => MEDIA_PATH,
+    ];
+    if (file_put_contents($jobFile, json_encode($job)) === false) {
+        return false;
+    }
+    chmod($jobFile, 0600);
 
-    // Create bash script with proper escaping
-    $scriptContent = "#!/bin/bash\n\n";
-    $scriptContent .= "DOWNLOAD_ID=\"$downloadId\"\n";
-    $scriptContent .= "LOG_FILE=\"$logFile\"\n";
-    $scriptContent .= "CONFIG_PATH=\"$configPath\"\n";
-    $scriptContent .= "MEDIA_PATH=\"$mediaPath\"\n\n";
+    // Generate the worker script (static PHP, no interpolated user input).
+    $workerPath = createDownloadWorker($downloadId);
 
-    $scriptContent .= "# Ensure log directory exists\n";
-    $scriptContent .= "mkdir -p \"\$(dirname \"\$LOG_FILE\")\"\n\n";
+    // Launch the worker detached from this request via proc_open with an argv array
+    // (array form bypasses /bin/sh entirely). setsid detaches it from the FPM process group.
+    $cmd = ['setsid', PHP_BINARY, $workerPath, $jobFile];
+    $descriptors = [
+        0 => ['file', '/dev/null', 'r'],
+        1 => ['file', '/dev/null', 'a'],
+        2 => ['file', '/dev/null', 'a'],
+    ];
+    $proc = proc_open($cmd, $descriptors, $pipes);
+    if (!is_resource($proc)) {
+        return false;
+    }
+    proc_close($proc); // setsid forks the worker, so this returns immediately
 
-    $scriptContent .= "# Update download status\n";
-    $scriptContent .= "update_status() {\n";
-    $scriptContent .= "    local status=\"\$1\"\n";
-    $scriptContent .= "    local progress=\"\${2:-0}\"\n";
-    $scriptContent .= "    local filename=\"\${3:-}\"\n";
-    $scriptContent .= "    php -r \"\n";
-    $scriptContent .= "    require_once '/opt/pisignage/web/config.php';\n";
-    $scriptContent .= "    require_once '/opt/pisignage/web/api/youtube.php';\n";
-    $scriptContent .= "    updateDownloadStatus('\$DOWNLOAD_ID', '\$status', \$progress, '\$filename');\n";
-    $scriptContent .= "    \"\n";
-    $scriptContent .= "}\n\n";
-
-    $scriptContent .= "# Execute download\n";
-    $scriptContent .= "echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] Starting YouTube download: \$DOWNLOAD_ID\" >> \"\$LOG_FILE\"\n";
-    $scriptContent .= "update_status \"downloading\" 0\n\n";
-
-    $scriptContent .= "# Run yt-dlp and capture output\n";
-    $scriptContent .= "$ytdlpCommand >> \"\$LOG_FILE\" 2>&1\n";
-    $scriptContent .= "YTDLP_EXIT_CODE=\$?\n\n";
-
-    $scriptContent .= "# Parse log to find downloaded filename\n";
-    $scriptContent .= "DOWNLOADED_FILE=\"\"\n";
-    $scriptContent .= "if [ -f \"\$LOG_FILE\" ]; then\n";
-    $scriptContent .= "    # Try to find merged file from [Merger] line (most reliable)\n";
-    $scriptContent .= "    MERGED_PATH=\$(grep -oP '\\[Merger\\] Merging formats into \"\\K[^\"]+' \"\$LOG_FILE\" | tail -1 2>/dev/null)\n";
-    $scriptContent .= "    if [ -n \"\$MERGED_PATH\" ] && [ -f \"\$MERGED_PATH\" ]; then\n";
-    $scriptContent .= "        DOWNLOADED_FILE=\$(basename \"\$MERGED_PATH\")\n";
-    $scriptContent .= "    fi\n\n";
-    $scriptContent .= "    # If not found, try destination filename in log\n";
-    $scriptContent .= "    if [ -z \"\$DOWNLOADED_FILE\" ]; then\n";
-    $scriptContent .= "        DEST_PATH=\$(grep -oP '\\[download\\] Destination: \\K.*' \"\$LOG_FILE\" | tail -1 2>/dev/null)\n";
-    $scriptContent .= "        if [ -n \"\$DEST_PATH\" ]; then\n";
-    $scriptContent .= "            DOWNLOADED_FILE=\$(basename \"\$DEST_PATH\")\n";
-    $scriptContent .= "            # Remove format suffix if present (.f696.mp4 -> check for final .mp4)\n";
-    $scriptContent .= "            FINAL_FILE=\"\${DOWNLOADED_FILE%%.f[0-9]*.mp4}.mp4\"\n";
-    $scriptContent .= "            if [ -f \"\$MEDIA_PATH/\$FINAL_FILE\" ]; then\n";
-    $scriptContent .= "                DOWNLOADED_FILE=\"\$FINAL_FILE\"\n";
-    $scriptContent .= "            fi\n";
-    $scriptContent .= "        fi\n";
-    $scriptContent .= "    fi\n\n";
-    $scriptContent .= "    # Last resort: find any .mp4/.webm/.mkv file created in last 2 minutes\n";
-    $scriptContent .= "    if [ -z \"\$DOWNLOADED_FILE\" ]; then\n";
-    $scriptContent .= "        FOUND_FILE=\$(find \"\$MEDIA_PATH\" -maxdepth 1 -type f \\( -name \"*.mp4\" -o -name \"*.webm\" -o -name \"*.mkv\" \\) -mmin -2 2>/dev/null | head -1)\n";
-    $scriptContent .= "        if [ -n \"\$FOUND_FILE\" ]; then\n";
-    $scriptContent .= "            DOWNLOADED_FILE=\$(basename \"\$FOUND_FILE\")\n";
-    $scriptContent .= "        fi\n";
-    $scriptContent .= "    fi\n";
-    $scriptContent .= "fi\n\n";
-
-    $scriptContent .= "# Update final status\n";
-    $scriptContent .= "if [ \$YTDLP_EXIT_CODE -eq 0 ] && [ -n \"\$DOWNLOADED_FILE\" ] && [ -f \"\$MEDIA_PATH/\$DOWNLOADED_FILE\" ]; then\n";
-    $scriptContent .= "    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] Download completed: \$DOWNLOADED_FILE\" >> \"\$LOG_FILE\"\n";
-    $scriptContent .= "    update_status \"completed\" 100 \"\$DOWNLOADED_FILE\"\n";
-    $scriptContent .= "else\n";
-    $scriptContent .= "    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] Download failed with exit code: \$YTDLP_EXIT_CODE\" >> \"\$LOG_FILE\"\n";
-    $scriptContent .= "    update_status \"error\" 0\n";
-    $scriptContent .= "fi\n\n";
-
-    $scriptContent .= "# Self-cleanup after 5 minutes\n";
-    $scriptContent .= "sleep 300\n";
-    $scriptContent .= "rm -f \"\$0\"\n";
-
-    $scriptPath = CONFIG_PATH . "/download_script_$downloadId.sh";
-    file_put_contents($scriptPath, $scriptContent);
-    chmod($scriptPath, 0755);
-
-    return $scriptPath;
+    return true;
 }
 
 /**
- * Create progress tracking script (DEPRECATED).
+ * Generate the detached PHP download worker.
  *
- * @deprecated 0.8.9 Use createDownloadScript instead
+ * The worker contains no interpolated user input: it reads the job JSON, runs
+ * yt-dlp via proc_open (array form), detects the resulting file, then updates
+ * the download status by re-using updateDownloadStatus() from this API.
+ *
  * @param string $downloadId Download ID
- * @param string $progressFile Progress file path
- * @param string $logFile Log file path
- * @return string Script path
- * @since 0.8.0
+ * @return string Worker script path
+ * @since 0.11.0
  */
-function createProgressScript($downloadId, $progressFile, $logFile) {
-    // DEPRECATED - Kept for compatibility
-    return createDownloadScript($downloadId, '', $logFile);
+function createDownloadWorker($downloadId) {
+    $apiFile = __FILE__;
+
+    $worker = <<<'PHPWORKER'
+<?php
+// PiSignage YouTube download worker (auto-generated, runs detached).
+$jobFile = $argv[1] ?? '';
+if ($jobFile === '' || !is_file($jobFile)) {
+    exit(1);
+}
+$job = json_decode(file_get_contents($jobFile), true);
+if (!is_array($job) || empty($job['ytdlp_args'])) {
+    exit(1);
+}
+
+$downloadId = $job['download_id'];
+$logFile    = $job['log_file'];
+$mediaPath  = $job['media_path'];
+$ytdlpArgs  = $job['ytdlp_args'];
+
+// Re-use the API's status/queue helpers (CLI-exempt guard, so no auth required here).
+// chdir into the api dir first so youtube.php's relative '../config.php' resolves to
+// the same realpath as our absolute include -> require_once dedupes (no redeclare).
+require_once '__CONFIG_PATH__';
+chdir(dirname('__API_FILE__'));
+require_once '__API_FILE__';
+
+@mkdir(dirname($logFile), 0755, true);
+
+$ts = function () { return date('Y-m-d H:i:s'); };
+file_put_contents($logFile, '[' . $ts() . "] Starting YouTube download: $downloadId\n", FILE_APPEND);
+updateDownloadStatus($downloadId, 'downloading', 0);
+
+// Run yt-dlp via proc_open with an argv array -> no shell, no interpolation.
+$descriptors = [
+    0 => ['file', '/dev/null', 'r'],
+    1 => ['file', $logFile, 'a'],
+    2 => ['file', $logFile, 'a'],
+];
+$proc = proc_open($ytdlpArgs, $descriptors, $pipes);
+$exitCode = 1;
+if (is_resource($proc)) {
+    $exitCode = proc_close($proc);
+}
+
+// Detect the downloaded filename from the yt-dlp log (PHP, no shell).
+$downloadedFile = '';
+$log = is_file($logFile) ? file_get_contents($logFile) : '';
+
+if ($log !== '') {
+    // 1) Merged output ("[Merger] Merging formats into "...") is most reliable.
+    if (preg_match_all('/\[Merger\] Merging formats into "([^"]+)"/', $log, $m) && !empty($m[1])) {
+        $merged = end($m[1]);
+        if (is_file($merged)) {
+            $downloadedFile = basename($merged);
+        }
+    }
+    // 2) Otherwise the [download] Destination: line.
+    if ($downloadedFile === '' && preg_match_all('/\[download\] Destination: (.+)/', $log, $m) && !empty($m[1])) {
+        $dest = trim(end($m[1]));
+        $candidate = basename($dest);
+        // Strip per-format suffix (".f696.mp4" -> ".mp4") and prefer the final file.
+        $final = preg_replace('/\.f[0-9]+\.mp4$/', '.mp4', $candidate);
+        if ($final !== null && is_file($mediaPath . '/' . $final)) {
+            $downloadedFile = $final;
+        } elseif (is_file($mediaPath . '/' . $candidate)) {
+            $downloadedFile = $candidate;
+        }
+    }
+}
+
+// 3) Last resort: newest media file created in the last 2 minutes.
+if ($downloadedFile === '') {
+    $newest = '';
+    $newestMtime = 0;
+    $cutoff = time() - 120;
+    foreach (glob($mediaPath . '/*.{mp4,webm,mkv}', GLOB_BRACE) ?: [] as $f) {
+        $mtime = filemtime($f);
+        if ($mtime >= $cutoff && $mtime > $newestMtime) {
+            $newestMtime = $mtime;
+            $newest = $f;
+        }
+    }
+    if ($newest !== '') {
+        $downloadedFile = basename($newest);
+    }
+}
+
+if ($exitCode === 0 && $downloadedFile !== '' && is_file($mediaPath . '/' . $downloadedFile)) {
+    file_put_contents($logFile, '[' . $ts() . "] Download completed: $downloadedFile\n", FILE_APPEND);
+    updateDownloadStatus($downloadId, 'completed', 100, $downloadedFile);
+} else {
+    file_put_contents($logFile, '[' . $ts() . "] Download failed with exit code: $exitCode\n", FILE_APPEND);
+    updateDownloadStatus($downloadId, 'error', 0);
+}
+
+// Self-cleanup: remove the job file and this worker.
+@unlink($jobFile);
+@unlink(__FILE__);
+PHPWORKER;
+
+    // Inject the (trusted, constant) paths.
+    $worker = str_replace('__CONFIG_PATH__', BASE_DIR . '/web/config.php', $worker);
+    $worker = str_replace('__API_FILE__', $apiFile, $worker);
+
+    $workerPath = CONFIG_PATH . "/download_worker_$downloadId.php";
+    file_put_contents($workerPath, $worker);
+    chmod($workerPath, 0600);
+
+    return $workerPath;
 }
 
 /**
@@ -609,8 +685,8 @@ function createProgressScript($downloadId, $progressFile, $logFile) {
  * @since 0.8.0
  */
 function cancelDownload($downloadId) {
-    // Kill process if running
-    $result = executeCommand("pkill -f 'yt-dlp.*$downloadId'");
+    // Kill the detached worker (and its yt-dlp child) by matching the worker file name.
+    $result = executeCommand('pkill -f ' . escapeshellarg("download_worker_$downloadId.php"));
 
     // Update status
     updateDownloadStatus($downloadId, 'cancelled');
@@ -618,11 +694,13 @@ function cancelDownload($downloadId) {
     // Clean up files
     $progressFile = CONFIG_PATH . "/progress_$downloadId.txt";
     $logFile = LOGS_PATH . "/youtube_$downloadId.log";
-    $scriptFile = CONFIG_PATH . "/download_script_$downloadId.sh";
+    $workerFile = CONFIG_PATH . "/download_worker_$downloadId.php";
+    $jobFile = CONFIG_PATH . "/download_job_$downloadId.json";
 
     if (file_exists($progressFile)) unlink($progressFile);
     if (file_exists($logFile)) unlink($logFile);
-    if (file_exists($scriptFile)) unlink($scriptFile);
+    if (file_exists($workerFile)) unlink($workerFile);
+    if (file_exists($jobFile)) unlink($jobFile);
 
     return true;
 }

@@ -11,12 +11,14 @@
  * - POST /api/playlist/upload    - Upload un média (optionnel)
  */
 
+// Garde d'authentification central (gère l'exception GET /api/playlist pour le kiosk public).
+require_once __DIR__ . '/_guard.php';
+
 header('Content-Type: application/json');
 
 // Configuration
-define('PLAYLIST_FILE', '/opt/pisignage/content/playlist.json');
-define('MEDIA_DIR', '/opt/pisignage/content/');
-define('ADMIN_TOKEN_FILE', '/opt/pisignage/config/admin_token');
+define('PLAYLIST_FILE', '/opt/pisignage/media/playlist.json');
+define('MEDIA_DIR', '/opt/pisignage/media/');
 
 // Fonction utilitaire pour les réponses JSON
 function jsonResponse($success, $data = null, $message = '', $code = 200) {
@@ -28,21 +30,6 @@ function jsonResponse($success, $data = null, $message = '', $code = 200) {
         'timestamp' => date('Y-m-d H:i:s')
     ]);
     exit;
-}
-
-// Vérification du token admin pour les opérations d'écriture
-function requireAdminToken() {
-    if (!file_exists(ADMIN_TOKEN_FILE)) {
-        error_log('[PiSignage Playlist API] WARNING: No admin token file found. Running in permissive mode.');
-        return; // Mode permissif
-    }
-
-    $expectedToken = trim(file_get_contents(ADMIN_TOKEN_FILE));
-    $providedToken = $_SERVER['HTTP_X_ADMIN_TOKEN'] ?? '';
-
-    if ($providedToken !== $expectedToken) {
-        jsonResponse(false, null, 'Unauthorized: Invalid admin token', 401);
-    }
 }
 
 // Validation de la structure de la playlist
@@ -146,7 +133,10 @@ switch ("$method:$pathInfo") {
     case 'GET:':
     case 'GET:/':
         if (!file_exists(PLAYLIST_FILE)) {
-            jsonResponse(false, null, 'Playlist file not found', 404);
+            // Pas encore de playlist enregistrée : renvoyer une playlist VIDE en 200.
+            // Le kiosk public (player.php) sonde /api/playlist en boucle ; un 404 figerait
+            // l'écran sur une install fraîche (garde-fou : /api/playlist DOIT rester 200).
+            jsonResponse(true, ['version' => 0, 'items' => [], 'autoplay' => false, 'autoLoop' => true], 'Empty playlist', 200);
         }
 
         $playlist = json_decode(file_get_contents(PLAYLIST_FILE), true);
@@ -160,7 +150,7 @@ switch ("$method:$pathInfo") {
     // PUT /api/playlist - Mettre à jour la playlist
     case 'PUT:':
     case 'PUT:/':
-        requireAdminToken();
+        // Authentification déjà imposée par _guard.php (méthode non-GET = session requise).
 
         $input = file_get_contents('php://input');
         $playlist = json_decode($input, true);
@@ -233,7 +223,7 @@ switch ("$method:$pathInfo") {
 
     // POST /api/playlist/refresh - Notifier le player
     case 'POST:/refresh':
-        requireAdminToken();
+        // Authentification déjà imposée par _guard.php (méthode non-GET = session requise).
 
         // Créer un fichier de signal pour le player
         $signalFile = '/tmp/pisignage-playlist-refresh';
@@ -247,7 +237,7 @@ switch ("$method:$pathInfo") {
 
     // POST /api/playlist/upload - Upload un média
     case 'POST:/upload':
-        requireAdminToken();
+        // Authentification déjà imposée par _guard.php (méthode non-GET = session requise).
 
         if (!isset($_FILES['file'])) {
             jsonResponse(false, null, 'No file uploaded', 400);
@@ -260,13 +250,16 @@ switch ("$method:$pathInfo") {
             jsonResponse(false, null, 'Upload error: ' . $file['error'], 400);
         }
 
-        // Vérifier le type MIME
+        // Vérifier le type MIME (aligné sur config.php ALLOWED_VIDEO_EXTENSIONS:
+        // mp4, mkv, avi, webm, mov, flv, wmv)
         $allowedTypes = [
             'video/mp4',
             'video/webm',
-            'video/ogg',
-            'video/quicktime',
-            'video/x-matroska'
+            'video/x-matroska',   // mkv
+            'video/x-msvideo',    // avi
+            'video/quicktime',    // mov
+            'video/x-flv',        // flv
+            'video/x-ms-wmv'      // wmv
         ];
 
         $finfo = finfo_open(FILEINFO_MIME_TYPE);
