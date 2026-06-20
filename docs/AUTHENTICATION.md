@@ -81,6 +81,17 @@ Toutes les pages et API endpoints vérifient l'authentification sauf:
 - `/login.php`
 - Ressources statiques (CSS, JS, images)
 
+**API Endpoints Protégés** (tous nécessitent authentification):
+- `/api/system.php` - Informations système
+- `/api/player.php` - Contrôle lecteur VLC
+- `/api/media.php` - Gestion médias
+- `/api/playlist-simple.php` - Gestion playlists
+- `/api/screenshot.php` - Captures d'écran
+- `/api/youtube.php` - Téléchargement YouTube
+- `/api/logs.php` - Logs système
+- `/api/scheduler.php` - Planification
+- `/api/kiosk.php` - Mode kiosk (Trixie uniquement)
+
 Exemple de vérification dans une page:
 ```php
 <?php
@@ -146,5 +157,5 @@ Le fichier credentials.json peut être corrompu. Supprimez-le et reconnectez-vou
 
 ---
 
-**Dernière mise à jour**: 2025-10-01
+**Dernière mise à jour**: 2025-11-09
 **Version PiSignage**: 0.8.9

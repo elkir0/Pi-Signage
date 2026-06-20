@@ -6,6 +6,30 @@ SCREENSHOT_DIR="/tmp"
 FILENAME="screenshot_$(date +%Y%m%d_%H%M%S).png"
 OUTPUT_PATH="$SCREENSHOT_DIR/$FILENAME"
 
+# Wayland environment for grim when invoked by www-data (php-fpm).
+# php-fpm runs without the kiosk user's session env, so grim cannot find the
+# Wayland socket. Point XDG_RUNTIME_DIR/WAYLAND_DISPLAY at the kiosk user's
+# session. Detect dynamically; fall back to the 'pi' kiosk user defaults.
+KIOSK_USER="${PISIGNAGE_KIOSK_USER:-pi}"
+if [ -z "$XDG_RUNTIME_DIR" ] || [ ! -d "$XDG_RUNTIME_DIR" ]; then
+    KIOSK_UID="$(id -u "$KIOSK_USER" 2>/dev/null)"
+    if [ -n "$KIOSK_UID" ] && [ -d "/run/user/$KIOSK_UID" ]; then
+        export XDG_RUNTIME_DIR="/run/user/$KIOSK_UID"
+    fi
+fi
+if [ -z "$WAYLAND_DISPLAY" ]; then
+    # Prefer an actual wayland-* socket in the runtime dir, else default name.
+    if [ -n "$XDG_RUNTIME_DIR" ]; then
+        for sock in "$XDG_RUNTIME_DIR"/wayland-[0-9]*; do
+            if [ -S "$sock" ]; then
+                export WAYLAND_DISPLAY="$(basename "$sock")"
+                break
+            fi
+        done
+    fi
+    export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}"
+fi
+
 # Function to log messages
 log_message() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >&2

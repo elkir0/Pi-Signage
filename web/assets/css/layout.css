@@ -8,7 +8,6 @@
     width: 280px;
     height: 100vh;
     background: rgba(26, 26, 46, 0.95);
-    backdrop-filter: blur(20px);
     border-right: 1px solid var(--glass-border);
     padding: 30px 20px;
     position: fixed;
@@ -112,8 +111,7 @@
     align-items: center;
     margin-bottom: 30px;
     padding: 20px 30px;
-    background: var(--glass);
-    backdrop-filter: blur(10px);
+    background: var(--surface);
     border-radius: 15px;
     border: 1px solid var(--glass-border);
 }
@@ -235,7 +233,6 @@
     width: 100%;
     height: 100%;
     background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(5px);
     z-index: 2000;
     display: none; /* Hidden by default */
     align-items: center;
@@ -250,8 +247,7 @@
 }
 
 .modal-content {
-    background: var(--glass);
-    backdrop-filter: blur(20px);
+    background: var(--surface-raised);
     border: 1px solid var(--glass-border);
     border-radius: 15px;
     max-width: 600px;
@@ -290,9 +286,7 @@
 }
 
 .playlist-panel {
-    background: var(--glass);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
+    background: var(--surface-raised);
     border: 1px solid var(--glass-border);
     border-radius: 15px;
     box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);

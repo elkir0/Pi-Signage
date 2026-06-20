@@ -46,7 +46,7 @@ include 'includes/header.php';
                     <!-- Sélecteur de lecteur vidéo -->
                     <div class="player-selector">
                         <div class="selector-title">Choisir le lecteur :</div>
-                        <!-- PiSignage v0.8.9+ uses VLC exclusively -->
+                        <!-- PiSignage v0.11.0+ uses VLC exclusively -->
                         <div class="player-info">
                             <div class="option-content">
                                 <div class="option-icon">🎛️</div>

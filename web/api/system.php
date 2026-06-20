@@ -1,9 +1,10 @@
 <?php
 /**
- * PiSignage v0.8.9 - System API
+ * PiSignage v0.11.0 - System API
  * Provides system information and controls
  */
 
+require_once __DIR__ . '/_guard.php';
 require_once "/opt/pisignage/web/config.php";
 
 $method = $_SERVER['REQUEST_METHOD'];
@@ -24,6 +25,31 @@ if ($method === 'GET' && isset($_GET['action']) && $_GET['action'] === 'get_play
         'config' => getPlayerConfiguration()
     ];
     jsonResponse(true, $playerInfo);
+    exit;
+}
+
+// ALSA Volume Control (v0.11.0)
+if ($method === 'GET' && isset($_GET['action']) && $_GET['action'] === 'get_volume') {
+    $volume = exec("amixer sget Master | grep -oP '\\d+%' | head -1 | tr -d '%'");
+    jsonResponse(true, ['volume' => intval($volume)]);
+    exit;
+}
+
+if ($method === 'POST' && isset($input['action']) && $input['action'] === 'set_volume') {
+    $volume = intval($input['volume'] ?? 100);
+    $volume = max(0, min(100, $volume)); // Clamp 0-100
+    exec("amixer sset Master {$volume}%");
+    jsonResponse(true, ['volume' => $volume, 'message' => "Volume set to {$volume}%"]);
+    exit;
+}
+
+if ($method === 'POST' && isset($input['action']) && $input['action'] === 'toggle_mute') {
+    $output = [];
+    exec("amixer sget Master | grep -oP '\\[on\\]|\\[off\\]' | head -1", $output);
+    $currentState = trim($output[0] ?? '[on]');
+    $newState = ($currentState === '[on]') ? 'off' : 'on';
+    exec("amixer sset Master {$newState}");
+    jsonResponse(true, ['muted' => ($newState === 'off'), 'message' => 'Mute toggled']);
     exit;
 }
 
@@ -111,16 +137,6 @@ function handleSystemAction($input) {
                 jsonResponse(true, null, 'Player restarted successfully');
             } else {
                 jsonResponse(false, $result, 'Failed to restart player');
-            }
-            break;
-
-        case 'switch-player':
-            $result = executeCommand('/opt/pisignage/scripts/player-manager.sh switch');
-            if ($result['success']) {
-                logMessage("Player switched via system API");
-                jsonResponse(true, ['output' => $result['output']], 'Player switched successfully');
-            } else {
-                jsonResponse(false, $result, 'Failed to switch player');
             }
             break;
 
@@ -383,8 +399,21 @@ function getUptime() {
 // ========== VLC PLAYER FUNCTIONS ==========
 
 function getCurrentPlayer() {
-    // PiSignage v0.8.9+ uses VLC exclusively
-    return 'vlc';
+    // Return the active player based on the Chromium kiosk feature flag.
+    return isChromiumPlayerEnabled() ? 'chromium' : 'vlc';
+}
+
+/**
+ * Check if Chromium Player mode is enabled (mirrors kiosk.php logic).
+ */
+function isChromiumPlayerEnabled() {
+    $featureFlagsFile = '/opt/pisignage/config/feature_flags';
+    if (!file_exists($featureFlagsFile)) {
+        return true; // Default: enabled
+    }
+
+    $content = file_get_contents($featureFlagsFile);
+    return strpos($content, 'USE_CHROMIUM_PLAYER=0') === false;
 }
 
 function getPlayerStatus() {
@@ -407,17 +436,21 @@ function getPlayerStatus() {
 }
 
 function getPlayerInfo() {
-    $result = executeCommand('/opt/pisignage/scripts/player-manager.sh info');
-    if ($result['success']) {
-        return [
-            'info' => $result['output'],
-            'current_player' => getCurrentPlayer()
-        ];
-    }
+    $currentPlayer = getCurrentPlayer();
+
+    // Report the systemd state of the VLC fallback service.
+    $result = executeCommand('systemctl is-active pisignage-vlc.service');
+    $vlcState = ($result['success'] && !empty($result['output']))
+        ? trim($result['output'][0])
+        : 'unknown';
 
     return [
-        'info' => ['No player information available'],
-        'current_player' => getCurrentPlayer()
+        'info' => [
+            'current_player' => $currentPlayer,
+            'chromium_enabled' => isChromiumPlayerEnabled(),
+            'vlc_service' => $vlcState
+        ],
+        'current_player' => $currentPlayer
     ];
 }
 
@@ -433,9 +466,9 @@ function getPlayerConfiguration() {
     // Return default configuration
     return [
         'player' => [
-            'default' => 'mpv',
-            'current' => 'mpv',
-            'available' => ['mpv', 'vlc']
+            'default' => 'vlc',
+            'current' => 'vlc',
+            'available' => ['vlc', 'chromium']
         ]
     ];
 }

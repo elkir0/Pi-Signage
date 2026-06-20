@@ -1,20 +1,20 @@
 <?php
 /**
- * PiSignage v0.8.9 - Schedule Management API
+ * PiSignage v0.11.0 - Schedule Management API
  *
  * Manages playlist scheduling with recurrence patterns, priorities, and conflict detection.
  * Supports daily, weekly, monthly, and one-time schedules with post-playback actions.
  *
  * @package    PiSignage
  * @subpackage API
- * @version    0.8.9
+ * @version    0.11.0
  * @since      0.8.0
  */
 
+require_once __DIR__ . '/_guard.php';
 require_once '../config.php';
 
 header('Content-Type: application/json');
-header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, PATCH');
 header('Access-Control-Allow-Headers: Content-Type');
 

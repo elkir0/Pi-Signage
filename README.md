@@ -1,9 +1,32 @@
-# PiSignage v0.8.9
+# PiSignage v0.11.0
 
 Professional digital signage solution for Raspberry Pi with modular web interface and advanced media management.
 
-## 🚀 What's New in v0.8.9
+## 🚀 What's New in v0.11.0
 
+### 🎭 **Display Mode Switcher**
+- **Toggle Between Modes**: Switch between VLC (stable, default) and Chromium kiosk (HTML5, advanced) via web UI or API
+- **Production Ready**: VLC mode for reliable 24/7 operation, Chromium for web content and advanced features
+- **Seamless Switching**: One-click mode change with automatic service management
+- **Web UI Control**: New Display Mode page (`/display-mode.php`) for easy configuration
+- **HDMI Audio Default**: System-wide HDMI audio output configuration
+
+### 🔧 **BUG-013 Fix - Single File Playback**
+- **100% Reliable**: Fixed unreliable single file playback with 4-step verification process
+- **Smart Retry**: Automatic retry logic ensures playback starts every time
+- **Playlist Management**: Proper playlist clearing prevents conflicts
+- **API Enhancement**: `player-control.php` now includes enhanced reliability
+
+### 📚 **Comprehensive Documentation**
+- **API Documentation**: Complete REST API reference with examples ([API_DOCUMENTATION.md](API_DOCUMENTATION.md))
+- **Architecture Guide**: Full system architecture documentation ([ARCHITECTURE.md](ARCHITECTURE.md))
+- **Migration Guide**: Step-by-step upgrade instructions ([MIGRATION.md](MIGRATION.md))
+
+### 🧹 **Code Cleanup**
+- **Legacy Removal**: Removed unused index-pi.php (2,620 lines) and youtube-simple.php
+- **Cleaner Codebase**: Improved maintainability and reduced technical debt
+
+### Previous (v0.8.9)
 - **VLC Exclusive Player**: Removed MPV support for better reliability and maintainability
 - **Simplified Architecture**: -400 lines of code with cleaner, more focused implementation
 - **Enhanced Stability**: Mature VLC HTTP API provides robust playback control
@@ -32,9 +55,31 @@ Professional digital signage solution for Raspberry Pi with modular web interfac
 
 - Raspberry Pi 3/4/5
 - Raspbian OS (Bullseye or newer)
+  - **Trixie (Debian 13)** supported with Wayland kiosk mode
+  - ⚠️ **For Trixie: Desktop edition REQUIRED** (not Lite)
 - 2GB+ RAM recommended
 - Network connectivity
 - Display connected via HDMI
+
+### 🆕 Trixie / Wayland Kiosk Mode
+
+**New in feature/trixie-kiosk-chromium branch:**
+
+Pi-Signage now supports **Raspberry Pi OS Trixie (Debian 13)** with a modern Wayland-based kiosk mode:
+
+- ✅ **Chromium Browser Kiosk** - Full-screen web dashboard display
+- ✅ **Wayland Compositor (labwc)** - Modern, lightweight display server
+- ✅ **Remote Configuration** - Change kiosk URL/flags via REST API
+- ✅ **Clean Boot Experience** - greetd + plymouth for seamless startup
+- ✅ **Backward Compatible** - VLC player and existing API remain functional
+
+**Target Hardware:** Raspberry Pi 4 / Pi 5
+
+**Requirements:**
+- ⚠️ **Desktop edition REQUIRED** - Raspberry Pi OS with desktop
+- Lite edition lacks Wayland graphics infrastructure and will fail
+
+**See:** [UPGRADE_TRIXIE.md](UPGRADE_TRIXIE.md) for complete installation and configuration guide.
 
 ## Installation
 

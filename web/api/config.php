@@ -4,6 +4,7 @@
  * Handles system configuration updates
  */
 
+require_once __DIR__ . '/_guard.php';
 require_once '../config.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
@@ -236,6 +237,18 @@ function updateNetworkConfig($input) {
     if (isset($input['ssid']) && isset($input['password'])) {
         $ssid = $input['ssid'];
         $password = $input['password'];
+
+        // Validate SSID (1-32 chars) and PSK (8-63 chars per WPA spec).
+        // Disallow control chars and the double-quote that would break the config block.
+        if (!is_string($ssid) || strlen($ssid) < 1 || strlen($ssid) > 32
+            || preg_match('/[\x00-\x1f"\\\\]/', $ssid)) {
+            jsonResponse(false, null, 'SSID invalide');
+        }
+        if (!is_string($password) || strlen($password) < 8 || strlen($password) > 63
+            || preg_match('/[\x00-\x1f"\\\\]/', $password)) {
+            jsonResponse(false, null, 'Mot de passe WiFi invalide (8-63 caractères)');
+        }
+
         $changes[] = "WiFi SSID: $ssid";
 
         // Create wpa_supplicant configuration
@@ -250,12 +263,27 @@ network={
 }
 ";
 
-        $tempFile = '/tmp/wpa_supplicant.conf';
+        // Write the PSK to a private temp file (umask 0077 -> 0600, never world-readable)
+        // and remove it immediately after the sudo copy instead of a deferred shell rm.
+        $oldUmask = umask(0077);
+        $tempFile = tempnam(sys_get_temp_dir(), 'wpa_');
+        if ($tempFile === false) {
+            umask($oldUmask);
+            jsonResponse(false, null, 'Échec de création du fichier temporaire WiFi');
+        }
+        @chmod($tempFile, 0600);
         file_put_contents($tempFile, $wpaConfig);
+        umask($oldUmask);
 
-        $commands[] = "sudo cp $tempFile /etc/wpa_supplicant/wpa_supplicant.conf";
+        $copyResult = executeCommand('sudo cp ' . escapeshellarg($tempFile) . ' /etc/wpa_supplicant/wpa_supplicant.conf');
+        // Remove the secret-bearing temp file right away.
+        @unlink($tempFile);
+
+        if (!$copyResult['success']) {
+            jsonResponse(false, null, 'Échec de la mise à jour de la configuration WiFi');
+        }
+
         $commands[] = "sudo wpa_cli -i wlan0 reconfigure";
-        $commands[] = "rm $tempFile";
     }
 
     if (isset($input['hostname'])) {

@@ -5,8 +5,7 @@
 
 /* Cards */
 .card {
-    background: var(--glass);
-    backdrop-filter: blur(10px);
+    background: var(--surface);
     border: 1px solid var(--glass-border);
     border-radius: 20px;
     padding: 25px;
@@ -31,8 +30,7 @@
 
 /* Player Selector Styles */
 .player-selector {
-    background: var(--glass);
-    backdrop-filter: blur(10px);
+    background: var(--surface);
     border: 1px solid var(--glass-border);
     border-radius: 15px;
     padding: 20px;
@@ -106,8 +104,7 @@
 }
 
 .player-status {
-    background: var(--glass);
-    backdrop-filter: blur(10px);
+    background: var(--surface);
     border: 1px solid var(--glass-border);
     border-radius: 15px;
     padding: 20px;
@@ -193,10 +190,9 @@
 }
 
 .btn-glass {
-    background: var(--glass);
+    background: var(--surface);
     color: var(--light);
     border: 1px solid var(--glass-border);
-    backdrop-filter: blur(10px);
 }
 
 .btn-glass:hover {
@@ -897,8 +893,7 @@
 /* Schedule Item Card */
 .schedule-item {
     position: relative;
-    background: var(--glass);
-    backdrop-filter: blur(10px);
+    background: var(--surface);
     border: 1px solid var(--glass-border);
     border-radius: 15px;
     margin-bottom: 15px;

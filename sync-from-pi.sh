@@ -11,7 +11,6 @@ echo "📥 Synchronisation depuis Raspberry Pi..."
 FILES_TO_SYNC=(
     "web/includes/footer.php"
     "web/api/test-stats.php"
-    "web/api/screenshot-vlc.php"
     "web/api/system-functions.php"
     "web/test_vlc.php"
 )

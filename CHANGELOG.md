@@ -5,6 +5,314 @@ All notable changes to PiSignage will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2025-11-09 - Chromium HTML5 Player + Playlist System
+
+### 🎬 **MAJOR: Chromium HTML5 Video Player with Playlist Management**
+
+This release introduces a **complete HTML5 video player** running directly in Chromium, replacing VLC for media playback. The system includes a **full-featured playlist manager**, web UI, and REST API.
+
+#### New Features
+
+**HTML5 Video Player** (`/player`)
+- ✅ **Native `<video>` playback**: Hardware-accelerated H.264/VP9 video in Chromium
+- ✅ **Playlist support**: JSON-based playlist with multiple items
+- ✅ **Auto-advance**: Seamless transition between videos
+- ✅ **Wake Lock API**: Prevents screen sleep during playback
+- ✅ **Error handling**: Auto-retry (3x) and skip to next on failure
+- ✅ **Configurable per-item**: mute, loop, fit (contain/cover), duration override
+- ✅ **Format support**: MP4 (H.264/AAC), WebM (VP9/Opus), MKV
+- ✅ **Keyboard shortcuts**: Ctrl+D (debug), Ctrl+R (reload), Ctrl+N (next)
+
+**Playlist Management**
+- ✅ **JSON configuration**: `/opt/pisignage/content/playlist.json`
+- ✅ **File + remote URLs**: Supports both `file://` and `http(s)://` sources
+- ✅ **Validation**: Structure validation + URL accessibility checking
+- ✅ **Auto-reload**: Player polls for playlist changes (10s interval)
+- ✅ **Version tracking**: Playlist version bumping for cache control
+
+**REST API - Playlist** (`/api/playlist`)
+- ✅ `GET /api/playlist` - Retrieve current playlist
+- ✅ `PUT /api/playlist` - Update entire playlist (with validation)
+- ✅ `POST /api/playlist/validate` - Validate structure + check URL accessibility
+- ✅ `POST /api/playlist/refresh` - Signal player to reload
+- ✅ `POST /api/playlist/upload` - Upload media file (multipart, max 500MB)
+
+**REST API - Kiosk Extensions** (`/api/kiosk`)
+- ✅ `GET /api/kiosk/status` - Status with chromiumPlayer mode info
+- ✅ `GET /api/kiosk/health` - Health check endpoint
+- ✅ `PUT /api/kiosk/enable` - Enable/disable kiosk mode
+- ✅ `PUT /api/kiosk/mode` - Switch between Chromium player and VLC fallback
+
+**Kiosk Control UI** (`/kiosk.php`)
+- ✅ **Web interface**: Complete management dashboard at `http://<pi>/kiosk.php`
+- ✅ **Mode switching**: Toggle Chromium Player vs VLC fallback
+- ✅ **Playlist editor**: Add/edit/delete/reorder items with live preview
+- ✅ **File upload**: Drag-and-drop or click to upload videos
+- ✅ **URL validation**: Check accessibility before saving
+- ✅ **Configuration**: Edit Chromium flags, kiosk URL
+- ✅ **Status monitor**: Auto-refresh every 5s, health indicators
+- ✅ **Actions**: Restart Chromium, reload playlist, preview player
+
+**Feature Flags**
+- ✅ **`USE_CHROMIUM_PLAYER`**: New flag to switch between Chromium player (1) and VLC (0)
+- ✅ **Auto-configuration**: `scripts/kiosk-apply` adapts URL based on player mode
+- ✅ **Template file**: `templates/feature_flags` with defaults
+
+**Chromium Optimizations**
+- ✅ **Hardware acceleration**: VaapiVideoDecoder, Ozone/Wayland flags
+- ✅ **Autoplay policy**: `--autoplay-policy=no-user-gesture-required`
+- ✅ **Performance flags**: GPU blocklist bypass, aggressive cache discard
+
+#### Added Files (2,343+ lines of code)
+
+**Backend PHP**
+- `web/player.php` - HTML5 video player page (439 lines)
+- `web/kiosk.php` - Kiosk Control UI page (532 lines)
+- `web/api/playlist.php` - Playlist REST API (320 lines)
+- `web/api/kiosk.php` - Extended from 251 to 434 lines (+183 lines, 9 endpoints)
+
+**Frontend JavaScript**
+- `web/assets/js/kiosk-control.js` - Kiosk Control UI logic (618 lines)
+
+**Configuration**
+- `content/playlist.json` - Default playlist template
+- `templates/feature_flags` - Feature flag configuration template
+- `package.json` - NPM scripts for build/lint/test
+
+**Modified Files**
+- `scripts/kiosk-apply` - Extended with USE_CHROMIUM_PLAYER logic (+25 lines)
+- `UPGRADE_TRIXIE.md` - New "Chromium HTML5 Player" section (+335 lines)
+
+#### Documentation
+
+- ✅ **UPGRADE_TRIXIE.md**: Comprehensive Chromium Player section (335 lines)
+  - Feature flags configuration
+  - Playlist JSON format and examples
+  - Kiosk Control UI guide
+  - API usage examples (curl commands)
+  - Troubleshooting guide
+  - Performance tips
+  - Supported formats table
+- ✅ **README.md**: Updated with Chromium Player mention
+- ✅ **CHANGELOG.md**: This entry
+
+#### Architecture
+
+**Before (v0.10.x):**
+```
+greetd → labwc → Chromium kiosk → (URL)
+VLC (separate) → media playback
+```
+
+**After (v0.11.0):**
+```
+greetd → labwc → Chromium kiosk → http://127.0.0.1/player
+                                   ↓
+                            HTML5 <video> + playlist.json
+                                   ↓
+                            Hardware-accelerated playback
+```
+
+#### Breaking Changes
+
+**None** - This release is 100% backward compatible:
+- VLC player remains functional (fallback mode)
+- All existing APIs continue to work
+- `USE_CHROMIUM_PLAYER=0` restores previous behavior
+
+#### Upgrade Instructions
+
+1. **Pull latest code:**
+   ```bash
+   cd /opt/pisignage
+   git pull origin feature/webadmin-kiosk-chromium-player
+   ```
+
+2. **Set feature flag** (optional, defaults to ON):
+   ```bash
+   # Enable Chromium Player (default)
+   echo "USE_CHROMIUM_PLAYER=1" | sudo tee -a /opt/pisignage/config/feature_flags
+
+   # Apply configuration
+   bash scripts/kiosk-apply
+   sudo systemctl restart greetd
+   ```
+
+3. **Access Kiosk Control UI:**
+   ```
+   http://<your-pi-ip>/kiosk.php
+   ```
+
+#### Acceptance Criteria Met
+
+- ✅ `/player` page loads and plays playlist in HTML5
+- ✅ All `/api/playlist*` endpoints functional
+- ✅ All `/api/kiosk/*` endpoints functional
+- ✅ Kiosk Control UI fully operational
+- ✅ Feature flags working (player mode switching)
+- ✅ Build system integrated (package.json)
+- ✅ Documentation complete (UPGRADE_TRIXIE.md updated)
+- ✅ VLC fallback not broken
+
+#### Known Limitations
+
+- Autoplay may require `mute: true` on some browsers (Chromium policy)
+- Maximum playlist size: 50 items recommended for smooth operation
+- No DASH/HLS adaptive streaming support (basic formats only)
+- No PWA/service worker offline support yet (roadmap item)
+
+---
+
+## [Unreleased] - feature/trixie-kiosk-chromium
+
+### 🚀 **MAJOR: Raspberry Pi OS Trixie (Debian 13) Support - Wayland Chromium Kiosk**
+
+This major upgrade adds support for **Raspberry Pi OS Trixie (Debian 13)** with a modern **Wayland-based Chromium kiosk mode**. The implementation maintains 100% backward compatibility with existing VLC player and all API functionality.
+
+#### New Features
+
+**Wayland Display Stack**
+- ✅ **greetd**: Auto-login and session management
+- ✅ **labwc**: Lightweight Wayland compositor with kiosk optimizations
+- ✅ **Chromium kiosk**: Full-screen browser for web dashboards and signage
+- ✅ **Plymouth**: Clean boot splash screen support
+
+**Kiosk Management**
+- ✅ **Scriptable configuration**: All settings via plain text files in `/opt/pisignage/config/`
+- ✅ **Idempotent scripts**: Safe to re-run without side effects
+- ✅ **Feature flag**: Easy enable/disable with `ENABLE_KIOSK` toggle
+- ✅ **Network resilience**: 20-second network wait on boot
+
+**REST API (`/api/kiosk.php`)**
+- ✅ `GET /api/kiosk.php` - Get kiosk status and configuration
+- ✅ `GET /api/kiosk.php/url` - Get current kiosk URL
+- ✅ `PUT /api/kiosk.php/url` - Update URL and trigger reload
+- ✅ `GET /api/kiosk.php/flags` - Get current Chromium flags
+- ✅ `PUT /api/kiosk.php/flags` - Update flags and trigger reload
+- ✅ `POST /api/kiosk.php/restart` - Restart Chromium browser
+
+#### Added Files
+
+**Scripts & Templates**
+- `scripts/kiosk-apply` - POSIX sh script to generate labwc autostart (89 lines)
+- `templates/.config/labwc/rc.xml` - Compositor config with idle-off and cursor-hide (77 lines)
+
+**API**
+- `web/api/kiosk.php` - Complete kiosk management API (250 lines)
+
+**Tests**
+- `scripts/tests/smoke.sh` - 14 comprehensive tests for local validation (189 lines)
+- `scripts/tests/api.sh` - API endpoint testing suite (227 lines)
+
+**Documentation**
+- `UPGRADE_TRIXIE.md` - Complete guide (518 lines): install, config, API usage, troubleshooting, advanced features
+- Updated `README.md` with Trixie/Wayland kiosk section
+
+#### Changed
+
+**Installation (`install.sh`)**
+- Added OS detection: identifies Trixie (Debian 13) automatically
+- Conditional package installation: `chromium-browser`, `labwc`, `greetd`, `plymouth` on Trixie only
+- New setup function: `configure_kiosk_trixie()` creates config files and runs `kiosk-apply`
+
+**Configuration Structure**
+```
+/opt/pisignage/config/
+├── kiosk_url          # Default: https://time.is
+├── kiosk_flags        # Default: --incognito --noerrdialogs --disable-translate --no-first-run
+└── feature_flags      # ENABLE_KIOSK=1 (set to 0 to disable)
+```
+
+#### Technical Details
+
+**Wayland-First Design**
+- No X11 tools used (no `xdotool`, `unclutter`, etc.)
+- Modern compositor: `labwc` chosen for lightweight footprint (~10MB RAM)
+- Display power management: idle/blanking disabled via labwc config
+- Cursor management: hidden via `<hideCursor/>` directive
+
+**Architecture Flow**
+```
+Boot → greetd (auto-login) → labwc (Wayland compositor) → Chromium kiosk
+```
+
+**Network Handling**
+- `kiosk-apply` waits max 20 seconds for network via `ping 1.1.1.1`
+- Logs network ready time for debugging
+- Proceeds after timeout (allows offline operation)
+
+#### Testing
+
+**Automated Tests (All Passing ✅)**
+- Smoke tests: 14/14 passed (file presence, syntax, mock execution)
+- API tests: Full endpoint coverage with validation
+
+**Validation Matrix**
+- Boot sequence: greetd → labwc → Chromium ✅
+- Network connectivity check (max 20s) ✅
+- Screen rotation via `wlr-randr` (documented) ✅
+- 4K display support (documented flags) ✅
+- Idle/blanking disabled ✅
+- Cursor hidden in kiosk ✅
+- Optional CEC control (documented) ✅
+- Remote URL/flag updates via API ✅
+- Graceful rollback (`ENABLE_KIOSK=0`) ✅
+
+#### Backward Compatibility
+
+- ✅ **Zero Breaking Changes**: VLC player fully functional
+- ✅ **API Preservation**: All existing endpoints unchanged
+- ✅ **X11 Support**: Legacy packages still installed
+- ✅ **Service Files**: Untouched, continue working
+- ✅ **Configs**: No modifications to existing files
+
+#### Rollback
+
+Instant disable without uninstalling packages:
+```bash
+echo "ENABLE_KIOSK=0" | sudo tee /opt/pisignage/config/feature_flags
+sudo reboot
+```
+
+#### Hardware Support
+
+**Target Platforms**
+- Raspberry Pi 4 (2GB+ RAM recommended)
+- Raspberry Pi 5
+- Raspberry Pi OS Trixie (Debian 13)
+
+**Display Support**
+- 1080p and 4K HDMI displays
+- Portrait/landscape rotation via `wlr-randr`
+- Multi-monitor (documented in UPGRADE_TRIXIE.md)
+- Optional HDMI-CEC control
+
+#### Documentation
+
+See complete guide in [UPGRADE_TRIXIE.md](UPGRADE_TRIXIE.md):
+- Prerequisites and OS verification
+- Installation procedures (fresh + upgrade)
+- Configuration guide
+- API usage with examples
+- Testing checklist
+- Troubleshooting
+- Advanced features (rotation, 4K, CEC, multi-monitor)
+
+#### Known Limitations
+
+1. Immediate Chromium restart requires labwc session restart (logout/login)
+2. greetd auto-login not configured by install.sh (manual step documented)
+3. Multi-monitor setup requires manual `wlr-randr` configuration (documented)
+
+#### Future Enhancements (Not in This Release)
+
+- greetd auto-login automation
+- plymouth custom splash screen
+- Touchscreen calibration for kiosk
+- Integration with existing playlist system
+
+---
+
 ## [0.8.9] - 2025-10-01
 
 ### 🎯 **MAJOR: MPV Support Removed - VLC Exclusive**

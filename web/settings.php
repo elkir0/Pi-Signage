@@ -129,4 +129,131 @@ include 'includes/header.php';
         </div>
     </div>
 
+<script>
+// Settings page functions
+async function systemAction(action) {
+    const actions = {
+        'reboot': 'Êtes-vous sûr de vouloir redémarrer le système ?',
+        'shutdown': 'Êtes-vous sûr de vouloir éteindre le système ?',
+        'clear-cache': 'Vider le cache du système ?'
+    };
+
+    if (actions[action] && !confirm(actions[action])) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/system.php', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({action: action})
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showAlert(data.message || 'Action exécutée avec succès', 'success');
+
+            // Special handling for reboot/shutdown
+            if (action === 'reboot') {
+                showAlert('Le système va redémarrer dans 1 minute...', 'warning');
+            } else if (action === 'shutdown') {
+                showAlert('Le système va s\'éteindre dans 1 minute...', 'warning');
+            }
+        } else {
+            showAlert(data.message || 'Erreur lors de l\'exécution', 'error');
+        }
+    } catch (error) {
+        console.error('System action error:', error);
+        showAlert('Erreur de communication avec le serveur', 'error');
+    }
+}
+
+async function restartCurrentPlayer() {
+    if (!confirm('Redémarrer le lecteur vidéo ?')) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/system.php', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({action: 'restart-player'})
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showAlert('Lecteur redémarré avec succès', 'success');
+        } else {
+            showAlert('Erreur lors du redémarrage du lecteur', 'error');
+        }
+    } catch (error) {
+        console.error('Restart player error:', error);
+        showAlert('Erreur de communication avec le serveur', 'error');
+    }
+}
+
+async function saveAudioConfig() {
+    const output = document.getElementById('audio-output').value;
+    showAlert('Configuration audio: ' + output, 'info');
+    // TODO: Implement audio config save
+}
+
+async function saveDisplayConfig() {
+    const resolution = document.getElementById('resolution').value;
+    const rotation = document.getElementById('rotation').value;
+    showAlert(`Résolution: ${resolution}, Rotation: ${rotation}°`, 'info');
+    // TODO: Implement display config save
+}
+
+async function saveNetworkConfig() {
+    const ssid = document.getElementById('wifi-ssid').value;
+    const password = document.getElementById('wifi-password').value;
+
+    if (!ssid) {
+        showAlert('Veuillez entrer un SSID', 'error');
+        return;
+    }
+
+    showAlert('Configuration réseau enregistrée', 'info');
+    // TODO: Implement network config save
+}
+
+async function changePassword() {
+    const oldPassword = document.getElementById('old-password').value;
+    const newPassword = document.getElementById('new-password').value;
+    const confirmPassword = document.getElementById('confirm-password').value;
+
+    if (!oldPassword || !newPassword || !confirmPassword) {
+        showAlert('Veuillez remplir tous les champs', 'error');
+        return;
+    }
+
+    if (newPassword.length < 6) {
+        showAlert('Le mot de passe doit contenir au moins 6 caractères', 'error');
+        return;
+    }
+
+    if (newPassword !== confirmPassword) {
+        showAlert('Les mots de passe ne correspondent pas', 'error');
+        return;
+    }
+
+    showAlert('Changement de mot de passe...', 'info');
+    // TODO: Implement password change
+}
+
+function showAlert(message, type = 'info') {
+    // Use PiSignage alert system if available
+    if (typeof PiSignage !== 'undefined' && PiSignage.core && PiSignage.core.showAlert) {
+        PiSignage.core.showAlert(message, type);
+    } else {
+        // Fallback to console
+        console.log(`[${type.toUpperCase()}] ${message}`);
+        alert(message);
+    }
+}
+</script>
+
 <?php include 'includes/footer.php'; ?>

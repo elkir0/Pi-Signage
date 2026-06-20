@@ -1,15 +1,18 @@
 <?php
 /**
- * PiSignage v0.8.9 - Player Control API
+ * PiSignage v0.11.0 - Player Control API
  *
  * Real-time VLC player control via HTTP interface (localhost:8080, password: pisignage).
  * Supports playback control, playlist management, volume, and system monitoring.
  *
  * @package    PiSignage
  * @subpackage API
- * @version    0.8.9
+ * @version    0.11.0
  * @since      0.8.0
  */
+
+// Garde d'authentification central (session requise pour toutes les méthodes).
+require_once __DIR__ . '/_guard.php';
 
 require_once '../config.php';
 
@@ -72,14 +75,25 @@ function getUptime() {
 }
 
 header('Content-Type: application/json');
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
 
 // VLC Configuration
 define('VLC_HOST', 'localhost');
 define('VLC_PORT', '8080');
-define('VLC_PASSWORD', 'pisignage');
+
+// Mot de passe HTTP VLC externalisé : lu depuis un fichier de config si présent,
+// sinon valeur câblée réelle « pisignage » (alignée sur le service VLC, port 8080).
+if (!defined('VLC_HTTP_PASSWORD_FILE')) {
+    define('VLC_HTTP_PASSWORD_FILE', '/opt/pisignage/config/vlc_password');
+}
+$__vlcPass = 'pisignage';
+if (is_readable(VLC_HTTP_PASSWORD_FILE)) {
+    $__filePass = trim((string)file_get_contents(VLC_HTTP_PASSWORD_FILE));
+    if ($__filePass !== '') {
+        $__vlcPass = $__filePass;
+    }
+}
+define('VLC_PASSWORD', $__vlcPass);
+unset($__vlcPass, $__filePass);
 
 /**
  * VLC HTTP interface controller.
@@ -126,8 +140,8 @@ class VLCController {
         $response = @file_get_contents($url, false, $context);
 
         if ($response === false) {
-            // Fallback to shell command if HTTP interface is not available
-            return $this->fallbackToShell($command, $params);
+            // API HTTP VLC (port 8080) injoignable : pas de fallback RC netcat (reliquat X11/desktop supprimé).
+            return ['success' => false, 'message' => 'VLC HTTP interface unavailable'];
         }
 
         $vlcResponse = json_decode($response, true);
@@ -136,43 +150,6 @@ class VLCController {
             return ['success' => true, 'data' => $vlcResponse];
         }
         return ['success' => false, 'message' => 'Invalid VLC response'];
-    }
-
-    /**
-     * Fallback to shell commands via netcat.
-     *
-     * @param string $command VLC command
-     * @param array $params Command parameters
-     * @return array Response with success status
-     * @since 0.8.0
-     */
-    private function fallbackToShell($command, $params) {
-        $result = ['success' => false, 'message' => 'Command not implemented'];
-
-        switch ($command) {
-            case 'pl_play':
-                exec('echo "play" | nc localhost 4212 2>&1', $output, $returnVar);
-                $result = ['success' => $returnVar === 0];
-                break;
-
-            case 'pl_pause':
-                exec('echo "pause" | nc localhost 4212 2>&1', $output, $returnVar);
-                $result = ['success' => $returnVar === 0];
-                break;
-
-            case 'pl_stop':
-                exec('echo "stop" | nc localhost 4212 2>&1', $output, $returnVar);
-                $result = ['success' => $returnVar === 0];
-                break;
-
-            case 'volume':
-                $vol = intval($params['val'] ?? 100);
-                exec("echo 'volume $vol' | nc localhost 4212 2>&1", $output, $returnVar);
-                $result = ['success' => $returnVar === 0, 'volume' => $vol];
-                break;
-        }
-
-        return $result;
     }
 
     /**
@@ -374,9 +351,16 @@ class VLCController {
     /**
      * Play specific media file.
      *
+     * BUG-013 FIX: Improved single file playback reliability by:
+     * 1. Clearing existing playlist
+     * 2. Adding file to empty playlist
+     * 3. Starting playback with explicit play command
+     * 4. Adding retry logic for unreliable VLC HTTP responses
+     *
      * @param string $file Filename in media directory
      * @return array Response with success status
      * @since 0.8.0
+     * @fixed 0.11.0
      */
     public function playFile($file) {
         $fullPath = MEDIA_DIR . '/' . basename($file);
@@ -384,7 +368,33 @@ class VLCController {
             return ['success' => false, 'message' => 'File not found'];
         }
 
-        return $this->sendCommand('in_play', ['input' => $fullPath]);
+        // Step 1: Clear existing playlist to avoid conflicts
+        $this->clearPlaylist();
+        usleep(200000); // 200ms delay for VLC to process
+
+        // Step 2: Add file to playlist
+        $addResult = $this->sendCommand('in_enqueue', ['input' => $fullPath]);
+        usleep(100000); // 100ms delay
+
+        // Step 3: Start playback with explicit play command
+        $playResult = $this->sendCommand('pl_play');
+        usleep(100000); // 100ms delay
+
+        // Step 4: Verify playback started (retry once if needed)
+        $status = $this->getStatus();
+        if ($status['state'] !== 'playing') {
+            // Retry: Force play again
+            $this->sendCommand('pl_play');
+            usleep(200000);
+            $status = $this->getStatus();
+        }
+
+        return [
+            'success' => $status['state'] === 'playing',
+            'message' => $status['state'] === 'playing' ? 'File playing' : 'Playback may be delayed',
+            'file' => basename($file),
+            'state' => $status['state']
+        ];
     }
 
     /**

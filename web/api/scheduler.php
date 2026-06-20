@@ -4,6 +4,10 @@
  * Manages scheduled playlist playback
  */
 
+// Auth guard for HTTP requests only; the cron CLI mode (argv 'check') runs without a session.
+if (php_sapi_name() !== 'cli') {
+    require_once __DIR__ . '/_guard.php';
+}
 require_once '../config.php';
 
 $method = $_SERVER['REQUEST_METHOD'];

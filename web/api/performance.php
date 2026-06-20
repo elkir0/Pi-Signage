@@ -8,6 +8,7 @@ Version: 1.0.0
 Date: 2025-09-22
 */
 
+require_once __DIR__ . '/_guard.php';
 require_once '../config.php';
 require_once 'system.php';
 
@@ -54,9 +55,10 @@ function getChromiumStats() {
     $stats = [];
 
     // PID Chromium
-    $chromium_pid = executeCommand("pgrep -f chromium-browser | head -1");
-    $stats['pid'] = $chromium_pid ? (int)$chromium_pid : null;
-    $stats['running'] = $chromium_pid !== false;
+    $pid_result = executeCommand('pgrep -f "/usr/bin/chromium" | head -1');
+    $chromium_pid = is_array($pid_result['output'] ?? null) ? trim(implode('', $pid_result['output'])) : '';
+    $stats['pid'] = $chromium_pid !== '' ? (int)$chromium_pid : null;
+    $stats['running'] = $chromium_pid !== '';
 
     if ($chromium_pid) {
         // CPU et mémoire du processus Chromium

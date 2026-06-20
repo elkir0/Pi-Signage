@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/_guard.php';
 require_once "/opt/pisignage/web/config.php";
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {

@@ -1,6 +1,6 @@
 <?php
 /**
- * PiSignage v0.8.9 - Screenshot Capture API
+ * PiSignage v0.11.0 - Screenshot Capture API
  *
  * Optimized screenshot capture for Raspberry Pi with multiple capture methods.
  * Supports raspi2png, scrot, fbgrab, grim (Wayland), gnome-screenshot, and ffmpeg-vlc.
@@ -8,10 +8,11 @@
  *
  * @package    PiSignage
  * @subpackage API
- * @version    0.8.9
+ * @version    0.11.0
  * @since      0.8.0
  */
 
+require_once __DIR__ . '/_guard.php';
 require_once dirname(__DIR__) . '/config.php';
 
 // Constantes de configuration
@@ -33,12 +34,10 @@ class ScreenshotManager {
     private $availableMethods = [];
 
     public function __construct() {
-        error_log("DEBUG: ScreenshotManager constructor called");
         $this->cacheDir = SCREENSHOT_CACHE_DIR;
         $this->lastCaptureFile = $this->cacheDir . '/.last_capture';
         $this->initializeCache();
         $this->detectAvailableMethods();
-        error_log("DEBUG: Available methods after detection: " . implode(', ', $this->availableMethods));
     }
 
     /**
@@ -86,7 +85,6 @@ class ScreenshotManager {
 
         // Si VLC est actif et ffmpeg disponible, prioriser ffmpeg-vlc
         logMessage("VLC detection: vlcRunning=" . ($vlcRunning ? 'true' : 'false') . ", ffmpeg=" . (shell_exec("which ffmpeg 2>/dev/null") ? 'found' : 'not found'));
-        error_log("DEBUG: VLC detection: vlcRunning=" . ($vlcRunning ? 'true' : 'false') . ", ffmpeg=" . (shell_exec("which ffmpeg 2>/dev/null") ? 'found' : 'not found'));
         if ($vlcRunning && shell_exec("which ffmpeg 2>/dev/null")) {
             $this->availableMethods[] = 'ffmpeg-vlc';
             logMessage("Added ffmpeg-vlc to available methods");

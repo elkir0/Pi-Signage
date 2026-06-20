@@ -249,6 +249,28 @@ PiSignage.playlists = {
 
         // Populate available files
         this.populateAvailableFiles(playlist.items);
+
+        // Get modal reference
+        const modal = document.getElementById('editPlaylistModal');
+        if (!modal) return;
+
+        // Add click handler to close on background click
+        const backgroundClickHandler = function(e) {
+            if (e.target.id === 'editPlaylistModal') {
+                PiSignage.playlists.closeEditModal();
+            }
+        };
+        modal.addEventListener('click', backgroundClickHandler);
+        modal._backgroundClickHandler = backgroundClickHandler;
+
+        // Add ESC key handler to close modal
+        const escapeHandler = function(e) {
+            if (e.key === 'Escape') {
+                PiSignage.playlists.closeEditModal();
+            }
+        };
+        document.addEventListener('keydown', escapeHandler);
+        modal._escapeHandler = escapeHandler;
     },
 
     populateAvailableFiles: async function(currentItems) {
@@ -274,7 +296,16 @@ PiSignage.playlists = {
 
     closeEditModal: function() {
         const modal = document.getElementById('editPlaylistModal');
-        if (modal) modal.remove();
+        if (modal) {
+            // Remove event handlers
+            if (modal._escapeHandler) {
+                document.removeEventListener('keydown', modal._escapeHandler);
+            }
+            if (modal._backgroundClickHandler) {
+                modal.removeEventListener('click', modal._backgroundClickHandler);
+            }
+            modal.remove();
+        }
     },
 
     savePlaylistChanges: async function(originalName) {

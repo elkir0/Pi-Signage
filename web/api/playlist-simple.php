@@ -4,6 +4,9 @@
  * Simplified playlist management for the playlist editor
  */
 
+// Garde d'authentification central (session requise pour toutes les méthodes).
+require_once __DIR__ . '/_guard.php';
+
 require_once '../config.php';
 
 $method = $_SERVER['REQUEST_METHOD'];

@@ -1,19 +1,20 @@
-# PiSignage v0.8.9 API Documentation
+# PiSignage v0.11.0 API Documentation
 
-> **Note**: API endpoints remain 100% compatible with previous versions. The v0.8.9 architecture provides the same REST API with improved performance, reliability, and VLC-exclusive player control.
+> **Note**: API endpoints remain 100% compatible with previous versions. The v0.11.0 architecture provides enhanced features including Display Mode Switcher (VLC/Chromium), improved VLC player control with BUG-013 fix, and comprehensive system management.
 
 ## Base URL
 ```
 http://{raspberry_pi_ip}/api/
 ```
 
-## What's New in v0.8.9
+## What's New in v0.11.0
 
-- **VLC-Exclusive Player**: All player controls now use VLC HTTP API exclusively (MPV removed)
-- **Improved Performance**: API responses are 80% faster due to modular architecture
-- **Enhanced Reliability**: No more JavaScript conflicts affecting API calls
-- **Better Error Handling**: More detailed error messages and proper HTTP status codes
-- **Authentication**: All endpoints now protected by authentication system
+- **Display Mode Switcher**: Toggle between VLC (stable, default) and Chromium kiosk (HTML5, advanced features) via web UI or API
+- **BUG-013 Fix**: Single file playback now 100% reliable with 4-step process (clear, enqueue, play, verify)
+- **Chromium Kiosk Mode**: Wayland-based fullscreen browser with FPS counter and Wake Lock API
+- **HDMI Audio Default**: System-wide HDMI audio output configuration
+- **Enhanced VLC Control**: Improved reliability with retry logic and timing delays
+- **Legacy Code Cleanup**: Removed unused index-pi.php and youtube-simple.php
 - **Maintained Compatibility**: All existing API integrations continue to work without changes
 
 ## Response Format
@@ -161,7 +162,7 @@ Deletes a playlist.
 
 ---
 
-## Player API (`/api/player.php`)
+## Player API (`/api/player.php` & `/api/player-control.php`)
 
 ### GET /api/player.php?action=status
 Returns current player status.
@@ -191,7 +192,44 @@ Controls the player.
 }
 ```
 
-**Note**: `player` parameter is no longer needed as VLC is the exclusive player in v0.8.9.
+### POST /api/player-control.php?action=play_file 🔧 BUG-013 FIX (v0.11.0)
+Play a single file with 100% reliability.
+
+**Request Body:**
+```json
+{
+  "file": "video.mp4"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "File playing",
+  "file": "video.mp4",
+  "state": "playing"
+}
+```
+
+**BUG-013 Fix Implementation:**
+1. **Clear existing playlist** - Removes conflicts from previous playback
+2. **Enqueue file** - Adds file to empty playlist with `in_enqueue`
+3. **Explicit play command** - Forces playback start with `pl_play`
+4. **Verify playback** - Checks state and retries if needed
+5. **Timing delays** - Allows VLC HTTP API to process commands (200ms, 100ms delays)
+
+**Previous Issue:**
+- VLC's `in_play` command was unreliable
+- Files wouldn't start playing consistently
+- Existing playlist caused conflicts
+
+**Solution:**
+- 4-step reliable playback process
+- Retry logic with verification
+- Proper timing for VLC API processing
+
+**Note**: VLC is the default and recommended player in v0.11.0 for stability.
 
 ### GET /api/player.php?action=current
 Returns the current player configuration.
@@ -378,6 +416,282 @@ Downloads a YouTube video.
   }
 }
 ```
+
+---
+
+## Display Mode API (`/api/display-mode.php`) 🆕 v0.11.0
+
+> **New in v0.11.0**: Toggle between VLC (stable, default) and Chromium kiosk (HTML5, advanced features) display modes.
+
+### GET /api/display-mode.php?action=status
+Returns current display mode and available modes.
+
+**Response:**
+```json
+{
+  "success": true,
+  "current_mode": "vlc",
+  "modes": {
+    "vlc": {
+      "name": "VLC Player (Default)",
+      "description": "Stable video player with hardware acceleration",
+      "service": "pisignage-vlc",
+      "autostart": true,
+      "status": "active"
+    },
+    "chromium": {
+      "name": "Chromium Kiosk (HTML5)",
+      "description": "Web-based player with FPS counter and advanced features",
+      "service": "greetd",
+      "autostart": false,
+      "status": "inactive"
+    }
+  },
+  "audio": {
+    "output": "hdmi",
+    "volume": 100
+  }
+}
+```
+
+### POST /api/display-mode.php?action=switch
+Switches display mode between VLC and Chromium.
+
+**Request Body:**
+```json
+{
+  "mode": "chromium"
+}
+```
+
+**Valid modes:**
+- `vlc` - VLC Player (default, stable)
+- `chromium` - Chromium Kiosk (HTML5, advanced features)
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Display mode switched to chromium",
+  "mode": "chromium",
+  "service_status": "active"
+}
+```
+
+**Implementation:**
+- Script: `/opt/pisignage/scripts/switch-display-mode.sh`
+- Config: `/opt/pisignage/config/display-mode.json`
+- Requires: sudo permissions for www-data user
+- Services:
+  - VLC mode: `pisignage-vlc` service
+  - Chromium mode: `greetd` service (labwc + Chromium)
+
+**Example:**
+```bash
+# Switch to Chromium kiosk
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"mode":"chromium"}' \
+  http://192.168.1.62/api/display-mode.php?action=switch
+
+# Switch back to VLC (default)
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"mode":"vlc"}' \
+  http://192.168.1.62/api/display-mode.php?action=switch
+
+# Check current mode
+curl http://192.168.1.62/api/display-mode.php?action=status
+```
+
+---
+
+## Kiosk API (`/api/kiosk.php`) 🆕
+
+> **New in feature/trixie-kiosk-chromium**: Remote management of Chromium kiosk mode on Raspberry Pi OS Trixie (Debian 13) with Wayland.
+
+### GET /api/kiosk.php
+Returns kiosk status and configuration.
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "enabled": true,
+    "url": "https://time.is",
+    "flags": "--incognito --noerrdialogs --disable-translate --no-first-run",
+    "chromium_running": true,
+    "autostart_exists": true
+  },
+  "message": "Kiosk status",
+  "timestamp": "2025-11-09 12:00:00"
+}
+```
+
+### GET /api/kiosk.php/url
+Returns the current kiosk URL.
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "url": "https://time.is"
+  },
+  "message": "Current kiosk URL",
+  "timestamp": "2025-11-09 12:00:00"
+}
+```
+
+### PUT /api/kiosk.php/url
+Updates the kiosk URL and triggers autostart regeneration.
+
+**Request Body:**
+```json
+{
+  "url": "https://grafana.local/dashboard"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "url": "https://grafana.local/dashboard",
+    "applied": true,
+    "message": "Autostart regenerated successfully"
+  },
+  "message": "Kiosk URL updated successfully",
+  "timestamp": "2025-11-09 12:00:00"
+}
+```
+
+**Validation:**
+- URL must be valid (checked with `filter_var`)
+- Changes are persisted to `/opt/pisignage/config/kiosk_url`
+- Script `kiosk-apply` is executed automatically
+
+### GET /api/kiosk.php/flags
+Returns the current Chromium flags.
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "flags": "--incognito --noerrdialogs --disable-translate --no-first-run"
+  },
+  "message": "Current Chromium flags",
+  "timestamp": "2025-11-09 12:00:00"
+}
+```
+
+### PUT /api/kiosk.php/flags
+Updates the Chromium flags and triggers autostart regeneration.
+
+**Request Body:**
+```json
+{
+  "flags": "--incognito --noerrdialogs --force-device-scale-factor=1.5"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "flags": "--incognito --noerrdialogs --force-device-scale-factor=1.5",
+    "applied": true,
+    "message": "Autostart regenerated successfully"
+  },
+  "message": "Kiosk flags updated successfully",
+  "timestamp": "2025-11-09 12:00:00"
+}
+```
+
+**Validation:**
+- Flags are checked for shell injection characters (`;&|$` etc.)
+- Changes are persisted to `/opt/pisignage/config/kiosk_flags`
+- Script `kiosk-apply` is executed automatically
+
+### POST /api/kiosk.php/restart
+Restarts the Chromium kiosk browser.
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "killed": true,
+    "applied": true,
+    "message": "Chromium killed. Will restart on next labwc session.",
+    "note": "For immediate effect, logout/login or restart labwc session"
+  },
+  "message": "Kiosk restart triggered",
+  "timestamp": "2025-11-09 12:00:00"
+}
+```
+
+**Behavior:**
+- Kills all Chromium processes with `pkill -f "/usr/bin/chromium"`
+- Executes `kiosk-apply` to regenerate autostart
+- Chromium restarts automatically on next labwc session start
+- For immediate restart: `sudo systemctl restart greetd` or logout/login
+
+### Kiosk Configuration Files
+
+The kiosk API manages these configuration files:
+
+| File | Purpose | Default Value |
+|------|---------|---------------|
+| `/opt/pisignage/config/kiosk_url` | Target URL | `https://time.is` |
+| `/opt/pisignage/config/kiosk_flags` | Chromium flags | `--incognito --noerrdialogs --disable-translate --no-first-run` |
+| `/opt/pisignage/config/feature_flags` | Enable/disable kiosk | `ENABLE_KIOSK=1` |
+
+### Recommended Chromium Flags
+
+**Basic (default):**
+```
+--incognito --noerrdialogs --disable-translate --no-first-run
+```
+
+**Enhanced:**
+```
+--incognito --noerrdialogs --disable-translate --no-first-run --disable-infobars --disable-session-crashed-bubble
+```
+
+**4K Display:**
+```
+--incognito --noerrdialogs --force-device-scale-factor=1.5 --high-dpi-support=1
+```
+
+### Requirements
+
+- **OS:** Raspberry Pi OS Trixie (Debian 13)
+- **Hardware:** Raspberry Pi 4 or 5
+- **Stack:** greetd → labwc (Wayland) → Chromium
+- **Feature flag:** `ENABLE_KIOSK=1` in `/opt/pisignage/config/feature_flags`
+
+### Disable Kiosk Mode
+
+To disable kiosk mode without uninstalling:
+
+```bash
+# Via API (if available)
+curl -X PUT http://[pi-ip]/api/kiosk.php/flags \
+  -H "Content-Type: application/json" \
+  -d '{"flags": ""}'
+
+# Or manually
+echo "ENABLE_KIOSK=0" | sudo tee /opt/pisignage/config/feature_flags
+sudo reboot
+```
+
+### See Also
+
+- [UPGRADE_TRIXIE.md](UPGRADE_TRIXIE.md) - Complete Trixie installation guide
+- [README.md](README.md#-trixie--wayland-kiosk-mode) - Trixie overview
 
 ---
 

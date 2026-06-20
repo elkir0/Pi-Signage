@@ -33,7 +33,7 @@ Toutes les réponses sont au format JSON avec la structure suivante :
 ```
 
 ### Authentification
-Aucune authentification n'est requise pour les endpoints de l'API locale. Pour un déploiement en production, configurez un reverse proxy avec authentification.
+Tous les endpoints API nécessitent une authentification via session PHP (v0.8.9). Les utilisateurs doivent être connectés via `/login.php` avant d'accéder aux APIs. Pour un déploiement en production externe, configurez HTTPS et un reverse proxy.
 
 ---
 
@@ -95,12 +95,8 @@ Exécute des actions système.
 }
 ```
 
-#### Basculer le lecteur
-```json
-{
-  "action": "switch-player"
-}
-```
+~~#### Basculer le lecteur~~
+> **Note v0.8.9**: Action obsolète - MPV retiré, VLC exclusif
 
 #### Redémarrer le service
 ```json
@@ -127,7 +123,7 @@ Obtient le statut du lecteur actuel.
     "status": "VLC running",
     "running": true,
     "current_player": "vlc",
-    "available_players": ["vlc", "mpv"],
+    "available_players": ["vlc"],
     "current_media": "BigBuckBunny.mp4",
     "position": 125.7,
     "duration": 596.0,
@@ -200,12 +196,8 @@ Contrôle le lecteur multimédia.
 }
 ```
 
-#### Basculer entre VLC et MPV
-```json
-{
-  "action": "switch"
-}
-```
+~~#### Basculer entre VLC et MPV~~
+> **Note v0.8.9**: Action obsolète - MPV retiré, VLC exclusif
 
 ---
 
@@ -473,13 +465,143 @@ GET /api/youtube.php?action=status&id=download_id
 
 ---
 
+## Endpoints Kiosk Mode (Trixie uniquement) 🆕
+
+> **Disponible uniquement sur Raspberry Pi OS Trixie (Debian 13)** avec mode kiosk Chromium activé
+
+### GET /api/kiosk.php
+Retourne le statut et la configuration du mode kiosk.
+
+**Réponse :**
+```json
+{
+  "success": true,
+  "data": {
+    "enabled": true,
+    "url": "https://grafana.local/dashboard",
+    "flags": "--incognito --noerrdialogs --disable-translate",
+    "chromium_running": true,
+    "autostart_exists": true
+  },
+  "message": "Kiosk status"
+}
+```
+
+### GET /api/kiosk.php/url
+Obtient l'URL actuelle du kiosk.
+
+**Réponse :**
+```json
+{
+  "success": true,
+  "data": {
+    "url": "https://grafana.local/dashboard"
+  }
+}
+```
+
+### PUT /api/kiosk.php/url
+Met à jour l'URL du kiosk et régénère la configuration labwc.
+
+**Requête :**
+```json
+{
+  "url": "https://home-assistant.local:8123"
+}
+```
+
+**Réponse :**
+```json
+{
+  "success": true,
+  "data": {
+    "url": "https://home-assistant.local:8123",
+    "applied": true,
+    "message": "Autostart regenerated successfully"
+  }
+}
+```
+
+### GET /api/kiosk.php/flags
+Obtient les flags Chromium actuels.
+
+**Réponse :**
+```json
+{
+  "success": true,
+  "data": {
+    "flags": "--incognito --noerrdialogs --force-device-scale-factor=1.5"
+  }
+}
+```
+
+### PUT /api/kiosk.php/flags
+Met à jour les flags Chromium et régénère la configuration.
+
+**Requête :**
+```json
+{
+  "flags": "--incognito --noerrdialogs --high-dpi-support=1"
+}
+```
+
+**Réponse :**
+```json
+{
+  "success": true,
+  "data": {
+    "flags": "--incognito --noerrdialogs --high-dpi-support=1",
+    "applied": true
+  }
+}
+```
+
+### POST /api/kiosk.php/restart
+Redémarre le navigateur Chromium kiosk.
+
+**Réponse :**
+```json
+{
+  "success": true,
+  "data": {
+    "killed": true,
+    "applied": true,
+    "message": "Chromium killed. Will restart on next labwc session.",
+    "note": "For immediate effect, logout/login or restart labwc session"
+  }
+}
+```
+
+**Flags Chromium recommandés :**
+- **Basique**: `--incognito --noerrdialogs --disable-translate --no-first-run`
+- **4K Display**: `--incognito --force-device-scale-factor=1.5 --high-dpi-support=1`
+- **Performance**: `--incognito --disable-gpu-vsync --disable-infobars`
+
+**Exemples d'utilisation :**
+```bash
+# Changer URL du kiosk
+curl -X PUT http://[pi-ip]/api/kiosk.php/url \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://grafana.local/dashboard"}'
+
+# Ajuster pour affichage 4K
+curl -X PUT http://[pi-ip]/api/kiosk.php/flags \
+  -H "Content-Type: application/json" \
+  -d '{"flags":"--incognito --force-device-scale-factor=1.5 --high-dpi-support=1"}'
+
+# Redémarrer Chromium
+curl -X POST http://[pi-ip]/api/kiosk.php/restart
+```
+
+---
+
 ## Endpoints logs et monitoring
 
 ### GET /api/logs.php
 Accès aux fichiers de logs.
 
 **Paramètres de requête :**
-- `file=pisignage|vlc|mpv|system` (requis)
+- `file=pisignage|vlc|system` (requis)
 - `lines=nombre` (défaut: 100)
 - `tail=true` (dernières lignes, défaut: true)
 
@@ -618,9 +740,8 @@ requests.post('http://192.168.1.100/api/upload.php',
 Les webhooks peuvent être configurés dans `/opt/pisignage/config/webhooks.json` pour recevoir des notifications d'événements.
 
 **Événements disponibles :**
-- `player.started` : Lecteur démarré
-- `player.stopped` : Lecteur arrêté
-- `player.switched` : Basculement VLC/MPV
+- `player.started` : Lecteur VLC démarré
+- `player.stopped` : Lecteur VLC arrêté
 - `media.uploaded` : Nouveau média uploadé
 - `system.error` : Erreur système critique
 

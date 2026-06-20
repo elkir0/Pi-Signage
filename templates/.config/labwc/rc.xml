@@ -1,0 +1,82 @@
+<?xml version="1.0"?>
+<!--
+    PiSignage - labwc Configuration for Kiosk Mode
+    Raspberry Pi OS Trixie (Debian 13) - Wayland Compositor
+
+    Features:
+    - Minimal keyboard shortcuts for emergency access
+    - Chromium window forced fullscreen via windowRules
+
+    Note: idle/blanking is handled by the absence of an idle daemon
+    (do not run swayidle in autostart); cursor hiding is handled by
+    labwc's native cursor mechanism. The non-schema <hideCursor/> and
+    <idle><disable/></idle> elements were removed (silently ignored by labwc).
+-->
+<labwc_config>
+
+  <!-- Appearance -->
+  <theme>
+    <name>Clearlooks</name>
+    <cornerRadius>0</cornerRadius>
+  </theme>
+
+  <!-- Cursor theme (kiosk mode) -->
+  <cursor>
+    <theme>Adwaita</theme>
+    <size>24</size>
+  </cursor>
+
+  <!-- Window placement and behavior -->
+  <placement>
+    <policy>center</policy>
+  </placement>
+
+  <!-- Keyboard shortcuts (minimal for emergency access) -->
+  <keyboard>
+    <!-- Emergency: Alt+F4 to close window -->
+    <keybind key="A-F4">
+      <action name="Close"/>
+    </keybind>
+
+    <!-- Emergency: Ctrl+Alt+T for terminal (admin access) -->
+    <keybind key="C-A-t">
+      <action name="Execute">
+        <command>/usr/bin/wterm</command>
+      </action>
+    </keybind>
+
+    <!-- Super+L to lock (if needed) -->
+    <keybind key="W-l">
+      <action name="Execute">
+        <command>/usr/bin/loginctl lock-session</command>
+      </action>
+    </keybind>
+  </keyboard>
+
+  <!-- Mouse bindings (minimal) -->
+  <mouse>
+    <default />
+  </mouse>
+
+  <!-- Window rules -->
+  <windowRules>
+    <!-- Make Chromium always fullscreen and on top.
+         Deux règles pour couvrir les deux app-id possibles selon le paquet/version :
+         'chromium-browser' (paquet RPi historique) et 'chromium' (paquet Debian/Trixie).
+         À confirmer sur le Pi via les logs labwc, puis ne garder que le bon. -->
+    <windowRule identifier="chromium-browser">
+      <action name="Maximize"/>
+      <action name="Fullscreen"/>
+    </windowRule>
+    <windowRule identifier="chromium">
+      <action name="Maximize"/>
+      <action name="Fullscreen"/>
+    </windowRule>
+  </windowRules>
+
+  <!-- Regions (virtual desktops - not needed for kiosk) -->
+  <regions>
+    <region name="center" />
+  </regions>
+
+</labwc_config>

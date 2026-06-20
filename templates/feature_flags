@@ -1,0 +1,17 @@
+# PiSignage Feature Flags
+# Configuration file for enabling/disabling major features
+# This file is sourced as a shell script, so use shell-compatible syntax
+
+# ENABLE_KIOSK: Enable Chromium kiosk mode (0=disabled, 1=enabled)
+# When enabled, Chromium will start automatically at boot in fullscreen kiosk mode
+ENABLE_KIOSK=1
+
+# USE_CHROMIUM_PLAYER: Use Chromium HTML5 player instead of VLC (0=VLC fallback, 1=Chromium player)
+# When enabled (1): Chromium kiosk will load http://127.0.0.1/player with HTML5 video playback
+# When disabled (0): Chromium kiosk uses custom URL from kiosk_url, VLC handles video playback
+USE_CHROMIUM_PLAYER=1
+
+# Notes:
+# - Changes take effect after running: scripts/kiosk-apply && sudo systemctl restart greetd
+# - ENABLE_KIOSK=0 disables all kiosk features (USE_CHROMIUM_PLAYER is ignored)
+# - USE_CHROMIUM_PLAYER requires ENABLE_KIOSK=1 to work

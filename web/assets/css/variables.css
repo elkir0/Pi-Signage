@@ -13,5 +13,7 @@
     --dark-light: #16213e;
     --light: #f0f3f7;
     --glass: rgba(255, 255, 255, 0.05);
+    --surface: color-mix(in srgb, var(--dark-light) 88%, white 5%);
+    --surface-raised: color-mix(in srgb, var(--dark-light) 82%, white 8%);
     --glass-border: rgba(255, 255, 255, 0.1);
 }

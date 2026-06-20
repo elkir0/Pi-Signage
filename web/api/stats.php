@@ -3,8 +3,9 @@
  * PiSignage Stats API - Direct stats endpoint
  */
 
+require_once __DIR__ . '/_guard.php';
+
 header('Content-Type: application/json');
-header('Access-Control-Allow-Origin: *');
 
 function getCpuUsage() {
     $load = sys_getloadavg();

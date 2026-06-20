@@ -72,10 +72,29 @@ async function initializeApplication() {
             PiSignage.intervals.startPlayerStatusRefresh(3000);
         }, 500);
 
+        // Page Visibility API: pause polling loops while the tab is hidden,
+        // resume them (with the same intervals) when it becomes visible again.
+        setupVisibilityPolling();
+
     } catch (error) {
         console.error('❌ Error during application initialization:', error);
         showAlert('Erreur d\'initialisation de l\'application', 'error');
     }
+}
+
+// Suspend/resume the stats (5s) and player (3s) polling loops based on
+// the Page Visibility API to avoid useless polling on a hidden tab.
+function setupVisibilityPolling() {
+    document.addEventListener('visibilitychange', function() {
+        if (document.hidden) {
+            // Tab hidden: stop both polling intervals to save CPU/network.
+            PiSignage.intervals.stopAll();
+        } else {
+            // Tab visible again: restart both polling intervals.
+            PiSignage.intervals.startStatsRefresh(5000);
+            PiSignage.intervals.startPlayerStatusRefresh(3000);
+        }
+    });
 }
 
 function setupGlobalEventBindings() {

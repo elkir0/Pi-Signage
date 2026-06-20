@@ -1,15 +1,20 @@
-b#!/bin/bash
+#!/bin/bash
 
 # ╔══════════════════════════════════════════════════════════════════════╗
-# ║                  PiSignage v0.8.9 - Installation Unifiée             ║
+# ║                  PiSignage v0.11.0 - Installation Unifiée            ║
 # ║                     Script d'installation ONE-CLICK                   ║
 # ║                          Date: 2025-10-01                            ║
 # ╚══════════════════════════════════════════════════════════════════════╝
 
 set -e
 
+# S'exécute en tant que 'pi' (non-root) : /usr/sbin et /sbin ne sont pas toujours dans
+# le PATH d'un utilisateur normal sur Debian, or `command -v nginx` (/usr/sbin/nginx)
+# en dépend -> sans ça, configure_webserver sautait silencieusement la config nginx.
+export PATH="/usr/sbin:/sbin:$PATH"
+
 # Configuration
-VERSION="0.8.9"
+VERSION="0.11.0"
 INSTALL_DIR="/opt/pisignage"
 GITHUB_REPO="https://github.com/elkir0/Pi-Signage.git"
 BBB_URL="http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
@@ -27,6 +32,59 @@ log_warn() { echo -e "${YELLOW}[⚠]${NC} $1"; }
 log_error() { echo -e "${RED}[✗]${NC} $1"; }
 log_step() { echo -e "\n${BLUE}═══ $1 ═══${NC}\n"; }
 
+# Detect OS version
+detect_os_version() {
+    if [ -f /etc/os-release ]; then
+        # shellcheck disable=SC1091
+        . /etc/os-release
+        OS_VERSION_ID="${VERSION_ID:-unknown}"
+        OS_VERSION_CODENAME="${VERSION_CODENAME:-unknown}"
+        log_info "Detected OS: ${NAME:-Unknown} ${VERSION_ID:-?} (${VERSION_CODENAME:-?})"
+
+        # Check if Trixie/Debian 13
+        if [ "$VERSION_CODENAME" = "trixie" ] || [ "$VERSION_ID" = "13" ]; then
+            IS_TRIXIE=1
+            # Chromium kiosk = lecteur par défaut sur Trixie ; VLC reste en secours.
+            USE_CHROMIUM_PLAYER=1
+            log_info "Trixie (Debian 13) detected - Wayland kiosk mode available"
+
+            # Check if Desktop edition (required for Wayland)
+            if ! dpkg -l 2>/dev/null | grep -qE "task-desktop|task-gnome|task-lxde|task-xfce"; then
+                log_warn "⚠️  WARNING: Raspberry Pi OS Lite detected!"
+                log_warn "    Wayland kiosk mode REQUIRES Desktop edition"
+                log_warn "    Lite edition lacks critical graphics infrastructure"
+                log_warn ""
+                log_warn "    Installation will continue, but Wayland features will fail."
+                log_warn "    VLC player will still work for basic media playback."
+                log_warn ""
+                log_warn "    For full Chromium kiosk support, re-flash with:"
+                log_warn "    'Raspberry Pi OS with desktop' from raspberrypi.com"
+                echo ""
+                if [ -z "$AUTO_MODE" ]; then
+                    read -p "Continue anyway? (y/N) " -n 1 -r
+                    echo
+                    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                        log_error "Installation aborted by user"
+                        exit 1
+                    fi
+                else
+                    log_warn "Auto mode: Continuing despite Desktop requirement warning"
+                fi
+            else
+                log_info "Desktop edition detected - full Wayland support available"
+            fi
+        else
+            IS_TRIXIE=0
+            # Pas de Chromium kiosk hors Trixie -> VLC est le lecteur.
+            USE_CHROMIUM_PLAYER=0
+        fi
+    else
+        log_warn "Cannot detect OS version (/etc/os-release missing)"
+        IS_TRIXIE=0
+        USE_CHROMIUM_PLAYER=0
+    fi
+}
+
 # Vérifier si root
 check_root() {
     if [[ $EUID -eq 0 ]]; then
@@ -34,6 +92,52 @@ check_root() {
         log_info "Utilisation: bash install.sh"
         exit 1
     fi
+}
+
+# Garde matérielle: cible Raspberry Pi 4/5 (2GB+).
+# Calquée sur detect_os_version(): lit /proc/device-tree/model puis, en secours,
+# la Revision de /proc/cpuinfo. Ne hard-fail PAS un Compute Module mal classé sans --force.
+check_hardware() {
+    if [ "${FORCE_INSTALL:-0}" = "1" ]; then
+        log_warn "Garde matérielle ignorée (--force)"
+        return 0
+    fi
+
+    local model=""
+    if [ -f /proc/device-tree/model ]; then
+        model=$(tr -d '\0' < /proc/device-tree/model 2>/dev/null)
+    fi
+
+    # Cas explicites Pi4/Pi5 -> OK.
+    case "$model" in
+        *"Raspberry Pi 5"*|*"Raspberry Pi 4"*|*"Compute Module 4"*|*"Compute Module 5"*)
+            log_info "Matériel détecté: $model"
+            return 0
+            ;;
+    esac
+
+    # Modèles Pi antérieurs explicitement non supportés.
+    case "$model" in
+        *"Raspberry Pi 3"*|*"Raspberry Pi 2"*|*"Raspberry Pi Model"*|*"Raspberry Pi Zero"*|*"Compute Module 3"*)
+            log_error "Modèle détecté: ${model:-inconnu}"
+            log_error "PiSignage v${VERSION} requiert un Pi4/5 (2GB+)."
+            log_info  "Bypass possible avec --force (non recommandé)."
+            exit 1
+            ;;
+    esac
+
+    # Modèle inconnu / device-tree absent: secours via Revision cpuinfo.
+    # On reste tolérant (Compute Module mal classé) -> simple avertissement, pas d'exit.
+    if [ -z "$model" ]; then
+        local rev=""
+        rev=$(grep -m1 -i '^Revision' /proc/cpuinfo 2>/dev/null | awk '{print $NF}')
+        log_warn "Modèle Pi indéterminé (Revision='${rev:-?}'). PiSignage cible Pi4/5 (2GB+)."
+        log_warn "Poursuite de l'installation (utilisez --force pour supprimer cet avertissement)."
+        return 0
+    fi
+
+    log_warn "Modèle Pi non reconnu: '$model'. Cible recommandée: Pi4/5 (2GB+). Poursuite."
+    return 0
 }
 
 # Bannière
@@ -92,10 +196,17 @@ install_dependencies() {
         PHP_VERSION=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;' 2>/dev/null)
     fi
 
-    # Utiliser PHP 8.2 par défaut si non détecté
+    # Dériver depuis /etc/php/ si php absent du PATH au moment de l'install
     if [ -z "$PHP_VERSION" ]; then
-        PHP_VERSION="8.2"
-        log_info "Version PHP non détectée, utilisation de PHP $PHP_VERSION par défaut"
+        for d in /etc/php/*/fpm; do
+            [ -d "$d" ] || continue
+            PHP_VERSION=$(basename "$(dirname "$d")")
+        done
+    fi
+
+    # Dernier recours: laisser apt résoudre le métapaquet php-fpm (pas de version câblée)
+    if [ -z "$PHP_VERSION" ]; then
+        log_info "Version PHP non détectée, installation du métapaquet php-fpm générique"
     else
         log_info "Version PHP détectée : $PHP_VERSION"
     fi
@@ -129,6 +240,18 @@ install_dependencies() {
         "socat"
     )
 
+    # Trixie-specific packages for Wayland kiosk mode
+    # NOTE: chromium n'est PAS dans cette liste — il est installé séparément plus bas
+    # (option C) pour ne pas masquer les échecs dans la boucle générique.
+    if [ "${IS_TRIXIE:-0}" = "1" ]; then
+        log_info "Adding Trixie/Wayland kiosk packages..."
+        packages+=(
+            "labwc"
+            "greetd"
+            "plymouth"
+        )
+    fi
+
     log_info "Installation des packages essentiels..."
     for package in "${packages[@]}"; do
         echo -n "  • Installation de $package... "
@@ -141,6 +264,28 @@ install_dependencies() {
             echo -e "${YELLOW}⚠ Déjà installé ou optionnel${NC}"
         fi
     done
+
+    # Installation Chromium (Trixie) — gérée hors boucle pour ne pas masquer les échecs.
+    if [ "${IS_TRIXIE:-0}" = "1" ]; then
+        log_info "Installation de Chromium (mode kiosk)..."
+        if ! sudo DEBIAN_FRONTEND=noninteractive apt-get install -y chromium; then
+            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y chromium-browser || {
+                log_error "Aucun paquet Chromium installable"
+                exit 1
+            }
+        fi
+
+        # Garantir un binaire chromium utilisable et un /usr/bin/chromium canonique.
+        CHROMIUM_BIN="$(command -v chromium || command -v chromium-browser || true)"
+        [ -z "$CHROMIUM_BIN" ] && [ -x /usr/lib/chromium/chromium ] && CHROMIUM_BIN=/usr/lib/chromium/chromium
+        [ -z "$CHROMIUM_BIN" ] && { log_error "Binaire chromium introuvable"; exit 1; }
+        # NE PAS créer /usr/bin/chromium s'il existe déjà.
+        [ ! -e /usr/bin/chromium ] && sudo ln -sf "$CHROMIUM_BIN" /usr/bin/chromium
+        log_info "Chromium prêt ($CHROMIUM_BIN)"
+
+        # Accélération matérielle Pi (best-effort, ne bloque pas l'install).
+        sudo apt-get install -y rpi-chromium-mods 2>/dev/null || true
+    fi
 
     # Installation de raspi2png si disponible
     if [ -f /usr/bin/raspi2png ]; then
@@ -247,13 +392,26 @@ clone_from_github() {
         # Copier tous les fichiers web dans /opt/pisignage
         log_info "Déploiement des fichiers de l'application..."
         sudo cp -r "$TEMP_DIR/web"/* "$INSTALL_DIR/web/" 2>/dev/null || true
-        sudo cp -r "$TEMP_DIR/config"/* "$INSTALL_DIR/config/" 2>/dev/null || true
+
+        # SOURCE OF TRUTH: install.sh GÉNÈRE nginx/php/systemd. On ne copie depuis
+        # config/ que la DATA runtime (whitelist), JAMAIS la config serveur du repo
+        # (nginx-pisignage.conf, php-upload.ini, systemd/*.service = obsolètes/morts).
+        for runtime_item in player-config.json download_queue.json playlists; do
+            if [ -e "$TEMP_DIR/config/$runtime_item" ]; then
+                sudo cp -r "$TEMP_DIR/config/$runtime_item" "$INSTALL_DIR/config/" 2>/dev/null || true
+            fi
+        done
+
         sudo cp "$TEMP_DIR/CLAUDE.md" "$INSTALL_DIR/" 2>/dev/null || true
         sudo cp "$TEMP_DIR/README.md" "$INSTALL_DIR/" 2>/dev/null || true
         sudo cp "$TEMP_DIR/CHANGELOG.md" "$INSTALL_DIR/" 2>/dev/null || true
 
         # Créer le lien symbolique youtube-simple.php (compatibilité API)
         sudo ln -sf youtube.php "$INSTALL_DIR/web/api/youtube-simple.php"
+
+        # Servir les médias en HTTP (le player charge /media/... ; --disable-web-security
+        # ayant été retiré pour la sécurité, les file:// ne marchent plus depuis la page http).
+        sudo ln -sfn "$INSTALL_DIR/media" "$INSTALL_DIR/web/media"
 
         # Corriger les permissions après copie
         sudo chown -R www-data:www-data "$INSTALL_DIR/web"
@@ -268,30 +426,48 @@ clone_from_github() {
 download_bbb() {
     log_step "Téléchargement de Big Buck Bunny"
 
-    if [ -f "$INSTALL_DIR/media/BigBuckBunny_720p.mp4" ]; then
+    local target="$INSTALL_DIR/media/BigBuckBunny_720p.mp4"
+    if [ -s "$target" ]; then
         log_info "Big Buck Bunny déjà présent"
-    else
-        log_info "Téléchargement en cours..."
-        sudo wget -q --show-progress -O "$INSTALL_DIR/media/BigBuckBunny_720p.mp4" "$BBB_URL" || \
-        sudo wget -q --show-progress -O "$INSTALL_DIR/media/BigBuckBunny_720p.mp4" \
-            "http://distribution.bbb3d.renderfarming.net/video/mp4/bbb_sunflower_1080p_60fps_normal.mp4"
-        log_info "Big Buck Bunny téléchargé"
+        return 0
     fi
+    log_info "Téléchargement en cours (vidéo de démo optionnelle, non bloquant)..."
+    # NON BLOQUANT: une URL de démo morte ne doit JAMAIS interrompre l'installation
+    # (le player utilise la playlist, pas cette vidéo). Timeouts pour éviter tout blocage.
+    sudo wget -q --timeout=20 --tries=2 -O "$target" "$BBB_URL" \
+        || sudo wget -q --timeout=20 --tries=2 -O "$target" \
+            "http://distribution.bbb3d.renderfarming.net/video/mp4/bbb_sunflower_1080p_60fps_normal.mp4" \
+        || log_warn "Vidéo de démo non téléchargée (URL injoignable) — sans impact sur PiSignage."
+    # Nettoyer un fichier vide laissé par un wget en échec
+    [ -s "$target" ] || sudo rm -f "$target"
+    return 0
 }
 
 # Créer le fichier de configuration config.php
 create_config_php() {
-    log_step "Création du fichier config.php"
+    log_step "Vérification de web/config.php (déployé depuis le dépôt)"
 
-    # Créer le fichier config.php
-    sudo tee $INSTALL_DIR/web/config.php > /dev/null << 'ENDOFCONFIG'
+    # SOURCE OF TRUTH: web/config.php est du CODE APPLICATIF déployé tel quel depuis le
+    # dépôt (cp -r web/ plus haut). On NE le régénère PLUS depuis un heredoc périmé :
+    # l'ancien heredoc était un sous-ensemble obsolète SANS sanitizeFilename/isValidMediaFile
+    # ni le retrait CORS -> cause racine de BUG-014. On vérifie seulement sa présence.
+    if [ -f "$INSTALL_DIR/web/config.php" ]; then
+        log_info "config.php présent (source: dépôt, non régénéré)"
+    else
+        log_error "web/config.php manquant après la copie du dépôt — abandon"
+        exit 1
+    fi
+    return 0
+
+    # Bloc générateur obsolète conservé inerte (jamais atteint, cf. return 0 ci-dessus).
+    sudo tee /dev/null > /dev/null << 'ENDOFCONFIG'
 <?php
 /**
  * PiSignage - Configuration centrale
  */
 
 // Version
-define('PISIGNAGE_VERSION', 'v0.8.9');
+define('PISIGNAGE_VERSION', 'v0.11.0');
 
 // Chemins
 define('BASE_DIR', '/opt/pisignage');
@@ -374,9 +550,21 @@ ENDOFCONFIG
 
 # Création/mise à jour de player-config.json
 create_config() {
-    log_step "Configuration du système"
+    log_step "Vérification de player-config.json (déployé depuis le dépôt)"
 
-    sudo tee $INSTALL_DIR/config/player-config.json > /dev/null << 'ENDOFFILE'
+    # SOURCE OF TRUTH: config/player-config.json est de la DATA déployée tel quel depuis le
+    # dépôt (clone/copie plus haut). On NE le régénère PLUS depuis un heredoc périmé qui
+    # réintroduisait mpv, pi_model, display=:0 (X11) et http_password=signage123 -> annulait
+    # la purge mpv/Pi3 et l'alignement du mot de passe VLC. On vérifie seulement sa présence.
+    if [ -f "$INSTALL_DIR/config/player-config.json" ]; then
+        log_info "player-config.json présent (source: dépôt, non régénéré)"
+    else
+        log_error "config/player-config.json manquant après la copie du dépôt"
+    fi
+    return 0
+
+    # Bloc générateur obsolète conservé inerte (jamais atteint, cf. return 0 ci-dessus).
+    sudo tee /dev/null > /dev/null << 'ENDOFFILE'
 {
   "player": {
     "default": "vlc",
@@ -413,6 +601,78 @@ ENDOFFILE
     log_info "Configuration créée"
 }
 
+# Configuration Kiosk pour Trixie
+configure_kiosk_trixie() {
+    if [ "${IS_TRIXIE:-0}" = "0" ]; then
+        log_info "Skipping kiosk configuration (not Trixie)"
+        return 0
+    fi
+
+    log_step "Configuration du mode Kiosk Chromium (Trixie)"
+
+    # Create kiosk config directory
+    sudo mkdir -p "$INSTALL_DIR/config"
+
+    # Create default kiosk URL config
+    if [ ! -f "$INSTALL_DIR/config/kiosk_url" ]; then
+        echo "https://time.is" | sudo tee "$INSTALL_DIR/config/kiosk_url" >/dev/null
+        log_info "Created default kiosk_url: https://time.is"
+    fi
+
+    # Create default kiosk flags
+    if [ ! -f "$INSTALL_DIR/config/kiosk_flags" ]; then
+        # Flags par défaut: Wayland/Ozone, décode V4L2 (pas VAAPI), pas de prompt keyring
+        # (--password-store=basic), pas de barre de traduction, pas de geste tactile.
+        echo "--ozone-platform=wayland --enable-features=UseOzonePlatform --disable-features=Translate,TranslateUI --password-store=basic --autoplay-policy=no-user-gesture-required --noerrdialogs --disable-infobars --no-first-run --disable-pinch --overscroll-history-navigation=0" | \
+            sudo tee "$INSTALL_DIR/config/kiosk_flags" >/dev/null
+        log_info "Created default kiosk_flags"
+    fi
+
+    # Policy Chromium managée : désactive définitivement la barre de traduction
+    # (les flags --disable-features=Translate ne suffisent pas sur certains builds RPi)
+    # ainsi que les invites navigateur par défaut. Déployée dans les 2 chemins possibles.
+    for poldir in /etc/chromium/policies/managed /etc/chromium-browser/policies/managed; do
+        sudo mkdir -p "$poldir"
+        sudo tee "$poldir/pisignage.json" >/dev/null <<'JSON'
+{
+  "TranslateEnabled": false,
+  "DefaultBrowserSettingEnabled": false,
+  "MetricsReportingEnabled": false,
+  "BackgroundModeEnabled": false,
+  "SpellcheckEnabled": false
+}
+JSON
+    done
+    log_info "Policy Chromium installée (traduction désactivée)"
+
+    # Create feature flags (kiosk + Chromium player enabled by default)
+    if [ ! -f "$INSTALL_DIR/config/feature_flags" ]; then
+        printf '%s\n%s\n' "ENABLE_KIOSK=1" "USE_CHROMIUM_PLAYER=1" | \
+            sudo tee "$INSTALL_DIR/config/feature_flags" >/dev/null
+        log_info "Created feature_flags (ENABLE_KIOSK=1, USE_CHROMIUM_PLAYER=1)"
+    fi
+
+    # Copy labwc rc.xml template to user's home if exists
+    if [ -f "templates/.config/labwc/rc.xml" ]; then
+        mkdir -p "$HOME/.config/labwc"
+        cp "templates/.config/labwc/rc.xml" "$HOME/.config/labwc/rc.xml"
+        log_info "Installed labwc rc.xml configuration"
+    fi
+
+    # Run kiosk-apply script to generate autostart
+    if [ -x "$INSTALL_DIR/scripts/kiosk-apply" ]; then
+        log_info "Running kiosk-apply to generate autostart..."
+        bash "$INSTALL_DIR/scripts/kiosk-apply" || log_warn "kiosk-apply returned error (may be normal)"
+    elif [ -x "scripts/kiosk-apply" ]; then
+        log_info "Running kiosk-apply from current directory..."
+        bash scripts/kiosk-apply || log_warn "kiosk-apply returned error (may be normal)"
+    else
+        log_warn "kiosk-apply script not found or not executable"
+    fi
+
+    log_info "Kiosk configuration completed"
+}
+
 # Création du script de démarrage VLC
 create_vlc_script() {
     log_step "Création des scripts de contrôle"
@@ -420,7 +680,7 @@ create_vlc_script() {
     sudo tee $INSTALL_DIR/scripts/start-vlc.sh > /dev/null << 'ENDOFFILE'
 #!/bin/bash
 
-echo "=== PiSignage v0.8.9 - Démarrage VLC ==="
+echo "=== PiSignage v0.11.0 - Démarrage VLC ==="
 
 # Arrêt gracieux des lecteurs existants
 systemctl --user stop pisignage-vlc.service 2>/dev/null || true
@@ -489,10 +749,25 @@ if ! systemctl is-active --quiet nginx && ! systemctl is-active --quiet apache2;
     php -S 0.0.0.0:80 index.php > /opt/pisignage/logs/php-server.log 2>&1 &
 fi
 
-# Démarrer le service VLC unifié
+# Déterminer le lecteur actif (Chromium par défaut).
+# isChromiumPlayerEnabled() côté PHP: actif sauf si "USE_CHROMIUM_PLAYER=0" présent.
+FEATURE_FLAGS="/opt/pisignage/config/feature_flags"
+USE_CHROMIUM=1
+if [ -f "$FEATURE_FLAGS" ] && grep -q "USE_CHROMIUM_PLAYER=0" "$FEATURE_FLAGS"; then
+    USE_CHROMIUM=0
+fi
+
+if [ "$USE_CHROMIUM" = "1" ]; then
+    # Mode Chromium kiosk: NE PAS démarrer VLC (double-propriétaire d'affichage),
+    # NI watchdog VLC. Chromium est lancé par labwc/kiosk-apply.
+    echo "Mode Chromium: VLC non démarré (lecteur kiosk actif)"
+    exit 0
+fi
+
+# Mode VLC: démarrer le service unifié et surveiller.
 sudo systemctl start pisignage-vlc.service || true
 
-# Watchdog - vérifier le service VLC
+# Watchdog - vérifier le service VLC (uniquement en mode VLC)
 while true; do
     if ! systemctl is-active --quiet pisignage-vlc.service; then
         echo "Service VLC arrêté, redémarrage..."
@@ -511,10 +786,39 @@ ENDOFFILE
 configure_webserver() {
     log_step "Configuration du serveur web"
 
+    # SOURCE OF TRUTH: ce fichier GÉNÈRE nginx/php/systemd. config/ ne contient que
+    # de la data runtime, PAS de la config serveur.
+
+    # Détection robuste de la version PHP AVANT toute génération nginx (corrige le 502).
+    PHP_VERSION=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;' 2>/dev/null)
+    if [ -z "$PHP_VERSION" ]; then
+        # Dériver depuis /etc/php/*/fpm/ (plus robuste que le littéral 8.2)
+        for d in /etc/php/*/fpm; do
+            [ -d "$d" ] || continue
+            PHP_VERSION=$(basename "$(dirname "$d")")
+        done
+    fi
+    if [ -z "$PHP_VERSION" ]; then
+        # Dernier recours: dériver depuis le socket fpm présent
+        for s in /run/php/php*-fpm.sock; do
+            [ -S "$s" ] || continue
+            PHP_VERSION=$(echo "$s" | sed -n 's#.*/php\([0-9.]*\)-fpm.sock#\1#p')
+        done
+    fi
+    if [ -z "$PHP_VERSION" ]; then
+        log_warn "Version PHP indétectable, dérivation impossible — socket FPM peut être incorrect"
+    else
+        log_info "Version PHP retenue pour nginx/FPM : $PHP_VERSION"
+    fi
+    PHP_SOCK="/run/php/php${PHP_VERSION}-fpm.sock"
+
     # Configurer nginx
     if command -v nginx > /dev/null 2>&1; then
         # Supprimer d'abord la config par défaut
         sudo rm -f /etc/nginx/sites-enabled/default
+
+        # Sauvegarde du vhost existant avant écrasement
+        sudo cp -a /etc/nginx/sites-available/pisignage /etc/nginx/sites-available/pisignage.bak.$(date +%s) 2>/dev/null || true
 
         sudo tee /etc/nginx/sites-available/pisignage > /dev/null << ENDOFFILE
 server {
@@ -525,6 +829,16 @@ server {
     index index.php index.html;
 
     server_name _;
+
+    # Compression (gains transfert)
+    gzip on;
+    gzip_comp_level 5;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+
+    # En-têtes de sécurité GLOBAUX uniquement (NE PAS ajouter X-Frame-Options/CSP
+    # frame-ancestors ici: casserait /player public).
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy same-origin always;
 
     # Configuration des limites d'upload pour 500MB
     client_max_body_size 500M;
@@ -548,11 +862,29 @@ server {
     # Répertoire temporaire pour les uploads
     client_body_temp_path /tmp/nginx_upload 1 2;
 
+    # Routage kiosk public (AVANT location /).
+    # /player -> player.php (page kiosk publique).
+    location = /player {
+        rewrite ^ /player.php last;
+    }
+
+    # /api/playlist -> playlist.php (le bloc ~ ^/api/(.+\.php) gère ensuite playlist.php
+    # et préserve SCRIPT_NAME=playlist.php pour l'exception GET du garde).
+    location = /api/playlist {
+        rewrite ^ /api/playlist.php last;
+    }
+
     location / {
         try_files \$uri \$uri/ /index.php?\$query_string;
     }
 
-    # API routes - support PATH_INFO for REST APIs (v0.8.9)
+    # Cache long pour les assets statiques
+    location ~* \.(jpg|jpeg|png|gif|ico|css|js|mp4|webm|mkv|mov)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # API routes - support PATH_INFO for REST APIs
     location ~ ^/api/(.+\.php)(/.*)?$ {
         fastcgi_split_path_info ^(/api/.+\.php)(/.*)?$;
         set \$script \$fastcgi_script_name;
@@ -563,7 +895,7 @@ server {
         fastcgi_param SCRIPT_NAME \$script;
 
         include fastcgi_params;
-        fastcgi_pass unix:/var/run/php/php8.2-fpm.sock;
+        fastcgi_pass unix:/run/php/php${PHP_VERSION}-fpm.sock;
 
         # Timeouts spécifiques pour PHP
         fastcgi_read_timeout 300s;
@@ -576,13 +908,31 @@ server {
         fastcgi_max_temp_file_size 0;
     }
 
-    location /api {
-        try_files \$uri \$uri/ /api/index.php?\$query_string;
+    # Défense en profondeur (2e couche): endpoints d'admin réservés au LAN.
+    # JAMAIS allow 127.0.0.1 (Chromium tourne en loopback avec --disable-web-security).
+    location = /api/system.php {
+        allow 192.168.0.0/16;
+        allow 10.0.0.0/8;
+        deny all;
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:/run/php/php${PHP_VERSION}-fpm.sock;
     }
+    location = /api/config.php {
+        allow 192.168.0.0/16;
+        allow 10.0.0.0/8;
+        deny all;
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:/run/php/php${PHP_VERSION}-fpm.sock;
+    }
+    # NOTE: kiosk.php utilise le routage PATH_INFO (/api/kiosk.php/url, /restart...).
+    # Un bloc "location = /api/kiosk.php" ne couvrirait PAS ces sous-chemins et les
+    # laisserait retomber sur le bloc regex non restreint. La protection d'auth est
+    # assurée par _guard.php; on ne pose donc pas de bloc IP exact ici pour ne pas
+    # casser le routage REST de kiosk.php.
 
     location ~ \.php$ {
         include snippets/fastcgi-php.conf;
-        fastcgi_pass unix:/var/run/php/php8.2-fpm.sock;
+        fastcgi_pass unix:/run/php/php${PHP_VERSION}-fpm.sock;
 
         # Timeouts spécifiques pour PHP
         fastcgi_read_timeout 300s;
@@ -607,9 +957,7 @@ ENDOFFILE
 
         sudo ln -sf /etc/nginx/sites-available/pisignage /etc/nginx/sites-enabled/
 
-        # Configurer les limites PHP pour uploads
-        # Détecter automatiquement la version PHP
-        PHP_VERSION=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;' 2>/dev/null || echo "8.2")
+        # Configurer les limites PHP pour uploads (PHP_VERSION déjà détectée en tête de fonction)
         PHP_INI="/etc/php/${PHP_VERSION}/fpm/php.ini"
 
         if [ -f "$PHP_INI" ]; then
@@ -623,13 +971,43 @@ ENDOFFILE
             log_warn "php.ini non trouvé pour PHP $PHP_VERSION"
         fi
 
+        # OPcache + réglages FPM (drop-in dédié PiSignage).
+        # validate_timestamps=1 OBLIGATOIRE pour que les hotfix sed prennent effet.
+        if [ -d "/etc/php/${PHP_VERSION}/fpm/conf.d" ]; then
+            sudo tee "/etc/php/${PHP_VERSION}/fpm/conf.d/99-pisignage.ini" > /dev/null << 'ENDOFOPCACHE'
+opcache.enable=1
+opcache.memory_consumption=64
+opcache.validate_timestamps=1
+opcache.revalidate_freq=60
+ENDOFOPCACHE
+            log_info "OPcache configuré (drop-in 99-pisignage.ini)"
+        else
+            log_warn "conf.d FPM introuvable pour PHP $PHP_VERSION, OPcache non configuré"
+        fi
+
+        # Pool FPM dimensionné pour Pi 2-4Go.
+        FPM_WWW_CONF="/etc/php/${PHP_VERSION}/fpm/pool.d/www.conf"
+        if [ -f "$FPM_WWW_CONF" ]; then
+            sudo sed -i 's/^pm = .*/pm = dynamic/' "$FPM_WWW_CONF"
+            sudo sed -i 's/^pm.max_children = .*/pm.max_children = 8/' "$FPM_WWW_CONF"
+            sudo sed -i 's/^pm.start_servers = .*/pm.start_servers = 2/' "$FPM_WWW_CONF"
+            sudo sed -i 's/^pm.min_spare_servers = .*/pm.min_spare_servers = 1/' "$FPM_WWW_CONF"
+            sudo sed -i 's/^pm.max_spare_servers = .*/pm.max_spare_servers = 3/' "$FPM_WWW_CONF"
+            log_info "Pool FPM dimensionné (max_children=8)"
+        else
+            log_warn "Pool FPM www.conf introuvable pour PHP $PHP_VERSION"
+        fi
+
         # Créer le répertoire temporaire pour nginx
         sudo mkdir -p /tmp/nginx_upload
         sudo chown www-data:www-data /tmp/nginx_upload
 
-        # Redémarrer les services avec détection de version PHP
-        sudo systemctl restart nginx || true
-        PHP_VERSION=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;' 2>/dev/null || echo "8.2")
+        # Recharger nginx uniquement si la config est valide (toujours nginx -t avant).
+        if sudo nginx -t; then
+            sudo systemctl reload nginx || sudo systemctl restart nginx
+        else
+            log_warn "nginx -t a échoué, vhost non rechargé"
+        fi
         sudo systemctl restart php${PHP_VERSION}-fpm || true
         log_info "Nginx configuré avec PHP $PHP_VERSION"
 
@@ -675,7 +1053,7 @@ After=network.target graphical.target
 Type=simple
 User=$USER
 WorkingDirectory=/opt/pisignage
-Environment="DISPLAY=:0"
+Environment="WAYLAND_DISPLAY=wayland-0"
 Environment="XDG_RUNTIME_DIR=/run/user/$(id -u)"
 ExecStart=/opt/pisignage/scripts/autostart.sh
 Restart=always
@@ -720,7 +1098,27 @@ echo "Mot de passe: pisignage"
 ENDOFSCRIPT
     sudo chmod +x $INSTALL_DIR/scripts/autostart-vlc.sh
 
-    # Créer le service systemd unifié pour VLC avec interface HTTP
+    # Détection modèle Pi pour le décodage matériel VLC sous Wayland/KMS.
+    # Pi4 (BCM2711): décodage H.264 matériel via v4l2m2m.
+    # Pi5 (BCM2712): pas de bloc H.264 matériel -> décodage logiciel.
+    PI_MODEL_STRING=""
+    if [ -f /proc/device-tree/model ]; then
+        PI_MODEL_STRING=$(tr -d '\0' < /proc/device-tree/model 2>/dev/null)
+    fi
+    case "$PI_MODEL_STRING" in
+        *"Raspberry Pi 5"*)
+            VLC_HWACCEL_FLAG="--avcodec-hw=none"
+            ;;
+        *)
+            # Pi4 et assimilés
+            VLC_HWACCEL_FLAG="--avcodec-hw=v4l2m2m"
+            ;;
+    esac
+
+    # Créer le service systemd unifié pour VLC avec interface HTTP.
+    # NOTE: c'est le lecteur de SECOURS. En mode Chromium par défaut, pisignage.service
+    # (autostart.sh) ne le démarre PAS — voir create_vlc_script().
+    # Sortie Wayland/KMS (gles2), AUCUN reliquat X11, AUCUN profil MMAL.
     sudo tee /etc/systemd/system/pisignage-vlc.service > /dev/null << ENDOFSERVICE
 [Unit]
 Description=PiSignage VLC Media Player with HTTP Interface
@@ -731,23 +1129,23 @@ Requires=network.target
 Type=simple
 User=pi
 Group=video
-Environment="DISPLAY=:0"
 Environment="HOME=/home/pi"
 Environment="XDG_RUNTIME_DIR=/run/user/1000"
+Environment="WAYLAND_DISPLAY=wayland-0"
 WorkingDirectory=/opt/pisignage
 
-# Start VLC with both display output and HTTP interface
+# Start VLC with both display output (Wayland/KMS) and HTTP interface
 ExecStart=/usr/bin/vlc \\
     --intf http \\
     --extraintf dummy \\
     --http-host 0.0.0.0 \\
     --http-port 8080 \\
     --http-password pisignage \\
-    --fullscreen \\
+    --vout=gles2 \\
+    ${VLC_HWACCEL_FLAG} \\
     --no-video-title-show \\
     --loop \\
     --playlist-autostart \\
-    --video-on-top \\
     --no-osd \\
     /opt/pisignage/media/
 
@@ -766,7 +1164,15 @@ ENDOFSERVICE
 
     sudo systemctl daemon-reload
     sudo systemctl enable pisignage-vlc.service
-    sudo systemctl start pisignage-vlc.service || true
+
+    # Ne PAS démarrer VLC tout de suite si Chromium est le lecteur par défaut
+    # (évite le double-propriétaire d'affichage). Le démarrage est piloté par
+    # autostart.sh selon le flag USE_CHROMIUM_PLAYER.
+    if [ "${USE_CHROMIUM_PLAYER:-1}" = "0" ]; then
+        sudo systemctl start pisignage-vlc.service || true
+    else
+        log_info "Mode Chromium par défaut: VLC fallback activé mais non démarré"
+    fi
 
     log_info "Service VLC configuré pour démarrage automatique"
 }
@@ -837,8 +1243,19 @@ test_installation() {
 
 # Fonction principale
 main() {
+    # Parse flags (acceptés dans n'importe quel ordre): --auto, --force
+    local banner_arg=""
+    for arg in "$@"; do
+        case "$arg" in
+            --auto)  export AUTO_MODE=1; banner_arg="--auto" ;;
+            --force) export FORCE_INSTALL=1 ;;
+        esac
+    done
+
     check_root
-    show_banner
+    check_hardware
+    show_banner "$banner_arg"
+    detect_os_version
     update_system
     install_dependencies
     create_structure
@@ -846,6 +1263,7 @@ main() {
     download_bbb
     create_config_php
     create_config
+    configure_kiosk_trixie
     create_vlc_script
     configure_webserver
     configure_sudo

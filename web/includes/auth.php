@@ -1,18 +1,20 @@
 <?php
 /**
- * PiSignage v0.8.9 - Authentication and Session Management
+ * PiSignage v0.11.0 - Authentication and Session Management
  * Handles session initialization and configuration management
- * v0.8.9: MPV support removed - VLC exclusive for better reliability
+ * v0.11.0: MPV support removed - VLC exclusive for better reliability
  */
 
 // Start session if not already started
 if (session_status() === PHP_SESSION_NONE) {
+    // secure=false imposé par LAN HTTP pur (pas de TLS). Passer 'secure'=>true dès qu'on sert en HTTPS.
+    session_set_cookie_params(['lifetime' => 0, 'path' => '/', 'httponly' => true, 'samesite' => 'Lax', 'secure' => false]);
     session_start();
 }
 
 // Configuration
 $config = [
-    'version' => '0.8.9',
+    'version' => '0.11.0',
     'media_path' => '/opt/pisignage/media/',
     'config_path' => '/opt/pisignage/config/',
     'logs_path' => '/opt/pisignage/logs/',
@@ -34,7 +36,7 @@ function initializeCredentials() {
     if (!file_exists($config['credentials_file'])) {
         $defaultCredentials = [
             'username' => 'admin',
-            'password' => password_hash('signage2025', PASSWORD_BCRYPT)
+            'password' => password_hash('signage2025', PASSWORD_BCRYPT, ['cost' => 12])
         ];
         file_put_contents($config['credentials_file'], json_encode($defaultCredentials, JSON_PRETTY_PRINT));
         chmod($config['credentials_file'], 0600); // Secure file permissions
@@ -51,11 +53,24 @@ function loadCredentials() {
 
 // Verify login credentials
 function verifyLogin($username, $password) {
+    global $config;
     $credentials = loadCredentials();
     if ($username === $credentials['username'] && password_verify($password, $credentials['password'])) {
         $_SESSION['authenticated'] = true;
         $_SESSION['username'] = $username;
         $_SESSION['login_time'] = time();
+        session_regenerate_id(true);
+        if (password_verify('signage2025', $credentials['password'])) {
+            $_SESSION['must_change_password'] = true;
+        }
+        // Rehash transparent vers cost=12 (écriture atomique).
+        if (password_needs_rehash($credentials['password'], PASSWORD_BCRYPT, ['cost' => 12])) {
+            $credentials['password'] = password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]);
+            $tmp = $config['credentials_file'] . '.tmp';
+            file_put_contents($tmp, json_encode($credentials, JSON_PRETTY_PRINT));
+            chmod($tmp, 0600);
+            rename($tmp, $config['credentials_file']);
+        }
         return true;
     }
     return false;
@@ -70,9 +85,14 @@ function updatePassword($oldPassword, $newPassword) {
         return ['success' => false, 'message' => 'Ancien mot de passe incorrect'];
     }
 
-    $credentials['password'] = password_hash($newPassword, PASSWORD_BCRYPT);
+    if ($newPassword === 'signage2025') {
+        return ['success' => false, 'message' => 'Mot de passe par défaut interdit'];
+    }
+
+    $credentials['password'] = password_hash($newPassword, PASSWORD_BCRYPT, ['cost' => 12]);
     if (file_put_contents($config['credentials_file'], json_encode($credentials, JSON_PRETTY_PRINT))) {
         chmod($config['credentials_file'], 0600);
+        unset($_SESSION['must_change_password']);
         return ['success' => true, 'message' => 'Mot de passe mis à jour'];
     }
 
@@ -91,6 +111,16 @@ function requireAuth() {
         $_SESSION['redirect_after_login'] = $currentPage;
         header('Location: /login.php');
         exit;
+    }
+
+    // Forcer le changement du mot de passe par défaut (pages WEB uniquement).
+    // Ne JAMAIS appliquer au player public ni à GET /api/playlist.
+    if (!empty($_SESSION['must_change_password'])) {
+        $page = getCurrentPage();
+        if (!in_array($page, ['login', 'settings', 'player', 'playlist'], true)) {
+            header('Location: /settings.php');
+            exit;
+        }
     }
 }
 
