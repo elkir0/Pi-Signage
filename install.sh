@@ -652,6 +652,24 @@ JSON
         log_info "Created feature_flags (ENABLE_KIOSK=1, USE_CHROMIUM_PLAYER=1)"
     fi
 
+    # Config kanshi (gestion des sorties) : kiosk mono-écran, tolérant aux 2 ports
+    # micro-HDMI du Pi4. "both" en premier -> si 2 sorties remontent (ex: écran reel +
+    # phantom), on n'en garde qu'une; sinon on prend la sortie unique connectee (port 0 OU 1).
+    mkdir -p "$HOME/.config/kanshi"
+    cat > "$HOME/.config/kanshi/config" <<'KANSHI'
+profile both {
+    output HDMI-A-1 enable position 0,0
+    output HDMI-A-2 disable
+}
+profile port0 {
+    output HDMI-A-1 enable position 0,0
+}
+profile port1 {
+    output HDMI-A-2 enable position 0,0
+}
+KANSHI
+    log_info "Config kanshi installée (kiosk mono-écran, tolérant aux 2 ports HDMI)"
+
     # Copy labwc rc.xml template to user's home if exists
     if [ -f "templates/.config/labwc/rc.xml" ]; then
         mkdir -p "$HOME/.config/labwc"
