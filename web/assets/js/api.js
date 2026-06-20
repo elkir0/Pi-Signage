@@ -20,14 +20,29 @@ PiSignage.api = {
             headers: {
                 'Content-Type': 'application/json',
             },
-            timeout: this.timeout,
             ...options
         };
 
+        // Resolve the effective timeout (per-call override or module default),
+        // then strip it from the options so it isn't passed to fetch().
+        const timeout = (typeof defaultOptions.timeout === 'number')
+            ? defaultOptions.timeout
+            : this.timeout;
+        delete defaultOptions.timeout;
+
+        // Only retry idempotent requests. POST/PUT/DELETE/PATCH may mutate
+        // server state, so replaying them on failure could double-apply.
+        const method = (defaultOptions.method || 'GET').toUpperCase();
+        const isIdempotent = (method === 'GET' || method === 'HEAD');
+        const maxAttempts = isIdempotent ? this.retryAttempts : 1;
+
         let attempt = 0;
-        while (attempt < this.retryAttempts) {
+        while (attempt < maxAttempts) {
+            // Per-attempt AbortController so {timeout} is actually enforced.
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), timeout);
             try {
-                const response = await fetch(url, defaultOptions);
+                const response = await fetch(url, { ...defaultOptions, signal: controller.signal });
 
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -37,13 +52,15 @@ PiSignage.api = {
                 return data;
             } catch (error) {
                 attempt++;
-                console.error(`API request failed (attempt ${attempt}/${this.retryAttempts}):`, error);
+                console.error(`API request failed (attempt ${attempt}/${maxAttempts}):`, error);
 
-                if (attempt < this.retryAttempts) {
+                if (attempt < maxAttempts) {
                     await this.delay(this.retryDelay * attempt);
                 } else {
                     throw error;
                 }
+            } finally {
+                clearTimeout(timer);
             }
         }
     },
@@ -142,7 +159,7 @@ PiSignage.api = {
                             reject(new Error('Invalid server response'));
                         }
                     } else if (xhr.status === 413) {
-                        reject(new Error('File too large (max 100MB)'));
+                        reject(new Error('File too large (max 500MB)'));
                     } else if (xhr.status === 500) {
                         reject(new Error('Server error - check PHP limits'));
                     } else {

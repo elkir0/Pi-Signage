@@ -186,7 +186,7 @@ include 'includes/header.php';
         <div class="modal-body">
             <div class="form-group">
                 <label for="item-url">URL du média</label>
-                <input type="text" id="item-url" class="form-control" placeholder="file:///opt/pisignage/content/video.mp4">
+                <input type="text" id="item-url" class="form-control" placeholder="file:///opt/pisignage/media/video.mp4">
                 <p class="help-text">file:// pour local, http(s):// pour distant</p>
             </div>
             <div class="form-group">

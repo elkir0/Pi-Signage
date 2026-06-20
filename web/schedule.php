@@ -345,7 +345,4 @@ include 'includes/header.php';
         </div>
     </div>
 
-
-    <script src="assets/js/schedule-v873.js" defer></script>
-
 <?php include 'includes/footer.php'; ?>

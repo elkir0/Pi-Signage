@@ -52,6 +52,13 @@
             object-fit: contain; /* Default, sera mis à jour dynamiquement */
         }
 
+        #image {
+            width: 100%;
+            height: 100%;
+            object-fit: contain; /* Default, sera mis à jour dynamiquement */
+            display: none; /* Masqué par défaut, affiché pour les items image */
+        }
+
         #loading {
             position: absolute;
             color: #fff;
@@ -98,6 +105,7 @@
     <div id="loading">Loading playlist...</div>
     <div id="error"></div>
     <video id="video" playsinline></video>
+    <img id="image" alt="">
     <div id="debug">
         <div>Status: <span id="debug-status">initializing</span></div>
         <div>FPS: <span id="debug-fps">0</span></div>
@@ -119,6 +127,7 @@
 class PiSignagePlayer {
     constructor() {
         this.video = document.getElementById('video');
+        this.image = document.getElementById('image');
         this.loading = document.getElementById('loading');
         this.errorDiv = document.getElementById('error');
         this.debug = document.getElementById('debug');
@@ -282,6 +291,41 @@ class PiSignagePlayer {
         this.updateDebug('current-index', index);
         this.updateDebug('current-url', item.url);
 
+        if (this.isImageItem(item)) {
+            // ----- Chemin IMAGE -----
+            // Stopper toute lecture vidéo en cours et masquer le <video>
+            this.video.pause();
+            this.video.removeAttribute('src');
+            this.video.load();
+            this.video.style.display = 'none';
+
+            // Afficher l'image
+            this.image.style.objectFit = item.fit || 'contain';
+            this.image.style.display = 'block';
+            this.image.src = item.url;
+            this.hideLoading();
+            this.hideError();
+            this.updateDebug('status', 'playing (image)');
+
+            // Enchaînement via la durée (par défaut 10s si non précisée)
+            const imageDuration = (item.duration && item.duration > 0) ? item.duration : 10;
+            setTimeout(() => {
+                if (this.currentIndex === index) {
+                    console.log(`[Player] Image duration ${imageDuration}s elapsed`);
+                    this.playNext();
+                }
+            }, imageDuration * 1000);
+
+            this.errorCount = 0; // Reset error count on successful load
+            return;
+        }
+
+        // ----- Chemin VIDEO -----
+        // Masquer l'image et réafficher le <video>
+        this.image.style.display = 'none';
+        this.image.removeAttribute('src');
+        this.video.style.display = '';
+
         // Appliquer paramètres
         this.video.muted = item.mute !== undefined ? item.mute : false;
         this.video.loop = item.loop !== undefined ? item.loop : false;
@@ -306,7 +350,7 @@ class PiSignagePlayer {
             }
         });
 
-        // Gérer duration custom (pour images statiques ou override)
+        // Gérer duration custom (override)
         if (item.duration && item.duration > 0) {
             setTimeout(() => {
                 if (this.currentIndex === index) {
@@ -317,6 +361,15 @@ class PiSignagePlayer {
         }
 
         this.errorCount = 0; // Reset error count on successful load
+    }
+
+    isImageItem(item) {
+        // Détecter une image via type explicite ou extension de l'URL
+        if (item.type && /^image/i.test(item.type)) {
+            return true;
+        }
+        const url = (item.url || '').split('?')[0].split('#')[0];
+        return /\.(jpe?g|png|gif|webp|svg|bmp)$/i.test(url);
     }
 
     handleVideoEnded() {

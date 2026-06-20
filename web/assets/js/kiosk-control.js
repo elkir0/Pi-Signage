@@ -494,7 +494,7 @@ async function updateChromiumFlags() {
 function resetChromiumFlags() {
     if (!confirm('Réinitialiser aux flags par défaut ?')) return;
 
-    const defaultFlags = '--ozone-platform=wayland\n--enable-features=VaapiVideoDecoder,UseOzonePlatform\n--autoplay-policy=no-user-gesture-required\n--disable-infobars\n--noerrdialogs\n--disable-translate\n--no-first-run\n--fast\n--fast-start\n--disable-features=TranslateUI\n--disk-cache-dir=/dev/null\n--aggressive-cache-discard';
+    const defaultFlags = '--ozone-platform=wayland\n--enable-features=UseOzonePlatform\n--ignore-gpu-blocklist\n--autoplay-policy=no-user-gesture-required\n--disable-infobars\n--noerrdialogs\n--disable-translate\n--no-first-run\n--incognito';
 
     document.getElementById('chromium-flags').value = defaultFlags;
     showNotification('Flags réinitialisés (pensez à sauvegarder)', 'info');
@@ -560,10 +560,29 @@ function refreshStatus() {
 
 function startStatusAutoRefresh() {
     // Refresh toutes les 5 secondes
+    if (statusRefreshInterval) {
+        clearInterval(statusRefreshInterval);
+    }
     statusRefreshInterval = setInterval(() => {
         loadKioskStatus();
     }, 5000);
 }
+
+function stopStatusAutoRefresh() {
+    if (statusRefreshInterval) {
+        clearInterval(statusRefreshInterval);
+        statusRefreshInterval = null;
+    }
+}
+
+// Suspend kiosk status polling while the tab is hidden, resume when visible.
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+        stopStatusAutoRefresh();
+    } else {
+        startStatusAutoRefresh();
+    }
+});
 
 // === ACTIONS ===
 async function restartKiosk() {
@@ -601,10 +620,12 @@ function escapeHtml(text) {
 }
 
 function showNotification(message, type = 'info') {
+    // Déléguer au système de notification unifié (functions.js -> showAlert).
+    if (typeof window.showAlert === 'function') {
+        window.showAlert(message, type);
+        return;
+    }
     console.log('[Notification] ' + type.toUpperCase() + ': ' + message);
-
-    // TODO: Implement proper notification UI
-    // Pour l'instant, utiliser console + alert pour erreurs critiques
     if (type === 'error') {
         alert('Erreur: ' + message);
     }

@@ -467,6 +467,15 @@ mediaStyles.textContent = `
 
     .media-file-card {
         transition: transform 0.2s, box-shadow 0.2s;
+        /* Virtualize long media lists: skip rendering off-screen cards. */
+        content-visibility: auto;
+        contain-intrinsic-size: auto 140px;
+    }
+
+    /* Same virtualization for playlist cards (long playlist grids). */
+    .playlist-card {
+        content-visibility: auto;
+        contain-intrinsic-size: auto 140px;
     }
 
     .media-file-card:hover {

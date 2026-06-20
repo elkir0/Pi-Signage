@@ -240,7 +240,7 @@ PiSignage.dashboard = {
     },
 
     switchPlayer: async function() {
-        // PiSignage v0.8.9+ uses VLC exclusively - player switching removed
+        // PiSignage v0.11.0 uses VLC exclusively - player switching removed
         showAlert('PiSignage utilise désormais VLC exclusivement pour une expérience optimale', 'info');
         return;
     }
@@ -248,12 +248,12 @@ PiSignage.dashboard = {
 
 // Global functions for backward compatibility
 window.switchPlayer = function() {
-    // PiSignage v0.8.9+ - VLC only
+    // PiSignage v0.11.0 - VLC only
     showAlert('PiSignage utilise VLC exclusivement', 'info');
 };
 
 window.getCurrentPlayer = function() {
-    return 'vlc'; // PiSignage v0.8.9+
+    return 'vlc'; // PiSignage v0.11.0
 };
 
 window.updatePlayerInterface = function() {

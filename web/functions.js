@@ -4,7 +4,15 @@
 console.log('✅ PiSignage v0.8.0 - Fixed Functions loaded');
 
 // ========== NOTIFICATION SYSTEM ==========
+// Unified on a single notification system: showNotification now delegates to
+// showAlert (defined in core.js). Kept as a thin alias for backward compat.
 function showNotification(message, type = 'info') {
+    if (typeof window.showAlert === 'function') {
+        window.showAlert(message, type);
+        return;
+    }
+
+    // Fallback (core.js not yet loaded): minimal inline notification.
     const notification = document.createElement('div');
     notification.className = `notification ${type}`;
     notification.textContent = message;
