@@ -1204,12 +1204,34 @@ configure_sudo() {
 # PiSignage sudo permissions
 pi ALL=(ALL) NOPASSWD: /sbin/shutdown, /sbin/reboot, /bin/systemctl
 www-data ALL=(ALL) NOPASSWD: /usr/bin/amixer, /usr/bin/raspi-config
+# Capture d'écran Wayland: www-data (php-fpm) lance grim dans la session labwc de 'pi'
+www-data ALL=(pi) NOPASSWD: /opt/pisignage/scripts/grim-capture.sh
 SUDOERS
 
     # Ajouter www-data au groupe video (accès framebuffer pour screenshots)
     sudo usermod -aG video www-data
 
-    log_info "Permissions configurées (www-data: video group + amixer sudo)"
+    # Helper de capture d'écran Wayland (grim) exécuté dans la session labwc de 'pi'.
+    # php-fpm (www-data) l'invoque via `sudo -u pi` (cf. règle sudoers ci-dessus).
+    sudo mkdir -p "$INSTALL_DIR/scripts"
+    sudo tee "$INSTALL_DIR/scripts/grim-capture.sh" > /dev/null << 'GRIMCAP'
+#!/bin/sh
+# PiSignage — Capture l'écran Wayland (labwc) du kiosk. Appelé par www-data via:
+#   sudo -u pi /opt/pisignage/scripts/grim-capture.sh
+# Écrit un PNG dans /tmp et imprime son chemin sur stdout.
+set -eu
+RUNTIME_DIR="/run/user/$(id -u)"
+export XDG_RUNTIME_DIR="$RUNTIME_DIR"
+WL="$(ls "$RUNTIME_DIR" 2>/dev/null | grep -m1 '^wayland-[0-9]*$' || true)"
+export WAYLAND_DISPLAY="${WL:-wayland-0}"
+OUT="/tmp/pisignage-screenshot.png"
+/usr/bin/grim -t png "$OUT" 2>/dev/null
+chmod 0644 "$OUT" 2>/dev/null || true
+echo "$OUT"
+GRIMCAP
+    sudo chmod 0755 "$INSTALL_DIR/scripts/grim-capture.sh"
+
+    log_info "Permissions configurées (www-data: video group + amixer sudo + grim-capture)"
 }
 
 # Test de l'installation
