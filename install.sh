@@ -628,6 +628,23 @@ configure_kiosk_trixie() {
         log_info "Created default kiosk_flags"
     fi
 
+    # Policy Chromium managée : désactive définitivement la barre de traduction
+    # (les flags --disable-features=Translate ne suffisent pas sur certains builds RPi)
+    # ainsi que les invites navigateur par défaut. Déployée dans les 2 chemins possibles.
+    for poldir in /etc/chromium/policies/managed /etc/chromium-browser/policies/managed; do
+        sudo mkdir -p "$poldir"
+        sudo tee "$poldir/pisignage.json" >/dev/null <<'JSON'
+{
+  "TranslateEnabled": false,
+  "DefaultBrowserSettingEnabled": false,
+  "MetricsReportingEnabled": false,
+  "BackgroundModeEnabled": false,
+  "SpellcheckEnabled": false
+}
+JSON
+    done
+    log_info "Policy Chromium installée (traduction désactivée)"
+
     # Create feature flags (kiosk + Chromium player enabled by default)
     if [ ! -f "$INSTALL_DIR/config/feature_flags" ]; then
         printf '%s\n%s\n' "ENABLE_KIOSK=1" "USE_CHROMIUM_PLAYER=1" | \
