@@ -8,6 +8,11 @@
 
 set -e
 
+# S'exécute en tant que 'pi' (non-root) : /usr/sbin et /sbin ne sont pas toujours dans
+# le PATH d'un utilisateur normal sur Debian, or `command -v nginx` (/usr/sbin/nginx)
+# en dépend -> sans ça, configure_webserver sautait silencieusement la config nginx.
+export PATH="/usr/sbin:/sbin:$PATH"
+
 # Configuration
 VERSION="0.11.0"
 INSTALL_DIR="/opt/pisignage"
@@ -404,6 +409,10 @@ clone_from_github() {
         # Créer le lien symbolique youtube-simple.php (compatibilité API)
         sudo ln -sf youtube.php "$INSTALL_DIR/web/api/youtube-simple.php"
 
+        # Servir les médias en HTTP (le player charge /media/... ; --disable-web-security
+        # ayant été retiré pour la sécurité, les file:// ne marchent plus depuis la page http).
+        sudo ln -sfn "$INSTALL_DIR/media" "$INSTALL_DIR/web/media"
+
         # Corriger les permissions après copie
         sudo chown -R www-data:www-data "$INSTALL_DIR/web"
 
@@ -417,15 +426,21 @@ clone_from_github() {
 download_bbb() {
     log_step "Téléchargement de Big Buck Bunny"
 
-    if [ -f "$INSTALL_DIR/media/BigBuckBunny_720p.mp4" ]; then
+    local target="$INSTALL_DIR/media/BigBuckBunny_720p.mp4"
+    if [ -s "$target" ]; then
         log_info "Big Buck Bunny déjà présent"
-    else
-        log_info "Téléchargement en cours..."
-        sudo wget -q --show-progress -O "$INSTALL_DIR/media/BigBuckBunny_720p.mp4" "$BBB_URL" || \
-        sudo wget -q --show-progress -O "$INSTALL_DIR/media/BigBuckBunny_720p.mp4" \
-            "http://distribution.bbb3d.renderfarming.net/video/mp4/bbb_sunflower_1080p_60fps_normal.mp4"
-        log_info "Big Buck Bunny téléchargé"
+        return 0
     fi
+    log_info "Téléchargement en cours (vidéo de démo optionnelle, non bloquant)..."
+    # NON BLOQUANT: une URL de démo morte ne doit JAMAIS interrompre l'installation
+    # (le player utilise la playlist, pas cette vidéo). Timeouts pour éviter tout blocage.
+    sudo wget -q --timeout=20 --tries=2 -O "$target" "$BBB_URL" \
+        || sudo wget -q --timeout=20 --tries=2 -O "$target" \
+            "http://distribution.bbb3d.renderfarming.net/video/mp4/bbb_sunflower_1080p_60fps_normal.mp4" \
+        || log_warn "Vidéo de démo non téléchargée (URL injoignable) — sans impact sur PiSignage."
+    # Nettoyer un fichier vide laissé par un wget en échec
+    [ -s "$target" ] || sudo rm -f "$target"
+    return 0
 }
 
 # Créer le fichier de configuration config.php
@@ -606,7 +621,9 @@ configure_kiosk_trixie() {
 
     # Create default kiosk flags
     if [ ! -f "$INSTALL_DIR/config/kiosk_flags" ]; then
-        echo "--incognito --noerrdialogs --disable-translate --no-first-run" | \
+        # Flags par défaut: Wayland/Ozone, décode V4L2 (pas VAAPI), pas de prompt keyring
+        # (--password-store=basic), pas de barre de traduction, pas de geste tactile.
+        echo "--ozone-platform=wayland --enable-features=UseOzonePlatform --disable-features=Translate,TranslateUI --password-store=basic --autoplay-policy=no-user-gesture-required --noerrdialogs --disable-infobars --no-first-run --disable-pinch --overscroll-history-navigation=0" | \
             sudo tee "$INSTALL_DIR/config/kiosk_flags" >/dev/null
         log_info "Created default kiosk_flags"
     fi

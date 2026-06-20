@@ -110,7 +110,12 @@ cat > "${AUTOSTART}" <<EOF
 # URL: ${URL}
 # Flags: ${FLAGS}
 
-/usr/bin/chromium --kiosk "${URL}" ${FLAGS}
+# Kiosk 24/7 : respawn Chromium s'il crashe/quitte (OOM, plantage GPU, etc.).
+# La boucle est mise en arrière-plan pour ne pas bloquer le reste de l'autostart labwc.
+while true; do
+    /usr/bin/chromium --kiosk "${URL}" ${FLAGS}
+    sleep 3
+done &
 EOF
 
 chmod 0644 "${AUTOSTART}"
