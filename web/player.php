@@ -615,6 +615,11 @@ class PiSignagePlayer {
         this.currentIndex = index;
         const item = this.playlist.items[index];
 
+        // Overlay par-video : si un overlay specifique existe pour cet item, il REMPLACE
+        // l'overlay global ; sinon le global est applique. (Controleur dans un <script>
+        // posterieur mais defini avant le 1er playItem qui s'execute apres DOMContentLoaded.)
+        if (window.PiSignageOverlay && window.PiSignageOverlay.applyForItem) window.PiSignageOverlay.applyForItem(item);
+
         console.log(`[Player] Playing item ${index}:`, item);
 
         this.updateDebug('current-index', index);
@@ -1285,19 +1290,28 @@ var qrcode = (function () {
     'use strict';
 
     var JSON_URL = '/data/overlay-content.json';
+    var MEDIA_URL = '/data/media-overlays.json'; // overlays par-video {basename: overlay}
     var REFRESH_MS = 5 * 60 * 1000;   // re-fetch toutes les 5 min
     var CLOCK_MS = 30 * 1000;         // maj horloge toutes les 30s
     var SHIFT_PERIOD_MS = 60 * 1000;  // cycle anti burn-in ~60s
+
+    // Facteurs d'echelle par taille (contrat partage : sm/md/lg/xl).
+    var SIZE_SCALE = { sm: 0.8, md: 1.0, lg: 1.25, xl: 1.5 };
+    function scaleFor(size) {
+        var s = SIZE_SCALE[size];
+        return (typeof s === 'number') ? s : 1.0; // defaut "md" = 1.0
+    }
 
     // Valeurs par defaut neutres (mode degrade)
     var DEFAULTS = {
         version: 1,
         enabled: true,
         lang: 'fr',
-        banner: { enabled: true, name: 'PiSignage', subtitle: '', logo: null },
-        clock: { enabled: true },
+        banner: { enabled: true, name: 'PiSignage', subtitle: '', logo: null, size: 'md' },
+        clock: { enabled: true, size: 'md' },
+        cards_size: 'md',
         cards: [],
-        qr: { enabled: false, label: '', data: '' }
+        qr: { enabled: false, label: '', data: '', size: 'md' }
     };
 
     // Icones SVG inline (stroke currentColor). Jeu volontairement restreint.
@@ -1321,7 +1335,10 @@ var qrcode = (function () {
 
     // ----- Etat du controleur -----
     var state = {
-        cfg: null,
+        cfg: null,           // config actuellement affichee (globale OU par-video)
+        globalCfg: null,     // derniere config GLOBALE validee (repli quand pas d'overlay par-video)
+        mediaMap: {},        // {basename: overlay} overlays par-video
+        currentBasename: '',  // basename de l'item courant (pour eviter un re-render inutile)
         cards: [],
         cardTimer: null,
         cardIndex: -1,
@@ -1329,7 +1346,9 @@ var qrcode = (function () {
         clockTimer: null,
         refreshTimer: null,
         shiftTimer: null,
-        lastSig: null
+        lastSig: null,
+        // Echelles courantes par zone (mises a jour a chaque render, lues par le pixel-shift).
+        scale: { clock: 1.0, qr: 1.0, cards: 1.0 }
     };
 
     // ============ HORLOGE (100% local) ============
@@ -1367,6 +1386,15 @@ var qrcode = (function () {
                 bannerEl.classList.remove('ov-on');
                 return;
             }
+            // Taille : le bandeau est pleine largeur (les textes/logo sont en vh). On
+            // echelonne le CONTENU (textes + logo) via un scale du corps du bandeau,
+            // origine bas-gauche -> le bloc reste ancre au bord et ne deborde pas a droite.
+            var bScale = scaleFor(b.size);
+            var bodyEl = bannerEl.querySelector('.ov-banner-body');
+            if (bodyEl) {
+                bodyEl.style.transformOrigin = 'left bottom';
+                bodyEl.style.transform = (bScale === 1.0) ? '' : ('scale(' + bScale + ')');
+            }
             setText('ov-banner-name', b.name || DEFAULTS.banner.name);
             setText('ov-banner-subtitle', b.subtitle || '');
             var logoEl = $('ov-banner-logo');
@@ -1390,6 +1418,10 @@ var qrcode = (function () {
             var c = (cfg && cfg.clock) ? cfg.clock : DEFAULTS.clock;
             var el = $('ov-clock');
             if (!el) return;
+            // Taille : memorise l'echelle (origine haut-droite) ; le scale est compose
+            // avec le pixel-shift par applyShift (un seul style.transform par element).
+            state.scale.clock = scaleFor(c && c.size);
+            el.style.transformOrigin = 'right top';
             if (c && c.enabled === false) { el.classList.remove('ov-on'); }
             else { el.classList.add('ov-on'); }
         } catch (e) { /* silencieux */ }
@@ -1474,6 +1506,12 @@ var qrcode = (function () {
     function startCarousel(cfg) {
         try {
             stopCarousel();
+            // Taille des cartes (champ TOP-LEVEL cards_size) : memorise l'echelle.
+            // Origine bas-centre ; le scale + le centrage translateX(-50%) + le
+            // pixel-shift sont composes par applyCardsTransform (un seul transform).
+            state.scale.cards = scaleFor(cfg && cfg.cards_size);
+            var cardsEl = $('ov-cards');
+            if (cardsEl) cardsEl.style.transformOrigin = 'center bottom';
             state.cards = normalizeCards(cfg);
             state.cardIndex = -1;
             // reset visuel
@@ -1497,6 +1535,10 @@ var qrcode = (function () {
         if (!zone || !canvasWrap) return;
         try {
             var q = (cfg && cfg.qr) ? cfg.qr : DEFAULTS.qr;
+            // Taille : memorise l'echelle (origine bas-droite) ; composee avec le
+            // pixel-shift par applyShift (un seul style.transform par element).
+            state.scale.qr = scaleFor(q && q.size);
+            zone.style.transformOrigin = 'right bottom';
             if (!q || q.enabled !== true || !q.data || typeof q.data !== 'string') {
                 zone.classList.remove('ov-show', 'ov-on');
                 canvasWrap.textContent = '';
@@ -1571,9 +1613,14 @@ var qrcode = (function () {
                     var ang = phase * 2 * Math.PI;
                     var dx = Math.round(Math.cos(ang) * amp);
                     var dy = Math.round(Math.sin(ang) * amp);
-                    applyShift($('ov-clock'), dx, dy);
-                    applyShift($('ov-qr'), -dx, dy);
-                    applyShift($('ov-banner'), 0, -Math.abs(dy));
+                    // Chaque zone : pixel-shift COMPOSE avec son scale courant (un seul
+                    // style.transform). #ov-banner reste sans scale (le scale est porte
+                    // par .ov-banner-body), il ne recoit donc que le shift.
+                    applyShift($('ov-clock'), dx, dy, state.scale.clock);
+                    applyShift($('ov-qr'), -dx, dy, state.scale.qr);
+                    applyShift($('ov-banner'), 0, -Math.abs(dy), 1.0);
+                    // #ov-cards : translateX(-50%) (centrage) + shift + scale, origine bas-centre.
+                    applyCardsTransform(dx, dy, state.scale.cards);
                 } catch (e) { /* silencieux */ }
             };
             tick();
@@ -1581,43 +1628,70 @@ var qrcode = (function () {
             state.shiftTimer = setInterval(tick, 2000);
         } catch (e) { /* pas critique */ }
     }
-    function applyShift(el, dx, dy) {
+    function applyShift(el, dx, dy, scale) {
         if (!el) return;
-        // On preserve translateX(-50%) eventuel des cartes : ici les zones
-        // visees (clock/qr/banner) n'utilisent pas ce centrage.
-        el.style.transform = 'translate3d(' + dx + 'px,' + dy + 'px,0)';
+        // Zones non centrees (clock/qr/banner) : translate (shift) puis scale.
+        // L'ordre translate->scale est correct car le scale s'applique autour de
+        // l'origine deja positionnee par transform-origin (haut-droite / bas-droite).
+        var s = (typeof scale === 'number') ? scale : 1.0;
+        var t = 'translate3d(' + dx + 'px,' + dy + 'px,0)';
+        if (s !== 1.0) t += ' scale(' + s + ')';
+        el.style.transform = t;
+    }
+    function applyCardsTransform(dx, dy, scale) {
+        // #ov-cards a un centrage de base translateX(-50%) qui DOIT etre conserve.
+        // Composition : translateX(-50%) (centrage) + translate3d(shift) + scale.
+        // Le translateX(-50%) reste en tete pour ne pas casser le centrage ; le scale
+        // est en queue avec transform-origin bas-centre -> grossit autour du centre-bas.
+        var el = $('ov-cards');
+        if (!el) return;
+        var s = (typeof scale === 'number') ? scale : 1.0;
+        var t = 'translateX(-50%) translate3d(' + dx + 'px,' + dy + 'px,0)';
+        if (s !== 1.0) t += ' scale(' + s + ')';
+        el.style.transform = t;
     }
 
     // ============ VALIDATION / RENDU GLOBAL ============
+    // Normalise une taille en sm|md|lg|xl (defaut md). Meme regle pour global et par-video.
+    function validSize(v) {
+        return (v === 'sm' || v === 'md' || v === 'lg' || v === 'xl') ? v : 'md';
+    }
+
     function validateConfig(raw) {
         // Retourne une config sure : merge avec DEFAULTS, tolere les manques.
+        // MEME validation pour l'overlay GLOBAL et chaque overlay PAR-VIDEO.
         var cfg = {
             version: 1,
             enabled: true,
             lang: 'fr',
-            banner: { enabled: true, name: DEFAULTS.banner.name, subtitle: '', logo: null },
-            clock: { enabled: true },
+            banner: { enabled: true, name: DEFAULTS.banner.name, subtitle: '', logo: null, size: 'md' },
+            clock: { enabled: true, size: 'md' },
+            cards_size: 'md',
             cards: [],
-            qr: { enabled: false, label: '', data: '' }
+            qr: { enabled: false, label: '', data: '', size: 'md' }
         };
         try {
             if (raw && typeof raw === 'object') {
                 if (raw.enabled === false) cfg.enabled = false;
                 if (raw.lang === 'nl' || raw.lang === 'fr') cfg.lang = raw.lang;
+                cfg.cards_size = validSize(raw.cards_size);
                 if (raw.banner && typeof raw.banner === 'object') {
                     cfg.banner.enabled = raw.banner.enabled !== false;
                     if (typeof raw.banner.name === 'string') cfg.banner.name = raw.banner.name;
                     if (typeof raw.banner.subtitle === 'string') cfg.banner.subtitle = raw.banner.subtitle;
                     cfg.banner.logo = (typeof raw.banner.logo === 'string' && raw.banner.logo) ? raw.banner.logo : null;
+                    cfg.banner.size = validSize(raw.banner.size);
                 }
                 if (raw.clock && typeof raw.clock === 'object') {
                     cfg.clock.enabled = raw.clock.enabled !== false;
+                    cfg.clock.size = validSize(raw.clock.size);
                 }
                 if (Array.isArray(raw.cards)) cfg.cards = raw.cards;
                 if (raw.qr && typeof raw.qr === 'object') {
                     cfg.qr.enabled = raw.qr.enabled === true;
                     if (typeof raw.qr.label === 'string') cfg.qr.label = raw.qr.label;
                     if (typeof raw.qr.data === 'string') cfg.qr.data = raw.qr.data;
+                    cfg.qr.size = validSize(raw.qr.size);
                 }
             }
         } catch (e) {
@@ -1626,7 +1700,9 @@ var qrcode = (function () {
         return cfg;
     }
 
-    function renderAll(cfg) {
+    // Rendu PARAMETRE par une config (globale OU par-video). Centralise tout le rendu
+    // de zones pour que applyGlobal() et applyForItem() partagent exactement le meme code.
+    function applyConfig(cfg) {
         state.cfg = cfg;
 
         var root = $('overlay-root');
@@ -1638,9 +1714,21 @@ var qrcode = (function () {
 
         renderBanner(cfg);
         renderClockZone(cfg);
-        startClock();
-        startCarousel(cfg);
+        startClock();          // l'horloge tourne en continu (startClock est idempotent)
+        startCarousel(cfg);    // le carrousel redemarre proprement sur la nouvelle config
         renderQR(cfg);
+    }
+
+    // Render du GLOBAL : memorise la config globale, puis l'affiche SI aucun overlay
+    // par-video n'est actuellement actif (sinon on garde l'overlay par-video a l'ecran).
+    function renderAll(cfg) {
+        state.globalCfg = cfg;
+        // currentBasename non vide ET present dans la map => un overlay par-video est
+        // affiche : on ne l'ecrase pas avec le global (le par-video REMPLACE le global).
+        if (state.currentBasename && state.mediaMap && state.mediaMap[state.currentBasename]) {
+            return;
+        }
+        applyConfig(cfg);
     }
 
     // Mode degrade : bandeau + horloge avec valeurs par defaut, rien d'autre.
@@ -1650,6 +1738,7 @@ var qrcode = (function () {
             cfg.cards = [];
             cfg.qr.enabled = false;
             state.cfg = cfg;
+            if (!state.globalCfg) state.globalCfg = cfg; // repli global tant que rien n'est charge
             var root = $('overlay-root');
             if (root) root.style.display = '';
             renderBanner(cfg);
@@ -1692,10 +1781,105 @@ var qrcode = (function () {
         }
     }
 
+    // ============ FETCH MAP OVERLAYS PAR-VIDEO ============
+    // Recupere /data/media-overlays.json = {basename: overlay}. Absent/invalide => {}.
+    // Chaque overlay est valide a l'application (applyForItem) via la MEME validateConfig.
+    function fetchMedia() {
+        try {
+            var url = MEDIA_URL + '?_=' + Date.now();
+            fetch(url, { cache: 'no-store' })
+                .then(function (resp) {
+                    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                    return resp.json();
+                })
+                .then(function (raw) {
+                    state.mediaMap = (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw : {};
+                    // Si l'item courant possede desormais (ou n'a plus) un overlay par-video,
+                    // re-appliquer le bon overlay sans attendre le prochain changement d'item.
+                    if (window.PiSignageOverlay && window.PiSignageOverlay.reapply) {
+                        window.PiSignageOverlay.reapply();
+                    }
+                })
+                .catch(function () {
+                    // Map absente/corrompue : on garde la precedente si on en a une,
+                    // sinon map vide (=> overlay global partout).
+                    if (!state.mediaMap) state.mediaMap = {};
+                });
+        } catch (e) {
+            if (!state.mediaMap) state.mediaMap = {};
+        }
+    }
+
     function startRefresh() {
         if (state.refreshTimer) clearInterval(state.refreshTimer);
-        state.refreshTimer = setInterval(fetchConfig, REFRESH_MS);
+        // Meme cadence (5 min) pour le global ET la map par-video.
+        state.refreshTimer = setInterval(function () {
+            fetchConfig();
+            fetchMedia();
+        }, REFRESH_MS);
     }
+
+    // ============ BASENAME ============
+    // basename = dernier segment de l'url, sans query (?) ni ancre (#).
+    function basenameOf(item) {
+        try {
+            if (!item || !item.url) return '';
+            return String(item.url).split('?')[0].split('#')[0].split('/').pop() || '';
+        } catch (e) { return ''; }
+    }
+
+    // ============ API PUBLIQUE (window.PiSignageOverlay) ============
+    // Applique l'overlay GLOBAL (repli quand l'item n'a pas d'overlay dedie).
+    function applyGlobal() {
+        try {
+            // NE PAS effacer state.currentBasename ici : il doit toujours refleter l'item
+            // courant (positionne par applyForItem). Sinon, si applyForItem tombe sur le
+            // global parce que la map par-video n'est pas encore chargee, on perdrait la
+            // trace de l'item et reapply() (apres chargement de la map) ne pourrait plus
+            // re-cibler l'overlay par-video. renderAll() decide via mediaMap[currentBasename].
+            var cfg = state.globalCfg || validateConfig(null);
+            applyConfig(cfg);
+        } catch (e) {
+            try { renderDegraded(); } catch (e2) {}
+        }
+    }
+
+    // Applique l'overlay du fichier courant : par-video s'il existe (REMPLACE le global),
+    // sinon global. item null/absent => global. Aucune fusion.
+    function applyForItem(item) {
+        try {
+            var bn = basenameOf(item);
+            state.currentBasename = bn;
+            var raw = (bn && state.mediaMap && Object.prototype.hasOwnProperty.call(state.mediaMap, bn))
+                ? state.mediaMap[bn] : null;
+            if (raw) {
+                // Overlay par-video : valide via la MEME validateConfig, puis remplace tout.
+                applyConfig(validateConfig(raw));
+            } else {
+                applyGlobal();
+            }
+        } catch (e) {
+            // Mode degrade strict : ne casse jamais la video.
+            try { applyGlobal(); } catch (e2) { try { renderDegraded(); } catch (e3) {} }
+        }
+    }
+
+    // Re-applique l'overlay du fichier courant (ex: apres un refresh de la map par-video).
+    function reapply() {
+        try {
+            if (state.currentBasename) {
+                applyForItem({ url: state.currentBasename });
+            } else {
+                applyGlobal();
+            }
+        } catch (e) { /* silencieux */ }
+    }
+
+    window.PiSignageOverlay = {
+        applyForItem: applyForItem,
+        applyGlobal: applyGlobal,
+        reapply: reapply
+    };
 
     // ============ BOOT ============
     function boot() {
@@ -1705,6 +1889,7 @@ var qrcode = (function () {
             renderDegraded();
             startPixelShift();
             fetchConfig();
+            fetchMedia();
             startRefresh();
         } catch (e) {
             // L'overlay ne doit JAMAIS empecher le lecteur de tourner.

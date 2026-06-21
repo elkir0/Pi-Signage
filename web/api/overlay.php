@@ -7,12 +7,20 @@
  * JSON file shared with the public player (served by nginx at
  * /data/overlay-content.json).
  *
- *   GET  /api/overlay.php  -> current content (or defaults if absent/corrupt)
- *   POST /api/overlay.php  -> validate schema and persist atomically
+ *   GET    /api/overlay.php                     -> global content (or defaults)
+ *   POST   /api/overlay.php                     -> validate + persist the global
+ *   GET    /api/overlay.php?target=media        -> map {filename: overlay}
+ *   GET    /api/overlay.php?target=media&file=X -> per-video overlay (or {exists:false})
+ *   POST   /api/overlay.php?target=media&file=X -> save the per-video overlay
+ *   DELETE /api/overlay.php?target=media&file=X -> drop the per-video overlay
  *
- * The player MUST keep working even if this file is absent or corrupt
+ * Per-video overlays use REPLACE semantics (no merge with the global): when
+ * present for the current item's basename, the player shows that overlay
+ * instead of the global one.
+ *
+ * The player MUST keep working even if these files are absent or corrupt
  * (degraded mode handled player-side); here we just guarantee that we only
- * ever write a well-formed, validated document.
+ * ever write well-formed, validated documents.
  */
 
 require_once __DIR__ . '/_guard.php';
@@ -20,10 +28,32 @@ require_once '../config.php';
 
 header('Content-Type: application/json');
 
-// Robust absolute path (resolves regardless of CWD / symlinks).
+// Robust absolute paths (resolve regardless of CWD / symlinks).
 define('OVERLAY_FILE', dirname(__DIR__) . '/data/overlay-content.json');
+define('MEDIA_OVERLAYS_FILE', dirname(__DIR__) . '/data/media-overlays.json');
 
 $method = $_SERVER['REQUEST_METHOD'];
+$target = isset($_GET['target']) ? (string)$_GET['target'] : '';
+
+// Per-video overlays (REPLACE semantics, stored in media-overlays.json).
+if ($target === 'media') {
+    $file = isset($_GET['file']) ? (string)$_GET['file'] : '';
+    switch ($method) {
+        case 'GET':
+            handleGetMediaOverlay($file);
+            break;
+        case 'POST':
+            $input = json_decode(file_get_contents('php://input'), true);
+            handleSaveMediaOverlay($file, $input);
+            break;
+        case 'DELETE':
+            handleDeleteMediaOverlay($file);
+            break;
+        default:
+            jsonResponse(false, null, 'Méthode non autorisée', 405);
+    }
+    return;
+}
 
 switch ($method) {
     case 'GET':
@@ -64,18 +94,20 @@ function overlayLoad(): array {
 
 function overlayDefaults(): array {
     return [
-        'version' => 1,
-        'enabled' => true,
-        'lang'    => 'fr',
-        'banner'  => [
+        'version'    => 1,
+        'enabled'    => true,
+        'lang'       => 'fr',
+        'banner'     => [
             'enabled'  => true,
             'name'     => 'PiSignage',
             'subtitle' => 'Affichage dynamique',
             'logo'     => null,
+            'size'     => 'md',
         ],
-        'clock'   => ['enabled' => true],
-        'cards'   => [],
-        'qr'      => ['enabled' => false, 'label' => '', 'data' => ''],
+        'clock'      => ['enabled' => true, 'size' => 'md'],
+        'cards_size' => 'md',
+        'cards'      => [],
+        'qr'         => ['enabled' => false, 'label' => '', 'data' => '', 'size' => 'md'],
     ];
 }
 
@@ -101,6 +133,189 @@ function handleSaveOverlay($input) {
     }
 
     jsonResponse(true, $clean, 'Overlay enregistré');
+}
+
+/* ------------------------------------------------------------------ */
+/* Per-video overlays (target=media)                                   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * GET ?target=media            -> full map {filename: overlayNormalized}.
+ * GET ?target=media&file=X     -> normalized overlay for X, or {exists:false}.
+ */
+function handleGetMediaOverlay(string $file) {
+    $map = mediaOverlaysLoad();
+
+    if ($file === '') {
+        $out = [];
+        foreach ($map as $name => $ov) {
+            $out[$name] = overlayNormalize($ov);
+        }
+        jsonResponse(true, $out);
+        return;
+    }
+
+    $name = mediaOverlayKey($file);
+    if ($name === null) {
+        jsonResponse(false, null, 'Nom de fichier invalide', 400);
+        return;
+    }
+    if (!isset($map[$name]) || !is_array($map[$name])) {
+        jsonResponse(true, ['exists' => false]);
+        return;
+    }
+    jsonResponse(true, overlayNormalize($map[$name]));
+}
+
+/**
+ * POST ?target=media&file=X -> validate the body and store it under key X
+ * in media-overlays.json (whole file written atomically).
+ */
+function handleSaveMediaOverlay(string $file, $input) {
+    $name = mediaOverlayKey($file);
+    if ($name === null) {
+        jsonResponse(false, null, 'Nom de fichier invalide', 400);
+        return;
+    }
+    if (!is_array($input)) {
+        jsonResponse(false, null, 'Corps de requête JSON invalide', 400);
+        return;
+    }
+
+    $clean = overlayValidate($input);
+    if ($clean === null) {
+        jsonResponse(false, null, 'Données overlay invalides', 422);
+        return;
+    }
+
+    $map = mediaOverlaysLoad();
+    $map[$name] = $clean;
+
+    if (!mediaOverlaysWriteAtomic($map)) {
+        jsonResponse(false, null, 'Échec de l\'écriture du fichier overlay par-vidéo', 500);
+        return;
+    }
+
+    jsonResponse(true, $clean, 'Overlay par-vidéo enregistré');
+}
+
+/**
+ * DELETE ?target=media&file=X -> remove key X (item reverts to the global
+ * overlay player-side). Idempotent: deleting an absent key still succeeds.
+ */
+function handleDeleteMediaOverlay(string $file) {
+    $name = mediaOverlayKey($file);
+    if ($name === null) {
+        jsonResponse(false, null, 'Nom de fichier invalide', 400);
+        return;
+    }
+
+    $map = mediaOverlaysLoad();
+    if (array_key_exists($name, $map)) {
+        unset($map[$name]);
+        if (!mediaOverlaysWriteAtomic($map)) {
+            jsonResponse(false, null, 'Échec de l\'écriture du fichier overlay par-vidéo', 500);
+            return;
+        }
+    }
+
+    jsonResponse(true, ['deleted' => $name], 'Overlay par-vidéo supprimé');
+}
+
+/**
+ * Load the per-video overlay map. Falls back to an empty map if the file is
+ * missing or unreadable/corrupt. Never throws.
+ */
+function mediaOverlaysLoad(): array {
+    if (is_readable(MEDIA_OVERLAYS_FILE)) {
+        $raw = @file_get_contents(MEDIA_OVERLAYS_FILE);
+        if ($raw !== false) {
+            $data = json_decode($raw, true);
+            if (is_array($data)) {
+                // Keep only string keys mapping to array overlays.
+                $out = [];
+                foreach ($data as $k => $v) {
+                    if (is_string($k) && is_array($v)) {
+                        $key = mediaOverlayKey($k);
+                        if ($key !== null) {
+                            $out[$key] = $v;
+                        }
+                    }
+                }
+                return $out;
+            }
+        }
+    }
+    return [];
+}
+
+/**
+ * Sanitize an incoming file reference into a safe map key (basename only).
+ * Drops any path/query, rejects traversal, bounds length, allows a
+ * conservative character set. Returns null when nothing safe remains.
+ */
+function mediaOverlayKey($file): ?string {
+    if (!is_string($file)) {
+        return null;
+    }
+    // Strip a possible query/fragment, then take the last path segment.
+    $file = preg_replace('/[?#].*$/', '', $file);
+    $file = str_replace('\\', '/', $file);
+    $file = basename($file);
+    $file = trim($file);
+
+    if ($file === '' || $file === '.' || $file === '..') {
+        return null;
+    }
+    if (strpos($file, '/') !== false) {
+        return null;
+    }
+    // Conservative safe set for media basenames.
+    if (!preg_match('/^[A-Za-z0-9._\- ()]+$/', $file)) {
+        return null;
+    }
+    if (strlen($file) > 200) {
+        return null;
+    }
+    return $file;
+}
+
+/** Atomic whole-file write of the per-video overlay map (tmp + rename). */
+function mediaOverlaysWriteAtomic(array $map): bool {
+    $dir = dirname(MEDIA_OVERLAYS_FILE);
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0755, true);
+    }
+    if (!is_writable($dir) && !is_writable(MEDIA_OVERLAYS_FILE)) {
+        return false;
+    }
+
+    // Encode an empty map as a JSON object, not an array.
+    $payload = empty($map) ? new stdClass() : $map;
+    $json = json_encode(
+        $payload,
+        JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+    );
+    if ($json === false) {
+        return false;
+    }
+
+    $tmp = @tempnam($dir, '.media-overlays.');
+    if ($tmp === false) {
+        return false;
+    }
+
+    if (@file_put_contents($tmp, $json . "\n") === false) {
+        @unlink($tmp);
+        return false;
+    }
+    @chmod($tmp, 0644);
+
+    if (!@rename($tmp, MEDIA_OVERLAYS_FILE)) {
+        @unlink($tmp);
+        return false;
+    }
+    return true;
 }
 
 /**
@@ -132,11 +347,18 @@ function overlayValidate($in): ?array {
         'name'     => overlayStr($banner['name'] ?? '', 80),
         'subtitle' => overlayStr($banner['subtitle'] ?? '', 160),
         'logo'     => $logo,
+        'size'     => overlaySize($banner['size'] ?? 'md'),
     ];
 
     // Clock.
     $clock = is_array($in['clock'] ?? null) ? $in['clock'] : [];
-    $out['clock'] = ['enabled' => overlayBool($clock['enabled'] ?? true)];
+    $out['clock'] = [
+        'enabled' => overlayBool($clock['enabled'] ?? true),
+        'size'    => overlaySize($clock['size'] ?? 'md'),
+    ];
+
+    // Common size for info cards.
+    $out['cards_size'] = overlaySize($in['cards_size'] ?? 'md');
 
     // Cards (rotating info). Hard cap to keep the player light.
     $out['cards'] = [];
@@ -172,6 +394,7 @@ function overlayValidate($in): ?array {
         'enabled' => overlayBool($qr['enabled'] ?? false),
         'label'   => overlayStr($qr['label'] ?? '', 60),
         'data'    => overlayStr($qr['data'] ?? '', 512),
+        'size'    => overlaySize($qr['size'] ?? 'md'),
     ];
 
     return $out;
@@ -209,6 +432,15 @@ function overlayIcon($v): string {
     $allowed = ['info', 'alert', 'clock', 'check', 'check-circle', 'calendar', 'wifi', 'volume', 'user'];
     $v = is_string($v) ? strtolower(trim($v)) : 'info';
     return in_array($v, $allowed, true) ? $v : 'info';
+}
+
+/**
+ * Bound a size token to the shared scale {sm, md, lg, xl} (default "md").
+ * Scale factors are applied player-side: sm=0.8, md=1.0, lg=1.25, xl=1.5.
+ */
+function overlaySize($v): string {
+    $v = is_string($v) ? strtolower(trim($v)) : 'md';
+    return in_array($v, ['sm', 'md', 'lg', 'xl'], true) ? $v : 'md';
 }
 
 /** Re-validate an already-stored document so GET never serves garbage. */

@@ -6,11 +6,14 @@
         "enabled": true,
         "name": "PiSignage",
         "subtitle": "Affichage dynamique · Lun–Ven 9h–18h",
-        "logo": null
+        "logo": null,
+        "size": "md"
     },
     "clock": {
-        "enabled": true
+        "enabled": true,
+        "size": "md"
     },
+    "cards_size": "md",
     "cards": [
         {
             "icon": "info",
@@ -34,6 +37,7 @@
     "qr": {
         "enabled": false,
         "label": "Plus d'infos",
-        "data": "https://example.com"
+        "data": "https://example.com",
+        "size": "md"
     }
 }
