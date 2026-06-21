@@ -4,12 +4,6 @@
  * available for inline onclick handlers on pages not yet migrated.
  */
 
-// YouTube monitor state (used by setupYouTubeHandlers)
-let youtubeMonitorInterval = null;
-let downloadStartTime = null;
-let currentDownloadUrl = '';
-let currentDownloadQuality = '';
-
 document.addEventListener('DOMContentLoaded', function () {
     const page = (document.body && document.body.getAttribute('data-page')) || '';
     const P = window.PiSignage || (window.PiSignage = {});
@@ -27,7 +21,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Shared global handlers (define window.* used by inline onclick on legacy pages)
     setupScreenshotHandlers();
-    setupYouTubeHandlers();
     setupSystemHandlers();
     setupSettingsHandlers();
     setupLogsHandlers();
@@ -74,79 +67,7 @@ function setupScreenshotHandlers() {
     };
 }
 
-/* ===================== YouTube ===================== */
-function setupYouTubeHandlers() {
-    window.downloadYoutube = async function () {
-        const urlInput = document.getElementById('youtube-url');
-        const qualitySelect = document.getElementById('youtube-quality');
-        if (!urlInput) return;
-
-        const url = urlInput.value;
-        const quality = qualitySelect ? qualitySelect.value : 'best';
-        currentDownloadUrl = url;
-        currentDownloadQuality = quality;
-
-        if (!url) { showAlert('Entrez une URL YouTube', 'error'); return; }
-
-        showAlert('Lancement du téléchargement…', 'info');
-        const progressDiv = document.getElementById('youtube-progress');
-        if (progressDiv) progressDiv.style.display = 'block';
-        downloadStartTime = Date.now();
-
-        try {
-            const data = await PiSignage.api.youtube.download(url, quality);
-            if (data.success) {
-                startYoutubeMonitoring();
-            } else {
-                showAlert('Erreur : ' + data.message, 'error');
-                if (progressDiv) progressDiv.style.display = 'none';
-            }
-        } catch (error) {
-            console.error('YouTube download error:', error);
-            showAlert('Erreur de connexion', 'error');
-            if (progressDiv) progressDiv.style.display = 'none';
-        }
-    };
-
-    function startYoutubeMonitoring() {
-        let checkCount = 0;
-        const maxChecks = 120;
-        youtubeMonitorInterval = setInterval(async () => {
-            checkCount++;
-            try {
-                const data = await PiSignage.api.youtube.getStatus();
-                const progressBar = document.getElementById('youtube-progress-fill');
-                if (data.downloading) {
-                    if (data.log) {
-                        const lines = data.log.split('\n').filter(l => l.trim());
-                        const lastLine = lines[lines.length - 1] || '';
-                        const m = lastLine.match(/(\d+\.?\d*)%/);
-                        if (m && progressBar) progressBar.style.width = parseFloat(m[1]) + '%';
-                    }
-                } else {
-                    clearInterval(youtubeMonitorInterval);
-                    const elapsed = Math.round((Date.now() - downloadStartTime) / 1000);
-                    showAlert('Vidéo téléchargée (' + elapsed + 's)', 'success');
-                    const pd = document.getElementById('youtube-progress');
-                    if (pd) pd.style.display = 'none';
-                    if (PiSignage.media && PiSignage.media.loadMediaFiles) {
-                        setTimeout(() => PiSignage.media.loadMediaFiles(), 2000);
-                    }
-                    const urlInput = document.getElementById('youtube-url');
-                    if (urlInput) urlInput.value = '';
-                }
-                if (checkCount >= maxChecks) {
-                    clearInterval(youtubeMonitorInterval);
-                    const pd = document.getElementById('youtube-progress');
-                    if (pd) pd.style.display = 'none';
-                    showAlert('Délai dépassé — vérifiez les logs', 'warning');
-                }
-            } catch (error) {
-                console.error('YouTube monitoring error:', error);
-            }
-        }, 5000);
-    }
-}
+/* YouTube download wiring now lives in assets/js/youtube.js (PiSignage.youtube). */
 
 /* ===================== System ===================== */
 function setupSystemHandlers() {
@@ -207,7 +128,6 @@ function setupLogsHandlers() {
 /* ===================== Cleanup ===================== */
 window.addEventListener('beforeunload', function () {
     try { if (window.autoScreenshotInterval) clearInterval(window.autoScreenshotInterval); } catch (e) {}
-    try { if (youtubeMonitorInterval) clearInterval(youtubeMonitorInterval); } catch (e) {}
     try { if (PiSignage.intervals && PiSignage.intervals.stopAll) PiSignage.intervals.stopAll(); } catch (e) {}
 });
 

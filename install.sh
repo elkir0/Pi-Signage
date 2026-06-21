@@ -303,6 +303,23 @@ install_dependencies() {
     log_info "Toutes les dépendances installées"
 }
 
+# Installe un yt-dlp géré par PiSignage : binaire standalone dans /opt/pisignage/bin,
+# propriété www-data, donc auto-updatable via `yt-dlp -U` (et depuis l'UI) SANS sudo.
+# Le paquet apt yt-dlp ne peut pas se self-update et vieillit vite (échecs de téléchargement).
+install_managed_ytdlp() {
+    log_step "Installation de yt-dlp géré (auto-updatable)"
+    sudo mkdir -p "$INSTALL_DIR/bin"
+    if sudo curl -fsSL --max-time 60 \
+        https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
+        -o "$INSTALL_DIR/bin/yt-dlp" 2>/dev/null; then
+        sudo chmod 0755 "$INSTALL_DIR/bin/yt-dlp"
+        sudo chown -R www-data:www-data "$INSTALL_DIR/bin"
+        log_info "yt-dlp géré installé: $(sudo -u www-data "$INSTALL_DIR/bin/yt-dlp" --version 2>/dev/null || echo 'version inconnue')"
+    else
+        log_info "ATTENTION: téléchargement de yt-dlp géré échoué — repli sur le paquet apt (mises à jour limitées)"
+    fi
+}
+
 # Création de la structure de dossiers
 create_structure() {
     log_step "Création de la structure PiSignage"
@@ -1299,6 +1316,7 @@ main() {
     update_system
     install_dependencies
     create_structure
+    install_managed_ytdlp
     clone_from_github
     download_bbb
     create_config_php

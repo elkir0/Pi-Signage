@@ -14,7 +14,7 @@ if (session_status() === PHP_SESSION_NONE) {
 
 // Asset cache-busting version (bump when CSS/JS change). Single source of truth.
 if (!defined('ASSET_VERSION')) {
-    define('ASSET_VERSION', '0.12.1');
+    define('ASSET_VERSION', '0.12.2');
 }
 
 // Configuration
