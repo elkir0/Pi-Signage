@@ -54,46 +54,72 @@ header('Expires: 0');
             justify-content: center;
         }
 
-        #video {
+        /* Double <video> (C1) : un joue pendant que l'autre précharge l'item suivant.
+           Crossfade par opacité -> aucun flash noir entre les items. */
+        #video, #video2 {
+            position: absolute;
+            inset: 0;
             width: 100%;
             height: 100%;
-            object-fit: contain; /* Default, sera mis à jour dynamiquement */
+            object-fit: contain; /* mis à jour dynamiquement par item.fit */
+            opacity: 0;
+            transition: opacity .45s ease;
         }
+        #video.is-active, #video2.is-active { opacity: 1; }
 
         #image {
+            position: absolute;
+            inset: 0;
             width: 100%;
             height: 100%;
             object-fit: contain; /* Default, sera mis à jour dynamiquement */
+            opacity: 0;
+            transition: opacity .45s ease;
             display: none; /* Masqué par défaut, affiché pour les items image */
         }
+        #image.is-active { opacity: 1; }
 
+        /* Splash de marque (R4) : affiché au boot et tant qu'aucun contenu ne joue,
+           au lieu d'une page blanche / d'un simple texte. */
         #loading {
             position: absolute;
-            color: #e6ebf2;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            font-size: 1.05rem;
-            font-weight: 500;
-            letter-spacing: .2px;
-            text-align: center;
+            inset: 0;
             z-index: 10;
             display: flex;
+            flex-direction: column;
             align-items: center;
-            gap: 12px;
+            justify-content: center;
+            gap: 18px;
+            background: radial-gradient(1200px 600px at 50% 35%, #0d1421 0%, #000 70%);
+            color: #e6ebf2;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         }
-
-        #loading::before {
-            content: "";
-            width: 14px;
-            height: 14px;
-            border-radius: 50%;
-            background: #34d399;
-            box-shadow: 0 0 14px #34d399;
-            animation: ps-pulse 1.4s ease-in-out infinite;
+        #loading .splash-logo {
+            width: 84px;
+            height: 84px;
+            border-radius: 22px;
+            background: linear-gradient(135deg, #34d399, #059669);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 14px 40px -10px rgba(16, 185, 129, 0.55);
+            animation: ps-pulse 1.8s ease-in-out infinite;
         }
-
+        #loading .splash-logo svg { width: 46px; height: 46px; stroke: #04130c; stroke-width: 2.2; fill: none; }
+        #loading .splash-title {
+            font-size: 1.9rem;
+            font-weight: 800;
+            letter-spacing: -.5px;
+        }
+        #loading .splash-msg {
+            font-size: 1rem;
+            font-weight: 500;
+            color: #8b98ad;
+            letter-spacing: .2px;
+        }
         @keyframes ps-pulse {
-            0%, 100% { opacity: .35; transform: scale(.85); }
-            50%      { opacity: 1;   transform: scale(1.1); }
+            0%, 100% { transform: scale(1);    box-shadow: 0 14px 40px -10px rgba(16,185,129,0.45); }
+            50%      { transform: scale(1.06); box-shadow: 0 18px 52px -8px rgba(16,185,129,0.7); }
         }
 
         #error {
@@ -345,6 +371,7 @@ header('Expires: 0');
 
 <div id="player-container">
     <video id="video" playsinline></video>
+    <video id="video2" playsinline></video>
     <img id="image" alt="">
 
     <!-- ============================================================== -->
@@ -380,7 +407,11 @@ header('Expires: 0');
         </div>
     </div>
 
-    <div id="loading">Loading playlist...</div>
+    <div id="loading">
+        <div class="splash-logo"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div>
+        <div class="splash-title">PiSignage</div>
+        <div class="splash-msg" id="loading-msg">Démarrage…</div>
+    </div>
     <div id="error"></div>
     <div id="debug">
         <div>Status: <span id="debug-status">initializing</span></div>
@@ -402,7 +433,11 @@ header('Expires: 0');
 
 class PiSignagePlayer {
     constructor() {
-        this.video = document.getElementById('video');
+        // Double <video> pour préchargement + crossfade (C1, anti flash noir).
+        this.videoEls = [document.getElementById('video'), document.getElementById('video2')];
+        this.activeIdx = 0;
+        this.video = this.videoEls[this.activeIdx]; // référence TOUJOURS la vidéo active (visible)
+        this.preloadIdx = -1;                       // index playlist préchargé dans la vidéo inactive
         this.image = document.getElementById('image');
         this.loading = document.getElementById('loading');
         this.errorDiv = document.getElementById('error');
@@ -438,38 +473,32 @@ class PiSignagePlayer {
     }
 
     setupEventListeners() {
-        // Événements vidéo
-        this.video.addEventListener('loadedmetadata', () => {
-            console.log('[Video] Metadata loaded:', this.video.duration, 'seconds');
-            this.updateDebug('status', 'playing');
-        });
-
-        this.video.addEventListener('canplay', () => {
-            console.log('[Video] Can play');
-            this.hideLoading();
-        });
-
-        this.video.addEventListener('playing', () => {
-            console.log('[Video] Playing');
-            this.hideError();
-        });
-
-        this.video.addEventListener('ended', () => {
-            console.log('[Video] Ended');
-            this.handleVideoEnded();
-        });
-
-        this.video.addEventListener('error', (e) => {
-            console.error('[Video] Error:', e);
-            this.handleVideoError();
-        });
-
-        this.video.addEventListener('stalled', () => {
-            console.warn('[Video] Stalled');
-        });
-
-        this.video.addEventListener('waiting', () => {
-            console.log('[Video] Waiting for data...');
+        // Les écouteurs sont posés sur LES DEUX <video> ; chaque handler n'agit que pour
+        // la vidéo ACTIVE (l'autre est en préchargement et ne doit pas piloter la lecture).
+        this.videoEls.forEach((vid) => {
+            vid.addEventListener('loadedmetadata', () => {
+                if (vid !== this.video) return;
+                console.log('[Video] Metadata loaded:', vid.duration, 'seconds');
+                this.updateDebug('status', 'playing');
+            });
+            vid.addEventListener('canplay', () => {
+                if (vid !== this.video) return;
+                this.hideLoading();
+            });
+            vid.addEventListener('playing', () => {
+                if (vid !== this.video) return;
+                this.hideError();
+            });
+            vid.addEventListener('ended', () => {
+                if (vid !== this.video) return;
+                console.log('[Video] Ended');
+                this.handleVideoEnded();
+            });
+            vid.addEventListener('error', () => {
+                if (vid !== this.video) return;
+                console.error('[Video] Error');
+                this.handleVideoError();
+            });
         });
 
         // Visibilité page (réacquérir Wake Lock si nécessaire)
@@ -509,9 +538,9 @@ class PiSignagePlayer {
     async loadPlaylist() {
         try {
             console.log('[Playlist] Loading from /api/playlist...');
-            this.showLoading('Loading playlist...');
+            this.showLoading('Chargement de la playlist…');
 
-            const response = await fetch('/api/playlist');
+            const response = await fetch('/api/playlist', { cache: 'no-store' });
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
@@ -521,14 +550,19 @@ class PiSignagePlayer {
                 throw new Error(result.message || 'Failed to load playlist');
             }
 
-            this.playlist = result.data;
-            console.log('[Playlist] Loaded:', this.playlist);
-
-            this.updateDebug('playlist-items', this.playlist.items.length);
-
-            if (!this.playlist.items || this.playlist.items.length === 0) {
+            const pl = result.data;
+            // Vérifier AVANT d'écraser la playlist courante (une réponse vide transitoire
+            // ne doit pas effacer un contenu valide en cours de lecture).
+            if (!pl.items || pl.items.length === 0) {
                 throw new Error('Playlist is empty');
             }
+
+            this.playlist = pl;
+            console.log('[Playlist] Loaded:', this.playlist);
+            this.updateDebug('playlist-items', this.playlist.items.length);
+
+            // Cache hors-ligne (R5) : mémorise la dernière playlist valide.
+            try { localStorage.setItem('pisignage:last-playlist', JSON.stringify(this.playlist)); } catch (e) {}
 
             // Démarrer lecture si autoplay
             if (this.playlist.autoplay) {
@@ -539,6 +573,25 @@ class PiSignagePlayer {
 
         } catch (error) {
             console.error('[Playlist] Load error:', error);
+
+            // Déjà en lecture : ne rien casser, on garde le contenu courant à l'écran.
+            if (this.playlist && this.playlist.items && this.playlist.items.length) {
+                console.warn('[Playlist] Réseau/API indisponible — maintien du contenu courant.');
+                return;
+            }
+
+            // Repli hors-ligne (R5) : rejouer la dernière playlist connue en cache.
+            try {
+                const cached = JSON.parse(localStorage.getItem('pisignage:last-playlist') || 'null');
+                if (cached && cached.items && cached.items.length) {
+                    console.warn('[Playlist] Repli hors-ligne : lecture du dernier contenu connu.');
+                    this.playlist = cached;
+                    this.updateDebug('playlist-items', cached.items.length);
+                    if (cached.autoplay !== false) { this.playItem(0); } else { this.hideLoading(); }
+                    return;
+                }
+            } catch (e) {}
+
             this.showError(`Failed to load playlist: ${error.message}`);
         }
     }
@@ -568,65 +621,76 @@ class PiSignagePlayer {
         this.updateDebug('current-url', item.url);
 
         if (this.isImageItem(item)) {
-            // ----- Chemin IMAGE -----
-            // Stopper toute lecture vidéo en cours et masquer le <video>
-            this.video.pause();
-            this.video.removeAttribute('src');
-            this.video.load();
-            this.video.style.display = 'none';
+            this.showImage(item, index);
+        } else {
+            this.playVideoItem(item, index);
+        }
+    }
 
-            // Afficher l'image
-            this.image.style.objectFit = item.fit || 'contain';
-            this.image.style.display = 'block';
-            this.image.src = item.url;
-            this.hideLoading();
-            this.hideError();
-            this.updateDebug('status', 'playing (image)');
+    // ----- Chemin IMAGE -----
+    showImage(item, index) {
+        // Masquer/mettre en pause les deux vidéos (crossfade géré par opacity).
+        this.videoEls.forEach(v => { v.classList.remove('is-active'); try { v.pause(); } catch (e) {} });
 
-            // Enchaînement via la durée (par défaut 10s si non précisée)
-            const imageDuration = (item.duration && item.duration > 0) ? item.duration : 10;
-            setTimeout(() => {
-                if (this.currentIndex === index) {
-                    console.log(`[Player] Image duration ${imageDuration}s elapsed`);
-                    this.playNext();
-                }
-            }, imageDuration * 1000);
+        this.image.style.objectFit = item.fit || 'contain';
+        this.image.src = item.url;
+        this.image.style.display = 'block';
+        void this.image.offsetWidth; // reflow -> la transition d'opacité s'applique
+        this.image.classList.add('is-active');
+        this.hideLoading();
+        this.hideError();
+        this.updateDebug('status', 'playing (image)');
 
-            this.errorCount = 0; // Reset error count on successful load
-            return;
+        const imageDuration = (item.duration && item.duration > 0) ? item.duration : 10;
+        setTimeout(() => {
+            if (this.currentIndex === index) {
+                console.log(`[Player] Image duration ${imageDuration}s elapsed`);
+                this.playNext();
+            }
+        }, imageDuration * 1000);
+
+        this.errorCount = 0;
+        this.preloadNext(); // précharger l'éventuelle vidéo suivante
+    }
+
+    // ----- Chemin VIDEO (préchargement + crossfade, C1) -----
+    playVideoItem(item, index) {
+        // La vidéo "incoming" est la vidéo INACTIVE (elle contient peut-être déjà l'item préchargé).
+        const newIdx = 1 - this.activeIdx;
+        const incoming = this.videoEls[newIdx];
+
+        incoming.muted = item.mute !== undefined ? item.mute : false;
+        incoming.loop = item.loop !== undefined ? item.loop : false;
+        incoming.style.objectFit = item.fit || 'contain';
+
+        // Charger la source seulement si elle n'est pas déjà préchargée pour cet item.
+        if (this.preloadIdx !== index || incoming.dataset.url !== item.url) {
+            incoming.src = item.url;
+            incoming.dataset.url = item.url;
+            try { incoming.load(); } catch (e) {}
         }
 
-        // ----- Chemin VIDEO -----
-        // Masquer l'image et réafficher le <video>
-        this.image.style.display = 'none';
-        this.image.removeAttribute('src');
-        this.video.style.display = '';
+        const onReady = () => {
+            this.swapTo(newIdx);   // crossfade : incoming devient active
+            this.hideLoading();
+            this.hideError();
+            this.errorCount = 0;   // succès -> reset
+            this.preloadNext();    // précharger le suivant dans la (nouvelle) vidéo inactive
+        };
 
-        // Appliquer paramètres
-        this.video.muted = item.mute !== undefined ? item.mute : false;
-        this.video.loop = item.loop !== undefined ? item.loop : false;
-        this.video.style.objectFit = item.fit || 'contain';
-
-        // Charger source
-        this.video.src = item.url;
-
-        // Jouer
-        this.video.play().catch(err => {
+        incoming.play().then(onReady).catch((err) => {
             console.error('[Player] Play error:', err);
-            // Si autoplay échoue (politique navigateur), retry avec mute
-            if (!this.video.muted) {
-                console.warn('[Player] Autoplay failed, retrying with mute');
-                this.video.muted = true;
-                this.video.play().catch(e => {
-                    console.error('[Player] Play with mute failed:', e);
-                    this.handleVideoError();
-                });
+            if (!incoming.muted) {
+                // Politique autoplay : retry en muet.
+                console.warn('[Player] Autoplay refusé, retry en muet');
+                incoming.muted = true;
+                incoming.play().then(onReady).catch(() => this.skipFailedItem(item, index));
             } else {
-                this.handleVideoError();
+                this.skipFailedItem(item, index);
             }
         });
 
-        // Gérer duration custom (override)
+        // Durée custom (override) : enchaîner après N secondes.
         if (item.duration && item.duration > 0) {
             setTimeout(() => {
                 if (this.currentIndex === index) {
@@ -635,8 +699,62 @@ class PiSignagePlayer {
                 }
             }, item.duration * 1000);
         }
+    }
 
-        this.errorCount = 0; // Reset error count on successful load
+    // Bascule visuelle (crossfade) vers la vidéo d'index newIdx.
+    swapTo(newIdx) {
+        const incoming = this.videoEls[newIdx];
+        const outgoing = this.videoEls[this.activeIdx];
+        incoming.classList.add('is-active');
+        if (incoming !== outgoing) {
+            outgoing.classList.remove('is-active');
+            // Mettre l'ancienne en pause après le crossfade (libère le décodeur GPU).
+            setTimeout(() => { if (outgoing !== this.video) { try { outgoing.pause(); } catch (e) {} } }, 550);
+        }
+        this.activeIdx = newIdx;
+        this.video = incoming;
+        // Masquer l'image (si elle était affichée) après le fondu.
+        this.image.classList.remove('is-active');
+        setTimeout(() => {
+            if (!this.image.classList.contains('is-active')) this.image.style.display = 'none';
+        }, 550);
+    }
+
+    // Précharge l'item suivant (s'il est vidéo) dans la vidéo inactive -> démarrage instantané.
+    preloadNext() {
+        this.preloadIdx = -1;
+        if (!this.playlist || !this.playlist.items || this.playlist.items.length < 2) return;
+
+        let nextIndex = this.currentIndex + 1;
+        if (nextIndex >= this.playlist.items.length) {
+            if (this.playlist.autoLoop) nextIndex = 0; else return;
+        }
+        const nextItem = this.playlist.items[nextIndex];
+        if (!nextItem || this.isImageItem(nextItem)) return; // images : pas de préchargement
+
+        const inactive = this.videoEls[1 - this.activeIdx];
+        if (inactive.dataset.url !== nextItem.url) {
+            inactive.muted = true;       // préchargement muet ; reconfiguré au play
+            inactive.preload = 'auto';
+            inactive.src = nextItem.url;
+            inactive.dataset.url = nextItem.url;
+            try { inactive.load(); } catch (e) {}
+        }
+        this.preloadIdx = nextIndex;
+    }
+
+    // Item illisible : retry quelques fois puis passer au suivant.
+    skipFailedItem(item, index) {
+        console.error('[Player] Lecture impossible:', item.url);
+        this.errorCount++;
+        this.updateDebug('errors', this.errorCount);
+        if (this.errorCount < this.maxRetries) {
+            setTimeout(() => { if (this.currentIndex === index) this.playItem(index); }, 1500);
+        } else {
+            this.errorCount = 0;
+            this.showError(`Impossible de lire : ${item.url}`, 3000);
+            this.playNext();
+        }
     }
 
     isImageItem(item) {
@@ -781,9 +899,10 @@ class PiSignagePlayer {
         this.updateDebug('video-info', info);
     }
 
-    showLoading(message = 'Loading...') {
-        this.loading.textContent = message;
-        this.loading.style.display = 'block';
+    showLoading(message = 'Démarrage…') {
+        const msg = document.getElementById('loading-msg');
+        if (msg) msg.textContent = message;
+        this.loading.style.display = 'flex';
     }
 
     hideLoading() {
@@ -813,7 +932,7 @@ class PiSignagePlayer {
 // Initialiser le player au chargement de la page
 window.addEventListener('DOMContentLoaded', () => {
     console.log('[PiSignage] Initializing player...');
-    new PiSignagePlayer();
+    window.__pisignagePlayer = new PiSignagePlayer();
 });
 </script>
 
