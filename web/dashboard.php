@@ -66,7 +66,10 @@ $actions = statusPill()
             </div>
 
             <div class="card">
-                <div class="card-head"><h2 class="card-title"><?= icon('cpu') ?>Ressources système</h2></div>
+                <div class="card-head">
+                    <h2 class="card-title"><?= icon('cpu') ?>Ressources système</h2>
+                    <span class="badge badge-danger" id="undervoltage-badge" role="alert" style="display:none" title="L'alimentation du Raspberry Pi est insuffisante"><?= icon('alert') ?>Sous-alimentation détectée</span>
+                </div>
                 <div class="gauges">
                     <div class="gauge"><div class="donut g-cpu" id="g-cpu"><span>--</span></div><small>CPU</small></div>
                     <div class="gauge"><div class="donut g-ram" id="g-ram"><span>--</span></div><small>RAM</small></div>

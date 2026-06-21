@@ -12,8 +12,13 @@
  *   GET  /api/kiosk/flags    -> Returns current Chromium flags
  *   PUT  /api/kiosk/flags    -> Updates Chromium flags and reloads
  *   PUT  /api/kiosk/enable   -> Enable/disable kiosk mode
- *   PUT  /api/kiosk/mode     -> Switch between Chromium player and VLC
- *   POST /api/kiosk/restart  -> Restarts Chromium kiosk
+ *   PUT  /api/kiosk/mode            -> Switch between Chromium player and VLC
+ *   POST /api/kiosk/restart         -> Restarts Chromium kiosk
+ *   POST /api/kiosk/restart-session -> Restarts the full greetd session (R7)
+ *   GET  /api/kiosk/screen          -> Returns screen power state + schedule (D1)
+ *   PUT  /api/kiosk/screen          -> Saves the screen power schedule (D1)
+ *   POST /api/kiosk/screen/on       -> Turns the screen on now (D1)
+ *   POST /api/kiosk/screen/off      -> Turns the screen off now (D1)
  */
 
 require_once __DIR__ . '/_guard.php';
@@ -24,7 +29,9 @@ define('KIOSK_CONFIG_DIR', '/opt/pisignage/config');
 define('KIOSK_URL_FILE', KIOSK_CONFIG_DIR . '/kiosk_url');
 define('KIOSK_FLAGS_FILE', KIOSK_CONFIG_DIR . '/kiosk_flags');
 define('KIOSK_FEATURE_FLAGS_FILE', KIOSK_CONFIG_DIR . '/feature_flags');
+define('KIOSK_SCREEN_SCHEDULE_FILE', KIOSK_CONFIG_DIR . '/screen_schedule.json');
 define('KIOSK_APPLY_SCRIPT', '/opt/pisignage/scripts/kiosk-apply');
+define('KIOSK_SCREEN_POWER_SCRIPT', '/opt/pisignage/scripts/screen-power.sh');
 
 // Get HTTP method and path
 $method = $_SERVER['REQUEST_METHOD'];
@@ -53,6 +60,32 @@ if ($pathInfo === '/url') {
         handleRestart();
     } else {
         jsonResponse(false, null, 'Method not allowed for /restart (use POST)', 405);
+    }
+} elseif ($pathInfo === '/restart-session') {
+    if ($method === 'POST') {
+        handleRestartSession();
+    } else {
+        jsonResponse(false, null, 'Method not allowed for /restart-session (use POST)', 405);
+    }
+} elseif ($pathInfo === '/screen/on') {
+    if ($method === 'POST') {
+        handleScreenPower('on');
+    } else {
+        jsonResponse(false, null, 'Method not allowed for /screen/on (use POST)', 405);
+    }
+} elseif ($pathInfo === '/screen/off') {
+    if ($method === 'POST') {
+        handleScreenPower('off');
+    } else {
+        jsonResponse(false, null, 'Method not allowed for /screen/off (use POST)', 405);
+    }
+} elseif ($pathInfo === '/screen') {
+    if ($method === 'GET') {
+        handleGetScreen();
+    } elseif ($method === 'PUT') {
+        handlePutScreen($input);
+    } else {
+        jsonResponse(false, null, 'Method not allowed for /screen', 405);
     }
 } elseif ($pathInfo === '/status' || $pathInfo === '' || $pathInfo === '/') {
     if ($method === 'GET') {
@@ -439,4 +472,187 @@ function handlePutMode($input) {
         'mode' => $useChromiumPlayer ? 'chromium-player' : 'vlc-fallback',
         'applied' => $applyResult['success'],
     ], 'Player mode switched to ' . ($useChromiumPlayer ? 'Chromium HTML5' : 'VLC fallback'));
+}
+
+/**
+ * POST /api/kiosk/restart-session
+ * Restarts the full display-manager session (relaunches labwc + Chromium), not just Chromium.
+ * 'display-manager' is the generic systemd alias -> works whether the DM is lightdm (this
+ * Pi4/Trixie image) or greetd. Requires sudoers:
+ *   www-data ALL=(root) NOPASSWD: /usr/bin/systemctl restart display-manager
+ */
+function handleRestartSession() {
+    logMessage("Kiosk session restart (display-manager) requested via API", 'INFO');
+
+    exec('sudo /usr/bin/systemctl restart display-manager 2>&1', $output, $returnCode);
+
+    if ($returnCode !== 0) {
+        jsonResponse(false, [
+            'return_code' => $returnCode,
+            'output' => implode("\n", $output),
+        ], 'Failed to restart the session', 500);
+        return;
+    }
+
+    jsonResponse(true, [
+        'return_code' => $returnCode,
+        'note' => 'display-manager restarted: the whole session (labwc + Chromium) is reloading',
+    ], 'Session redémarrée');
+}
+
+/**
+ * Read the screen power schedule from JSON, returning defaults if absent/invalid.
+ */
+function readScreenSchedule() {
+    $defaults = [
+        'enabled'  => false,
+        'on_time'  => '07:00',
+        'off_time' => '22:00',
+        'days'     => [0, 1, 2, 3, 4, 5, 6],
+    ];
+
+    if (!file_exists(KIOSK_SCREEN_SCHEDULE_FILE)) {
+        return $defaults;
+    }
+
+    $raw = file_get_contents(KIOSK_SCREEN_SCHEDULE_FILE);
+    $data = json_decode($raw, true);
+    if (!is_array($data)) {
+        return $defaults;
+    }
+
+    return array_merge($defaults, $data);
+}
+
+/**
+ * Validate a "HH:MM" 24-hour time string.
+ */
+function isValidHhMm($value) {
+    return is_string($value) && preg_match('/^([01][0-9]|2[0-3]):[0-5][0-9]$/', $value) === 1;
+}
+
+/**
+ * GET /api/kiosk/screen
+ * Returns the live screen power state plus the saved schedule.
+ */
+function handleGetScreen() {
+    $schedule = readScreenSchedule();
+
+    // Probe the live screen state via the helper (runs in pi's Wayland session, sets the
+    // Wayland env itself; ignores the virtual NOOP output). The helper path is whitelisted
+    // in sudoers (env/wlr-randr directly are not), so we go through it.
+    $state = 'unknown';
+    if (file_exists(KIOSK_SCREEN_POWER_SCRIPT)) {
+        exec('sudo -u pi ' . escapeshellarg(KIOSK_SCREEN_POWER_SCRIPT) . ' state 2>/dev/null', $probe, $probeCode);
+        $out = trim(implode("\n", $probe));
+        if ($probeCode === 0 && ($out === 'on' || $out === 'off')) {
+            $state = $out;
+        }
+    }
+
+    jsonResponse(true, [
+        'state'    => $state,
+        'schedule' => $schedule,
+    ], 'Screen power state and schedule');
+}
+
+/**
+ * PUT /api/kiosk/screen
+ * Saves the screen power schedule to JSON.
+ * Body: {enabled:bool, on_time:"HH:MM", off_time:"HH:MM", days:[0-6]}
+ */
+function handlePutScreen($input) {
+    if (!is_array($input)) {
+        jsonResponse(false, null, 'Invalid or missing JSON body', 400);
+        return;
+    }
+
+    if (!isset($input['enabled']) || !is_bool($input['enabled'])) {
+        jsonResponse(false, null, 'Missing or invalid field: enabled (must be boolean)', 400);
+        return;
+    }
+
+    if (!isset($input['on_time']) || !isValidHhMm($input['on_time'])) {
+        jsonResponse(false, null, 'Invalid on_time (expected HH:MM)', 400);
+        return;
+    }
+
+    if (!isset($input['off_time']) || !isValidHhMm($input['off_time'])) {
+        jsonResponse(false, null, 'Invalid off_time (expected HH:MM)', 400);
+        return;
+    }
+
+    if (!isset($input['days']) || !is_array($input['days'])) {
+        jsonResponse(false, null, 'Invalid days (expected array of 0-6)', 400);
+        return;
+    }
+
+    // Sanitize days: keep unique integers in [0,6], sorted.
+    $days = [];
+    foreach ($input['days'] as $d) {
+        if (is_int($d) && $d >= 0 && $d <= 6) {
+            $days[$d] = $d;
+        } elseif (is_string($d) && ctype_digit($d) && (int)$d >= 0 && (int)$d <= 6) {
+            $days[(int)$d] = (int)$d;
+        }
+    }
+    $days = array_values($days);
+    sort($days);
+
+    $schedule = [
+        'enabled'  => $input['enabled'],
+        'on_time'  => $input['on_time'],
+        'off_time' => $input['off_time'],
+        'days'     => $days,
+    ];
+
+    // Ensure config directory exists
+    if (!is_dir(KIOSK_CONFIG_DIR)) {
+        mkdir(KIOSK_CONFIG_DIR, 0755, true);
+    }
+
+    $json = json_encode($schedule, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    if (file_put_contents(KIOSK_SCREEN_SCHEDULE_FILE, $json) === false) {
+        jsonResponse(false, null, 'Failed to write screen schedule', 500);
+        return;
+    }
+
+    logMessage('Screen power schedule updated via API', 'INFO');
+
+    jsonResponse(true, ['schedule' => $schedule], 'Planning écran enregistré');
+}
+
+/**
+ * POST /api/kiosk/screen/on  or  /api/kiosk/screen/off
+ * Applies the screen power state immediately via screen-power.sh (run as pi).
+ * Requires sudoers: www-data ALL=(pi) NOPASSWD: /opt/pisignage/scripts/screen-power.sh
+ */
+function handleScreenPower($action) {
+    if (!in_array($action, ['on', 'off'], true)) {
+        jsonResponse(false, null, 'Invalid screen action', 400);
+        return;
+    }
+
+    if (!file_exists(KIOSK_SCREEN_POWER_SCRIPT)) {
+        jsonResponse(false, null, 'screen-power.sh script not found at ' . KIOSK_SCREEN_POWER_SCRIPT, 500);
+        return;
+    }
+
+    logMessage("Screen power '$action' requested via API", 'INFO');
+
+    $cmd = 'sudo -u pi ' . escapeshellarg(KIOSK_SCREEN_POWER_SCRIPT) . ' ' . escapeshellarg($action) . ' 2>&1';
+    exec($cmd, $output, $returnCode);
+
+    if ($returnCode !== 0) {
+        jsonResponse(false, [
+            'return_code' => $returnCode,
+            'output' => implode("\n", $output),
+        ], "Failed to turn screen $action", 500);
+        return;
+    }
+
+    jsonResponse(true, [
+        'state' => $action,
+        'output' => implode("\n", $output),
+    ], $action === 'on' ? 'Écran allumé' : 'Écran éteint');
 }

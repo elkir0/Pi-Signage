@@ -66,7 +66,23 @@ PiSignage.dashboard = {
 
             const up = this._el('stat-uptime');
             if (up && s.uptime) up.textContent = String(s.uptime).replace(/^up\s+/, '');
+
+            this._setUndervoltage(s.throttled);
         } catch (e) { /* silent — transient */ }
+    },
+
+    /* ---------- under-voltage alert ---------- */
+    _setUndervoltage(t) {
+        const badge = this._el('undervoltage-badge');
+        if (!badge) return;
+        // t is null on non-Pi hardware or when vcgencmd is unavailable.
+        const alert = !!(t && (t.under_voltage_now || t.under_voltage_occurred));
+        badge.style.display = alert ? 'inline-flex' : 'none';
+        if (alert) {
+            badge.title = t.under_voltage_now
+                ? "Sous-alimentation en cours — vérifiez l'alimentation du Raspberry Pi"
+                : "Une sous-alimentation s'est produite depuis le démarrage";
+        }
     },
 
     /* ---------- counts ---------- */

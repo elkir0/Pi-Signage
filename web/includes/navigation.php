@@ -15,6 +15,7 @@ $nav = [
     'Diffusion' => [
         ['player-control-ui.php',  'player-control-ui', 'Lecteur',      'play-line'],
         ['kiosk.php',              'kiosk',     'Kiosk',           'kiosk'],
+        ['overlay.php',            'overlay',   'Overlay',         'layers'],
         ['schedule.php',           'schedule',  'Programmation',   'calendar'],
         ['screenshot.php',         'screenshot','Capture',         'camera'],
     ],

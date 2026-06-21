@@ -17,6 +17,7 @@ PiSignage.kiosk = {
         this.loadUrl();
         this.loadFlags();
         this.loadMode();
+        this.loadScreen();
         this.startAutoRefresh();
         this.bindEvents();
     },
@@ -502,8 +503,114 @@ PiSignage.kiosk = {
         }
     },
 
+    async restartSession() {
+        if (!this._confirm('Redémarrer toute la session graphique (greetd) ? labwc et Chromium seront relancés.')) return;
+        try {
+            const r = await fetch('/api/kiosk.php/restart-session', { method: 'POST' });
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const result = await r.json();
+            if (result.success) {
+                this._toast('Session redémarrée', 'success');
+                setTimeout(() => this.loadStatus(), 3000);
+            } else {
+                throw new Error(result.message);
+            }
+        } catch (e) {
+            console.error('[kiosk] restartSession', e);
+            this._toast('Erreur de redémarrage de la session : ' + e.message, 'error');
+        }
+    },
+
     previewPlayer() {
         window.open('/player', '_blank', 'width=1280,height=720');
+    },
+
+    /* ---------- screen power (extinction programmée) ---------- */
+    async loadScreen() {
+        try {
+            const r = await fetch('/api/kiosk.php/screen');
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const result = await r.json();
+            if (result.success && result.data) {
+                this.renderScreen(result.data);
+            }
+        } catch (e) {
+            console.error('[kiosk] loadScreen', e);
+        }
+    },
+
+    renderScreen(data) {
+        const sched = data.schedule || {};
+        this._setChecked('screen-schedule-enabled', sched.enabled === true);
+        if (sched.on_time) this._setVal('screen-on-time', sched.on_time);
+        if (sched.off_time) this._setVal('screen-off-time', sched.off_time);
+
+        const days = Array.isArray(sched.days) ? sched.days.map(Number) : [];
+        document.querySelectorAll('.screen-day').forEach((cb) => {
+            cb.checked = days.indexOf(parseInt(cb.value, 10)) !== -1;
+        });
+
+        const badge = this._el('screen-state-badge');
+        if (badge) {
+            const state = data.state;
+            let cls = 'badge';
+            let label = 'Écran';
+            if (state === 'on') { cls = 'badge badge-success'; label = 'Écran allumé'; }
+            else if (state === 'off') { cls = 'badge badge-warn'; label = 'Écran éteint'; }
+            badge.className = cls;
+            badge.textContent = label;
+        }
+    },
+
+    _collectScreenDays() {
+        const days = [];
+        document.querySelectorAll('.screen-day').forEach((cb) => {
+            if (cb.checked) days.push(parseInt(cb.value, 10));
+        });
+        return days;
+    },
+
+    async saveScreenSchedule() {
+        const body = {
+            enabled: this._el('screen-schedule-enabled').checked,
+            on_time: this._el('screen-on-time').value,
+            off_time: this._el('screen-off-time').value,
+            days: this._collectScreenDays()
+        };
+        try {
+            const r = await fetch('/api/kiosk.php/screen', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const result = await r.json();
+            if (result.success) this._toast('Planning écran enregistré', 'success');
+            else throw new Error(result.message);
+        } catch (e) {
+            console.error('[kiosk] saveScreenSchedule', e);
+            this._toast('Erreur d\'enregistrement du planning : ' + e.message, 'error');
+        }
+    },
+
+    async screenOn() { await this._applyScreenPower('on'); },
+    async screenOff() { await this._applyScreenPower('off'); },
+
+    async _applyScreenPower(action) {
+        try {
+            const r = await fetch('/api/kiosk.php/screen/' + action, { method: 'POST' });
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const result = await r.json();
+            if (result.success) {
+                this._toast(action === 'on' ? 'Écran allumé' : 'Écran éteint', 'success');
+                setTimeout(() => this.loadScreen(), 1000);
+            } else {
+                throw new Error(result.message);
+            }
+        } catch (e) {
+            console.error('[kiosk] applyScreenPower', e);
+            this._toast('Erreur de commande écran : ' + e.message, 'error');
+        }
     },
 
     /* ---------- small DOM helpers ---------- */

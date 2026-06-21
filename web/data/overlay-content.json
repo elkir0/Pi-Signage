@@ -1,0 +1,39 @@
+{
+    "version": 1,
+    "enabled": true,
+    "lang": "fr",
+    "banner": {
+        "enabled": true,
+        "name": "PiSignage",
+        "subtitle": "Affichage dynamique · Lun–Ven 9h–18h",
+        "logo": null
+    },
+    "clock": {
+        "enabled": true
+    },
+    "cards": [
+        {
+            "icon": "info",
+            "text_fr": "Bienvenue, bonne journée à toutes et tous",
+            "text_nl": "Welkom, een fijne dag gewenst",
+            "duration": 8
+        },
+        {
+            "icon": "info",
+            "text_fr": "Pensez à bien vous hydrater",
+            "text_nl": "Vergeet niet voldoende te drinken",
+            "duration": 8
+        },
+        {
+            "icon": "info",
+            "text_fr": "Merci de votre visite",
+            "text_nl": "Bedankt voor uw bezoek",
+            "duration": 8
+        }
+    ],
+    "qr": {
+        "enabled": false,
+        "label": "Plus d'infos",
+        "data": "https://example.com"
+    }
+}

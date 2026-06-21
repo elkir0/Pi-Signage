@@ -410,6 +410,12 @@ clone_from_github() {
         log_info "Déploiement des fichiers de l'application..."
         sudo cp -r "$TEMP_DIR/web"/* "$INSTALL_DIR/web/" 2>/dev/null || true
 
+        # Déployer les scripts runtime du dépôt (kiosk-apply, screen-power.sh,
+        # screen-schedule-tick.sh, grim-capture.sh, screenshot-wayland.sh, rotate-logs.sh…).
+        # Certains scripts (start-vlc.sh, autostart.sh) sont (re)générés inline plus loin.
+        sudo cp -r "$TEMP_DIR/scripts"/* "$INSTALL_DIR/scripts/" 2>/dev/null || true
+        sudo chmod +x "$INSTALL_DIR/scripts/"*.sh "$INSTALL_DIR/scripts/kiosk-apply" 2>/dev/null || true
+
         # SOURCE OF TRUTH: install.sh GÉNÈRE nginx/php/systemd. On ne copie depuis
         # config/ que la DATA runtime (whitelist), JAMAIS la config serveur du repo
         # (nginx-pisignage.conf, php-upload.ini, systemd/*.service = obsolètes/morts).
@@ -703,6 +709,29 @@ KANSHI
         bash scripts/kiosk-apply || log_warn "kiosk-apply returned error (may be normal)"
     else
         log_warn "kiosk-apply script not found or not executable"
+    fi
+
+    # Autologin lightdm (R1) : sur ce Pi4/Trixie le gestionnaire de session est lightdm
+    # (et non greetd). On garantit l'autologin de 'pi' vers la session par défaut (labwc)
+    # pour un boot kiosk fiable OTB, sans dépendre des défauts de l'image.
+    if command -v lightdm >/dev/null 2>&1; then
+        sudo mkdir -p /etc/lightdm/lightdm.conf.d
+        sudo tee /etc/lightdm/lightdm.conf.d/10-pisignage-autologin.conf >/dev/null <<'LIGHTDM'
+[Seat:*]
+autologin-user=pi
+autologin-user-timeout=0
+LIGHTDM
+        log_info "Autologin lightdm configuré (utilisateur pi)"
+    fi
+
+    # Cron d'extinction d'écran programmée (D1) : applique screen_schedule.json chaque minute
+    # via screen-schedule-tick.sh -> screen-power.sh (wlr-randr dans la session de 'pi').
+    if [ -f "$INSTALL_DIR/scripts/screen-schedule-tick.sh" ]; then
+        sudo chmod +x "$INSTALL_DIR/scripts/screen-schedule-tick.sh"
+        echo '* * * * * root /opt/pisignage/scripts/screen-schedule-tick.sh >/dev/null 2>&1' | \
+            sudo tee /etc/cron.d/pisignage-screen >/dev/null
+        sudo chmod 0644 /etc/cron.d/pisignage-screen
+        log_info "Cron d'extinction d'écran programmée installé"
     fi
 
     log_info "Kiosk configuration completed"
@@ -1223,6 +1252,11 @@ pi ALL=(ALL) NOPASSWD: /sbin/shutdown, /sbin/reboot, /bin/systemctl
 www-data ALL=(ALL) NOPASSWD: /usr/bin/amixer, /usr/bin/raspi-config
 # Capture d'écran Wayland: www-data (php-fpm) lance grim dans la session labwc de 'pi'
 www-data ALL=(pi) NOPASSWD: /opt/pisignage/scripts/grim-capture.sh
+# Extinction d'écran programmée (kiosk): on/off via wlr-randr dans la session de 'pi'
+www-data ALL=(pi) NOPASSWD: /opt/pisignage/scripts/screen-power.sh
+www-data ALL=(pi) NOPASSWD: /usr/bin/wlr-randr
+# Redémarrer la session kiosk complète (alias générique lightdm/greetd)
+www-data ALL=(root) NOPASSWD: /usr/bin/systemctl restart display-manager
 SUDOERS
 
     # Ajouter www-data au groupe video (accès framebuffer pour screenshots)

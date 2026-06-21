@@ -86,6 +86,51 @@ $actions = '<span class="status-pill" id="kiosk-pill"><span class="live-dot"></s
             </div>
         </div>
 
+        <!-- Écran (extinction programmée) -->
+        <div class="card" style="margin-top:18px">
+            <div class="card-head">
+                <h2 class="card-title"><?= icon('monitor') ?>Écran (extinction programmée)</h2>
+                <span class="badge" id="screen-state-badge"><span class="live-dot"></span>Écran</span>
+            </div>
+            <div class="form-group">
+                <label class="row" style="justify-content:space-between;align-items:center;gap:14px;margin:0">
+                    <span>Activer l'extinction programmée</span>
+                    <span class="toggle-switch">
+                        <input type="checkbox" id="screen-schedule-enabled">
+                        <span class="toggle-slider"></span>
+                    </span>
+                </label>
+                <p style="font-size:12.5px;color:var(--text-faint);margin:8px 0 0">Éteint puis rallume l'écran (HDMI) aux heures choisies, les jours sélectionnés.</p>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="screen-on-time">Heure d'allumage</label>
+                    <input type="time" id="screen-on-time" class="form-control" value="07:00">
+                </div>
+                <div class="form-group">
+                    <label for="screen-off-time">Heure d'extinction</label>
+                    <input type="time" id="screen-off-time" class="form-control" value="22:00">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Jours actifs</label>
+                <div class="row" id="screen-days" style="gap:8px;flex-wrap:wrap">
+                    <label class="row" style="gap:6px;cursor:pointer"><input type="checkbox" class="screen-day" value="1" checked><span>Lun</span></label>
+                    <label class="row" style="gap:6px;cursor:pointer"><input type="checkbox" class="screen-day" value="2" checked><span>Mar</span></label>
+                    <label class="row" style="gap:6px;cursor:pointer"><input type="checkbox" class="screen-day" value="3" checked><span>Mer</span></label>
+                    <label class="row" style="gap:6px;cursor:pointer"><input type="checkbox" class="screen-day" value="4" checked><span>Jeu</span></label>
+                    <label class="row" style="gap:6px;cursor:pointer"><input type="checkbox" class="screen-day" value="5" checked><span>Ven</span></label>
+                    <label class="row" style="gap:6px;cursor:pointer"><input type="checkbox" class="screen-day" value="6" checked><span>Sam</span></label>
+                    <label class="row" style="gap:6px;cursor:pointer"><input type="checkbox" class="screen-day" value="0" checked><span>Dim</span></label>
+                </div>
+            </div>
+            <div class="row" style="gap:10px;flex-wrap:wrap">
+                <button class="btn btn-primary" type="button" onclick="PiSignage.kiosk && PiSignage.kiosk.saveScreenSchedule()"><?= icon('check') ?>Enregistrer le planning</button>
+                <button class="btn btn-secondary" type="button" onclick="PiSignage.kiosk && PiSignage.kiosk.screenOn()"><?= icon('sun') ?>Allumer maintenant</button>
+                <button class="btn btn-secondary" type="button" onclick="PiSignage.kiosk && PiSignage.kiosk.screenOff()"><?= icon('moon') ?>Éteindre maintenant</button>
+            </div>
+        </div>
+
         <!-- Playlist Chromium Player -->
         <div class="card" style="margin-top:18px">
             <div class="card-head">
@@ -122,9 +167,11 @@ $actions = '<span class="status-pill" id="kiosk-pill"><span class="live-dot"></s
             </div>
             <div class="row" style="gap:10px;flex-wrap:wrap">
                 <button class="btn btn-danger" type="button" onclick="PiSignage.kiosk && PiSignage.kiosk.restart()"><?= icon('refresh') ?>Redémarrer Chromium</button>
+                <button class="btn btn-danger" type="button" onclick="PiSignage.kiosk && PiSignage.kiosk.restartSession()"><?= icon('power') ?>Redémarrer la session</button>
                 <button class="btn btn-secondary" type="button" onclick="PiSignage.kiosk && PiSignage.kiosk.refreshPlaylist()"><?= icon('refresh') ?>Recharger la playlist</button>
                 <button class="btn btn-secondary" type="button" onclick="PiSignage.kiosk && PiSignage.kiosk.previewPlayer()"><?= icon('eye') ?>Prévisualiser le player</button>
             </div>
+            <p style="font-size:12.5px;color:var(--text-faint);margin:10px 0 0">« Redémarrer Chromium » relance uniquement le navigateur. « Redémarrer la session » relance toute la session graphique (greetd : labwc + Chromium).</p>
         </div>
 
       </div>
