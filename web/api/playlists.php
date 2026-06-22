@@ -291,5 +291,30 @@ function playlistPushLive($pl) {
     }
     @chmod($tmp, 0664);
     if (!@rename($tmp, LIVE_PLAYLIST_FILE)) { @unlink($tmp); return false; }
+
+    // Rafraîchissement IMMÉDIAT de l'écran : on signale un "reload" sur le canal de
+    // commande (config/player-command.json) que le player poll toutes les 2s — sinon
+    // l'écran n'actualise qu'au poll de version (10s). Bénéficie à Diffuser (Playlists /
+    // Lecteur) ET au scheduler (Phase 3). Format identique à api/display.php.
+    playlistSignalReload();
     return true;
+}
+
+/** Incrémente le seq du canal de commande avec cmd=reload (réveille le player sous 2s). */
+function playlistSignalReload() {
+    $cmdFile = CONFIG_PATH . '/player-command.json';
+    $seq = 0;
+    if (is_file($cmdFile)) {
+        $d = json_decode((string)file_get_contents($cmdFile), true);
+        if (is_array($d) && isset($d['seq']) && is_numeric($d['seq'])) $seq = (int)$d['seq'];
+    }
+    $next = json_encode(['seq' => $seq + 1, 'cmd' => 'reload', 'ts' => time()]);
+    $dir = dirname($cmdFile);
+    $tmp = @tempnam($dir, '.cmd.');
+    if ($tmp === false) { @file_put_contents($cmdFile, $next); return; }
+    if (@file_put_contents($tmp, $next) !== false && @rename($tmp, $cmdFile)) {
+        @chmod($cmdFile, 0664);
+    } else {
+        @unlink($tmp);
+    }
 }

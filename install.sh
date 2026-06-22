@@ -224,7 +224,6 @@ install_dependencies() {
         "php${PHP_VERSION}-curl"
         "php${PHP_VERSION}-zip"
         "sqlite3"
-        "vlc"
         "ffmpeg"
         "yt-dlp"
         "xinit"
@@ -828,17 +827,10 @@ if [ "$USE_CHROMIUM" = "1" ]; then
     exit 0
 fi
 
-# Mode VLC: démarrer le service unifié et surveiller.
-sudo systemctl start pisignage-vlc.service || true
-
-# Watchdog - vérifier le service VLC (uniquement en mode VLC)
-while true; do
-    if ! systemctl is-active --quiet pisignage-vlc.service; then
-        echo "Service VLC arrêté, redémarrage..."
-        sudo systemctl restart pisignage-vlc.service
-    fi
-    sleep 30
-done
+# VLC retiré (v0.12) : il n'existe plus de lecteur de secours.
+# USE_CHROMIUM_PLAYER=0 n'est plus supporté — on sort proprement sans rien démarrer.
+echo "USE_CHROMIUM_PLAYER=0 obsolète : VLC a été retiré. Réactivez le mode Chromium."
+exit 0
 ENDOFFILE
 
     sudo chmod +x $INSTALL_DIR/scripts/autostart.sh
@@ -1134,111 +1126,12 @@ ENDOFFILE
 
     log_info "Service de démarrage automatique configuré"
 
-    # Créer le script de démarrage VLC
-    sudo tee $INSTALL_DIR/scripts/autostart-vlc.sh > /dev/null << 'ENDOFSCRIPT'
-#!/bin/bash
-# Script de démarrage automatique VLC pour PiSignage
-
-# Attendre que le système soit prêt
-sleep 10
-
-# Créer le répertoire runtime si nécessaire
-export XDG_RUNTIME_DIR=/run/user/1000
-mkdir -p $XDG_RUNTIME_DIR
-sudo chown pi:pi $XDG_RUNTIME_DIR
-
-# Arrêter toute instance VLC existante proprement
-systemctl --user stop pisignage-vlc.service 2>/dev/null || true
-pkill -TERM vlc 2>/dev/null || true
-sleep 3
-
-# Démarrer le service VLC unifié (recommandé)
-systemctl --user start pisignage-vlc.service 2>/dev/null || \
-sudo systemctl start pisignage-vlc.service
-
-echo "Service VLC unifié démarré avec succès"
-echo "Interface HTTP disponible sur: http://localhost:8080"
-echo "Mot de passe: pisignage"
-ENDOFSCRIPT
-    sudo chmod +x $INSTALL_DIR/scripts/autostart-vlc.sh
-
-    # Détection modèle Pi pour le décodage matériel VLC sous Wayland/KMS.
-    # Pi4 (BCM2711): décodage H.264 matériel via v4l2m2m.
-    # Pi5 (BCM2712): pas de bloc H.264 matériel -> décodage logiciel.
-    PI_MODEL_STRING=""
-    if [ -f /proc/device-tree/model ]; then
-        PI_MODEL_STRING=$(tr -d '\0' < /proc/device-tree/model 2>/dev/null)
-    fi
-    case "$PI_MODEL_STRING" in
-        *"Raspberry Pi 5"*)
-            VLC_HWACCEL_FLAG="--avcodec-hw=none"
-            ;;
-        *)
-            # Pi4 et assimilés
-            VLC_HWACCEL_FLAG="--avcodec-hw=v4l2m2m"
-            ;;
-    esac
-
-    # Créer le service systemd unifié pour VLC avec interface HTTP.
-    # NOTE: c'est le lecteur de SECOURS. En mode Chromium par défaut, pisignage.service
-    # (autostart.sh) ne le démarre PAS — voir create_vlc_script().
-    # Sortie Wayland/KMS (gles2), AUCUN reliquat X11, AUCUN profil MMAL.
-    sudo tee /etc/systemd/system/pisignage-vlc.service > /dev/null << ENDOFSERVICE
-[Unit]
-Description=PiSignage VLC Media Player with HTTP Interface
-After=network.target display-manager.service
-Requires=network.target
-
-[Service]
-Type=simple
-User=pi
-Group=video
-Environment="HOME=/home/pi"
-Environment="XDG_RUNTIME_DIR=/run/user/1000"
-Environment="WAYLAND_DISPLAY=wayland-0"
-WorkingDirectory=/opt/pisignage
-
-# Start VLC with both display output (Wayland/KMS) and HTTP interface
-ExecStart=/usr/bin/vlc \\
-    --intf http \\
-    --extraintf dummy \\
-    --http-host 0.0.0.0 \\
-    --http-port 8080 \\
-    --http-password pisignage \\
-    --vout=gles2 \\
-    ${VLC_HWACCEL_FLAG} \\
-    --no-video-title-show \\
-    --loop \\
-    --playlist-autostart \\
-    --no-osd \\
-    /opt/pisignage/media/
-
-# Graceful shutdown - no more pkill/killall conflicts
-ExecStop=/bin/kill -TERM \$MAINPID
-TimeoutStopSec=15
-KillMode=mixed
-Restart=on-failure
-RestartSec=5
-StandardOutput=append:/opt/pisignage/logs/vlc.log
-StandardError=append:/opt/pisignage/logs/vlc.log
-
-[Install]
-WantedBy=multi-user.target
-ENDOFSERVICE
-
-    sudo systemctl daemon-reload
-    sudo systemctl enable pisignage-vlc.service
-
-    # Ne PAS démarrer VLC tout de suite si Chromium est le lecteur par défaut
-    # (évite le double-propriétaire d'affichage). Le démarrage est piloté par
-    # autostart.sh selon le flag USE_CHROMIUM_PLAYER.
-    if [ "${USE_CHROMIUM_PLAYER:-1}" = "0" ]; then
-        sudo systemctl start pisignage-vlc.service || true
-    else
-        log_info "Mode Chromium par défaut: VLC fallback activé mais non démarré"
-    fi
-
-    log_info "Service VLC configuré pour démarrage automatique"
+    # VLC retiré (v0.12) : Chromium HTML5 (player.php sur /player) est le moteur de
+    # lecture UNIQUE. Plus aucun service pisignage-vlc n'est créé / activé / démarré
+    # (libère ~135 Mo RAM, supprime le « lecteur fantôme »). Le kiosk est lancé par
+    # labwc/kiosk-apply ; pisignage.service ne fait qu'exécuter autostart.sh
+    # (no-op en mode Chromium). Voir docs unification de la diffusion.
+    log_info "Lecteur unique: Chromium kiosk (VLC retiré)"
 }
 
 # Configuration des permissions sudo (pour redémarrage)
@@ -1299,15 +1192,6 @@ test_installation() {
         log_warn "Serveur web ne répond pas encore"
     fi
 
-    # Vérifier le service VLC unifié
-    if systemctl is-active --quiet pisignage-vlc.service; then
-        log_info "Service VLC unifié en cours d'exécution"
-    else
-        log_warn "Service VLC unifié n'est pas encore démarré"
-        # Essayer de le démarrer
-        sudo systemctl start pisignage-vlc.service || true
-    fi
-
     # Vérifier le service
     if systemctl is-active --quiet pisignage; then
         log_info "Service PiSignage actif"
@@ -1315,18 +1199,11 @@ test_installation() {
         log_warn "Service PiSignage inactif"
     fi
 
-    # Vérification finale de la configuration unifiée
-    if systemctl is-enabled --quiet pisignage-vlc.service; then
-        log_info "✓ Service VLC unifié correctement configuré"
+    # Vérifier que le lecteur kiosk (player.php) répond
+    if curl -s --connect-timeout 5 http://localhost/player >/dev/null 2>&1; then
+        log_info "✓ Lecteur kiosk (/player) accessible"
     else
-        log_warn "Service VLC unifié non activé"
-    fi
-
-    # Vérifier l'interface HTTP
-    if curl -s --connect-timeout 5 http://localhost:8080 >/dev/null 2>&1; then
-        log_info "✓ Interface HTTP VLC accessible"
-    else
-        log_warn "Interface HTTP VLC non accessible (normal au premier démarrage)"
+        log_warn "Lecteur kiosk (/player) non accessible (vérifier nginx/php-fpm)"
     fi
 
     log_info "Tests terminés"
@@ -1379,11 +1256,10 @@ main() {
     echo "🚀 PiSignage démarre automatiquement au boot!"
     echo ""
     echo "💡 Commandes utiles:"
-    echo "   sudo systemctl status pisignage     # Voir le statut principal"
-    echo "   sudo systemctl status pisignage-vlc # Voir le statut VLC"
-    echo "   sudo systemctl restart pisignage-vlc # Redémarrer VLC"
-    echo "   tail -f $INSTALL_DIR/logs/vlc.log   # Voir les logs VLC"
-    echo "   Interface HTTP VLC: http://${ip}:8080 (mot de passe: pisignage)"
+    echo "   sudo systemctl status pisignage       # Voir le statut principal"
+    echo "   Lecteur kiosk: http://${ip}/player    # Page affichée par Chromium"
+    echo "   bash $INSTALL_DIR/scripts/kiosk-apply # Régénérer l'autostart kiosk"
+    echo "   tail -f $INSTALL_DIR/logs/player.log  # Logs lecteur (si présents)"
     echo ""
     echo "📝 Documentation: $INSTALL_DIR/CLAUDE.md"
     echo ""

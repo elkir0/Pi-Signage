@@ -102,41 +102,50 @@ PiSignage.dashboard = {
         } catch (e) {}
     },
 
-    /* ---------- now playing ---------- */
+    /* ---------- now playing (moteur réel via /api/display.php) ---------- */
     async refreshPlayer() {
         try {
-            const r = await PiSignage.api.player.getStatus();
+            const r = await PiSignage.api.request('/api/display.php?action=state');
             if (!r || !r.success || !r.data) { this._setPlayer(null); return; }
             this._setPlayer(r.data);
         } catch (e) { this._setPlayer(null); }
     },
 
+    // d = { state:{status,name,index,count,current{...}}, online, active{slug,name} }
     _setPlayer(d) {
         const pill = this._el('topbar-status');
         const title = this._el('np-title'), sub = this._el('np-sub'),
               fill = this._el('np-fill'), cur = this._el('np-cur'),
               dur = this._el('np-dur'), badge = this._el('np-badge');
 
-        if (!d || !d.state || d.state === 'stopped' || (!d.current_file && d.state !== 'playing')) {
-            if (title) title.textContent = 'Aucune lecture';
+        const st = d && d.state ? d.state : null;
+        const online = !!(d && d.online);
+        const active = d && d.active ? d.active : null;
+        const status = st ? st.status : null;
+        const playing = status === 'playing';
+        this._playing = playing;
+
+        if (!st || !online || status === 'idle' || !st.current) {
+            if (title) title.textContent = online ? 'Aucune lecture' : 'Lecteur hors ligne';
             if (sub) sub.textContent = '—';
             if (fill) fill.style.width = '0%';
-            if (cur) cur.textContent = '00:00';
-            if (dur) dur.textContent = '00:00';
+            if (cur) cur.textContent = '—';
+            if (dur) dur.textContent = '—';
             if (badge) badge.style.display = 'none';
-            if (pill) { pill.className = 'status-pill is-stopped'; pill.querySelector('.pill-text').textContent = 'Lecteur · arrêté'; }
+            if (pill) { pill.className = 'status-pill is-stopped'; pill.querySelector('.pill-text').textContent = online ? 'Lecteur · arrêté' : 'Lecteur · hors ligne'; }
             return;
         }
-        const playing = d.state === 'playing';
-        if (title) title.textContent = d.current_file || 'Média';
-        if (sub) {
-            const pl = Array.isArray(d.playlist) && d.playlist.length ? d.playlist.length + ' éléments' : 'Lecture directe';
-            sub.textContent = 'Volume ' + (d.volume != null ? d.volume + '%' : '—') + ' · ' + pl;
-        }
-        const pos = d.position || 0, len = d.duration || 0;
-        if (fill) fill.style.width = (len ? Math.min(100, pos / len * 100) : 0) + '%';
-        if (cur) cur.textContent = this._fmtTime(pos);
-        if (dur) dur.textContent = this._fmtTime(len);
+
+        const c = st.current || {};
+        const idx = (st.index | 0) + 1;
+        const count = st.count | 0;
+        const activeName = (active && active.name) ? active.name : (st.name || '');
+
+        if (title) title.textContent = c.name || c.url || 'Média';
+        if (sub) sub.textContent = (count ? ('Élément ' + idx + ' / ' + count) : 'Lecture directe') + (activeName ? ' · ' + activeName : '');
+        if (fill) fill.style.width = (count ? Math.min(100, idx / count * 100) : 0) + '%';
+        if (cur) cur.textContent = count ? String(idx) : '—';
+        if (dur) dur.textContent = count ? String(count) : '—';
         if (badge) badge.style.display = playing ? 'block' : 'none';
         if (pill) {
             pill.className = 'status-pill ' + (playing ? 'is-playing' : 'is-paused');
@@ -144,12 +153,20 @@ PiSignage.dashboard = {
         }
     },
 
-    /* ---------- actions ---------- */
+    /* ---------- actions (transport vers le moteur réel) ---------- */
     async control(action) {
+        // Mappe les boutons dashboard vers les commandes display.php.
+        // 'play' agit en bascule lecture/pause ; 'stop' = pause (pas de stop pour le kiosk).
+        const map = { previous: 'prev', next: 'next', stop: 'pause' };
+        let cmd = map[action] || action;
+        if (action === 'play') cmd = this._playing ? 'pause' : 'play';
         try {
-            const r = await PiSignage.api.player.control(action);
+            const r = await PiSignage.api.request('/api/display.php?action=command', {
+                method: 'POST',
+                body: JSON.stringify({ cmd: cmd })
+            });
             if (r && r.success === false) PiSignage.ui.toast(r.message || 'Erreur', 'error');
-            this.refreshPlayer();
+            setTimeout(() => this.refreshPlayer(), 600);
         } catch (e) { PiSignage.ui.toast('Erreur de communication', 'error'); }
     },
 

@@ -449,6 +449,10 @@ class PiSignagePlayer {
         this.maxRetries = 3;
         this.wakeLock = null;
         this.pollInterval = null;
+        this.commandInterval = null;
+        this.stateInterval = null;
+        this.lastCmdSeq = -1;   // -1 = baseline non initialisée (cf. startCommandPolling)
+        this.paused = false;
 
         // Debug mode (Ctrl+D pour afficher)
         this.debugMode = false;
@@ -469,6 +473,8 @@ class PiSignagePlayer {
         await this.loadPlaylist();
         await this.requestWakeLock();
         this.startPolling();
+        this.startCommandPolling();
+        this.startStateReporting();
         this.startFpsCounter();
     }
 
@@ -625,11 +631,15 @@ class PiSignagePlayer {
         this.updateDebug('current-index', index);
         this.updateDebug('current-url', item.url);
 
+        this.paused = false;
+
         if (this.isImageItem(item)) {
             this.showImage(item, index);
         } else {
             this.playVideoItem(item, index);
         }
+
+        this.reportState();  // remontée immédiate à l'admin (page Lecteur / dashboard)
     }
 
     // ----- Chemin IMAGE -----
@@ -863,6 +873,95 @@ class PiSignagePlayer {
                 // Silent fail pour polling
             }
         }, 10000); // Poll toutes les 10 secondes
+    }
+
+    // ----- Canal de commande (page Lecteur / dashboard -> moteur réel) -----
+    // Poll /api/display.php?action=command toutes les 2s. La 1re lecture sert de
+    // BASELINE (on n'exécute pas une commande déjà ancienne au (re)chargement du player) ;
+    // ensuite on n'exécute que lorsque `seq` progresse.
+    startCommandPolling() {
+        this.commandInterval = setInterval(async () => {
+            try {
+                const r = await fetch('/api/display.php?action=command', { cache: 'no-store' });
+                if (!r.ok) return;
+                const res = await r.json();
+                if (!res.success || !res.data) return;
+                const seq = res.data.seq | 0;
+                if (this.lastCmdSeq < 0) { this.lastCmdSeq = seq; return; } // baseline
+                if (seq <= this.lastCmdSeq) return;
+                this.lastCmdSeq = seq;
+                this.execCommand(res.data.cmd);
+            } catch (e) { /* silencieux */ }
+        }, 2000);
+    }
+
+    execCommand(cmd) {
+        console.log('[Player] Commande reçue:', cmd);
+        switch (cmd) {
+            case 'next':   this.playNext(); break;
+            case 'prev':   this.playPrev(); break;
+            case 'pause':  this.pause(); break;
+            case 'play':   this.resume(); break;
+            case 'reload': this.reloadPlaylist(); break;
+            default: console.warn('[Player] Commande inconnue:', cmd);
+        }
+    }
+
+    pause() {
+        this.paused = true;
+        try { this.video.pause(); } catch (e) {}
+        this.updateDebug('status', 'paused');
+        this.reportState();
+    }
+
+    resume() {
+        this.paused = false;
+        try { this.video.play().catch(() => {}); } catch (e) {}
+        this.updateDebug('status', 'playing');
+        this.reportState();
+    }
+
+    playPrev() {
+        if (!this.playlist || !this.playlist.items) return;
+        const prevIndex = this.currentIndex - 1;
+        if (prevIndex >= 0) {
+            this.playItem(prevIndex);
+        } else if (this.playlist.autoLoop) {
+            this.playItem(this.playlist.items.length - 1);
+        } else {
+            this.playItem(0);
+        }
+    }
+
+    // ----- Remontée d'état vers l'admin -----
+    startStateReporting() {
+        this.reportState();
+        this.stateInterval = setInterval(() => this.reportState(), 5000); // heartbeat 5s
+    }
+
+    reportState() {
+        let item = null, count = 0;
+        if (this.playlist && this.playlist.items) {
+            count = this.playlist.items.length;
+            item = this.playlist.items[this.currentIndex] || null;
+        }
+        const payload = {
+            status:  this.paused ? 'paused' : (item ? 'playing' : 'idle'),
+            name:    (this.playlist && this.playlist.name) ? this.playlist.name : '',
+            version: (this.playlist && this.playlist.version) ? this.playlist.version : 0,
+            index:   this.currentIndex,
+            count:   count,
+            current: item ? { url: item.url || '', name: item.name || '', type: item.type || '' } : null,
+        };
+        try {
+            fetch('/api/display.php?action=state', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                cache: 'no-store',
+                body: JSON.stringify(payload),
+                keepalive: true,
+            }).catch(() => {});
+        } catch (e) { /* silencieux */ }
     }
 
     startFpsCounter() {

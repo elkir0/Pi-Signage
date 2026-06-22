@@ -16,6 +16,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && basename($_SERVER['SCRIPT_NAME']) ==
     return;
 }
 
+// Exceptions publiques pour le player kiosk (Chromium, sans session HTTP) — display.php :
+//  - GET  ?action=command  : le player interroge le canal de commande (transport).
+//  - POST ?action=state    : le player rapporte son état courant.
+// Le reste de display.php (POST command, GET state, playmedia) reste protégé par l'auth.
+if (basename($_SERVER['SCRIPT_NAME']) === 'display.php') {
+    $m = $_SERVER['REQUEST_METHOD'];
+    $a = $_GET['action'] ?? '';
+    if (($m === 'GET' && $a === 'command') || ($m === 'POST' && $a === 'state')) {
+        return;
+    }
+}
+
 if (!isAuthenticated()) {
     http_response_code(401);
     header('Content-Type: application/json');

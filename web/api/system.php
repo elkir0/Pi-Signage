@@ -163,23 +163,16 @@ function handleSystemAction($input) {
 
     switch ($action) {
         case 'restart-player':
-            $result = executeCommand('sudo systemctl restart pisignage-player');
+        case 'restart-vlc': // alias hérité (VLC retiré) — redémarre désormais la session kiosk
+            // Le lecteur réel est le kiosk Chromium (labwc). Redémarrer la session
+            // (display-manager, alias générique lightdm/greetd) relance labwc + Chromium.
+            // Sudoers: www-data ALL=(root) NOPASSWD: /usr/bin/systemctl restart display-manager
+            $result = executeCommand('sudo /usr/bin/systemctl restart display-manager');
             if ($result['success']) {
-                logMessage("Player restarted via system API");
-                jsonResponse(true, null, 'Player restarted successfully');
+                logMessage("Kiosk player (display-manager) restarted via system API");
+                jsonResponse(true, null, 'Lecteur kiosk redémarré (session relancée)');
             } else {
-                jsonResponse(false, $result, 'Failed to restart player');
-            }
-            break;
-
-        case 'restart-vlc':
-            // Legacy support - redirect to restart-player
-            $result = executeCommand('sudo systemctl restart pisignage-player');
-            if ($result['success']) {
-                logMessage("Player (legacy VLC command) restarted via system API");
-                jsonResponse(true, null, 'Player restarted successfully');
-            } else {
-                jsonResponse(false, $result, 'Failed to restart player');
+                jsonResponse(false, $result, 'Échec du redémarrage du lecteur kiosk');
             }
             break;
 
