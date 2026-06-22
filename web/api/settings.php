@@ -10,7 +10,10 @@ require_once '../config.php';
 header('Content-Type: application/json');
 
 $method = $_SERVER['REQUEST_METHOD'];
-$input = json_decode(file_get_contents('php://input'), true);
+// Réutilise le corps mis en cache par le garde (php://input est à lecture unique en état must_change).
+$input = isset($GLOBALS['__guard_input'])
+    ? $GLOBALS['__guard_input']
+    : json_decode((string)file_get_contents('php://input'), true);
 
 switch ($method) {
     case 'GET':
@@ -59,7 +62,7 @@ function loadSettings() {
         // Default settings
         $defaultSettings = [
             'audio_output' => 'hdmi',
-            'version' => '0.11.0'
+            'version' => PISIGNAGE_VERSION_NUM
         ];
         file_put_contents($settingsFile, json_encode($defaultSettings, JSON_PRETTY_PRINT));
         chmod($settingsFile, 0644);
@@ -96,24 +99,17 @@ function updateAudioOutput($input) {
         return;
     }
 
-    // Apply audio output change via raspi-config
-    // 0 = auto, 1 = headphone/jack, 2 = hdmi
-    $device = ($audioOutput === 'hdmi') ? 2 : 1;
-    $command = "sudo raspi-config nonint do_audio $device 2>&1";
+    // Applique via le helper à arguments fixes (root-owned 0755, verrouillé en sudoers à hdmi|jack).
+    // Défense en profondeur : in_array (ci-dessus) + escapeshellarg + case du script + littéral sudoers.
+    $command = 'sudo -n /opt/pisignage/scripts/audio-output.sh ' . escapeshellarg($audioOutput) . ' 2>&1';
     exec($command, $output, $returnCode);
 
     if ($returnCode === 0) {
         jsonResponse(true, ['audio_output' => $audioOutput], 'Sortie audio changée: ' . strtoupper($audioOutput));
     } else {
-        // Fallback: try alternative method with amixer if available
-        $fallbackCommand = "pactl set-card-profile 0 output:" . ($audioOutput === 'hdmi' ? 'hdmi-stereo' : 'analog-stereo') . " 2>&1";
-        exec($fallbackCommand, $fallbackOutput, $fallbackCode);
-
-        if ($fallbackCode === 0) {
-            jsonResponse(true, ['audio_output' => $audioOutput], 'Sortie audio changée: ' . strtoupper($audioOutput));
-        } else {
-            jsonResponse(false, null, 'Erreur lors du changement de sortie audio. Sortie sauvegardée mais non appliquée.');
-        }
+        // Pas de repli pactl fiable (www-data sans bus de session sur Trixie/PipeWire) : on log honnêtement.
+        error_log('[pisignage] audio-output.sh a échoué (rc=' . $returnCode . '): ' . implode(' ', (array)$output));
+        jsonResponse(false, null, 'Erreur lors du changement de sortie audio. Sortie sauvegardée mais non appliquée.');
     }
 }
 
@@ -121,8 +117,8 @@ function changePassword($input) {
     $oldPassword = $input['old_password'] ?? '';
     $newPassword = $input['new_password'] ?? '';
 
-    if (strlen($newPassword) < 6) {
-        jsonResponse(false, null, 'Le nouveau mot de passe doit contenir au moins 6 caractères');
+    if (strlen($newPassword) < 8) {
+        jsonResponse(false, null, 'Le nouveau mot de passe doit contenir au moins 8 caractères');
         return;
     }
 

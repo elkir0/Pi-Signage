@@ -63,8 +63,8 @@ PiSignage.settings = {
             PiSignage.ui.toast('Tous les champs sont requis', 'error');
             return;
         }
-        if (newPassword.length < 6) {
-            PiSignage.ui.toast('Le nouveau mot de passe doit contenir au moins 6 caractères', 'error');
+        if (newPassword.length < 8) {
+            PiSignage.ui.toast('Le nouveau mot de passe doit contenir au moins 8 caractères', 'error');
             return;
         }
         if (newPassword !== confirmPassword) {

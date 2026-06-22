@@ -11,6 +11,7 @@ $pageTitle = $pageTitle ?? ucfirst(getCurrentPage());
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="<?= htmlspecialchars($_SESSION['csrf'] ?? '', ENT_QUOTES) ?>">
     <meta name="color-scheme" content="dark light">
     <title>PiSignage · <?= htmlspecialchars($pageTitle) ?></title>
     <!-- Anti-flash: apply saved theme before first paint -->

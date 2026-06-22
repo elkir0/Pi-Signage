@@ -1,25 +1,45 @@
 <?php
 /**
- * PiSignage v0.11.0 - Authentication and Session Management
- * Handles session initialization and configuration management
- * v0.11.0: MPV support removed - VLC exclusive for better reliability
+ * PiSignage v0.12 - Authentication and Session Management
+ * Handles session initialization and configuration management.
+ * v0.12: Chromium HTML5 is the sole player engine (VLC removed).
  */
+
+require_once __DIR__ . '/../version.php';
 
 // Start session if not already started
 if (session_status() === PHP_SESSION_NONE) {
-    // secure=false imposé par LAN HTTP pur (pas de TLS). Passer 'secure'=>true dès qu'on sert en HTTPS.
-    session_set_cookie_params(['lifetime' => 0, 'path' => '/', 'httponly' => true, 'samesite' => 'Lax', 'secure' => false]);
+    // 'secure' dérivé UNIQUEMENT du vrai TLS (jamais X-Forwarded-Proto, spoofable -> self-DoS LAN HTTP).
+    $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+          || (($_SERVER['SERVER_PORT'] ?? '') === '443');
+    @ini_set('session.use_strict_mode', '1');
+    session_set_cookie_params(['lifetime' => 0, 'path' => '/', 'httponly' => true, 'samesite' => 'Lax', 'secure' => $https]);
     session_start();
 }
 
-// Asset cache-busting version (bump when CSS/JS change). Single source of truth.
-if (!defined('ASSET_VERSION')) {
-    define('ASSET_VERSION', '0.12.8');
+// Jeton CSRF par session (survit à session_regenerate_id, qui préserve $_SESSION).
+if (empty($_SESSION['csrf'])) {
+    $_SESSION['csrf'] = bin2hex(random_bytes(32));
+}
+
+// Durée de vie côté serveur des sessions AUTHENTIFIÉES (le kiosk/agent ne portent pas de session).
+if (!empty($_SESSION['authenticated'])) {
+    $now = time();
+    $idleMax = 8 * 3600;   // 8h d'inactivité
+    $absMax  = 7 * 86400;  // 7j absolus
+    $login = $_SESSION['login_time'] ?? $now;
+    $last  = $_SESSION['last_activity'] ?? $now;
+    if (($now - $last) > $idleMax || ($now - $login) > $absMax) {
+        $_SESSION = [];
+        session_destroy();
+    } else {
+        $_SESSION['last_activity'] = $now;
+    }
 }
 
 // Configuration
 $config = [
-    'version' => '0.12.0',
+    'version' => PISIGNAGE_VERSION_NUM,
     'media_path' => '/opt/pisignage/media/',
     'config_path' => '/opt/pisignage/config/',
     'logs_path' => '/opt/pisignage/logs/',
@@ -56,14 +76,19 @@ function loadCredentials() {
     return json_decode($data, true);
 }
 
-// Verify login credentials
+// Verify login credentials.
+// Pas de court-circuit sur le username : on exécute toujours password_verify contre le hash
+// stocké (travail constant) et on compare le username en temps constant (hash_equals).
 function verifyLogin($username, $password) {
     global $config;
     $credentials = loadCredentials();
-    if ($username === $credentials['username'] && password_verify($password, $credentials['password'])) {
+    $userOk = hash_equals((string)$credentials['username'], (string)$username);
+    $passOk = password_verify($password, $credentials['password']);
+    if ($userOk && $passOk) {
         $_SESSION['authenticated'] = true;
-        $_SESSION['username'] = $username;
+        $_SESSION['username'] = $credentials['username'];
         $_SESSION['login_time'] = time();
+        $_SESSION['last_activity'] = time();
         session_regenerate_id(true);
         if (password_verify('signage2025', $credentials['password'])) {
             $_SESSION['must_change_password'] = true;
@@ -90,14 +115,26 @@ function updatePassword($oldPassword, $newPassword) {
         return ['success' => false, 'message' => 'Ancien mot de passe incorrect'];
     }
 
-    if ($newPassword === 'signage2025') {
-        return ['success' => false, 'message' => 'Mot de passe par défaut interdit'];
+    if (strlen($newPassword) < 8) {
+        return ['success' => false, 'message' => 'Le mot de passe doit faire au moins 8 caractères'];
+    }
+
+    // Refuser les mots de passe faibles / par défaut.
+    $weak = ['signage2025', 'password', 'admin', 'administrator', '12345678', 'pisignage', 'zaforge', (string)gethostname()];
+    $lower = strtolower($newPassword);
+    foreach ($weak as $w) {
+        if ($w !== '' && $lower === strtolower($w)) {
+            return ['success' => false, 'message' => 'Mot de passe trop faible / par défaut interdit'];
+        }
     }
 
     $credentials['password'] = password_hash($newPassword, PASSWORD_BCRYPT, ['cost' => 12]);
-    if (file_put_contents($config['credentials_file'], json_encode($credentials, JSON_PRETTY_PRINT))) {
-        chmod($config['credentials_file'], 0600);
+    $tmp = $config['credentials_file'] . '.tmp';
+    if (file_put_contents($tmp, json_encode($credentials, JSON_PRETTY_PRINT)) !== false) {
+        chmod($tmp, 0600);
+        rename($tmp, $config['credentials_file']);
         unset($_SESSION['must_change_password']);
+        session_regenerate_id(true);
         return ['success' => true, 'message' => 'Mot de passe mis à jour'];
     }
 
@@ -119,11 +156,11 @@ function requireAuth() {
     }
 
     // Forcer le changement du mot de passe par défaut (pages WEB uniquement).
-    // Ne JAMAIS appliquer au player public ni à GET /api/playlist.
+    // player.php / GET /api/playlist sont publics et n'appellent jamais requireAuth().
     if (!empty($_SESSION['must_change_password'])) {
         $page = getCurrentPage();
-        if (!in_array($page, ['login', 'settings', 'player', 'playlist'], true)) {
-            header('Location: /settings.php');
+        if (!in_array($page, ['login', 'settings'], true)) {
+            header('Location: /settings.php?force_password=1');
             exit;
         }
     }

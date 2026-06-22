@@ -14,10 +14,10 @@ window.PiSignage = window.PiSignage || {
     api: {},
     utils: {},
     config: {
-        version: '0.11.0',
+        version: '0.12.0',
         currentSection: 'dashboard',
-        currentPlayer: 'vlc',
-        selectedPlayer: 'vlc'
+        currentPlayer: 'chromium',
+        selectedPlayer: 'chromium'
     }
 };
 
@@ -32,11 +32,43 @@ if (typeof systemStatsInterval === 'undefined') {
     window.systemStatsInterval = null;
 }
 if (typeof currentPlayer === 'undefined') {
-    window.currentPlayer = 'vlc';
+    window.currentPlayer = 'chromium';
 }
 if (typeof selectedPlayer === 'undefined') {
-    window.selectedPlayer = 'vlc';
+    window.selectedPlayer = 'chromium';
 }
+
+// CSRF : attache automatiquement le token (méthodes mutables, MÊME ORIGINE uniquement).
+// Le test d'origine via new URL() bloque la primitive de fuite de token (//evil.com).
+(function () {
+    if (window.__pisignageCsrfPatched) { return; }
+    window.__pisignageCsrfPatched = true;
+    function csrfToken() {
+        var m = document.querySelector('meta[name="csrf-token"]');
+        return m ? m.getAttribute('content') : '';
+    }
+    window.PiSignage.csrfToken = csrfToken;
+    var _fetch = window.fetch;
+    if (typeof _fetch === 'function') {
+        window.fetch = function (input, init) {
+            init = init || {};
+            var method = (init.method || (typeof input === 'object' && input && input.method) || 'GET').toUpperCase();
+            var url = (typeof input === 'string') ? input : (input && input.url) || '';
+            var sameOrigin;
+            try { sameOrigin = (new URL(url, location.href).origin === location.origin); }
+            catch (e) { sameOrigin = true; }
+            if (sameOrigin && ['POST', 'PUT', 'DELETE', 'PATCH'].indexOf(method) !== -1) {
+                var headers = new Headers(init.headers || (typeof input === 'object' && input && input.headers) || {});
+                if (!headers.has('X-CSRF-Token')) {
+                    var t = csrfToken();
+                    if (t) { headers.set('X-CSRF-Token', t); }
+                }
+                init.headers = headers;
+            }
+            return _fetch.call(this, input, init);
+        };
+    }
+})();
 
 // CRITICAL: Global showSection function for navigation
 window.showSection = function(section) {

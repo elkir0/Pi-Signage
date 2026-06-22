@@ -3,8 +3,8 @@
  * PiSignage - Configuration centrale
  */
 
-// Version
-define('PISIGNAGE_VERSION', 'v0.11.0');
+// Version — source unique (web/version.php)
+require_once __DIR__ . '/version.php';
 
 // Chemins
 define('BASE_DIR', '/opt/pisignage');
@@ -169,8 +169,23 @@ function logMessage($message, $level = 'INFO') {
     @file_put_contents($logFile, $logEntry, FILE_APPEND | LOCK_EX);
 }
 
-// Fonction pour exécuter des commandes système
+// Fonction pour exécuter des commandes système.
+// - $command ARRAY (argv) : exécution SANS shell via proc_open -> aucune injection possible (préféré).
+// - $command STRING        : chemin legacy conservé pour le détachement reboot/shutdown éprouvé.
 function executeCommand($command, $background = false) {
+    if (is_array($command)) {
+        $descriptors = [1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
+        $proc = @proc_open($command, $descriptors, $pipes, null, null);
+        if (!is_resource($proc)) {
+            return ['success' => false, 'output' => [], 'return_code' => 127];
+        }
+        $out = stream_get_contents($pipes[1]); fclose($pipes[1]);
+        $err = stream_get_contents($pipes[2]); fclose($pipes[2]);
+        $rc = proc_close($proc);
+        $combined = trim($out . ($err !== '' ? "\n" . $err : ''));
+        $lines = ($combined === '') ? [] : preg_split('/\r?\n/', $combined);
+        return ['success' => $rc === 0, 'output' => $lines, 'return_code' => $rc];
+    }
     if ($background) {
         // Lancer en arrière-plan (ex: reboot/shutdown) et retourner immédiatement
         exec($command . ' > /dev/null 2>&1 &');

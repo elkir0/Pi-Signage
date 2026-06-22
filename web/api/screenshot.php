@@ -758,20 +758,13 @@ try {
 
     switch ($_SERVER['REQUEST_METHOD']) {
         case 'GET':
-            $action = $_GET['action'] ?? 'capture';
+            $action = $_GET['action'] ?? 'status';
 
             switch ($action) {
                 case 'capture':
-                    // Paramètres de capture
-                    $options = [
-                        'format' => $_GET['format'] ?? 'png',
-                        'quality' => intval($_GET['quality'] ?? SCREENSHOT_QUALITY_DEFAULT),
-                        'method' => $_GET['method'] ?? 'auto',
-                        'base64' => isset($_GET['base64']) && $_GET['base64'] !== 'false'
-                    ];
-
-                    $result = $screenshotManager->capture($options);
-                    jsonResponse($result['success'], $result['data'] ?? null, $result['message'] ?? $result['error'] ?? null);
+                    // Capture = effet de bord (grim shell-out). POST UNIQUEMENT pour empêcher un
+                    // déclenchement cross-site par <img src=...?action=capture> (CSRF en GET).
+                    jsonResponse(false, null, 'Capture via POST uniquement', 405);
                     break;
 
                 case 'list':

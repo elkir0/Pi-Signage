@@ -14,7 +14,7 @@ set -e
 export PATH="/usr/sbin:/sbin:$PATH"
 
 # Configuration
-VERSION="0.11.0"
+VERSION="0.12.0"
 INSTALL_DIR="/opt/pisignage"
 GITHUB_REPO="https://github.com/elkir0/Pi-Signage.git"
 BBB_URL="http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
@@ -988,6 +988,13 @@ opcache.enable=1
 opcache.memory_consumption=64
 opcache.validate_timestamps=1
 opcache.revalidate_freq=60
+; Durcissement session (v0.12). PAS de cookie_secure ici (casserait le LAN HTTP pur) :
+; le flag Secure est posé dynamiquement dans auth.php selon le vrai HTTPS.
+session.use_strict_mode=1
+session.cookie_httponly=1
+session.cookie_samesite=Lax
+session.use_only_cookies=1
+session.gc_maxlifetime=28800
 ENDOFOPCACHE
             log_info "OPcache configuré (drop-in 99-pisignage.ini)"
         else
@@ -1092,18 +1099,32 @@ configure_sudo() {
     log_step "Configuration des permissions"
 
     # Configure sudo permissions for pi user and www-data
-    sudo tee /etc/sudoers.d/pisignage > /dev/null << 'SUDOERS'
-# PiSignage sudo permissions
-pi ALL=(ALL) NOPASSWD: /sbin/shutdown, /sbin/reboot, /bin/systemctl
-www-data ALL=(ALL) NOPASSWD: /usr/bin/amixer, /usr/bin/raspi-config
+    # Sudoers least-privilege (v0.12 durci) : écriture en temp + validation visudo AVANT install.
+    local SUDO_TMP
+    SUDO_TMP="$(mktemp)"
+    cat > "$SUDO_TMP" << 'SUDOERS'
+# PiSignage/Zaforge sudo permissions — moindre privilège (v0.12 durci).
+# raspi-config N'EST PLUS accordé à www-data (c'était une escalade local->root) : il n'est
+# atteignable que via le wrapper à arguments fixes audio-output.sh hdmi|jack. wlr-randr retiré
+# (aucun appelant www-data ; screen-schedule-tick.sh tourne en root via cron). (ALL) -> (root).
+pi ALL=(root) NOPASSWD: /sbin/shutdown, /sbin/reboot, /bin/systemctl
+www-data ALL=(root) NOPASSWD: /usr/bin/amixer
+www-data ALL=(root) NOPASSWD: /opt/pisignage/scripts/audio-output.sh hdmi, /opt/pisignage/scripts/audio-output.sh jack
 # Capture d'écran Wayland: www-data (php-fpm) lance grim dans la session labwc de 'pi'
 www-data ALL=(pi) NOPASSWD: /opt/pisignage/scripts/grim-capture.sh
-# Extinction d'écran programmée (kiosk): on/off via wlr-randr dans la session de 'pi'
+# Extinction d'écran programmée (kiosk): on/off dans la session de 'pi'
 www-data ALL=(pi) NOPASSWD: /opt/pisignage/scripts/screen-power.sh
-www-data ALL=(pi) NOPASSWD: /usr/bin/wlr-randr
 # Redémarrer la session kiosk complète (alias générique lightdm/greetd)
 www-data ALL=(root) NOPASSWD: /usr/bin/systemctl restart display-manager
 SUDOERS
+    if sudo visudo -cf "$SUDO_TMP" >/dev/null 2>&1; then
+        sudo install -o root -g root -m 0440 "$SUDO_TMP" /etc/sudoers.d/pisignage
+    else
+        log_error "Fichier sudoers invalide — non installé (sécurité préservée)"
+    fi
+    rm -f "$SUDO_TMP"
+    # Supprimer durablement toute grant blanket héritée (escalade pi->root).
+    sudo rm -f /etc/sudoers.d/010-pisignage-nopasswd
 
     # Ajouter www-data au groupe video (accès framebuffer pour screenshots)
     sudo usermod -aG video www-data
@@ -1128,7 +1149,24 @@ echo "$OUT"
 GRIMCAP
     sudo chmod 0755 "$INSTALL_DIR/scripts/grim-capture.sh"
 
-    log_info "Permissions configurées (www-data: video group + amixer sudo + grim-capture)"
+    # Helper de bascule audio à ARGUMENTS FIXES (verrouillé en sudoers à hdmi|jack).
+    # INVARIANT DE SÉCURITÉ : root:root 0755 (généré APRÈS le déploiement web pour ne JAMAIS
+    # hériter de www-data — sinon la grant deviendrait une escalade vers root).
+    sudo tee "$INSTALL_DIR/scripts/audio-output.sh" > /dev/null << 'AUDIOOUT'
+#!/bin/sh
+set -eu
+case "${1:-}" in
+    hdmi) DEV=2 ;;
+    jack) DEV=1 ;;
+    *) echo "usage: audio-output.sh hdmi|jack" >&2; exit 2 ;;
+esac
+if [ "$#" -ne 1 ]; then echo "usage: audio-output.sh hdmi|jack" >&2; exit 2; fi
+exec /usr/bin/raspi-config nonint do_audio "$DEV"
+AUDIOOUT
+    sudo chown root:root "$INSTALL_DIR/scripts/audio-output.sh"
+    sudo chmod 0755 "$INSTALL_DIR/scripts/audio-output.sh"
+
+    log_info "Permissions configurées (least-privilege: raspi-config retiré, audio via wrapper, sudoers 0440)"
 }
 
 # Test de l'installation
@@ -1162,6 +1200,25 @@ test_installation() {
     log_info "Tests terminés"
 }
 
+# Provisionne le token de l'agent local (zaforge-agent). Idempotent (conserve l'existant).
+# Fichier 0640 pi:www-data : pi (agent, uid 1000) le lit, www-data (php-fpm) aussi, rien pour les autres.
+# (0600 impossible : agent=pi et php-fpm=www-data sans groupe commun -> 0640 = forme minimale.)
+provision_agent_token() {
+    local AF="$INSTALL_DIR/config/agent.json"
+    sudo mkdir -p "$INSTALL_DIR/config"
+    if sudo test -s "$AF" && sudo grep -q '"token"' "$AF" 2>/dev/null; then
+        log_info "Token agent déjà présent (conservé)"
+    else
+        local T TS
+        T="$(openssl rand -hex 32)"
+        TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        printf '{\n  "token": "%s",\n  "created_at": "%s"\n}\n' "$T" "$TS" | sudo tee "$AF" >/dev/null
+        log_info "Token agent généré"
+    fi
+    sudo chown pi:www-data "$AF" 2>/dev/null || true
+    sudo chmod 0640 "$AF"
+}
+
 # Fonction principale
 main() {
     # Parse flags (acceptés dans n'importe quel ordre): --auto, --force
@@ -1189,6 +1246,7 @@ main() {
     create_autostart_script
     configure_webserver
     configure_sudo
+    provision_agent_token
     configure_autostart
     test_installation
 

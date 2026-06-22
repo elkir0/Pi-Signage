@@ -33,6 +33,13 @@ PiSignage.api = {
         // Only retry idempotent requests. POST/PUT/DELETE/PATCH may mutate
         // server state, so replaying them on failure could double-apply.
         const method = (defaultOptions.method || 'GET').toUpperCase();
+        // CSRF (ceinture+bretelles ; l'intercepteur core.js couvre déjà window.fetch).
+        if (['POST', 'PUT', 'DELETE', 'PATCH'].indexOf(method) !== -1) {
+            const _t = (window.PiSignage && PiSignage.csrfToken)
+                ? PiSignage.csrfToken()
+                : (function () { const m = document.querySelector('meta[name="csrf-token"]'); return m ? m.getAttribute('content') : ''; })();
+            if (_t) { defaultOptions.headers = Object.assign({}, defaultOptions.headers, { 'X-CSRF-Token': _t }); }
+        }
         const isIdempotent = (method === 'GET' || method === 'HEAD');
         const maxAttempts = isIdempotent ? this.retryAttempts : 1;
 
@@ -173,6 +180,9 @@ PiSignage.api = {
                 };
 
                 xhr.open('POST', '/api/upload.php');
+                // L'intercepteur fetch ne couvre PAS XHR -> attacher le token CSRF explicitement.
+                var _csrf = (window.PiSignage && PiSignage.csrfToken) ? PiSignage.csrfToken() : '';
+                if (_csrf) { xhr.setRequestHeader('X-CSRF-Token', _csrf); }
                 xhr.send(formData);
             });
         }
@@ -296,7 +306,7 @@ PiSignage.api = {
     // Screenshot API calls
     screenshot: {
         capture: function() {
-            return PiSignage.api.request('/api/screenshot.php?action=capture');
+            return PiSignage.api.request('/api/screenshot.php?action=capture', { method: 'POST' });
         }
     },
 

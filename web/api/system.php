@@ -73,26 +73,27 @@ if ($method === 'GET' && isset($_GET['action']) && $_GET['action'] === 'get_play
 
 // ALSA Volume Control (v0.11.0)
 if ($method === 'GET' && isset($_GET['action']) && $_GET['action'] === 'get_volume') {
-    $volume = exec("amixer sget Master | grep -oP '\\d+%' | head -1 | tr -d '%'");
-    jsonResponse(true, ['volume' => intval($volume)]);
+    $r = executeCommand(['/usr/bin/amixer', 'sget', 'Master']);
+    $vol = 0;
+    if (preg_match('/(\d+)%/', implode("\n", $r['output']), $mm)) { $vol = (int)$mm[1]; }
+    jsonResponse(true, ['volume' => $vol]);
     exit;
 }
 
 if ($method === 'POST' && isset($input['action']) && $input['action'] === 'set_volume') {
     $volume = intval($input['volume'] ?? 100);
     $volume = max(0, min(100, $volume)); // Clamp 0-100
-    exec("amixer sset Master {$volume}%");
+    executeCommand(['/usr/bin/amixer', 'sset', 'Master', $volume . '%']);
     jsonResponse(true, ['volume' => $volume, 'message' => "Volume set to {$volume}%"]);
     exit;
 }
 
 if ($method === 'POST' && isset($input['action']) && $input['action'] === 'toggle_mute') {
-    $output = [];
-    exec("amixer sget Master | grep -oP '\\[on\\]|\\[off\\]' | head -1", $output);
-    $currentState = trim($output[0] ?? '[on]');
-    $newState = ($currentState === '[on]') ? 'off' : 'on';
-    exec("amixer sset Master {$newState}");
-    jsonResponse(true, ['muted' => ($newState === 'off'), 'message' => 'Mute toggled']);
+    executeCommand(['/usr/bin/amixer', 'sset', 'Master', 'toggle']);
+    // Relire l'état réel après bascule (ne pas présumer du résultat).
+    $s = executeCommand(['/usr/bin/amixer', 'sget', 'Master']);
+    $muted = (bool)preg_match('/\[off\]/', implode("\n", $s['output']));
+    jsonResponse(true, ['muted' => $muted, 'message' => 'Mute toggled']);
     exit;
 }
 
@@ -167,7 +168,7 @@ function handleSystemAction($input) {
             // Le lecteur réel est le kiosk Chromium (labwc). Redémarrer la session
             // (display-manager, alias générique lightdm/greetd) relance labwc + Chromium.
             // Sudoers: www-data ALL=(root) NOPASSWD: /usr/bin/systemctl restart display-manager
-            $result = executeCommand('sudo /usr/bin/systemctl restart display-manager');
+            $result = executeCommand(['sudo', '/usr/bin/systemctl', 'restart', 'display-manager']);
             if ($result['success']) {
                 logMessage("Kiosk player (display-manager) restarted via system API");
                 jsonResponse(true, null, 'Lecteur kiosk redémarré (session relancée)');
@@ -212,7 +213,7 @@ function handleSystemAction($input) {
             break;
 
         case 'restart-nginx':
-            $result = executeCommand('sudo systemctl restart nginx');
+            $result = executeCommand(['sudo', '/usr/bin/systemctl', 'restart', 'nginx']);
             if ($result['success']) {
                 logMessage("Nginx restarted via system API");
                 jsonResponse(true, null, 'Nginx restarted successfully');
@@ -267,14 +268,14 @@ function handleConfigUpdate($input) {
 
 
 function handleGetLogs($input) {
-    $lines = $input['lines'] ?? 50;
+    $lines = max(1, min(2000, (int)($input['lines'] ?? 50)));
     $logFile = LOGS_PATH . '/pisignage.log';
 
     if (!file_exists($logFile)) {
         jsonResponse(true, [], 'No logs available');
     }
 
-    $result = executeCommand("tail -n $lines $logFile");
+    $result = executeCommand(['/usr/bin/tail', '-n', (string)$lines, $logFile]);
 
     if ($result['success']) {
         jsonResponse(true, $result['output']);

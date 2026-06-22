@@ -201,7 +201,10 @@ function updateDisplayConfig($input) {
     }
 
     if (isset($input['rotation'])) {
-        $rotation = intval($input['rotation']);
+        $rotation = (int)$input['rotation'];
+        if (!in_array($rotation, [0, 90, 180, 270], true)) {
+            jsonResponse(false, null, 'Rotation invalide (0, 90, 180, 270)');
+        }
         $changes[] = "Rotation: {$rotation}°";
         $commands[] = "sudo sed -i 's/^display_rotate=.*/display_rotate=$rotation/' /boot/config.txt";
 
@@ -287,10 +290,14 @@ network={
     }
 
     if (isset($input['hostname'])) {
-        $hostname = preg_replace('/[^a-zA-Z0-9-]/', '', $input['hostname']);
+        $hostname = (string)$input['hostname'];
+        // Allow-list stricte (RFC 1123, pas de tiret en tête -> pas d'injection d'option).
+        if (!preg_match('/^[a-z0-9][a-z0-9-]{0,62}$/i', $hostname)) {
+            jsonResponse(false, null, "Nom d'hôte invalide");
+        }
         $changes[] = "Hostname: $hostname";
-        $commands[] = "sudo hostnamectl set-hostname $hostname";
-        $commands[] = "sudo systemctl restart avahi-daemon";
+        $commands[] = ['sudo', '/usr/bin/hostnamectl', 'set-hostname', $hostname];
+        $commands[] = ['sudo', '/usr/bin/systemctl', 'restart', 'avahi-daemon'];
     }
 
     if (empty($commands)) {
@@ -372,9 +379,13 @@ function updateSystemConfig($input) {
     $changes = [];
 
     if (isset($input['timezone'])) {
-        $timezone = $input['timezone'];
+        $timezone = (string)$input['timezone'];
+        // Allow-list strict : identifiant de fuseau connu de PHP (sinon injection shell as www-data).
+        if (!in_array($timezone, timezone_identifiers_list(), true)) {
+            jsonResponse(false, null, 'Fuseau horaire invalide');
+        }
         $changes[] = "Timezone: $timezone";
-        $commands[] = "sudo timedatectl set-timezone $timezone";
+        $commands[] = ['sudo', '/usr/bin/timedatectl', 'set-timezone', $timezone];
     }
 
     if (empty($commands)) {
