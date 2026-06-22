@@ -22,6 +22,39 @@ if (empty($_SESSION['csrf'])) {
     $_SESSION['csrf'] = bin2hex(random_bytes(32));
 }
 
+// === PONT D'AUTH RELAIS — « mode complet » à distance via le tunnel WireGuard ===
+// Le proxy UI du relais (conteneur dans le netns WireGuard, source wg0 = 10.70.0.1)
+// présente un secret partagé. On établit une session admin SEULEMENT si :
+//   (a) REMOTE_ADDR == 10.70.0.1 — la passerelle relais. NON-SPOOFABLE : TCP exige
+//       le handshake (un SYN à source usurpée n'aboutit jamais), et l'isolation WG
+//       (FORWARD wg0->wg0 DROP côté relais + allowed_ips clampés côté agent)
+//       empêche tout autre pair d'être 10.70.0.1 ou d'atteindre ce Pi ;
+//   (b) le header X-Zaforge-Proxy correspond au secret (hash_equals, >= 32).
+// REMOTE_ADDR est le vrai pair TCP (cet nginx ne fait pas confiance à XFF). Aucune
+// interférence avec le login LAN (192.168.1.x) ni le kiosk (127.0.0.1, sans header).
+// L'opérateur a déjà passé l'auth console (httpOnly + CSRF + TLS) avant d'arriver ici.
+if (empty($_SESSION['authenticated'])) {
+    $zfProxyHdr = $_SERVER['HTTP_X_ZAFORGE_PROXY'] ?? '';
+    if ($zfProxyHdr !== '') {
+        $zfRemote = $_SERVER['REMOTE_ADDR'] ?? '';
+        $zfSecretFile = '/opt/pisignage/config/relay-proxy-secret';
+        $zfExpected = is_readable($zfSecretFile) ? trim((string)@file_get_contents($zfSecretFile)) : '';
+        if ($zfRemote === '10.70.0.1' && $zfExpected !== ''
+            && strlen($zfProxyHdr) >= 32 && hash_equals($zfExpected, $zfProxyHdr)) {
+            $_SESSION['authenticated']   = true;
+            $_SESSION['username']        = 'admin';
+            $_SESSION['login_time']      = $_SESSION['login_time'] ?? time();
+            $_SESSION['last_activity']   = time();
+            $_SESSION['via_relay_proxy'] = true;
+            // L'opérateur distant a déjà été authentifié par la console : on ne le
+            // bloque pas sur le mur de changement de mot de passe par défaut.
+            unset($_SESSION['must_change_password']);
+        } else {
+            @error_log('[pisignage] relay-proxy auth refusée depuis ' . $zfRemote);
+        }
+    }
+}
+
 // Durée de vie côté serveur des sessions AUTHENTIFIÉES (le kiosk/agent ne portent pas de session).
 if (!empty($_SESSION['authenticated'])) {
     $now = time();
