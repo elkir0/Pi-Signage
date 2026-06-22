@@ -382,9 +382,9 @@
 
       <h4 class="sec-h">Telemetry ${tel ? `<span class="muted small">(${esc(fmtAgo(tel.ts))})</span>` : ''}</h4>
       <dl class="detail-list">
-        <div><dt>CPU</dt><dd>${sys.cpu != null ? esc(sys.cpu) + '%' : '—'}</dd></div>
-        <div><dt>Temp</dt><dd>${sys.temp != null ? esc(Math.round(sys.temp)) + '°C' : '—'}</dd></div>
-        <div><dt>Memory</dt><dd>${sys.mem != null ? esc(sys.mem) + '%' : '—'}</dd></div>
+        <div><dt>CPU</dt><dd>${(sys.cpu_pct != null ? sys.cpu_pct : sys.cpu) != null ? esc(Math.round(sys.cpu_pct != null ? sys.cpu_pct : sys.cpu)) + '%' : '—'}</dd></div>
+        <div><dt>Temp</dt><dd>${(sys.temp_c != null ? sys.temp_c : sys.temp) != null ? esc(Math.round(sys.temp_c != null ? sys.temp_c : sys.temp)) + '°C' : '—'}</dd></div>
+        <div><dt>Memory</dt><dd>${(sys.mem_pct != null ? sys.mem_pct : sys.mem) != null ? esc(Math.round(sys.mem_pct != null ? sys.mem_pct : sys.mem)) + '%' : '—'}</dd></div>
         <div><dt>Uptime</dt><dd>${sys.uptime != null ? esc(fmtUptime(sys.uptime)) : '—'}</dd></div>
         <div><dt>Now playing</dt><dd>${esc(player.now_playing || player.current || '—')}</dd></div>
         <div><dt>Playlist</dt><dd>${esc(player.playlist || '—')}</dd></div>

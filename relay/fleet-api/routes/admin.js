@@ -60,8 +60,15 @@ async function handle(req, res, ctx) {
     const devices = rows.map((d) => {
       let cpu = null, temp = null;
       if (d._sys) {
-        try { const s = JSON.parse(d._sys); if (s.cpu != null) cpu = s.cpu; if (s.temp != null) temp = s.temp; }
-        catch (_) { /* ignore malformed telemetry */ }
+        // The agent heartbeat reports cpu_pct / temp_c (see telemetry.go). Map them
+        // to the cpu/temp the console card renders. (Accept legacy cpu/temp too.)
+        try {
+          const s = JSON.parse(d._sys);
+          const c = s.cpu_pct != null ? s.cpu_pct : s.cpu;
+          const t = s.temp_c != null ? s.temp_c : s.temp;
+          if (c != null) cpu = c;
+          if (t != null) temp = t;
+        } catch (_) { /* ignore malformed telemetry */ }
       }
       return {
         device_id: d.device_id, state: d.state, hostname: d.hostname, model: d.model,
