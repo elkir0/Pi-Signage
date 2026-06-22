@@ -77,7 +77,8 @@ async function handle(req, res, ctx) {
         last_seen_at: d.last_seen_at, last_heartbeat_at: d.last_heartbeat_at,
         online: d.online === 1, created_at: d.created_at, confirmed_at: d.confirmed_at,
         content_cached: d.content_cached === 1,
-        cpu: cpu, temp: temp
+        // The console card reads d.telemetry_preview.cpu/temp (normalized).
+        telemetry_preview: { cpu: cpu, temp: temp }
       };
     });
     return send(res, 200, { v: 1, devices });
