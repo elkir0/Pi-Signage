@@ -219,6 +219,17 @@ const MIGRATIONS = [
     );
     CREATE INDEX IF NOT EXISTS ix_billing_events_tenant ON billing_events(tenant_id, ts);
     `
+  },
+  {
+    // 007_system_tenant: the Stripe webhook idempotency latch writes a
+    // processed_events row keyed by the stripe event id, bucketed under the
+    // 'system' tenant. processed_events.tenant_id is a FK to tenants, so without
+    // this sentinel the latch INSERT would FK-fail and the webhook would be
+    // silently dropped (breaking dunning + self-heal). Seed it once; no devices,
+    // api_keys, or console_users ever attach to it.
+    name: '007_system_tenant',
+    sql: `INSERT OR IGNORE INTO tenants(tenant_id, name, status, created_at)
+          VALUES ('system', 'system', 'active', CAST(strftime('%s','now') AS INTEGER));`
   }
 ];
 

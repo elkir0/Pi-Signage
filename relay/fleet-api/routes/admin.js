@@ -152,7 +152,11 @@ async function handle(req, res, ctx) {
     // Existing peers are untouched; only minting a new code is refused.
     if (!entitlement(tenantId).ok) return send(res, 402, { v: 1, error: 'payment_required' });
     const code = ids.newEnrollmentCode();
-    const ttl = Number.isInteger(body.ttl_seconds) ? body.ttl_seconds : cfg.enroll.codeTtlSeconds;
+    // Clamp the TTL to [60s, 24h]: an unvalidated huge value would mint an
+    // effectively non-expiring code (defeating the short-lived-code defense), a
+    // negative one an already-expired code.
+    const reqTtl = Number.isInteger(body.ttl_seconds) ? body.ttl_seconds : cfg.enroll.codeTtlSeconds;
+    const ttl = Math.min(Math.max(reqTtl, 60), 24 * 3600);
     const rebind = body.rebind === true ? 1 : 0;
     get().prepare(`INSERT INTO enrollment_codes(code_hash, tenant_id, rebind, created_at, expires_at)
       VALUES (?,?,?,?,?)`)

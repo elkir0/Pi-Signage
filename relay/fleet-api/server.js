@@ -60,6 +60,19 @@ async function main() {
     } catch (e) { console.error('[sweep]', e.message); }
   }, 30000).unref();
 
+  // Retention prune (bounds the append-only growth tables a busy/abusive device
+  // would otherwise fill). processed_events holds short-lived idempotency latches
+  // (heartbeat-ts dedup + 'stripe:'+id) — none are redelivered after days; events
+  // is a forensic stream. Hourly, jittered-free (interval only). device_telemetry
+  // is one row per device (UPSERT) so it needs no pruning.
+  setInterval(() => {
+    const now = Math.floor(Date.now() / 1000);
+    try {
+      db.get().prepare('DELETE FROM processed_events WHERE processed_at < ?').run(now - 7 * 24 * 3600);
+      db.get().prepare('DELETE FROM events WHERE ts < ?').run(now - 30 * 24 * 3600);
+    } catch (e) { console.error('[retention]', e.message); }
+  }, 3600000).unref();
+
   // Nightly billing reconcile (MUST-FIX 4): ~24h, jittered, only when configured.
   // Heals a tenant stuck managed-off after a missed invoice.paid by moving TOWARD
   // Stripe truth. Never removePeer/disableClient/stop.
@@ -97,20 +110,22 @@ async function main() {
           return send(res, 400, { v: 1, error: 'invalid_signature' });
         }
 
-        // Idempotency latch: reuse processed_events (no new table). The tenant is
-        // best-effort from metadata; 'system' otherwise (the row is just a latch).
-        const tenantId =
-          (evt.data && evt.data.object && evt.data.object.metadata && evt.data.object.metadata.tenant_id) ||
-          (evt.data && evt.data.object && evt.data.object.client_reference_id) ||
-          'system';
+        // Idempotency latch: reuse processed_events (no new table). The latch row is
+        // bucketed under the seeded 'system' tenant (migration 007) — NOT a tenant
+        // derived from attacker-controllable event metadata, which could name a
+        // non-existent tenant and FK-fail the INSERT, silently dropping a legit
+        // webhook. The REAL tenant is resolved inside applyWebhookEvent by Stripe
+        // customer/subscription id. msg_key ('stripe:'+id) is the true idempotency key.
         let first;
         try {
           first = db.get().prepare(
             'INSERT OR IGNORE INTO processed_events(msg_key, tenant_id, processed_at) VALUES (?,?,?)'
-          ).run('stripe:' + evt.id, tenantId, Math.floor(Date.now() / 1000));
+          ).run('stripe:' + evt.id, 'system', Math.floor(Date.now() / 1000));
         } catch (e) {
+          // A DB failure here means we did NOT record (and will NOT process) the
+          // event — return 5xx so Stripe REDELIVERS rather than silently dropping it.
           console.error('[webhook] latch:', e.message);
-          return send(res, 200, { v: 1, received: true }); // never make Stripe retry on our DB hiccup
+          return send(res, 500, { v: 1, error: 'latch_failed' });
         }
         if (first.changes === 0) {
           // Already processed — early 200 BEFORE any re-fetch/mutate.

@@ -55,11 +55,23 @@ if ($agentHeader !== '') {
     $isLoopback = in_array($remote, ['127.0.0.1', '::1', '::ffff:127.0.0.1'], true);
     $expected = pisignage_agent_token();
     if ($isLoopback && $expected !== '' && strlen($agentHeader) >= 32 && hash_equals($expected, $agentHeader)) {
-        $GLOBALS['__guard_agent'] = true;
-        return;
+        // PÉRIMÈTRE du token agent : il ne déverrouille QUE les endpoints dont l'agent
+        // a réellement besoin (stats lecture ; état/commande du player ; playlists).
+        // Défense en profondeur : un processus www-data compromis qui lit agent.json
+        // (0640 pi:www-data) ne pilote alors que ce périmètre — jamais settings/system/
+        // media/upload/youtube/etc. Le token n'est PAS une clé d'API générale.
+        $agentScript = basename($_SERVER['SCRIPT_NAME'] ?? '');
+        if (in_array($agentScript, ['stats.php', 'display.php', 'playlists.php'], true)) {
+            $GLOBALS['__guard_agent'] = true;
+            return;
+        }
+        // Token valide mais endpoint hors périmètre : pas de return -> tombe dans le
+        // 401 normal ci-dessous (aucun accès élargi).
+        @error_log('[pisignage] agent token hors périmètre: ' . $agentScript);
+    } else {
+        // En-tête présent mais échec : journaliser sans révéler quelle vérif a échoué (no-oracle).
+        @error_log('[pisignage] agent auth refusée depuis ' . $remote);
     }
-    // En-tête présent mais échec : journaliser sans révéler quelle vérif a échoué (no-oracle).
-    @error_log('[pisignage] agent auth refusée depuis ' . $remote);
 }
 
 if (!isAuthenticated()) {

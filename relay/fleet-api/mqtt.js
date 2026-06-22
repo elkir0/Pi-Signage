@@ -9,6 +9,30 @@ let client = null;
 
 function now() { return Math.floor(Date.now() / 1000); }
 
+// Hard cap on an inbound broker payload. Telemetry/status/result/event are all
+// small JSON; this bounds the buffer+toString+JSON.parse cost so a rooted enrolled
+// device cannot push multi-MB messages to exhaust the single shared Node process.
+// Mirrors the broker-side message_size_limit. (Kept >= broker limit.)
+const MAX_MQTT_PAYLOAD = 131072; // 128 KB
+
+// Per-device inbound message throttle. A compromised device cannot flood the
+// growth tables (events / processed_events) or the parser. Bounded-size, lazily
+// swept. Generous vs legitimate cadence (heartbeat ~2/min + occasional status/
+// result/event); sustained abuse beyond the cap is silently dropped before any
+// DB write. Topic ACLs already confine a device to its OWN subtree.
+const deviceMsgWindows = new Map();
+function deviceRateOk(deviceId) {
+  const nowMs = Date.now();
+  if (deviceMsgWindows.size > 100000) {
+    for (const [k, w] of deviceMsgWindows) if (nowMs - w.windowStart >= 60000) deviceMsgWindows.delete(k);
+  }
+  const w = deviceMsgWindows.get(deviceId);
+  if (!w || nowMs - w.windowStart >= 60000) { deviceMsgWindows.set(deviceId, { windowStart: nowMs, count: 1 }); return true; }
+  if (w.count >= 120) return false; // 120 msgs/min/device
+  w.count += 1;
+  return true;
+}
+
 // Look up a device by its MQTT username (== device_id). The relay AUTHORITATIVELY
 // derives tenant_id from THIS row, never from any client-supplied field.
 function deviceByUsername(username) {
@@ -55,6 +79,8 @@ function connect() {
 }
 
 function onMessage(topic, payload) {
+  // Bound memory + parse cost: drop oversized payloads BEFORE toString()/JSON.parse.
+  if (payload.length > MAX_MQTT_PAYLOAD) return;
   // topic = zf/<tenant>/<device>/<kind>
   const parts = topic.split('/');
   if (parts.length !== 4 || parts[0] !== 'zf') return;
@@ -63,6 +89,7 @@ function onMessage(topic, payload) {
 
   const dev = deviceByUsername(username);
   if (!dev) return; // unknown device — broker ACLs should prevent this anyway
+  if (!deviceRateOk(dev.device_id)) return; // shed per-device floods before any INSERT
   const tenantId = dev.tenant_id; // AUTHORITATIVE
 
   let msg;

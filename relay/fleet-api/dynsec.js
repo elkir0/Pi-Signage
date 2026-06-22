@@ -109,7 +109,7 @@ function connect() {
 }
 
 // Send a batch of dynsec commands; await the correlated response (MQTT5).
-function send(commands) {
+function sendOne(commands) {
   if (!ready) return Promise.reject(new Error('dynsec not ready'));
   return new Promise((resolve, reject) => {
     const corr = crypto.randomBytes(12);
@@ -126,6 +126,19 @@ function send(commands) {
       if (err) { clearTimeout(timer); pending.delete(key); reject(err); }
     });
   });
+}
+
+// SERIALIZE all $CONTROL traffic: at most ONE request is ever in flight. The
+// mosquitto dynsec plugin does not reliably echo the MQTT5 correlationData, so the
+// response is matched by FIFO — which is only unambiguous with a single in-flight
+// request. Concurrent enrollments would otherwise have 2+ pending and mis-correlate
+// responses. We chain each send onto the previous (regardless of its outcome).
+let dynsecChain = Promise.resolve();
+function send(commands) {
+  const run = () => sendOne(commands);
+  const result = dynsecChain.then(run, run);
+  dynsecChain = result.then(() => {}, () => {}); // keep the chain alive on error
+  return result;
 }
 
 // Tolerate "already exists" / "not found" so provisioning + pruning are idempotent.

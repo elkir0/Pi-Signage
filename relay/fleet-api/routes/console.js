@@ -24,6 +24,8 @@
 // =============================================================================
 
 const crypto = require('crypto');
+const { promisify } = require('util');
+const scryptAsync = promisify(crypto.scrypt);
 const cfg = require('../config');
 const { get } = require('../db');
 const ids = require('../ids');
@@ -54,8 +56,11 @@ function ctEqual(a, b) {
   return crypto.timingSafeEqual(ha, hb) && String(a).length === String(b).length;
 }
 
-// scrypt verifier matching admin.js scryptHash: 'scrypt$N$salt$hash'.
-function verifyPassword(password, stored) {
+// scrypt verifier matching admin.js scryptHash: 'scrypt$N$salt$hash'. ASYNC: the
+// KDF runs in libuv's threadpool (crypto.scrypt), NOT scryptSync, so a flood of
+// login attempts cannot block the single Node event loop (which would freeze the
+// whole control plane). The handler awaits this.
+async function verifyPassword(password, stored) {
   if (typeof stored !== 'string') return false;
   const parts = stored.split('$');
   if (parts.length !== 4 || parts[0] !== 'scrypt') return false;
@@ -67,10 +72,30 @@ function verifyPassword(password, stored) {
     expected = Buffer.from(parts[3], 'base64url');
   } catch (_) { return false; }
   let dk;
-  try { dk = crypto.scryptSync(String(password), salt, expected.length, { N, r: 8, p: 1 }); }
+  try { dk = await scryptAsync(String(password), salt, expected.length, { N, r: 8, p: 1 }); }
   catch (_) { return false; }
   return dk.length === expected.length && crypto.timingSafeEqual(dk, expected);
 }
+
+// Per-ACCOUNT login throttle (in addition to the per-IP limiter). Bounds horizontal
+// password spraying against a single account regardless of source IP. Fixed window,
+// bounded-size map (lazily swept). Cleared on a successful login.
+const emailAttempts = new Map();
+const EMAIL_WINDOW_MS = 300000; // 5 min
+const EMAIL_MAX = 25;           // attempts per account per window
+function emailAllow(email) {
+  const nowMs = Date.now();
+  const key = String(email).toLowerCase();
+  if (emailAttempts.size > 20000) {
+    for (const [k, w] of emailAttempts) if (nowMs - w.windowStart >= EMAIL_WINDOW_MS) emailAttempts.delete(k);
+  }
+  const w = emailAttempts.get(key);
+  if (!w || nowMs - w.windowStart >= EMAIL_WINDOW_MS) { emailAttempts.set(key, { windowStart: nowMs, count: 1 }); return true; }
+  if (w.count >= EMAIL_MAX) return false;
+  w.count += 1;
+  return true;
+}
+function emailClear(email) { emailAttempts.delete(String(email).toLowerCase()); }
 
 function cookieHeader(name, value, maxAgeS, httpOnly) {
   const flags = [
@@ -141,13 +166,16 @@ async function handle(req, res, ctx) {
     if (typeof b.email !== 'string' || typeof b.password !== 'string') {
       return send(res, 400, { v: 1, error: 'bad_request' });
     }
+    // Per-account throttle (defends a single account against IP-rotated spraying).
+    if (!emailAllow(b.email)) return send(res, 429, { v: 1, error: 'rate_limited' });
     const user = get().prepare(
       'SELECT * FROM console_users WHERE email=? AND disabled_at IS NULL'
     ).get(String(b.email).toLowerCase());
     // Always run a verify to keep timing uniform whether or not the user exists.
-    const ok = user ? verifyPassword(b.password, user.pw_hash)
-      : verifyPassword(b.password, 'scrypt$16384$AAAA$AAAA');
+    const ok = user ? await verifyPassword(b.password, user.pw_hash)
+      : await verifyPassword(b.password, 'scrypt$16384$AAAA$AAAA');
     if (!user || !ok) return send(res, 401, { v: 1, error: 'invalid_credentials' });
+    emailClear(b.email); // successful auth: reset the per-account counter
 
     const rawSid = crypto.randomBytes(32).toString('base64url');
     const rawCsrf = crypto.randomBytes(24).toString('base64url');

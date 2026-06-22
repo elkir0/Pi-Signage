@@ -38,12 +38,26 @@ function tryServe(req, res, dir) {
   try { data = fs.readFileSync(full); }
   catch (_) { res.writeHead(404, { 'Content-Type': 'application/json' }); res.end('{"v":1,"error":"not_found"}'); return true; }
 
-  res.writeHead(200, {
+  const headers = {
     'Content-Type': route.type,
     'Content-Length': Buffer.byteLength(data),
     'Cache-Control': route.cache,
     'X-Content-Type-Options': 'nosniff'
-  });
+  };
+  // Strict CSP on the HTML document: the SPA loads only same-origin app.js/styles.css,
+  // a data: favicon, and fetches the same-origin /console API. No third-party origins,
+  // no inline scripts. frame-ancestors 'none' is the modern anti-clickjacking control.
+  // NOTE: X-Frame-Options / Referrer-Policy are intentionally NOT set here — the CT101
+  // security-headers snippet already adds them to every response; emitting them again
+  // would produce duplicate headers (which some browsers treat as undefined). CSP is
+  // the ONE header CT101 does not provide, so the app owns it.
+  if (route.type.indexOf('text/html') === 0) {
+    headers['Content-Security-Policy'] =
+      "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+      "img-src 'self' data:; connect-src 'self'; font-src 'self'; " +
+      "base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
+  }
+  res.writeHead(200, headers);
   res.end(req.method === 'HEAD' ? undefined : data);
   return true;
 }
