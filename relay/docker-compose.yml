@@ -36,7 +36,7 @@ services:
       - PUID=1000
       - PGID=1000
       - TZ=Europe/Paris
-      - SERVERPORT=51840          # wg0 ListenPort = host-published = public DNAT = Endpoint
+      - SERVERPORT=41840          # wg0 ListenPort = host-published = public DNAT = Endpoint
       - SERVERURL=relay.zaforge.com
       - INTERNAL_SUBNET=10.70.0.0
       - PEERS=0                   # peers are live-added by fleet-api, not generated
@@ -46,8 +46,8 @@ services:
       - ./wireguard/templates/server.conf:/config/templates/server.conf:ro
       - /lib/modules:/lib/modules:ro
     ports:
-      # WireGuard UDP — host 51840 -> container 51840 (matches SERVERPORT).
-      - "10.10.10.160:51840:51840/udp"
+      # WireGuard UDP — host 41840 -> container 41840 (matches SERVERPORT).
+      - "10.10.10.160:41840:41840/udp"
       # Mosquitto shares THIS namespace, so the broker's host-facing TLS port
       # 8883 is published HERE (private IP only). 1883 is intentionally NOT
       # published — it lives on wg0 (10.70.0.1), reachable only in-tunnel.
@@ -108,7 +108,7 @@ services:
       - WG_CONTAINER=zf-wireguard                  # fleet-api execs `docker exec` into this
       - WG_IFACE=wg0
       - WG_SERVER_PUBLIC_KEY=${WG_SERVER_PUBLIC_KEY}
-      - WG_ENDPOINT=relay.zaforge.com:51840
+      - WG_ENDPOINT=relay.zaforge.com:41840
       - WG_RELAY_IP=10.70.0.1
       - WG_POOL_CIDR=10.70.0.0/16
       - WG_RESERVED_CIDR=10.70.0.0/28

@@ -50,7 +50,7 @@ module.exports = {
     iface: opt('WG_IFACE', 'wg0'),
     // Server-side facts handed to the Pi at enrollment.
     serverPubKey: req('WG_SERVER_PUBLIC_KEY'),
-    endpoint: opt('WG_ENDPOINT', 'relay.zaforge.com:51840'),
+    endpoint: opt('WG_ENDPOINT', 'relay.zaforge.com:41840'),
     relayIp: opt('WG_RELAY_IP', '10.70.0.1'), // the /32 the Pi is allowed to reach
     persistentKeepalive: intOpt('WG_KEEPALIVE', 25),
     // Pool the tenant /28 blocks are carved from. 10.70.0.0/16.

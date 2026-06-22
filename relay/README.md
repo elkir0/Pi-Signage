@@ -97,7 +97,7 @@ node fleet-api/alloc.js --selftest             # allocator invariants
 
 ### GATED steps (operator approval required — do NOT auto-run)
 
-- **Proxmox host DNAT** (`scripts/apply-host-dnat.sh`): adds public UDP `51840`
+- **Proxmox host DNAT** (`scripts/apply-host-dnat.sh`): adds public UDP `41840`
   → VM600. Run on the Proxmox host (37.187.155.234) only after reviewing it
   against the existing `51820`=VM400 / `51830`=CT220 rules. It is idempotent
   (`iptables -C` before `-A`) and persists with `iptables-save` without flushing
