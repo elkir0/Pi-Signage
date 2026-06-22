@@ -954,12 +954,14 @@ class PiSignagePlayer {
             current: item ? { url: item.url || '', name: item.name || '', type: item.type || '' } : null,
         };
         try {
+            // PAS de keepalive : c'est un battement périodique (toutes les 5s), pas une
+            // balise de déchargement. keepalive a un quota navigateur réduit qui, saturé
+            // sur un Pi lent, fait échouer silencieusement les rapports suivants.
             fetch('/api/display.php?action=state', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 cache: 'no-store',
                 body: JSON.stringify(payload),
-                keepalive: true,
             }).catch(() => {});
         } catch (e) { /* silencieux */ }
     }
