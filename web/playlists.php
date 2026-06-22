@@ -6,161 +6,152 @@ include 'includes/header.php';
 include 'includes/navigation.php';
 require_once 'includes/components.php';
 
+// Le bouton "Nouvelle playlist" est masqué quand l'éditeur est ouvert (géré côté JS).
 $actions =
-      '<button class="btn btn-primary btn-sm" type="button" onclick="createNewPlaylist()">' . icon('plus') . 'Nouvelle</button>'
-    . '<button class="btn btn-secondary btn-sm" type="button" onclick="loadExistingPlaylist()">' . icon('folder') . 'Charger</button>'
-    . '<button class="btn btn-secondary btn-sm" type="button" id="save-playlist-btn" onclick="saveCurrentPlaylist()" disabled>' . icon('check') . 'Sauvegarder</button>';
+      '<span class="status-pill" id="pl-active-pill" style="display:none">'
+    .   '<span class="live-dot"></span><span class="pill-text" id="pl-active-pill-text">À l\'écran</span>'
+    . '</span>'
+    . '<button class="btn btn-primary btn-sm" type="button" id="pl-new-btn" onclick="PiSignage.playlists.newPlaylist()">'
+    .   icon('plus') . 'Nouvelle playlist</button>';
 ?>
 <div class="main">
-    <?php pageHeader('Éditeur de playlists', 'Organisez vos médias', $actions); ?>
+    <?php pageHeader('Playlists', 'Composez et diffusez vos playlists', $actions); ?>
 
     <div class="content">
       <div class="content-inner">
 
-        <!-- Existing playlists overview -->
-        <div class="section-title">Playlists existantes</div>
-        <div id="playlist-container" class="grid grid-3" style="margin-top:14px">
-            <!-- Playlists will be loaded here dynamically -->
+        <!-- ============================ VUE LISTE ============================ -->
+        <div id="pl-list-view">
+
+            <!-- Bannière : playlist actuellement diffusée -->
+            <div class="card" id="pl-active-banner" style="display:none;margin-bottom:18px">
+                <div class="row" style="justify-content:space-between">
+                    <div class="row" style="gap:12px;min-width:0">
+                        <span class="status-pill is-playing"><span class="live-dot"></span>À l'écran</span>
+                        <div style="min-width:0">
+                            <div class="pl-banner-name" id="pl-active-name" style="font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+                            <div style="font-size:12px;color:var(--text-faint)" id="pl-active-meta"></div>
+                        </div>
+                    </div>
+                    <button class="btn btn-secondary btn-sm" type="button" id="pl-active-edit-btn">
+                        <?= icon('edit') ?>Modifier
+                    </button>
+                </div>
+            </div>
+
+            <div class="section-title">Vos playlists</div>
+            <div id="pl-cards" class="grid grid-3" style="margin-top:14px" aria-live="polite">
+                <div class="empty-state" style="grid-column:1/-1">
+                    <span class="spinner"></span>
+                    <p style="margin-top:14px">Chargement des playlists…</p>
+                </div>
+            </div>
         </div>
 
-        <!-- Playlist editor interface -->
-        <div id="playlist-editor" class="playlist-editor-container">
-            <!-- Media library panel (left) -->
-            <div class="playlist-panel media-library-panel">
-                <div class="panel-header">
-                    <h3><?= icon('folder') ?>Bibliothèque média</h3>
-                    <div class="panel-controls">
-                        <button class="btn-icon" type="button" onclick="refreshMediaLibrary()" title="Actualiser">
-                            <?= icon('refresh') ?>
+        <!-- ============================ VUE ÉDITEUR ============================ -->
+        <div id="pl-editor-view" style="display:none">
+
+            <!-- Barre d'actions de l'éditeur -->
+            <div class="card" style="margin-bottom:18px">
+                <div class="row" style="justify-content:space-between;gap:14px">
+                    <div class="row" style="gap:10px;flex:1;min-width:240px">
+                        <button class="icon-btn" type="button" title="Retour à la liste" onclick="PiSignage.playlists.showList()">
+                            <?= icon('chevron') ?>
                         </button>
-                        <input type="text" class="search-input" placeholder="Rechercher..." id="media-search" onkeyup="filterMediaLibrary()">
+                        <div class="form-group" style="margin:0;flex:1;min-width:180px">
+                            <input type="text" id="pl-name" class="form-control" placeholder="Nom de la playlist" autocomplete="off">
+                        </div>
                     </div>
-                </div>
-                <div class="panel-content">
-                    <div class="media-filters">
-                        <button class="filter-btn active" data-type="all" onclick="filterMediaType('all')">Tous</button>
-                        <button class="filter-btn" data-type="video" onclick="filterMediaType('video')">Vidéos</button>
-                        <button class="filter-btn" data-type="image" onclick="filterMediaType('image')">Images</button>
-                        <button class="filter-btn" data-type="audio" onclick="filterMediaType('audio')">Audio</button>
-                    </div>
-                    <div class="media-library-list" id="media-library-list">
-                        <!-- Media files will be loaded here -->
+                    <div class="row" style="gap:10px;flex-wrap:wrap">
+                        <button class="btn btn-secondary btn-sm" type="button" onclick="PiSignage.playlists.save(false)">
+                            <?= icon('check') ?>Enregistrer
+                        </button>
+                        <button class="btn btn-primary btn-sm" type="button" onclick="PiSignage.playlists.save(true)">
+                            <?= icon('play-line') ?>Enregistrer &amp; Diffuser
+                        </button>
                     </div>
                 </div>
             </div>
 
-            <!-- Playlist workspace panel (center) -->
-            <div class="playlist-panel workspace-panel">
-                <div class="panel-header">
-                    <h3><?= icon('playlist') ?>Espace de travail</h3>
-                    <div class="playlist-info">
-                        <span id="playlist-name-display">Nouvelle playlist</span>
-                        <span class="playlist-stats">
-                            <span id="item-count">0 élément</span> ·
-                            <span id="total-duration">00:00</span>
-                        </span>
+            <div class="playlist-editor-container">
+
+                <!-- Bibliothèque média (gauche) -->
+                <div class="playlist-panel media-library-panel">
+                    <div class="panel-header">
+                        <h3><?= icon('folder') ?>Bibliothèque média</h3>
+                        <div class="panel-controls">
+                            <input type="text" class="search-input" placeholder="Rechercher…" id="pl-media-search" autocomplete="off">
+                            <button class="icon-btn" type="button" title="Actualiser" onclick="PiSignage.playlists.loadMedia()">
+                                <?= icon('refresh') ?>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="panel-content">
+                        <div class="media-filters" id="pl-media-filters">
+                            <button class="filter-btn active" type="button" data-type="all">Tous</button>
+                            <button class="filter-btn" type="button" data-type="video">Vidéos</button>
+                            <button class="filter-btn" type="button" data-type="image">Images</button>
+                            <button class="filter-btn" type="button" data-type="audio">Audio</button>
+                        </div>
+                        <div class="media-library-list" id="pl-media-list">
+                            <div class="empty-state"><span class="spinner"></span></div>
+                        </div>
                     </div>
                 </div>
-                <div class="panel-content">
-                    <div class="playlist-workspace" id="playlist-workspace">
-                        <div class="drop-zone" id="playlist-drop-zone">
-                            <div class="drop-zone-content">
-                                <div class="drop-zone-icon"><?= icon('upload') ?></div>
-                                <p>Glissez des médias ici pour créer votre playlist</p>
-                                <p class="drop-zone-hint">Ou cliquez sur « + » dans la bibliothèque</p>
+
+                <!-- Contenu de la playlist (centre) -->
+                <div class="playlist-panel workspace-panel">
+                    <div class="panel-header">
+                        <h3><?= icon('playlist') ?>Contenu de la playlist</h3>
+                        <div class="panel-controls" style="color:var(--text-faint);font-size:12px">
+                            <span id="pl-item-count">0 élément</span>
+                        </div>
+                    </div>
+                    <div class="panel-content">
+                        <div class="playlist-workspace">
+                            <div class="drop-zone" id="pl-drop-zone">
+                                <div class="drop-zone-content">
+                                    <div class="drop-zone-icon"><?= icon('plus') ?></div>
+                                    <p>Glissez des médias ici, ou cliquez sur « + » dans la bibliothèque.</p>
+                                    <p class="drop-zone-hint">Les éléments se liront dans l'ordre affiché.</p>
+                                </div>
+                            </div>
+                            <div class="playlist-items" id="pl-items"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Options de la playlist (droite) -->
+                <div class="playlist-panel properties-panel">
+                    <div class="panel-header">
+                        <h3><?= icon('settings') ?>Options de lecture</h3>
+                    </div>
+                    <div class="panel-content">
+                        <div class="form-group">
+                            <label class="row" style="justify-content:space-between;gap:12px;margin:0;cursor:pointer">
+                                <span>Lecture automatique</span>
+                                <span class="toggle-switch"><input type="checkbox" id="pl-autoplay" checked><span class="toggle-slider"></span></span>
+                            </label>
+                            <p style="font-size:11.5px;color:var(--text-faint);margin-top:6px">Démarre la lecture dès la mise à l'écran.</p>
+                        </div>
+                        <div class="form-group">
+                            <label class="row" style="justify-content:space-between;gap:12px;margin:0;cursor:pointer">
+                                <span>Lecture en boucle</span>
+                                <span class="toggle-switch"><input type="checkbox" id="pl-autoloop" checked><span class="toggle-slider"></span></span>
+                            </label>
+                            <p style="font-size:11.5px;color:var(--text-faint);margin-top:6px">Reprend au début à la fin de la playlist.</p>
+                        </div>
+
+                        <div class="section-title" style="margin-top:8px">Élément sélectionné</div>
+                        <div id="pl-item-options" style="margin-top:14px">
+                            <div class="empty-state" style="padding:24px 8px">
+                                <?= icon('list') ?>
+                                <p>Sélectionnez un élément de la playlist pour ajuster ses options.</p>
                             </div>
                         </div>
-                        <div class="playlist-items" id="playlist-items">
-                            <!-- Playlist items will be added here -->
-                        </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Properties panel (right) -->
-            <div class="playlist-panel properties-panel">
-                <div class="panel-header">
-                    <h3><?= icon('settings') ?>Propriétés</h3>
-                </div>
-                <div class="panel-content">
-                    <div class="properties-section">
-                        <h4>Playlist</h4>
-                        <div class="form-group">
-                            <label>Nom</label>
-                            <input type="text" id="playlist-name-input" class="form-control" placeholder="Nom de la playlist" oninput="updatePlaylistName()">
-                        </div>
-                        <div class="form-group">
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="playlist-loop" onchange="updatePlaylistSettings()">
-                                Lecture en boucle
-                            </label>
-                        </div>
-                        <div class="form-group">
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="playlist-shuffle" onchange="updatePlaylistSettings()">
-                                Lecture aléatoire
-                            </label>
-                        </div>
-                        <div class="form-group">
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="playlist-auto-advance" checked onchange="updatePlaylistSettings()">
-                                Avancement automatique
-                            </label>
-                        </div>
-                    </div>
-
-                    <div class="properties-section" id="item-properties" style="display: none;">
-                        <h4>Élément sélectionné</h4>
-                        <div class="form-group">
-                            <label>Fichier</label>
-                            <span id="selected-file-name">—</span>
-                        </div>
-                        <div class="form-group">
-                            <label>Durée (secondes)</label>
-                            <input type="number" id="item-duration" class="form-control" min="1" max="3600" value="10" onchange="updateItemDuration()">
-                        </div>
-                        <div class="form-group">
-                            <label>Transition</label>
-                            <select id="item-transition" class="form-control" onchange="updateItemTransition()">
-                                <option value="none">Aucune</option>
-                                <option value="fade">Fondu</option>
-                                <option value="slide-left">Glissement gauche</option>
-                                <option value="slide-right">Glissement droite</option>
-                                <option value="zoom">Zoom</option>
-                                <option value="dissolve">Dissolution</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Durée transition (ms)</label>
-                            <input type="number" id="transition-duration" class="form-control" min="0" max="5000" value="1000" onchange="updateTransitionDuration()">
-                        </div>
-                    </div>
-
-                    <div class="properties-section">
-                        <h4>Actions</h4>
-                        <button class="btn btn-primary btn-block" onclick="previewPlaylist()" id="preview-btn" disabled>
-                            <?= icon('play') ?>Aperçu
-                        </button>
-                        <button class="btn btn-secondary btn-block" style="margin-top:10px" onclick="clearPlaylist()">
-                            <?= icon('trash') ?>Vider
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Loading existing playlists modal -->
-        <div id="load-playlist-modal" class="modal">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3>Charger une playlist</h3>
-                    <button class="btn-close" type="button" onclick="PiSignage.ui.closeModal('load-playlist-modal')"><?= icon('close') ?></button>
-                </div>
-                <div class="modal-body">
-                    <div id="existing-playlists-list">
-                        <!-- Existing playlists will be loaded here -->
-                    </div>
-                </div>
             </div>
         </div>
 
