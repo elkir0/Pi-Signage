@@ -49,17 +49,30 @@ async function handle(req, res, ctx) {
   if (req.method === 'GET' && seg[0] === 'devices' && seg.length === 1) {
     const tenantId = resolveTenantScope(principal, url.searchParams.get('tenant_id'));
     if (!tenantId) return send(res, 400, { v: 1, error: 'bad_tenant' });
+    // LEFT JOIN the latest telemetry so the list cards can show live CPU/temp
+    // (one telemetry row per device, keyed by device_id). cpu/temp are parsed from
+    // the heartbeat system_json (same shape the detail view reads as sys.cpu/sys.temp).
     const rows = get().prepare(
-      "SELECT * FROM devices WHERE tenant_id=? AND state!='retired' ORDER BY created_at DESC"
+      "SELECT d.*, t.system_json AS _sys FROM devices d " +
+      "LEFT JOIN device_telemetry t ON t.device_id = d.device_id " +
+      "WHERE d.tenant_id=? AND d.state!='retired' ORDER BY d.created_at DESC"
     ).all(tenantId);
-    const devices = rows.map((d) => ({
-      device_id: d.device_id, state: d.state, hostname: d.hostname, model: d.model,
-      fingerprint: d.fingerprint, wg_ip: d.wg_ip, agent_version: d.agent_version,
-      player_version: d.player_version, badge: badge(d, ts),
-      last_seen_at: d.last_seen_at, last_heartbeat_at: d.last_heartbeat_at,
-      online: d.online === 1, created_at: d.created_at, confirmed_at: d.confirmed_at,
-      content_cached: d.content_cached === 1
-    }));
+    const devices = rows.map((d) => {
+      let cpu = null, temp = null;
+      if (d._sys) {
+        try { const s = JSON.parse(d._sys); if (s.cpu != null) cpu = s.cpu; if (s.temp != null) temp = s.temp; }
+        catch (_) { /* ignore malformed telemetry */ }
+      }
+      return {
+        device_id: d.device_id, state: d.state, hostname: d.hostname, model: d.model,
+        fingerprint: d.fingerprint, wg_ip: d.wg_ip, agent_version: d.agent_version,
+        player_version: d.player_version, badge: badge(d, ts),
+        last_seen_at: d.last_seen_at, last_heartbeat_at: d.last_heartbeat_at,
+        online: d.online === 1, created_at: d.created_at, confirmed_at: d.confirmed_at,
+        content_cached: d.content_cached === 1,
+        cpu: cpu, temp: temp
+      };
+    });
     return send(res, 200, { v: 1, devices });
   }
 
