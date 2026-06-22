@@ -5,6 +5,77 @@ All notable changes to PiSignage will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-06 - Moteur unique Chromium HTML5 + Playlists unifiées + Dayparting réel
+
+### 🎬 **MAJEUR : VLC retiré — moteur de lecture unique Chromium HTML5**
+
+PiSignage v0.12 abandonne définitivement VLC. Le **seul moteur de lecture** est désormais le player HTML5 dans Chromium (`web/player.php`, servi sur `/player`), qui lit `/opt/pisignage/media/playlist.json`. Disparaissent : le service systemd `pisignage-vlc`, l'interface HTTP VLC (port 8080), le mot de passe VLC, le mode « fallback VLC » et toute notion de « dual-player » / MPV.
+
+#### Changements majeurs
+
+**Moteur de lecture (Chromium HTML5 uniquement)**
+- ✅ Plus aucune dépendance VLC : suppression du service `pisignage-vlc`, de l'API HTTP VLC port 8080 et du mot de passe VLC
+- ✅ Le player poll la version de la playlist (10s) et un canal `reload` (2s) pour se recharger seul
+- ✅ Résilience : splash de démarrage, repli hors-ligne, préchargement anti-flash
+
+**Session graphique = lightdm (remplace greetd)**
+- ✅ Autologin de l'utilisateur `pi` → compositeur Wayland **labwc** → `chromium --kiosk http://127.0.0.1/player`
+- ✅ « Redémarrer la session » = `sudo systemctl restart display-manager`
+
+**Contrôle du lecteur via `web/api/display.php`**
+- ✅ `POST /api/display.php?action=command` `{cmd:next|prev|play|pause|reload}` (le player poll `GET ?action=command` toutes les 2s)
+- ✅ Le player rapporte son état via `POST /api/display.php?action=state` ; `GET ?action=state` pour l'admin
+- ✅ `POST /api/display.php?action=playmedia` `{file}` pour lire un média isolé
+- ✅ Le **volume** est désormais le volume **système ALSA** via `web/api/system.php` (`set_volume` / `get_volume` / `toggle_mute`) — plus de « volume VLC »
+
+**Playlists unifiées (`web/api/playlists.php`)**
+- ✅ Une **source de vérité unique** : `/opt/pisignage/playlists/<slug>.json`, schéma `{name,slug,version,autoplay,autoLoop,items:[{url,type,name,duration,fit,mute,loop,transition}]}`
+- ✅ `GET` (liste + playlist active), `GET ?name=X`, `POST` (créer/maj `{name,items,autoplay,autoLoop}`), `DELETE ?name=X`
+- ✅ `POST ?action=activate&name=X` (« Diffuser à l'écran ») : écrit `/opt/pisignage/media/playlist.json`, met à jour le pointeur `/opt/pisignage/config/active-playlist.json` et incrémente `version` → le player recharge seul
+- ✅ Noyau de code partagé : `web/api/playlists-core.php`
+- ✅ Fin des « deux mondes de playlists »
+
+**Programmation (dayparting) réelle**
+- ✅ `web/api/scheduler.php` devient un **exécuteur CLI** lancé par cron 1×/minute (en `www-data`, `/etc/cron.d/pisignage-scheduler`)
+- ✅ Lit `/opt/pisignage/data/schedules.json` et désigne la playlist active selon heure/jour/récurrence/priorité (idempotent ; revert en fin de fenêtre)
+- ✅ État réel écrit dans `/opt/pisignage/config/scheduler-state.json` et reflété dans l'UI
+- ✅ Fin du double scheduler
+
+**Intégrité média**
+- ✅ Renommer/supprimer un média propage/nettoie les références dans toutes les playlists **et** dans la playlist à l'écran (`web/api/media.php` + `playlists-core.php`)
+
+**Alignement du fuseau horaire**
+- ✅ `web/config.php` aligne le fuseau horaire PHP sur `/etc/timezone` (sinon le dayparting comparait des heures UTC à des heures locales)
+
+**UI consolidée**
+- ✅ Page **« Playlists »** : composer + Diffuser au même endroit
+- ✅ Page **« Lecteur »** : contrôle du moteur réel (play/pause/skip/reload + volume ALSA + état live)
+- ✅ Page **« Kiosk »** : réglages d'**affichage** uniquement (mode kiosk, URL, flags Chromium, extinction d'écran programmée, redémarrage) — plus d'éditeur de playlist en double
+- ✅ Page **« Programmation »** : dayparting réel
+
+**Refonte UI v0.12**
+- ✅ Design system adaptatif clair/sombre, accent « emerald », police Inter locale, icônes SVG (**aucun emoji**)
+- ✅ Overlay d'infos sur les vidéos (horloge / bandeau / cartes bilingues fr-nl / QR)
+- ✅ Extinction d'écran programmée
+- ✅ YouTube : barre de progression live + mise à jour `yt-dlp` 1-clic (`yt-dlp` géré dans `/opt/pisignage/bin`)
+
+#### Endpoints dépréciés (répondent HTTP 410)
+- ⛔ `playlist-simple.php`
+- ⛔ `player.php` (API)
+- ⛔ `player-control.php`
+
+#### Cible matérielle & stack
+- Raspberry Pi 4/5, Raspberry Pi OS Trixie (Debian 13), Wayland/labwc
+- Backend PHP 8.4-fpm + nginx
+
+#### Breaking Changes
+- VLC est **retiré** : `USE_CHROMIUM_PLAYER=0` (mode VLC) n'existe plus, le player Chromium HTML5 est le seul moteur
+- La session graphique passe de **greetd** à **lightdm** (display-manager)
+- Le « volume VLC » est remplacé par le **volume système ALSA**
+- Les playlists migrent vers `/opt/pisignage/playlists/<slug>.json` (source unique) avec pointeur `active-playlist.json`
+
+---
+
 ## [0.11.0] - 2025-11-09 - Chromium HTML5 Player + Playlist System
 
 ### 🎬 **MAJOR: Chromium HTML5 Video Player with Playlist Management**
@@ -640,6 +711,8 @@ PiSignage v0.8.9 completes the transition to a production-ready, VLC-exclusive d
 ---
 
 ## Migration Guide
+
+> ⚠️ **OBSOLÈTE depuis v0.12** — Cette section décrit une migration de l'ère v0.8.x (VLC, `php8.2-fpm`, URL `player.php`). Depuis v0.12, VLC est retiré (moteur unique Chromium HTML5), la stack est `php8.4-fpm`, et `player.php` est un endpoint déprécié (HTTP 410). Voir l'entrée [0.12.0] en tête, `ARCHITECTURE.md` et `API_DOCUMENTATION.md`.
 
 ### From v0.8.x to v0.8.9
 

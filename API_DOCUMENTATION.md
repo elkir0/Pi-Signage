@@ -1,21 +1,21 @@
-# PiSignage v0.11.0 API Documentation
+# PiSignage v0.12.0 API Documentation
 
-> **Note**: API endpoints remain 100% compatible with previous versions. The v0.11.0 architecture provides enhanced features including Display Mode Switcher (VLC/Chromium), improved VLC player control with BUG-013 fix, and comprehensive system management.
+> **Note (v0.12.0)**: VLC has been **removed**. The single playback engine is now **Chromium HTML5** (`web/player.php` served at `/player`, rendering `/opt/pisignage/media/playlist.json`). Player control moved to `/api/display.php` (command/state/playmedia). Playlists are unified under `/api/playlists.php` (one source of truth: `/opt/pisignage/playlists/<slug>.json`). Volume is now **system ALSA volume** via `/api/system.php` (there is no more "VLC volume"). Several legacy endpoints are **deprecated** and respond with **HTTP 410 Gone** (see [Deprecated Endpoints](#deprecated-endpoints-http-410-gone)).
 
 ## Base URL
 ```
 http://{raspberry_pi_ip}/api/
 ```
 
-## What's New in v0.11.0
+## What's New in v0.12.0
 
-- **Display Mode Switcher**: Toggle between VLC (stable, default) and Chromium kiosk (HTML5, advanced features) via web UI or API
-- **BUG-013 Fix**: Single file playback now 100% reliable with 4-step process (clear, enqueue, play, verify)
-- **Chromium Kiosk Mode**: Wayland-based fullscreen browser with FPS counter and Wake Lock API
-- **HDMI Audio Default**: System-wide HDMI audio output configuration
-- **Enhanced VLC Control**: Improved reliability with retry logic and timing delays
-- **Legacy Code Cleanup**: Removed unused index-pi.php and youtube-simple.php
-- **Maintained Compatibility**: All existing API integrations continue to work without changes
+- **VLC removed**: Single playback engine is now Chromium HTML5. No more `pisignage-vlc` service, no VLC HTTP interface (port 8080), no VLC password.
+- **Player control API** (`/api/display.php`): the player polls `?action=command` every 2s and reports `?action=state`; admin sends `command`/`playmedia` and reads `state`.
+- **Unified playlists** (`/api/playlists.php`): single CRUD + `activate` ("Diffuser à l'écran"). One schema, one source of truth on disk. Shared core logic in `web/api/playlists-core.php`.
+- **Real dayparting**: `/api/scheduler.php` is now a **CLI executor run by cron** (1×/min, as `www-data`) — it is **not** an HTTP endpoint.
+- **ALSA volume only**: volume/mute handled by `/api/system.php` (`get_volume`/`set_volume`/`toggle_mute`).
+- **Media integrity**: renaming/deleting media propagates and cleans references across all playlists and the on-screen playlist.
+- **Deprecated endpoints**: `playlist-simple.php`, `player.php`, `player-control.php` now return **HTTP 410 Gone**.
 
 ## Response Format
 All API responses follow a standard JSON structure:
@@ -79,6 +79,55 @@ Reboots the system.
 ### POST /api/system.php?action=shutdown
 Shuts down the system.
 
+### GET /api/system.php?action=get_volume
+Returns the current **system (ALSA)** volume and mute state. There is no separate "VLC volume" in v0.12 — this is the only volume control.
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "volume": 80,
+    "muted": false
+  }
+}
+```
+
+### POST /api/system.php?action=set_volume
+Sets the **system (ALSA)** volume via `amixer` (0-100).
+
+**Request Body:**
+```json
+{
+  "volume": 65
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "volume": 65
+  },
+  "message": "Volume set"
+}
+```
+
+### POST /api/system.php?action=toggle_mute
+Toggles the **system (ALSA)** mute state.
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "muted": true
+  },
+  "message": "Mute toggled"
+}
+```
+
 ---
 
 ## Media API (`/api/media.php`)
@@ -112,88 +161,166 @@ Deletes a media file.
 }
 ```
 
+> **Media integrity (v0.12.0)**: Renaming or deleting a media file propagates/cleans its references across **all** playlists and the on-screen playlist (`/opt/pisignage/media/playlist.json`). Implemented via `web/api/media.php` together with `web/api/playlists-core.php`.
+
 ---
 
-## Playlist API (`/api/playlist-simple.php`)
+## Playlists API (`/api/playlists.php`) 🆕 v0.12.0
 
-### GET /api/playlist-simple.php
-Returns all playlists.
+> **Unified in v0.12.0**: A single source of truth for playlists. Each playlist is stored as `/opt/pisignage/playlists/<slug>.json`. The active-playlist pointer lives in `/opt/pisignage/config/active-playlist.json`. Shared logic is in `web/api/playlists-core.php`. The legacy `playlist-simple.php` is **deprecated (HTTP 410)**.
 
-**Response:**
+**Playlist schema (on disk and in API payloads):**
 ```json
 {
-  "success": true,
-  "data": [
+  "name": "Morning Playlist",
+  "slug": "morning-playlist",
+  "version": 3,
+  "autoplay": true,
+  "autoLoop": true,
+  "items": [
     {
-      "name": "Morning Playlist",
-      "items": [
-        {"file": "video1.mp4", "duration": 30},
-        {"file": "image1.jpg", "duration": 10}
-      ],
-      "created_at": "2025-01-01 10:00:00"
+      "url": "video1.mp4",
+      "type": "video",
+      "name": "Intro clip",
+      "duration": 30,
+      "fit": "contain",
+      "mute": false,
+      "loop": false,
+      "transition": "fade"
     }
   ]
 }
 ```
 
-### POST /api/playlist-simple.php
-Creates a new playlist.
-
-**Request Body:**
-```json
-{
-  "name": "Evening Playlist",
-  "items": [
-    {"file": "video2.mp4", "duration": 60}
-  ],
-  "description": "Content for evening display"
-}
-```
-
-### DELETE /api/playlist-simple.php
-Deletes a playlist.
-
-**Request Body:**
-```json
-{
-  "name": "Morning Playlist"
-}
-```
-
----
-
-## Player API (`/api/player.php` & `/api/player-control.php`)
-
-### GET /api/player.php?action=status
-Returns current player status.
+### GET /api/playlists.php
+Returns the list of playlists and which one is active.
 
 **Response:**
 ```json
 {
   "success": true,
   "data": {
-    "player": "vlc",
-    "status": "playing",
-    "current_file": "video1.mp4",
-    "position": 45,
-    "duration": 120,
-    "volume": 80
+    "playlists": [
+      {"name": "Morning Playlist", "slug": "morning-playlist", "items": 5},
+      {"name": "Evening Playlist", "slug": "evening-playlist", "items": 3}
+    ],
+    "active": "morning-playlist"
   }
 }
 ```
 
-### POST /api/player.php
-Controls the player.
+### GET /api/playlists.php?name=X
+Returns a single playlist by name/slug (full schema, including `items`).
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "name": "Morning Playlist",
+    "slug": "morning-playlist",
+    "version": 3,
+    "autoplay": true,
+    "autoLoop": true,
+    "items": [
+      {"url": "video1.mp4", "type": "video", "name": "Intro clip", "duration": 30, "fit": "contain", "mute": false, "loop": false, "transition": "fade"}
+    ]
+  }
+}
+```
+
+### POST /api/playlists.php
+Creates or updates a playlist (upsert keyed on `name`/`slug`).
 
 **Request Body:**
 ```json
 {
-  "action": "play|pause|stop|next|previous"
+  "name": "Evening Playlist",
+  "autoplay": true,
+  "autoLoop": true,
+  "items": [
+    {"url": "video2.mp4", "type": "video", "duration": 60, "fit": "contain", "mute": false, "loop": false, "transition": "fade"}
+  ]
 }
 ```
 
-### POST /api/player-control.php?action=play_file 🔧 BUG-013 FIX (v0.11.0)
-Play a single file with 100% reliability.
+**Response:**
+```json
+{
+  "success": true,
+  "data": {"name": "Evening Playlist", "slug": "evening-playlist"},
+  "message": "Playlist saved"
+}
+```
+
+### POST /api/playlists.php?action=activate&name=X
+Activates a playlist ("Diffuser à l'écran"). Writes `/opt/pisignage/media/playlist.json`, updates the active-playlist pointer, and **increments the version** so the player reloads on its own (version poll every 10s, plus the reload channel every 2s — see [Display/Player API](#displayplayer-api-apidisplayphp--v0120)).
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "active": "evening-playlist",
+    "version": 4
+  },
+  "message": "Playlist diffusée à l'écran"
+}
+```
+
+### DELETE /api/playlists.php?name=X
+Deletes a playlist by name/slug.
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Playlist deleted"
+}
+```
+
+---
+
+## Display/Player API (`/api/display.php`) 🆕 v0.12.0
+
+> **New in v0.12.0**: The playback engine is the Chromium HTML5 player (`web/player.php` at `/player`). It is controlled through `/api/display.php`. The **player polls** `GET ?action=command` every 2s and reports its live state via `POST ?action=state`; the **admin UI** sends commands with `POST ?action=command`, reads state with `GET ?action=state`, and plays an isolated media with `POST ?action=playmedia`.
+
+### POST /api/display.php?action=command
+Sends a control command to the player. (The player consumes it on its next 2s poll.)
+
+**Request Body:**
+```json
+{
+  "cmd": "next"
+}
+```
+
+**Valid `cmd` values:** `next` | `prev` | `play` | `pause` | `reload`
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Command queued",
+  "cmd": "next"
+}
+```
+
+### GET /api/display.php?action=command
+Polled by the player to fetch the next pending command. Returns the queued command (and clears it) or an empty/`none` command when nothing is pending.
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "cmd": "next"
+  }
+}
+```
+
+### POST /api/display.php?action=playmedia
+Plays a single isolated media file on screen (without modifying the active playlist).
 
 **Request Body:**
 ```json
@@ -206,33 +333,53 @@ Play a single file with 100% reliability.
 ```json
 {
   "success": true,
-  "message": "File playing",
-  "file": "video.mp4",
-  "state": "playing"
+  "message": "Playing media",
+  "file": "video.mp4"
 }
 ```
 
-**BUG-013 Fix Implementation:**
-1. **Clear existing playlist** - Removes conflicts from previous playback
-2. **Enqueue file** - Adds file to empty playlist with `in_enqueue`
-3. **Explicit play command** - Forces playback start with `pl_play`
-4. **Verify playback** - Checks state and retries if needed
-5. **Timing delays** - Allows VLC HTTP API to process commands (200ms, 100ms delays)
+### GET /api/display.php?action=state
+Returns the player's last reported live state (used by the admin UI).
 
-**Previous Issue:**
-- VLC's `in_play` command was unreliable
-- Files wouldn't start playing consistently
-- Existing playlist caused conflicts
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "playing": true,
+    "paused": false,
+    "current_item": "video1.mp4",
+    "index": 0,
+    "playlist": "morning-playlist",
+    "version": 4
+  }
+}
+```
 
-**Solution:**
-- 4-step reliable playback process
-- Retry logic with verification
-- Proper timing for VLC API processing
+### POST /api/display.php?action=state
+Reported by the player itself to publish its current live state (consumed by `GET ?action=state`).
 
-**Note**: VLC is the default and recommended player in v0.11.0 for stability.
+**Request Body:**
+```json
+{
+  "playing": true,
+  "paused": false,
+  "current_item": "video1.mp4",
+  "index": 0,
+  "playlist": "morning-playlist",
+  "version": 4
+}
+```
 
-### GET /api/player.php?action=current
-Returns the current player configuration.
+**Response:**
+```json
+{
+  "success": true,
+  "message": "State updated"
+}
+```
+
+> **Volume**: Player/system volume is **not** handled here. Use the ALSA volume endpoints on `/api/system.php` (`get_volume` / `set_volume` / `toggle_mute`).
 
 ---
 
@@ -295,7 +442,7 @@ Returns system logs.
   "data": {
     "logs": [
       "[2025-01-01 12:00:00] System started",
-      "[2025-01-01 12:00:05] VLC player initialized"
+      "[2025-01-01 12:00:05] Chromium kiosk player initialized"
     ]
   }
 }
@@ -323,40 +470,42 @@ Returns performance metrics.
 
 ---
 
-## Scheduler API (`/api/scheduler.php`)
+## Scheduler (`/api/scheduler.php`) — CLI executor, NOT an HTTP endpoint 🆕 v0.12.0
 
-### GET /api/scheduler.php
-Returns scheduled playlists.
+> **Changed in v0.12.0**: `web/api/scheduler.php` is now a **CLI executor run by cron** (1×/minute, as `www-data`, via `/etc/cron.d/pisignage-scheduler`). It is **not** called over HTTP. It performs real dayparting: it reads `/opt/pisignage/data/schedules.json` and designates the active playlist according to time/day/recurrence/priority. It is idempotent and reverts to the default playlist at the end of a window. The resolved state is written to `/opt/pisignage/config/scheduler-state.json` and reflected in the UI.
 
-**Response:**
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "id": 1,
-      "playlist": "Morning Playlist",
-      "start_time": "08:00",
-      "end_time": "12:00",
-      "days": ["mon", "tue", "wed", "thu", "fri"],
-      "active": true
-    }
-  ]
-}
+**Execution:**
+```cron
+# /etc/cron.d/pisignage-scheduler
+* * * * * www-data php /opt/pisignage/web/api/scheduler.php >/dev/null 2>&1
 ```
 
-### POST /api/scheduler.php
-Creates or updates a schedule.
+**Inputs / outputs:**
 
-**Request Body:**
+| File | Role |
+|------|------|
+| `/opt/pisignage/data/schedules.json` | Schedule definitions (read) |
+| `/opt/pisignage/config/scheduler-state.json` | Resolved active window/state (written) |
+| `/opt/pisignage/config/active-playlist.json` | Active-playlist pointer it updates when a window applies |
+
+> **Timezone note**: `web/config.php` aligns the PHP timezone with `/etc/timezone`; otherwise dayparting would compare UTC against local schedule times.
+
+**`schedules.json` entry shape (illustrative):**
 ```json
-{
-  "playlist": "Evening Playlist",
-  "start_time": "18:00",
-  "end_time": "22:00",
-  "days": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
-}
+[
+  {
+    "id": 1,
+    "playlist": "Morning Playlist",
+    "start_time": "08:00",
+    "end_time": "12:00",
+    "days": ["mon", "tue", "wed", "thu", "fri"],
+    "priority": 10,
+    "enabled": true
+  }
+]
 ```
+
+Schedule **definitions** are managed from the "Programmation" page (UI), not by calling this script over HTTP.
 
 ---
 
@@ -380,7 +529,7 @@ Returns system configuration.
       "ethernet_connected": false
     },
     "player": {
-      "default": "vlc",
+      "engine": "chromium",
       "autostart": true
     }
   }
@@ -419,9 +568,10 @@ Downloads a YouTube video.
 
 ---
 
-## Display Mode API (`/api/display-mode.php`) 🆕 v0.11.0
+## Display Mode API (`/api/display-mode.php`) ⚠️ OBSOLETE since v0.12
 
-> **New in v0.11.0**: Toggle between VLC (stable, default) and Chromium kiosk (HTML5, advanced features) display modes.
+> **⚠️ OBSOLETE since v0.12 — VLC removed, single engine = Chromium HTML5.**
+> There is no longer a VLC/Chromium toggle: the only playback engine is the Chromium HTML5 player. Player control is now on [`/api/display.php`](#displayplayer-api-apidisplayphp--v0120); display/kiosk settings are on [`/api/kiosk.php`](#kiosk-api-apikioskphp-); volume is ALSA via [`/api/system.php`](#system-api-apisystemphp). The section below is kept for historical reference only.
 
 ### GET /api/display-mode.php?action=status
 Returns current display mode and available modes.
@@ -637,7 +787,7 @@ Restarts the Chromium kiosk browser.
 - Kills all Chromium processes with `pkill -f "/usr/bin/chromium"`
 - Executes `kiosk-apply` to regenerate autostart
 - Chromium restarts automatically on next labwc session start
-- For immediate restart: `sudo systemctl restart greetd` or logout/login
+- For immediate restart, restart the graphical session: `sudo systemctl restart display-manager` (lightdm) or logout/login
 
 ### Kiosk Configuration Files
 
@@ -670,7 +820,7 @@ The kiosk API manages these configuration files:
 
 - **OS:** Raspberry Pi OS Trixie (Debian 13)
 - **Hardware:** Raspberry Pi 4 or 5
-- **Stack:** greetd → labwc (Wayland) → Chromium
+- **Stack:** lightdm (autologin `pi`) → labwc (Wayland) → Chromium (`--kiosk http://127.0.0.1/player`)
 - **Feature flag:** `ENABLE_KIOSK=1` in `/opt/pisignage/config/feature_flags`
 
 ### Disable Kiosk Mode
@@ -695,11 +845,26 @@ sudo reboot
 
 ---
 
+## Deprecated Endpoints (HTTP 410 Gone)
+
+The following endpoints were **removed in v0.12.0** and now respond with **HTTP 410 Gone**. Update integrations to the replacements below.
+
+| Removed endpoint | Replacement |
+|------------------|-------------|
+| `/api/playlist-simple.php` (GET/POST/DELETE) | [`/api/playlists.php`](#playlists-api-apiplaylistsphp--v0120) (unified CRUD + `activate`) |
+| `/api/player.php` (status/control) | [`/api/display.php`](#displayplayer-api-apidisplayphp--v0120) (`command` / `state` / `playmedia`) |
+| `/api/player-control.php` (`play_file`, BUG-013) | [`/api/display.php?action=playmedia`](#displayplayer-api-apidisplayphp--v0120) |
+
+> The old VLC-centric concepts that backed these endpoints no longer exist: no `pisignage-vlc` service, no VLC HTTP interface (port 8080), no VLC password, no "VLC volume" (volume is ALSA via `/api/system.php`).
+
+---
+
 ## Error Codes
 
 - `200` - Success
 - `400` - Bad Request
 - `404` - Not Found
+- `410` - Gone (deprecated endpoint removed in v0.12.0)
 - `500` - Internal Server Error
 - `507` - Insufficient Storage
 

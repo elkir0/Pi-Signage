@@ -1,22 +1,24 @@
-# Guide d'installation détaillé - PiSignage v0.8.9
+# Guide d'installation détaillé - PiSignage v0.12.0
 
-## Nouveautés v0.8.9
+## Nouveautés v0.12.0
 
-- **VLC exclusif**: Support MPV complètement retiré pour stabilité maximale
-- **Authentification complète**: Système d'auth sur toutes les pages
-- **Contrôle audio**: Gestion volume complète via VLC HTTP API
-- **Architecture modulaire**: Interface web divisée en 9 pages spécialisées
-- **Performance améliorée**: 80% plus rapide sur Raspberry Pi
-- **Navigation fiable**: Fini les erreurs JavaScript "showSection is not defined"
-- **Maintenance facilitée**: Code organisé en modules focalisés
+- **Moteur unique Chromium HTML5**: VLC retiré ; le lecteur est `web/player.php` servi sur `/player`, affiché en kiosk par Chromium
+- **Session graphique lightdm**: autologin de l'utilisateur `pi` → compositeur Wayland labwc → Chromium `--kiosk http://127.0.0.1/player`
+- **Contrôle du lecteur via API web**: `web/api/display.php` (commandes next/prev/play/pause/reload, état live)
+- **Volume système ALSA**: contrôle audio via `web/api/system.php` (set_volume/get_volume/toggle_mute) — plus de volume VLC
+- **Playlists unifiées**: une seule source de vérité (`web/api/playlists.php`) + bouton « Diffuser à l'écran »
+- **Programmation réelle (dayparting)**: exécuteur CLI `web/api/scheduler.php` lancé par cron 1×/minute
+- **yt-dlp géré**: binaire dans `/opt/pisignage/bin`, mise à jour 1-clic depuis l'UI
+- **Refonte UI**: design system clair/sombre, icônes SVG (aucun emoji), overlay d'infos vidéo
+- **Performance améliorée**: optimisée pour Raspberry Pi 4/5
 
 ## Introduction
 
-Ce document vous accompagne dans l'installation de PiSignage v0.8.9 sur votre Raspberry Pi. L'installation automatique prend environ 10-15 minutes sur un système à jour, ou jusqu'à 60 minutes sur un système fraîchement installé nécessitant des mises à jour complètes.
+Ce document vous accompagne dans l'installation de PiSignage v0.12.0 sur votre Raspberry Pi. L'installation automatique prend environ 10-15 minutes sur un système à jour, ou jusqu'à 60 minutes sur un système fraîchement installé nécessitant des mises à jour complètes.
 
-**Avantages de v0.8.9**:
-- Interface plus réactive et moderne
-- Navigation plus fluide entre les sections
+**Avantages de v0.12.0**:
+- Moteur de lecture unique (Chromium HTML5) pour une maintenance simplifiée
+- Interface plus réactive et moderne (design adaptatif clair/sombre)
 - Performance optimisée pour Raspberry Pi
 - Architecture modulaire pour une maintenance simplifiée
 
@@ -31,12 +33,10 @@ Ce document vous accompagne dans l'installation de PiSignage v0.8.9 sur votre Ra
 
 ### Système d'exploitation
 
-**Raspberry Pi OS Bookworm (Debian 12)** est le système de référence, de préférence en version 64 bits pour les modèles compatibles. La version Lite est suffisante car PiSignage n'a pas besoin d'environnement de bureau complet.
-
-**Raspberry Pi OS Trixie (Debian 13)** est également supporté avec fonctionnalités avancées :
-- Mode kiosk Chromium avec Wayland
-- API REST complète pour contrôle à distance du kiosk
-- Stack moderne greetd + labwc
+**Raspberry Pi OS Trixie (Debian 13)** est le système de référence, de préférence en version 64 bits, pour les Raspberry Pi 4/5. La cible repose sur Wayland/labwc et le mode kiosk Chromium :
+- Moteur de lecture unique Chromium HTML5 (Wayland)
+- API REST complète pour contrôle à distance du lecteur et du kiosk
+- Stack moderne lightdm (autologin) + labwc
 - Voir [UPGRADE_TRIXIE.md](../UPGRADE_TRIXIE.md) pour installation complète
 
 Une installation fraîche est recommandée pour éviter les conflits avec des configurations existantes.
@@ -73,31 +73,38 @@ Le script automatise l'ensemble du processus d'installation :
 
 1. Mise à jour complète du système (peut prendre 30-60 minutes sur un système neuf)
 2. Installation des composants nécessaires :
-   - Serveur web Nginx avec PHP 8.2
-   - Lecteur vidéo VLC (exclusif dans v0.8.9)
+   - Serveur web Nginx avec PHP 8.4-fpm
+   - Chromium et la stack kiosk Wayland (labwc, lightdm)
+   - yt-dlp installé dans /opt/pisignage/bin
    - Outils système pour les captures d'écran
 3. Création de l'arborescence dans /opt/pisignage
-4. Configuration du serveur web et des services système
+4. Configuration du serveur web, de l'autologin lightdm et des crons système
 5. Téléchargement de l'interface web depuis GitHub
 6. Récupération de la vidéo de démonstration Big Buck Bunny
-7. Application des permissions et activation du démarrage automatique
+7. Application des permissions et activation du démarrage automatique du kiosk
 
 ### Vérification après installation
 
 Une fois l'installation terminée, vérifiez que tout fonctionne correctement :
 
 ```bash
-# État du service principal
-sudo systemctl status pisignage
+# État de la session graphique (autologin lightdm)
+sudo systemctl status display-manager
 
 # Test de l'interface web
 curl -I http://localhost
+
+# Test du lecteur Chromium (page servie sur /player)
+curl -I http://localhost/player
+
+# Vérifier que Chromium tourne en kiosk
+pgrep -a chromium
 
 # Consultation des logs si nécessaire
 tail -f /opt/pisignage/logs/pisignage.log
 ```
 
-L'interface web devrait être accessible depuis n'importe quel navigateur à l'adresse http://[IP-RASPBERRY]/
+L'interface web devrait être accessible depuis n'importe quel navigateur à l'adresse http://[IP-RASPBERRY]/ et le lecteur sur http://[IP-RASPBERRY]/player
 
 ## Installation manuelle détaillée
 
@@ -121,11 +128,22 @@ sudo reboot
 Installez tous les paquets requis en une seule commande :
 
 ```bash
-sudo apt install -y nginx php8.2-fpm php8.2-cli php8.2-json \
-    php8.2-curl vlc git wget curl unzip
+sudo apt install -y nginx php8.4-fpm php8.4-cli \
+    php8.4-curl git wget curl unzip \
+    chromium chromium-l10n labwc lightdm
 ```
 
-Pour un monitoring avancé du système, vous pouvez également installer :
+> **Note**: VLC n'est plus requis (retiré en v0.12). Le moteur de lecture unique est Chromium HTML5, affiché en kiosk via labwc sous Wayland.
+
+yt-dlp est géré par PiSignage et installé dans `/opt/pisignage/bin` (téléchargé du dépôt officiel, mise à jour 1-clic depuis l'UI) :
+```bash
+sudo mkdir -p /opt/pisignage/bin
+sudo wget -O /opt/pisignage/bin/yt-dlp \
+    https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp
+sudo chmod +x /opt/pisignage/bin/yt-dlp
+```
+
+Pour un monitoring avancé du système et le traitement média, vous pouvez également installer :
 ```bash
 sudo apt install -y htop rsync ffmpeg
 ```
@@ -150,12 +168,19 @@ rm -rf /tmp/raspi2png
 Créez l'arborescence complète du projet :
 
 ```bash
-sudo mkdir -p /opt/pisignage/{web,media,config,logs,scripts}
+sudo mkdir -p /opt/pisignage/{web,media,config,logs,scripts,bin,playlists,data}
 sudo mkdir -p /opt/pisignage/web/api
 sudo mkdir -p /dev/shm/pisignage-screenshots
 sudo chown -R $USER:$USER /opt/pisignage
 chmod 755 /opt/pisignage
 ```
+
+Rôle des répertoires clés :
+- `playlists/` : source de vérité des playlists (`<slug>.json`)
+- `config/` : pointeur de playlist active (`active-playlist.json`) et état du scheduler (`scheduler-state.json`)
+- `data/` : programmation dayparting (`schedules.json`)
+- `media/` : médias + `playlist.json` (la playlist effectivement diffusée à l'écran)
+- `bin/` : binaires gérés par PiSignage (yt-dlp)
 
 ### Étape 5 : Configuration du serveur web
 
@@ -180,7 +205,7 @@ server {
 
     location ~ \.php$ {
         include snippets/fastcgi-php.conf;
-        fastcgi_pass unix:/var/run/php/php8.2-fpm.sock;
+        fastcgi_pass unix:/var/run/php/php8.4-fpm.sock;
         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
         include fastcgi_params;
     }
@@ -213,39 +238,37 @@ sudo nginx -t && sudo systemctl reload nginx
 Modifiez les limites PHP pour permettre l'upload de gros fichiers vidéo :
 
 ```bash
-sudo sed -i 's/upload_max_filesize = .*/upload_max_filesize = 500M/' /etc/php/8.2/fpm/php.ini
-sudo sed -i 's/post_max_size = .*/post_max_size = 500M/' /etc/php/8.2/fpm/php.ini
-sudo sed -i 's/max_execution_time = .*/max_execution_time = 300/' /etc/php/8.2/fpm/php.ini
-sudo sed -i 's/memory_limit = .*/memory_limit = 256M/' /etc/php/8.2/fpm/php.ini
+sudo sed -i 's/upload_max_filesize = .*/upload_max_filesize = 500M/' /etc/php/8.4/fpm/php.ini
+sudo sed -i 's/post_max_size = .*/post_max_size = 500M/' /etc/php/8.4/fpm/php.ini
+sudo sed -i 's/max_execution_time = .*/max_execution_time = 300/' /etc/php/8.4/fpm/php.ini
+sudo sed -i 's/memory_limit = .*/memory_limit = 256M/' /etc/php/8.4/fpm/php.ini
 
 sudo mkdir -p /tmp/nginx_uploads
 sudo chown www-data:www-data /tmp/nginx_uploads
-sudo systemctl restart php8.2-fpm
+sudo systemctl restart php8.4-fpm
 ```
 
 ### Étape 7 : Récupération des fichiers PiSignage
 
+La méthode recommandée pour récupérer l'ensemble cohérent des fichiers (interface, APIs, lecteur, scripts) est de cloner le dépôt et de copier l'arborescence `web/` et `scripts/` :
+
 ```bash
-cd /opt/pisignage
-
-# Interface web principale
-wget -O web/index.php https://raw.githubusercontent.com/elkir0/Pi-Signage/main/web/index.php
-
-# APIs
-mkdir -p web/api
-wget -O web/api/system.php https://raw.githubusercontent.com/elkir0/Pi-Signage/main/web/api/system.php
-wget -O web/api/player.php https://raw.githubusercontent.com/elkir0/Pi-Signage/main/web/api/player.php
-wget -O web/api/media.php https://raw.githubusercontent.com/elkir0/Pi-Signage/main/web/api/media.php
-wget -O web/api/screenshot-raspi2png.php https://raw.githubusercontent.com/elkir0/Pi-Signage/main/web/api/screenshot-raspi2png.php
-
-# Configuration
-wget -O config/player-config.json https://raw.githubusercontent.com/elkir0/Pi-Signage/main/config/player-config.json
-
-# Scripts de gestion
-wget -O scripts/player-manager-v0.8.1.sh https://raw.githubusercontent.com/elkir0/Pi-Signage/main/scripts/player-manager-v0.8.1.sh
-wget -O scripts/start-vlc.sh https://raw.githubusercontent.com/elkir0/Pi-Signage/main/scripts/start-vlc.sh
-chmod +x scripts/*.sh
+cd /tmp
+git clone https://github.com/elkir0/Pi-Signage.git
+sudo cp -r Pi-Signage/web/. /opt/pisignage/web/
+sudo cp -r Pi-Signage/scripts/. /opt/pisignage/scripts/
+chmod +x /opt/pisignage/scripts/*.sh
 ```
+
+L'arborescence `web/api` contient notamment :
+- `display.php` : contrôle du lecteur Chromium (commandes play/pause/next/prev/reload, état live, lecture isolée)
+- `playlists.php` + `playlists-core.php` : playlists unifiées (créer/maj/activer/supprimer, « Diffuser à l'écran »)
+- `scheduler.php` : exécuteur CLI du dayparting (lancé par cron, voir Étape 9)
+- `system.php` : volume système ALSA, redémarrage, cache, etc.
+- `media.php` : gestion des médias (avec propagation des renommages/suppressions dans les playlists)
+- `kiosk.php` : réglages d'affichage (mode kiosk, URL, flags Chromium, extinction d'écran)
+
+> **Note**: les endpoints `playlist-simple.php`, `player.php` et `player-control.php` sont **dépréciés** (réponse HTTP 410). Le lecteur n'est plus VLC ; il n'y a plus de script `start-vlc.sh` ni de `player-manager`.
 
 ### Étape 8 : Vidéo de démonstration
 
@@ -256,36 +279,55 @@ wget -O media/BigBuckBunny_720p.mp4 \
     "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
 ```
 
-### Étape 9 : Création du service système
+### Étape 9 : Session graphique (autologin lightdm) et crons
+
+En v0.12, il n'y a plus de service systemd `pisignage` ni de lecteur VLC. Le lecteur est Chromium, lancé en kiosk au démarrage de la session graphique :
+
+```
+lightdm (autologin pi) → labwc (Wayland) → chromium --kiosk http://127.0.0.1/player
+```
+
+**Autologin lightdm** de l'utilisateur `pi` sur une session labwc :
 
 ```bash
-# Créer le service systemd
-sudo tee /etc/systemd/system/pisignage.service > /dev/null << 'EOF'
-[Unit]
-Description=PiSignage Digital Signage Player
-After=graphical-session.target
-Wants=graphical-session.target
+sudo tee /etc/lightdm/lightdm.conf.d/50-pisignage-autologin.conf > /dev/null << 'EOF'
+[Seat:*]
+autologin-user=pi
+autologin-session=labwc
+EOF
+```
 
-[Service]
-Type=simple
-User=pi
-Group=pi
-WorkingDirectory=/opt/pisignage
-ExecStart=/opt/pisignage/scripts/player-manager-v0.8.1.sh start
-ExecStop=/opt/pisignage/scripts/player-manager-v0.8.1.sh stop
-Restart=always
-RestartSec=10
-Environment=DISPLAY=:0
-Environment=XDG_RUNTIME_DIR=/run/user/1000
+**Lancement de Chromium en kiosk** au démarrage de labwc (autostart de la session) :
 
-[Install]
-WantedBy=default.target
+```bash
+sudo -u pi mkdir -p /home/pi/.config/labwc
+sudo -u pi tee /home/pi/.config/labwc/autostart > /dev/null << 'EOF'
+chromium --kiosk --noerrdialogs --disable-infobars http://127.0.0.1/player &
+EOF
+```
+
+> Les flags Chromium et l'URL du kiosk sont ensuite gérés depuis l'UI (page « Kiosk », API `web/api/kiosk.php`) et régénérés par `kiosk-apply`. Pour redémarrer la session graphique : `sudo systemctl restart display-manager`.
+
+**Crons système** : deux tâches planifiées sont nécessaires.
+
+- `pisignage-screen` : pilote l'extinction d'écran programmée.
+- `pisignage-scheduler` : exécute le dayparting toutes les minutes (en `www-data`), lit `/opt/pisignage/data/schedules.json` et désigne la playlist active selon heure/jour/récurrence/priorité.
+
+```bash
+# Scheduler dayparting (1×/minute, en www-data)
+sudo tee /etc/cron.d/pisignage-scheduler > /dev/null << 'EOF'
+* * * * * www-data /usr/bin/php /opt/pisignage/web/api/scheduler.php >/dev/null 2>&1
 EOF
 
-# Recharger systemd et activer le service
-sudo systemctl daemon-reload
-sudo systemctl enable pisignage
+# Extinction d'écran programmée
+sudo tee /etc/cron.d/pisignage-screen > /dev/null << 'EOF'
+* * * * * pi /opt/pisignage/scripts/screen-schedule.sh >/dev/null 2>&1
+EOF
+
+sudo chmod 644 /etc/cron.d/pisignage-scheduler /etc/cron.d/pisignage-screen
 ```
+
+> Pour que le dayparting compare des heures locales (et non UTC), `web/config.php` aligne le fuseau horaire PHP sur `/etc/timezone`. Vérifiez le fuseau du système avec `timedatectl`.
 
 ### Étape 10 : Application des permissions
 
@@ -295,49 +337,48 @@ Configurez les permissions pour que chaque composant ait les droits appropriés 
 sudo chown -R www-data:www-data /opt/pisignage/web
 sudo chown -R www-data:www-data /opt/pisignage/media
 sudo chown -R www-data:www-data /opt/pisignage/logs
-sudo chown -R pi:pi /opt/pisignage/config
+sudo chown -R www-data:www-data /opt/pisignage/playlists
+sudo chown -R www-data:www-data /opt/pisignage/config
+sudo chown -R www-data:www-data /opt/pisignage/data
 sudo chown -R pi:pi /opt/pisignage/scripts
+sudo chown -R www-data:www-data /opt/pisignage/bin
 chmod +x /opt/pisignage/scripts/*.sh
+chmod +x /opt/pisignage/bin/yt-dlp
 ```
+
+> Le scheduler et les APIs web (PHP-FPM, www-data) écrivent dans `playlists/`, `config/`, `data/` et `media/`. Ces répertoires doivent donc appartenir à `www-data`.
 
 ## Configuration complémentaire
 
-### Configuration VLC
+### Configuration du kiosk Chromium
+
+Le moteur de lecture est Chromium en mode kiosk. La configuration (mode kiosk, URL du lecteur, flags Chromium, extinction d'écran programmée) se gère depuis l'UI (page « Kiosk », API `web/api/kiosk.php`) et est régénérée par `kiosk-apply` :
 
 ```bash
-# Créer la configuration VLC pour pi
-sudo -u pi mkdir -p /home/pi/.config/vlc
-sudo -u pi tee /home/pi/.config/vlc/vlcrc > /dev/null << 'EOF'
-[dummy]
-dummy-quiet=1
+# Modifier les flags Chromium puis régénérer l'autostart
+sudo nano /opt/pisignage/config/kiosk_flags
+bash /opt/pisignage/scripts/kiosk-apply
 
-[core]
-intf=dummy
-vout=drm
-fullscreen=1
-loop=1
-no-video-title-show=1
-EOF
+# Changer l'URL du kiosk (par défaut http://127.0.0.1/player)
+echo "http://127.0.0.1/player" | sudo tee /opt/pisignage/config/kiosk_url
+bash /opt/pisignage/scripts/kiosk-apply
 ```
 
-### Configuration MPV
-
-> **Note**: Support MPV complètement retiré dans v0.8.9. Cette section est conservée uniquement pour référence historique. PiSignage utilise maintenant VLC exclusivement pour une meilleure stabilité et compatibilité.
-
-~~Cette configuration n'est plus nécessaire depuis v0.8.9.~~
+> **Note historique** : VLC et MPV ont été retirés. Depuis v0.12, PiSignage utilise un moteur de lecture unique Chromium HTML5 (page `web/player.php` servie sur `/player`), qui lit `/opt/pisignage/media/playlist.json`. Il n'y a plus de configuration `vlcrc`, plus d'interface HTTP VLC (port 8080), ni de mot de passe VLC.
 
 ### Validation de l'installation
 
-Démarrez le service et vérifiez son bon fonctionnement :
+Vérifiez que la session graphique et l'interface web fonctionnent :
 
 ```bash
-sudo systemctl start pisignage
-sudo systemctl status pisignage
+sudo systemctl status display-manager
+pgrep -a chromium
 ```
 
 L'interface web doit répondre sur le port 80 :
 ```bash
 curl -I http://localhost
+curl -I http://localhost/player
 ```
 
 ## Optimisations pour Raspberry Pi
@@ -380,7 +421,8 @@ La désactivation du swap est optionnelle mais peut améliorer les performances 
 Assurez-vous que tous les composants sont correctement installés :
 
 ```bash
-cvlc --version
+chromium --version
+/opt/pisignage/bin/yt-dlp --version
 php -v
 nginx -t
 ```
@@ -390,21 +432,35 @@ nginx -t
 Vérifiez que tous les services sont actifs :
 
 ```bash
-sudo systemctl status nginx php8.2-fpm pisignage
+sudo systemctl status nginx php8.4-fpm display-manager
 ```
 
-Testez l'API pour confirmer que tout fonctionne :
+Vérifiez que les crons sont en place :
+```bash
+ls -l /etc/cron.d/pisignage-scheduler /etc/cron.d/pisignage-screen
+```
+
+Testez les APIs pour confirmer que tout fonctionne :
 ```bash
 curl -s http://localhost/api/system.php
+curl -s "http://localhost/api/display.php?action=state"
+curl -s http://localhost/api/playlists.php
 ```
 
 ### Test du lecteur vidéo
 
-Vérifiez que VLC peut lire la vidéo de test :
+Vérifiez que le lecteur Chromium s'affiche bien et lit la playlist à l'écran :
 
 ```bash
-# Test rapide avec VLC (5 secondes)
-cvlc --play-and-exit --run-time=5 /opt/pisignage/media/BigBuckBunny_720p.mp4
+# La page lecteur doit répondre (HTTP 200)
+curl -I http://localhost/player
+
+# Chromium doit tourner en kiosk
+pgrep -a chromium
+
+# Déclencher un rechargement du lecteur via l'API
+curl -s -X POST "http://localhost/api/display.php?action=command" \
+    -H "Content-Type: application/json" -d '{"cmd":"reload"}'
 ```
 
 ## Résolution des problèmes courants
@@ -412,18 +468,24 @@ cvlc --play-and-exit --run-time=5 /opt/pisignage/media/BigBuckBunny_720p.mp4
 ### Problèmes de permissions
 ```bash
 # Corriger les permissions
-sudo chown -R www-data:www-data /opt/pisignage/web
+sudo chown -R www-data:www-data /opt/pisignage/web /opt/pisignage/media \
+    /opt/pisignage/playlists /opt/pisignage/config /opt/pisignage/data
 sudo chown -R pi:pi /opt/pisignage/scripts
 sudo chmod +x /opt/pisignage/scripts/*.sh
 ```
 
-### Service qui ne démarre pas
+### Session graphique / kiosk qui ne démarre pas
 ```bash
-# Vérifier les logs
-sudo journalctl -u pisignage -f
+# Vérifier l'autologin lightdm
+sudo systemctl status display-manager
+sudo journalctl -u lightdm -n 50
 
-# Vérifier la configuration
-/opt/pisignage/scripts/player-manager-v0.8.1.sh test
+# Vérifier l'autostart labwc et le processus Chromium
+cat /home/pi/.config/labwc/autostart
+pgrep -a chromium
+
+# Redémarrer la session graphique
+sudo systemctl restart display-manager
 ```
 
 ### Interface web inaccessible
@@ -433,20 +495,33 @@ sudo nginx -t
 sudo systemctl status nginx
 
 # Vérifier PHP
-sudo systemctl status php8.2-fpm
+sudo systemctl status php8.4-fpm
 ```
 
 ### Problèmes avec le lecteur vidéo
 ```bash
-# Test manuel VLC
-export DISPLAY=:0
-cvlc --intf dummy --fullscreen --loop /opt/pisignage/media/BigBuckBunny_720p.mp4
+# La page lecteur doit répondre (HTTP 200)
+curl -I http://localhost/player
 
-# Vérifier les processus VLC
-ps aux | grep vlc
+# Vérifier l'état rapporté par le lecteur
+curl -s "http://localhost/api/display.php?action=state"
 
-# Logs VLC via API HTTP
-curl http://localhost:8080/requests/status.json
+# Forcer un rechargement du lecteur
+curl -s -X POST "http://localhost/api/display.php?action=command" \
+    -H "Content-Type: application/json" -d '{"cmd":"reload"}'
+
+# Vérifier le processus Chromium en kiosk
+pgrep -a chromium
+```
+
+### Dayparting (programmation) qui ne s'applique pas
+```bash
+# Exécuter le scheduler manuellement (comme le cron)
+sudo -u www-data /usr/bin/php /opt/pisignage/web/api/scheduler.php
+
+# Vérifier l'état du scheduler et le fuseau horaire
+cat /opt/pisignage/config/scheduler-state.json
+timedatectl
 ```
 
 ### Réinstallation complète
@@ -454,10 +529,11 @@ curl http://localhost:8080/requests/status.json
 Si vous devez recommencer l'installation depuis zéro :
 
 ```bash
-sudo systemctl stop pisignage nginx php8.2-fpm
+sudo systemctl stop nginx php8.4-fpm
 sudo rm -rf /opt/pisignage
 sudo rm -f /etc/nginx/sites-enabled/pisignage
-sudo rm -f /etc/systemd/system/pisignage.service
+sudo rm -f /etc/cron.d/pisignage-scheduler /etc/cron.d/pisignage-screen
+sudo rm -f /etc/lightdm/lightdm.conf.d/50-pisignage-autologin.conf
 sudo systemctl daemon-reload
 ```
 
@@ -507,10 +583,10 @@ chmod +x /opt/pisignage/scripts/monitor.sh
 
 ## Remarques finales
 
-Ce guide couvre l'installation complète de PiSignage v0.8.9. L'installation automatique convient à la majorité des cas d'usage. L'installation manuelle est réservée aux utilisateurs expérimentés ou aux configurations spécifiques.
+Ce guide couvre l'installation complète de PiSignage v0.12.0. L'installation automatique convient à la majorité des cas d'usage. L'installation manuelle est réservée aux utilisateurs expérimentés ou aux configurations spécifiques.
 
 ## Migration depuis versions précédentes
 
-Si vous avez déjà PiSignage v0.8.x installé, consultez le [Guide de migration](MIGRATION.md) pour une mise à jour en douceur vers v0.8.9.
+Si vous avez déjà une version antérieure de PiSignage installée, consultez le [Guide de migration](MIGRATION.md) pour une mise à jour en douceur vers v0.12.0. La migration retire VLC, bascule la session graphique sur lightdm et unifie les playlists.
 
 Pour toute question ou problème, consultez la documentation de dépannage ou ouvrez une issue sur le dépôt GitHub.

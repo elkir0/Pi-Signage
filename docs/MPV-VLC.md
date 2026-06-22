@@ -5,6 +5,20 @@
 
 ---
 
+> ⚠️ **OBSOLÈTE depuis v0.12 — VLC retiré, moteur unique Chromium HTML5.**
+>
+> Ce rapport analysait le choix entre VLC et MPV à l'époque de la v0.8.5. Il est conservé
+> comme **archive historique** uniquement. Depuis la v0.12 (juin 2026), VLC **et** MPV ont
+> été entièrement retirés : le seul moteur de lecture est **Chromium en kiosk** (`web/player.php`
+> servi sur `/player`), qui lit `/opt/pisignage/media/playlist.json`. Il n'y a plus de service
+> `pisignage-vlc`, plus d'interface HTTP VLC (port 8080), plus de mot de passe VLC, plus de
+> bascule de lecteur, plus d'IPC MPV. Le contrôle du lecteur passe désormais par
+> `web/api/display.php` et le volume est le volume **système ALSA** via `web/api/system.php`.
+>
+> Pour l'architecture et les API actuelles, voir **ARCHITECTURE.md** et **API_DOCUMENTATION.md**.
+
+---
+
 ## Executive Summary
 
 After comprehensive analysis of the PiSignage v0.8.5 codebase, **MPV support is partially implemented but critically broken**. The system has a strong VLC-centric architecture with VLC HTTP interface deeply integrated into core features. While MPV exists as a fallback player, it lacks critical control APIs for playlist management, playback controls, and screenshot capture.

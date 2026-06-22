@@ -1,8 +1,14 @@
-# PiSignage v0.8.9 Architecture Guide
+# PiSignage Architecture Guide
 
 ## Overview
 
-PiSignage v0.8.9 represents a complete architectural transformation from a monolithic Single-Page Application (SPA) to a modular Multi-Page Application (MPA) optimized for Raspberry Pi performance.
+PiSignage uses a modular Multi-Page Application (MPA) web admin (the transformation from
+a monolithic SPA started in v0.8.9), optimized for Raspberry Pi performance.
+
+As of **v0.12**, the playback engine is a **single Chromium HTML5 kiosk** (VLC removed),
+the playlist APIs are unified around one source of truth, and dayparting runs as a real
+cron-driven executor. The sections below reflect the v0.12 architecture; some illustrative
+code samples retain `v0.8.9` markers and remain valid as patterns.
 
 ## Table of Contents
 - [Architecture Philosophy](#architecture-philosophy)
@@ -58,60 +64,47 @@ Modular MPA Architecture
 
 ## Display Stack Architecture
 
-### Traditional Stack (Raspberry Pi OS Bullseye/Bookworm)
+> **v0.12 — Moteur de lecture unique :** VLC a été **retiré**. Le seul moteur de
+> lecture est désormais **Chromium en mode kiosk HTML5** affichant `web/player.php`
+> (servi sur `/player`). Plus de service `pisignage-vlc`, plus d'interface HTTP VLC
+> (port 8080), plus de mot de passe VLC. Le « volume VLC » est remplacé par le
+> **volume système ALSA** (`/api/system.php`).
 
-The traditional PiSignage architecture uses VLC player for media playback on standard Raspberry Pi OS:
+### Single Engine Stack (Raspberry Pi OS Trixie - Debian 13)
 
-```
-Raspberry Pi OS (Bullseye/Bookworm)
-├── X11 Display Server
-├── Desktop Environment (LXDE/Pixel)
-├── VLC Player (fullscreen media playback)
-│   ├── HTTP API on port 8080
-│   ├── Direct framebuffer rendering
-│   └── Hardware-accelerated decoding
-└── Web Interface (nginx + PHP)
-    └── API controls VLC via HTTP
-```
-
-**Characteristics:**
-- VLC player exclusive (MPV removed in v0.8.9)
-- X11-based display stack
-- Manual VLC window management
-- HTTP API for player control
-
-### Trixie/Wayland Stack (Raspberry Pi OS Trixie - Debian 13)
-
-For Raspberry Pi OS Trixie, PiSignage adds a modern Wayland-based kiosk mode using Chromium for dashboard display:
+PiSignage uses a single playback engine: a Chromium kiosk browser, on a Wayland/labwc
+display stack. The browser loads the local player page (`/player`), which reads the
+on-screen playlist and renders HTML5 images/videos plus overlays:
 
 ```
 Raspberry Pi OS Trixie (Debian 13)
 ├── Wayland Display Server
-├── greetd (Session Manager)
-│   └── Auto-login configuration
+├── lightdm (Display Manager)
+│   └── Auto-login as user 'pi'
 ├── labwc (Wayland Compositor)
 │   ├── Minimal footprint (~10MB RAM)
 │   ├── rc.xml configuration
 │   ├── autostart script execution
 │   └── Chromium kiosk management
-├── Chromium Browser (Kiosk Mode)
-│   ├── Full-screen web dashboard display
+├── Chromium Browser (Kiosk Mode — ONLY playback engine)
+│   ├── chromium --kiosk http://127.0.0.1/player
+│   ├── HTML5 image/video playback + overlays
 │   ├── Hardware acceleration
 │   └── Configurable flags
-├── VLC Player (Media Playback)
-│   └── HTTP API on port 8080
-└── Web Interface (nginx + PHP)
-    ├── Kiosk API (/api/kiosk.php)
-    └── Player API (/api/player.php)
+└── Web Interface (nginx + PHP 8.4-fpm)
+    ├── Player page (/player → web/player.php)
+    ├── Display/control API (/api/display.php)
+    ├── Playlists API (/api/playlists.php)
+    ├── System/volume API (/api/system.php — ALSA)
+    └── Kiosk API (/api/kiosk.php — display settings only)
 ```
 
 **Key Components:**
 
-#### greetd
-- Modern session manager replacing traditional display managers
-- Configured for auto-login without password
-- Starts labwc compositor automatically
-- Configuration: `/etc/greetd/config.toml`
+#### lightdm
+- Display manager handling auto-login as user `pi` (replaces the former greetd setup)
+- Starts the labwc Wayland session automatically
+- "Restart session" = `sudo systemctl restart display-manager`
 
 #### labwc
 - Lightweight Wayland compositor designed for single-purpose displays
@@ -119,10 +112,12 @@ Raspberry Pi OS Trixie (Debian 13)
 - Executes autostart script at session start
 - Minimal resource usage ideal for Raspberry Pi
 
-#### Chromium Kiosk Mode
-- Full-screen browser for dashboard display
+#### Chromium Kiosk (single playback engine)
+- Full-screen browser launched as `chromium --kiosk http://127.0.0.1/player`
+- Renders the active playlist (HTML5 images/videos) plus info overlays
 - Launched via labwc autostart with custom flags
 - Network wait logic (20s max) ensures connectivity
+- Resilience: splash screen, offline fallback, anti-flash preloading
 - Configurable URL and flags via REST API
 
 #### Configuration Flow
@@ -145,10 +140,35 @@ scripts/kiosk-apply      # POSIX sh script
 
 labwc session starts
 ├── Sources autostart
-└── Launches Chromium with flags
+└── Launches Chromium with flags (kiosk → /player)
 ```
 
-**REST API Control:**
+#### Playback Control Flow (v0.12)
+
+The web admin and the Chromium player communicate through `web/api/display.php`,
+which acts as a command/state channel — there is no VLC HTTP API any more:
+
+```
+Admin UI (Lecteur page)                Chromium player (/player)
+        │                                       │
+        │  POST /api/display.php?action=command │
+        │  {cmd: next|prev|play|pause|reload}   │
+        ├──────────────────────────────────────►  poll GET ?action=command (2s)
+        │                                       │  → executes command
+        │                                       │
+        │  GET  /api/display.php?action=state   │  POST ?action=state (reports state)
+        ◄──────────────────────────────────────┤
+        │                                       │
+        │  POST /api/display.php?action=playmedia│
+        │  {file}  (play one isolated media)    ├──────────────────────────────────────►
+```
+
+The player also polls the playlist `version` (every 10s) and the reload channel
+(every 2s), so "Diffuser à l'écran" (activate playlist) makes the player reload by
+itself. Volume is the **system ALSA volume** via `/api/system.php`
+(`set_volume` / `get_volume` / `toggle_mute`).
+
+**REST API Control (display settings only):**
 
 ```bash
 # Change kiosk URL
@@ -177,23 +197,21 @@ echo "ENABLE_KIOSK=1" | sudo tee /opt/pisignage/config/feature_flags
 sudo reboot
 ```
 
-### Stack Comparison
+### Stack Summary
 
-| Feature | Traditional (X11) | Trixie (Wayland) |
-|---------|------------------|------------------|
-| Display Server | X11 | Wayland |
-| Compositor | Desktop Environment | labwc |
-| Media Player | VLC | VLC |
-| Kiosk Browser | N/A | Chromium |
-| Session Manager | LightDM/autologin | greetd |
-| RAM Usage | ~150MB | ~110MB |
-| Remote Kiosk API | N/A | ✅ Full REST API |
-| Auto-restart | Manual | Automatic via labwc |
+| Feature | Trixie (Wayland) |
+|---------|------------------|
+| Display Server | Wayland |
+| Compositor | labwc |
+| Playback Engine | Chromium kiosk (HTML5) — single engine |
+| Session Manager | lightdm (auto-login `pi`) |
+| RAM Usage | ~110MB |
+| Remote Control API | ✅ Full REST API (`display.php` / `playlists.php` / `kiosk.php`) |
+| Auto-restart | Automatic via labwc / `systemctl restart display-manager` |
 
-**When to use each:**
-
-- **Traditional Stack**: Raspberry Pi OS Bullseye/Bookworm, simple media playback requirements
-- **Trixie Stack**: Raspberry Pi OS Trixie (Debian 13), need for web dashboard display, remote management, modern Wayland benefits
+**Target platform:** Raspberry Pi 4/5 on Raspberry Pi OS Trixie (Debian 13), Wayland/labwc.
+There is no longer a VLC/X11 "traditional stack" — the Chromium HTML5 kiosk is the only
+supported playback engine.
 
 For complete Trixie installation and configuration, see [UPGRADE_TRIXIE.md](../UPGRADE_TRIXIE.md).
 
@@ -207,14 +225,14 @@ For complete Trixie installation and configuration, see [UPGRADE_TRIXIE.md](../U
 /opt/pisignage/web/
 ├── index.php                 # Entry point (redirects to dashboard)
 ├── dashboard.php             # Main system dashboard
+├── player.php                # Chromium kiosk player page (served at /player)
 ├── media.php                 # Media file management
-├── playlists.php            # Playlist creation/editing
-├── player.php               # Video player controls
+├── playlists.php            # Playlist composer + "Diffuser à l'écran"
 ├── settings.php             # System configuration
 ├── logs.php                 # System log viewer
 ├── screenshot.php           # Screenshot utility
 ├── youtube.php              # YouTube downloader
-├── schedule.php             # Playlist scheduling
+├── schedule.php             # Programmation (dayparting)
 │
 ├── includes/                # Shared components
 │   ├── header.php           # Common HTML head, meta tags, CSS/JS imports
@@ -241,16 +259,40 @@ For complete Trixie installation and configuration, see [UPGRADE_TRIXIE.md](../U
 │       └── init.js          # Application initialization
 │
 └── api/                     # REST API endpoints
-    ├── system.php           # System information/control
-    ├── player.php           # Player control
-    ├── media.php            # Media file operations
+    ├── system.php           # System info/control + ALSA volume (set/get/toggle_mute)
+    ├── display.php          # Player command/state channel (next/prev/play/pause/reload, state, playmedia)
+    ├── playlists.php        # Unified playlists API (list/get/create/update/activate/delete)
+    ├── playlists-core.php   # Shared playlist logic (used by playlists.php + media.php)
+    ├── kiosk.php            # Kiosk display settings (URL, flags, restart, screen off)
+    ├── media.php            # Media file operations (rename/delete propagate to playlists)
     ├── upload.php           # File upload handling
-    ├── playlist-simple.php  # Playlist management
     ├── screenshot.php       # Screenshot capture
-    ├── youtube.php          # YouTube download
+    ├── youtube.php          # YouTube download (yt-dlp in /opt/pisignage/bin)
     ├── logs.php             # Log access
     ├── performance.php      # Performance metrics
-    └── scheduler.php        # Schedule management
+    └── scheduler.php        # Dayparting executor (CLI, run by cron every minute)
+    #
+    # DEPRECATED (respond HTTP 410): playlist-simple.php, player.php, player-control.php
+```
+
+#### Data & Config Layout (v0.12)
+
+```
+/opt/pisignage/
+├── playlists/<slug>.json         # Single source of truth per playlist
+│       # schema: {name, slug, version, autoplay, autoLoop,
+│       #          items:[{url,type,name,duration,fit,mute,loop,transition}]}
+├── config/
+│   ├── active-playlist.json       # Pointer to the active playlist
+│   ├── scheduler-state.json       # Real dayparting state (written by scheduler)
+│   ├── kiosk_url / kiosk_flags    # Chromium kiosk display settings
+│   └── feature_flags              # ENABLE_KIOSK=0|1
+├── data/
+│   └── schedules.json             # Dayparting schedules (read by scheduler.php)
+├── media/
+│   └── playlist.json              # What the player renders on screen ("Diffuser" writes this)
+└── bin/
+    └── yt-dlp                      # Managed yt-dlp binary (1-click update)
 ```
 
 ---
@@ -596,17 +638,41 @@ All API responses use consistent JSON structure:
 
 ```
 /api/
-├── system.php        # System operations (stats, reboot, shutdown)
-├── player.php        # Player control (play, pause, stop, volume)
-├── media.php         # Media file management (list, delete, info)
+├── system.php        # System operations (stats, reboot, shutdown) + ALSA volume
+├── display.php       # Player command/state channel (next/prev/play/pause/reload, state, playmedia)
+├── playlists.php     # Unified playlist operations (list/get/create/update/activate/delete)
+├── playlists-core.php# Shared playlist logic (also used by media.php)
+├── media.php         # Media file management (rename/delete propagate references)
 ├── upload.php        # File upload handling
-├── playlist.php      # Playlist operations (CRUD)
 ├── screenshot.php    # Screen capture
-├── youtube.php       # YouTube video download
+├── youtube.php       # YouTube video download (yt-dlp)
 ├── logs.php          # System logs access
 ├── performance.php   # Performance metrics
-├── scheduler.php     # Playlist scheduling
-└── kiosk.php         # Kiosk mode management (Trixie only)
+├── scheduler.php     # Dayparting executor (CLI, run by cron each minute)
+└── kiosk.php         # Kiosk display settings (URL, flags, restart, screen off)
+
+# DEPRECATED (HTTP 410): playlist-simple.php, player.php, player-control.php
+```
+
+#### Playlist & Playback APIs (v0.12)
+
+```bash
+# Playlists (unified — one source of truth: /opt/pisignage/playlists/<slug>.json)
+GET    /api/playlists.php                 # list + active playlist
+GET    /api/playlists.php?name=X          # one playlist
+POST   /api/playlists.php                 # create/update {name,items,autoplay,autoLoop}
+POST   /api/playlists.php?action=activate&name=X   # "Diffuser à l'écran"
+DELETE /api/playlists.php?name=X          # delete
+
+# Player engine control (Chromium kiosk via display.php)
+POST   /api/display.php?action=command    # {cmd:next|prev|play|pause|reload}
+GET    /api/display.php?action=command    # player polls (every 2s)
+POST   /api/display.php?action=state      # player reports its state
+GET    /api/display.php?action=state      # admin reads live state
+POST   /api/display.php?action=playmedia  # {file} play one isolated media
+
+# Volume = system ALSA (no VLC volume)
+POST   /api/system.php  {action:set_volume|get_volume|toggle_mute}
 ```
 
 ---

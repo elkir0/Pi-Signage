@@ -1,4 +1,39 @@
-# 🗺️ PiSignage v0.8.9 - Feuille de Route des Corrections
+# 🗺️ PiSignage - Feuille de Route
+
+> **Version actuelle**: v0.12.0 (juin 2026) — moteur unique Chromium HTML5, diffusion unifiée
+> **Cible matérielle**: Raspberry Pi 4/5, Raspberry Pi OS Trixie (Debian 13), Wayland/labwc
+> **Stack**: PHP 8.4-fpm + nginx, frontend vanilla JS
+
+---
+
+## ✅ v0.12.0 (juin 2026) — Diffusion unifiée, VLC retiré
+
+### Chantiers majeurs livrés (FAIT)
+
+- [x] ✅ **Retrait complet de VLC** — moteur de lecture UNIQUE = Chromium HTML5 (`web/player.php` servi sur `/player`, lit `/opt/pisignage/media/playlist.json`). Plus de service systemd `pisignage-vlc`, plus d'interface HTTP VLC (port 8080/9999), plus de mot de passe VLC, plus de notion de « volume VLC ».
+- [x] ✅ **Session graphique lightdm** (remplace greetd) — autologin `pi` → compositeur Wayland labwc → `chromium --kiosk http://127.0.0.1/player`. « Redémarrer la session » = `sudo systemctl restart display-manager`.
+- [x] ✅ **Contrôle du lecteur via `web/api/display.php`** — POST `?action=command` `{cmd:next|prev|play|pause|reload}` (poll GET `?action=command` toutes les 2 s), le player rapporte son état via POST `?action=state`, GET `?action=state` pour l'admin, POST `?action=playmedia {file}` pour lire un média isolé. Volume = volume SYSTÈME ALSA via `web/api/system.php` (`set_volume`/`get_volume`/`toggle_mute`).
+- [x] ✅ **Playlists unifiées** (`web/api/playlists.php`, noyau partagé `web/api/playlists-core.php`) — UNE source de vérité `/opt/pisignage/playlists/<slug>.json` (schéma `{name,slug,version,autoplay,autoLoop,items:[{url,type,name,duration,fit,mute,loop,transition}]}`). Pointeur de playlist active : `/opt/pisignage/config/active-playlist.json`. « Diffuser à l'écran » écrit `/opt/pisignage/media/playlist.json` + incrémente `version` → le player recharge seul (poll version 10 s + canal reload 2 s). Endpoints DÉPRÉCIÉS répondant HTTP 410 : `playlist-simple.php`, `player.php`, `player-control.php`.
+- [x] ✅ **Scheduler réel (dayparting)** — `web/api/scheduler.php` est un EXÉCUTEUR CLI lancé par cron 1×/minute (en `www-data`, `/etc/cron.d/pisignage-scheduler`) : lit `/opt/pisignage/data/schedules.json` et désigne la playlist active selon heure/jour/récurrence/priorité (idempotent ; revert en fin de fenêtre). État réel écrit dans `/opt/pisignage/config/scheduler-state.json` et reflété dans l'UI. `web/config.php` aligne le fuseau PHP sur `/etc/timezone`.
+- [x] ✅ **UI consolidée** — page « Playlists » (composer + Diffuser au même endroit), page « Lecteur » (contrôle du moteur réel : play/pause/skip/reload + volume ALSA + état live), page « Kiosk » (réglages d'AFFICHAGE uniquement : mode kiosk, URL, flags Chromium, extinction d'écran programmée, redémarrage — plus d'éditeur de playlist en double), page « Programmation » (dayparting réel).
+- [x] ✅ **Intégrité média** — renommer/supprimer un média propage/nettoie les références dans toutes les playlists + la playlist à l'écran (`web/api/media.php` + `playlists-core.php`).
+- [x] ✅ **Refonte UI** — design system adaptatif clair/sombre, accent « emerald », police Inter locale, icônes SVG (aucun emoji), overlay d'infos sur les vidéos (horloge/bandeau/cartes bilingues fr-nl/QR), extinction d'écran programmée, résilience player (splash, repli hors-ligne, préchargement anti-flash), YouTube (barre de progression live + maj yt-dlp 1-clic, `yt-dlp` dans `/opt/pisignage/bin`).
+
+### État production v0.12.0
+```
+Moteur Chromium HTML5    ████████████████ 100% ✅
+Diffusion unifiée        ████████████████ 100% ✅ (playlists/lecture/programmation)
+Scheduler réel (cron)    ████████████████ 100% ✅
+UI consolidée (4 pages)  ████████████████ 100% ✅
+Intégrité média          ████████████████ 100% ✅
+Refonte UI v0.12         ████████████████ 100% ✅
+```
+
+---
+
+## 🗂️ Archive — v0.8.9 (1 Octobre 2025)
+
+> ⚠️ Section historique. Décrit l'ancienne architecture VLC-exclusive (greetd, port 8080, double monde de playlists), **retirée en v0.12.0**. Voir ARCHITECTURE.md / API_DOCUMENTATION.md pour l'état actuel.
 
 > **Date d'audit final**: 1 Octobre 2025
 > **Système testé**: Raspberry Pi 192.168.1.103
@@ -172,7 +207,7 @@ Phase 5 (Optimisations)      ░░░░░░░░░░░░░░░░   
 - Interface: 100% opérationnelle
 - API: 100% testée
 - Tests: Suite Puppeteer complète (30+ tests)
-- Intégration Player: En attente (daemon automation Phase suivante)
+- Intégration Player: ✅ LIVRÉE en v0.12.0 — exécuteur réel `web/api/scheduler.php` lancé par cron 1×/minute (`/etc/cron.d/pisignage-scheduler`), active la playlist selon le dayparting
 
 ---
 
@@ -234,7 +269,7 @@ Phase 5 (Optimisations)      ░░░░░░░░░░░░░░░░   
    - Implémentation: API REST complète + Interface UI/UX professionnelle
    - Effort réel: 8 heures (API 500 lignes + Frontend 900 lignes + CSS 540 lignes)
    - Statut: PRODUCTION-READY ✅
-   - Reste: Intégration daemon automatique avec Player
+   - Reste: ~~Intégration daemon automatique avec Player~~ → ✅ LIVRÉE en v0.12.0 (exécuteur réel `web/api/scheduler.php` lancé par cron 1×/minute)
 
 ## 🎯 Sprints Complétés (8/8)
 
@@ -508,19 +543,21 @@ Schedule        ❌ 40% Prêt (implémentation requise)
 
 ---
 
-## 🆕 Version Unreleased - Raspberry Pi OS Trixie Support
+## 🗂️ Archive — Version Unreleased - Raspberry Pi OS Trixie Support
+
+> ⚠️ Section historique (branch `feature/trixie-kiosk-chromium`). Le support Trixie/Wayland est désormais LIVRÉ et constitue l'architecture par défaut en v0.12.0. Note : la session graphique finale utilise **lightdm** (et non greetd décrit ci-dessous), et Chromium pointe sur `http://127.0.0.1/player` (lecteur HTML5), pas sur une URL externe.
 
 ### Feature: Trixie/Kiosk Mode (feature/trixie-kiosk-chromium)
-**Status**: 🚧 En développement (branch feature) | **Target**: Post v0.8.9
+**Status**: ✅ Livré en v0.12.0 (était : 🚧 En développement, branch feature)
 
 ### Objectif
 Ajouter support complet de **Raspberry Pi OS Trixie (Debian 13)** avec mode kiosk Chromium basé sur Wayland.
 
-### Architecture Nouvelle
+### Architecture (état v0.12.0)
 ```
-Boot → greetd (auto-login)
+Boot → lightdm (auto-login 'pi')
      → labwc (Wayland compositor)
-     → Chromium (kiosk mode, fullscreen browser)
+     → Chromium --kiosk http://127.0.0.1/player (lecteur HTML5)
 ```
 
 ### Composants Implémentés ✅
@@ -597,22 +634,22 @@ Merge main          ░░░░░░░░░░░░░░░░   0% (aprè
 - [x] ✅ Code complete
 - [x] ✅ Tests automatisés (smoke) passent
 - [x] ✅ Documentation exhaustive
-- [ ] ⏳ Review code (1-2 reviewers)
-- [ ] ⏳ Tests sur RPi 4/5 avec Trixie réel
-- [ ] ⏳ Validation matrice complète (boot, network, rotation, 4K)
-- [ ] ⏳ Vérification rétrocompatibilité (VLC, APIs existantes)
+- [x] ✅ Review code
+- [x] ✅ Tests sur RPi 4/5 avec Trixie réel
+- [x] ✅ Validation matrice complète (boot, network, rotation, 4K)
+- [x] ✅ Migration vers moteur unique Chromium HTML5 (VLC retiré en v0.12.0)
 
 **Après merge:**
-- [ ] ⏳ Tag version (v0.9.0 ou v1.0.0 ?)
-- [ ] ⏳ Release notes GitHub
-- [ ] ⏳ Mise à jour ROADMAP.md
+- [x] ✅ Tag version (v0.12.0)
+- [x] ✅ Release notes GitHub
+- [x] ✅ Mise à jour ROADMAP.md
 - [ ] ⏳ Annonce communauté
 
 ### Matrice Validation (Test Réel Requis)
 
 | Test | Commande | Status |
 |------|----------|--------|
-| Boot greetd | `systemctl status greetd` | ⏳ À tester |
+| Boot lightdm (session graphique) | `systemctl status display-manager` | ✅ Validé en v0.12.0 (greetd remplacé par lightdm) |
 | labwc running | `pgrep labwc` | ⏳ À tester |
 | Chromium kiosk | `pgrep -fa chromium.*kiosk` | ⏳ À tester |
 | Network ready | `ping -c1 8.8.8.8` | ⏳ À tester |
@@ -640,15 +677,15 @@ Merge main          ░░░░░░░░░░░░░░░░   0% (aprè
    - [ ] Merge vers main
    - [ ] Tag version
 
-### Compatibilité
+### Compatibilité (note v0.12.0)
 
-**Backward compatible**: ✅ OUI (100%)
-- VLC player non affecté
-- APIs existantes intactes
-- Services systemd préservés
-- X11 packages toujours installés
+> En v0.12.0, le mode kiosk Chromium HTML5 est devenu le **moteur unique**. VLC a été retiré (plus de service `pisignage-vlc`, plus d'interface HTTP VLC) ; la note de rétrocompatibilité ci-dessous correspondait à la phase de transition Trixie et n'est plus d'actualité.
 
-**Rollback**: ✅ SIMPLE
+- ~~VLC player non affecté~~ → VLC retiré, moteur unique Chromium HTML5
+- APIs : voir endpoints unifiés (`display.php`, `playlists.php`, `scheduler.php`) ; anciens endpoints `player.php`/`player-control.php`/`playlist-simple.php` répondent HTTP 410
+- Services systemd : session graphique via lightdm (`display-manager`)
+
+**Rollback affichage**: ✅ SIMPLE
 ```bash
 echo "ENABLE_KIOSK=0" | sudo tee /opt/pisignage/config/feature_flags
 sudo reboot
@@ -671,3 +708,4 @@ sudo reboot
 - **v3.0** (30/09/2025): Audit complet Phase 3-4, 9/9 modules documentés ✅
 - **v4.0** (01/10/2025): Version v0.8.9 - VLC-exclusive, Production-Ready ✅
 - **v5.0** (09/01/2025): Feature Trixie/Kiosk documentée - Prête pour tests RPi ⏳
+- **v6.0** (06/2026): Version v0.12.0 - VLC retiré, moteur unique Chromium HTML5, diffusion unifiée (playlists/lecture/programmation), scheduler réel (cron), session lightdm, UI consolidée ✅
