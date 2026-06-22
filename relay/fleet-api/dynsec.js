@@ -47,7 +47,10 @@ function deviceAcls(base) {
     { acltype: 'publishClientSend',    topic: `${base}/status`, priority: 0, allow: true },
     { acltype: 'publishClientSend',    topic: `${base}/result`, priority: 0, allow: true },
     { acltype: 'publishClientSend',    topic: `${base}/event`,  priority: 0, allow: true },
-    { acltype: 'subscribe',            topic: `${base}/cmd`,    priority: 0, allow: true },
+    // 'subscribeLiteral' is the real dynsec acltype — a bare 'subscribe' is
+    // SILENTLY DROPPED by mosquitto, leaving the device unable to SUBSCRIBE to its
+    // own cmd topic (heartbeats still flow, but commands never arrive).
+    { acltype: 'subscribeLiteral',     topic: `${base}/cmd`,    priority: 0, allow: true },
     // A device must also be allowed to RECEIVE what it subscribed to.
     { acltype: 'publishClientReceive', topic: `${base}/cmd`,    priority: 0, allow: true }
   ];
