@@ -190,6 +190,8 @@
 
                 if (data.success) {
                     this.schedules = data.data || [];
+                    // État RÉEL fourni par l'exécuteur cron (plus de "En cours" deviné côté client).
+                    this.schedulerState = data.scheduler || {};
                     this.renderSchedules();
                     this.updateStatistics();
                 }
@@ -421,7 +423,8 @@
                 if (schedule.enabled) {
                     stats.active++;
 
-                    // Check if currently running
+                    // "En cours" = ce que l'exécuteur cron diffuse RÉELLEMENT (is_active_now),
+                    // pas une estimation horaire côté navigateur.
                     const nextRun = new Date(schedule.metadata.next_run);
                     if (this.isCurrentlyRunning(schedule, now)) {
                         stats.running++;
@@ -443,11 +446,14 @@
          * Check if schedule is currently running
          */
         isCurrentlyRunning: function(schedule, now) {
+            // Source de vérité = l'exécuteur cron (champ is_active_now annoté par l'API).
+            // Repli (si l'exécuteur n'a jamais tourné) : estimation horaire côté client.
+            if (typeof schedule.is_active_now === 'boolean') {
+                return schedule.is_active_now;
+            }
             const startTime = schedule.schedule.start_time;
             const endTime = schedule.schedule.end_time || '23:59';
-
             const nowTimeStr = now.toTimeString().substring(0, 5);
-
             return nowTimeStr >= startTime && nowTimeStr <= endTime;
         },
 

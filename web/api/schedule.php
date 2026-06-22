@@ -349,10 +349,25 @@ if ($method === 'GET' && empty($id)) {
         return strcmp($aNext, $bNext);
     });
 
+    // État RÉEL fourni par l'exécuteur cron (config/scheduler-state.json) : quelle
+    // planification est effectivement à l'écran maintenant. Fin du badge "En cours"
+    // calculé côté navigateur (qui mentait si l'exécuteur n'avait pas tourné).
+    $schedulerStateFile = CONFIG_PATH . '/scheduler-state.json';
+    $schedulerState = [];
+    if (file_exists($schedulerStateFile)) {
+        $schedulerState = json_decode(file_get_contents($schedulerStateFile), true) ?: [];
+    }
+    $activeId = $schedulerState['active_schedule_id'] ?? null;
+    foreach ($schedules as &$s) {
+        $s['is_active_now'] = ($activeId !== null && ($s['id'] ?? null) === $activeId);
+    }
+    unset($s);
+
     sendResponse([
         'success' => true,
         'data' => array_values($schedules),
         'count' => count($schedules),
+        'scheduler' => $schedulerState,
         'timestamp' => date('c')
     ]);
 }

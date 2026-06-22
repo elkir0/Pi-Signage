@@ -733,6 +733,17 @@ LIGHTDM
         log_info "Cron d'extinction d'écran programmée installé"
     fi
 
+    # Cron de PROGRAMMATION (dayparting réel, Phase 3) : exécuteur 1×/min qui lit
+    # data/schedules.json et pose la playlist active selon l'heure/jour (api/scheduler.php).
+    # Exécuté en www-data (même utilisateur que l'API web -> aucune divergence de permissions
+    # sur media/playlist.json, config/*.json, logs/system.log).
+    if [ -f "$INSTALL_DIR/web/api/scheduler.php" ]; then
+        echo '* * * * * www-data /usr/bin/php /opt/pisignage/web/api/scheduler.php >/dev/null 2>&1' | \
+            sudo tee /etc/cron.d/pisignage-scheduler >/dev/null
+        sudo chmod 0644 /etc/cron.d/pisignage-scheduler
+        log_info "Cron de programmation (dayparting) installé"
+    fi
+
     log_info "Kiosk configuration completed"
 }
 

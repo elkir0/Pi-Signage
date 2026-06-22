@@ -1,309 +1,236 @@
 <?php
 /**
- * PiSignage v0.8.0 - Scheduler API
- * Manages scheduled playlist playback
+ * PiSignage — EXÉCUTEUR DE PROGRAMMATION (dayparting réel). Phase 3 de l'unification.
+ *
+ * Lancé par cron une fois par minute (en www-data, comme l'API web) :
+ *     * * * * * www-data /usr/bin/php /opt/pisignage/web/api/scheduler.php
+ *
+ * Lit data/schedules.json (le store JSON édité par la page Programmation), détermine la
+ * playlist qui DOIT être à l'écran maintenant (selon heure/jour/récurrence/priorité), et
+ * la diffuse via playlistActivateByName() — exactement comme le bouton « Diffuser ».
+ *
+ * IDEMPOTENT : ne réécrit la playlist qu'aux TRANSITIONS de fenêtre (entrée/sortie), pas
+ * chaque minute — sinon le player rechargerait en boucle. L'état réel est écrit dans
+ * config/scheduler-state.json pour que l'UI cesse de « mentir » (badge En cours calculé
+ * côté navigateur). À la fin d'une fenêtre, retour optionnel (post_actions.revert_default)
+ * à la playlist qui jouait avant.
+ *
+ * AUCUN HTTP : pur CLI. (L'extinction d'écran reste un pipeline séparé : screen-schedule-tick.sh.)
  */
 
-// Auth guard for HTTP requests only; the cron CLI mode (argv 'check') runs without a session.
-if (php_sapi_name() !== 'cli') {
-    require_once __DIR__ . '/_guard.php';
-}
-require_once '../config.php';
-
-$method = $_SERVER['REQUEST_METHOD'];
-$input = json_decode(file_get_contents('php://input'), true);
-
-switch ($method) {
-    case 'GET':
-        handleGetSchedules();
-        break;
-
-    case 'POST':
-        handleCreateSchedule($input);
-        break;
-
-    case 'PUT':
-        handleUpdateSchedule($input);
-        break;
-
-    case 'DELETE':
-        handleDeleteSchedule($input);
-        break;
-
-    default:
-        jsonResponse(false, null, 'Method not allowed');
+if (PHP_SAPI !== 'cli') {
+    http_response_code(404);
+    echo 'scheduler.php est un exécuteur CLI (cron), pas un endpoint HTTP.';
+    exit;
 }
 
-function handleGetSchedules() {
-    global $db;
+require_once __DIR__ . '/playlists-core.php'; // modèle + activation + config.php
 
-    try {
-        $stmt = $db->query("SELECT * FROM schedules ORDER BY created_at DESC");
-        $schedules = $stmt->fetchAll(PDO::FETCH_ASSOC);
+if (!defined('SCHEDULES_FILE'))       define('SCHEDULES_FILE', '/opt/pisignage/data/schedules.json');
+if (!defined('SCHEDULER_STATE_FILE')) define('SCHEDULER_STATE_FILE', CONFIG_PATH . '/scheduler-state.json');
 
-        // Process schedules data
-        foreach ($schedules as &$schedule) {
-            $schedule['days_array'] = json_decode($schedule['days'], true);
-            $schedule['enabled'] = (bool)$schedule['enabled'];
+schMain();
+
+function schMain() {
+    $schedules = schLoadSchedules();
+    $now       = new DateTime('now');
+    $winner    = schPickActive($schedules, $now);
+
+    $state       = schLoadState();
+    $prevId      = $state['active_schedule_id'] ?? null;
+    $restoreSlug = $state['restore_slug'] ?? null;
+
+    // ---- Une fenêtre est active maintenant ----
+    if ($winner !== null) {
+        $wid = (string)$winner['id'];
+
+        if ($prevId === $wid) {
+            // Déjà appliqué pour cette fenêtre : ne rien réécrire (laisse les overrides manuels).
+            schWriteState($wid, $winner['playlist'], $restoreSlug, 'active', $winner['name']);
+            return;
         }
 
-        jsonResponse(true, $schedules);
-    } catch (Exception $e) {
-        logMessage("Failed to get schedules: " . $e->getMessage(), 'ERROR');
-        jsonResponse(false, null, 'Failed to retrieve schedules');
-    }
-}
-
-function handleCreateSchedule($input) {
-    global $db;
-
-    // Validate required fields
-    $requiredFields = ['name', 'playlist_name', 'start_time', 'end_time', 'days'];
-    foreach ($requiredFields as $field) {
-        if (!isset($input[$field]) || empty($input[$field])) {
-            jsonResponse(false, null, "Field '$field' is required");
-        }
-    }
-
-    $name = trim($input['name']);
-    $playlistName = trim($input['playlist_name']);
-    $startTime = trim($input['start_time']);
-    $endTime = trim($input['end_time']);
-    $days = is_array($input['days']) ? $input['days'] : json_decode($input['days'], true);
-
-    // Validate playlist exists
-    $playlistFile = PLAYLISTS_PATH . '/' . $playlistName . '.json';
-    if (!file_exists($playlistFile)) {
-        jsonResponse(false, null, 'Playlist does not exist');
-    }
-
-    // Validate time format
-    if (!validateTimeFormat($startTime) || !validateTimeFormat($endTime)) {
-        jsonResponse(false, null, 'Invalid time format. Use HH:MM');
-    }
-
-    // Validate days array
-    if (!is_array($days) || empty($days)) {
-        jsonResponse(false, null, 'Days array is required');
-    }
-
-    foreach ($days as $day) {
-        if (!is_numeric($day) || $day < 0 || $day > 6) {
-            jsonResponse(false, null, 'Invalid day value. Use 0-6 (Sunday-Saturday)');
-        }
-    }
-
-    try {
-        $stmt = $db->prepare("
-            INSERT INTO schedules (name, playlist_name, start_time, end_time, days, enabled)
-            VALUES (?, ?, ?, ?, ?, 1)
-        ");
-
-        $stmt->execute([
-            $name,
-            $playlistName,
-            $startTime,
-            $endTime,
-            json_encode($days)
-        ]);
-
-        $scheduleId = $db->lastInsertId();
-
-        logMessage("Schedule created: $name (ID: $scheduleId)");
-        jsonResponse(true, ['id' => $scheduleId], 'Schedule created successfully');
-
-    } catch (Exception $e) {
-        logMessage("Failed to create schedule: " . $e->getMessage(), 'ERROR');
-        jsonResponse(false, null, 'Failed to create schedule');
-    }
-}
-
-function handleUpdateSchedule($input) {
-    global $db;
-
-    if (!isset($input['id'])) {
-        jsonResponse(false, null, 'Schedule ID is required');
-    }
-
-    $id = intval($input['id']);
-
-    // Check if schedule exists
-    $stmt = $db->prepare("SELECT * FROM schedules WHERE id = ?");
-    $stmt->execute([$id]);
-    $schedule = $stmt->fetch(PDO::FETCH_ASSOC);
-
-    if (!$schedule) {
-        jsonResponse(false, null, 'Schedule not found');
-    }
-
-    // Update fields if provided
-    $updateFields = [];
-    $updateValues = [];
-
-    if (isset($input['name'])) {
-        $updateFields[] = 'name = ?';
-        $updateValues[] = trim($input['name']);
-    }
-
-    if (isset($input['playlist_name'])) {
-        $playlistName = trim($input['playlist_name']);
-        $playlistFile = PLAYLISTS_PATH . '/' . $playlistName . '.json';
-        if (!file_exists($playlistFile)) {
-            jsonResponse(false, null, 'Playlist does not exist');
-        }
-        $updateFields[] = 'playlist_name = ?';
-        $updateValues[] = $playlistName;
-    }
-
-    if (isset($input['start_time'])) {
-        if (!validateTimeFormat($input['start_time'])) {
-            jsonResponse(false, null, 'Invalid start time format');
-        }
-        $updateFields[] = 'start_time = ?';
-        $updateValues[] = trim($input['start_time']);
-    }
-
-    if (isset($input['end_time'])) {
-        if (!validateTimeFormat($input['end_time'])) {
-            jsonResponse(false, null, 'Invalid end time format');
-        }
-        $updateFields[] = 'end_time = ?';
-        $updateValues[] = trim($input['end_time']);
-    }
-
-    if (isset($input['days'])) {
-        $days = is_array($input['days']) ? $input['days'] : json_decode($input['days'], true);
-        if (!is_array($days) || empty($days)) {
-            jsonResponse(false, null, 'Invalid days array');
-        }
-        $updateFields[] = 'days = ?';
-        $updateValues[] = json_encode($days);
-    }
-
-    if (isset($input['enabled'])) {
-        $updateFields[] = 'enabled = ?';
-        $updateValues[] = $input['enabled'] ? 1 : 0;
-    }
-
-    if (empty($updateFields)) {
-        jsonResponse(false, null, 'No fields to update');
-    }
-
-    try {
-        $updateValues[] = $id;
-        $sql = "UPDATE schedules SET " . implode(', ', $updateFields) . " WHERE id = ?";
-        $stmt = $db->prepare($sql);
-        $stmt->execute($updateValues);
-
-        logMessage("Schedule updated: ID $id");
-        jsonResponse(true, null, 'Schedule updated successfully');
-
-    } catch (Exception $e) {
-        logMessage("Failed to update schedule: " . $e->getMessage(), 'ERROR');
-        jsonResponse(false, null, 'Failed to update schedule');
-    }
-}
-
-function handleDeleteSchedule($input) {
-    global $db;
-
-    if (!isset($input['id'])) {
-        jsonResponse(false, null, 'Schedule ID is required');
-    }
-
-    $id = intval($input['id']);
-
-    try {
-        $stmt = $db->prepare("DELETE FROM schedules WHERE id = ?");
-        $stmt->execute([$id]);
-
-        if ($stmt->rowCount() > 0) {
-            logMessage("Schedule deleted: ID $id");
-            jsonResponse(true, null, 'Schedule deleted successfully');
-        } else {
-            jsonResponse(false, null, 'Schedule not found');
+        // Transition vers une nouvelle fenêtre. Si on n'était pas déjà sous contrôle du
+        // scheduler, on mémorise ce qui jouait pour pouvoir le restaurer en fin de fenêtre.
+        if ($prevId === null) {
+            $restoreSlug = playlistActiveSlug();
         }
 
-    } catch (Exception $e) {
-        logMessage("Failed to delete schedule: " . $e->getMessage(), 'ERROR');
-        jsonResponse(false, null, 'Failed to delete schedule');
+        $pl = playlistActivateByName($winner['playlist']);
+        if ($pl === null) {
+            schLog("Programmation « {$winner['name']} » : playlist « {$winner['playlist']} » introuvable — ignorée", 'ERROR');
+            return; // on ne prend pas le contrôle si la playlist n'existe pas
+        }
+        if ($pl === false) {
+            schLog("Programmation « {$winner['name']} » : échec d'activation de « {$winner['playlist']} »", 'ERROR');
+            return;
+        }
+        schMarkRun($schedules, $wid);
+        schLog("Programmation activée : « {$winner['name']} » → playlist « {$winner['playlist']} »");
+        schWriteState($wid, $winner['playlist'], $restoreSlug, 'active', $winner['name']);
+        return;
     }
-}
 
-function validateTimeFormat($time) {
-    return preg_match('/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/', $time);
-}
-
-// Check for active schedules (called by cron or system)
-function checkActiveSchedules() {
-    global $db;
-
-    $currentTime = date('H:i');
-    $currentDay = date('w'); // 0 = Sunday, 6 = Saturday
-
-    try {
-        $stmt = $db->prepare("
-            SELECT * FROM schedules
-            WHERE enabled = 1
-            AND start_time <= ?
-            AND end_time > ?
-        ");
-        $stmt->execute([$currentTime, $currentTime]);
-        $schedules = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-        foreach ($schedules as $schedule) {
-            $days = json_decode($schedule['days'], true);
-
-            if (in_array($currentDay, $days)) {
-                // This schedule should be active
-                playScheduledPlaylist($schedule['playlist_name']);
-                logMessage("Activated schedule: " . $schedule['name']);
-                break; // Only activate one schedule at a time
+    // ---- Aucune fenêtre active ----
+    if ($prevId !== null) {
+        // On vient de SORTIR d'une fenêtre programmée -> revert éventuel.
+        $exited = schFindById($schedules, $prevId);
+        $revert = $exited && !empty($exited['post_actions']['revert_default']);
+        if ($revert && $restoreSlug) {
+            $pl = playlistActivateByName($restoreSlug);
+            if ($pl && $pl !== false) {
+                schLog("Fin de programmation : retour à la playlist « {$restoreSlug} »");
+            } else {
+                schLog("Fin de programmation : playlist de restauration « {$restoreSlug} » indisponible", 'ERROR');
             }
+        } else {
+            schLog("Fin de programmation : pas de restauration (on laisse l'écran tel quel)");
         }
-
-    } catch (Exception $e) {
-        logMessage("Failed to check active schedules: " . $e->getMessage(), 'ERROR');
+        schWriteState(null, null, null, 'idle', null);
+        return;
     }
+
+    // Aucun contrôle scheduler en cours : on met seulement à jour l'horodatage d'évaluation.
+    schWriteState(null, null, null, 'idle', null);
 }
 
-function playScheduledPlaylist($playlistName) {
-    $playlistFile = PLAYLISTS_PATH . '/' . $playlistName . '.json';
+/* ============================ Sélection ============================ */
 
-    if (!file_exists($playlistFile)) {
-        logMessage("Scheduled playlist not found: $playlistName", 'ERROR');
-        return false;
+/** Retourne la planification gagnante active maintenant (priorité max), ou null. */
+function schPickActive($schedules, DateTime $now) {
+    $candidates = [];
+    foreach ($schedules as $s) {
+        if (schIsActive($s, $now)) $candidates[] = $s;
+    }
+    if (empty($candidates)) return null;
+
+    usort($candidates, function ($a, $b) {
+        $pa = (int)($a['priority'] ?? 0);
+        $pb = (int)($b['priority'] ?? 0);
+        if ($pa !== $pb) return $pb - $pa;                 // priorité décroissante
+        $sa = $a['schedule']['start_time'] ?? '00:00';
+        $sb = $b['schedule']['start_time'] ?? '00:00';
+        if ($sa !== $sb) return strcmp($sb, $sa);          // début le plus tardif (plus spécifique)
+        return strcmp((string)($a['id'] ?? ''), (string)($b['id'] ?? ''));
+    });
+    return $candidates[0];
+}
+
+/** Une planification est-elle active à l'instant $now ? (enabled + date + jour + fenêtre horaire) */
+function schIsActive($s, DateTime $now) {
+    if (empty($s['enabled'])) return false;
+    if (empty($s['playlist'])) return false;
+
+    $sch  = $s['schedule'] ?? [];
+    $rec  = $sch['recurrence'] ?? [];
+    $type = $rec['type'] ?? 'daily';
+
+    $today = $now->format('Y-m-d');
+    $dow   = (int)$now->format('w'); // 0 = dimanche
+    $dom   = (int)$now->format('j');
+    $nowHM = $now->format('H:i');
+
+    // Plage de dates (start_date / end_date) — sauf 'once' qui porte sa propre date.
+    if ($type !== 'once') {
+        if (!empty($rec['start_date']) && $today < substr((string)$rec['start_date'], 0, 10)) return false;
+        $noEnd = !empty($rec['no_end_date']);
+        if (!$noEnd && !empty($rec['end_date']) && $today > substr((string)$rec['end_date'], 0, 10)) return false;
     }
 
-    $playlist = json_decode(file_get_contents($playlistFile), true);
-
-    if (!$playlist || !isset($playlist['items'])) {
-        logMessage("Invalid scheduled playlist format: $playlistName", 'ERROR');
-        return false;
+    // Jour applicable ?
+    switch ($type) {
+        case 'once':
+            $d = !empty($rec['start_date']) ? substr((string)$rec['start_date'], 0, 10) : null;
+            if ($d === null || $today !== $d) return false;
+            break;
+        case 'daily':
+            break; // tous les jours
+        case 'weekly':
+            $days = is_array($rec['days'] ?? null) ? array_map('intval', $rec['days']) : [];
+            if (!in_array($dow, $days, true)) return false;
+            break;
+        case 'monthly':
+            $ds = isset($rec['date_specific']) ? (int)$rec['date_specific'] : 0;
+            if ($ds <= 0 || $dom !== $ds) return false;
+            break;
+        default:
+            return false;
     }
 
-    // Stop current playback
-    vlcCommand('pl_stop');
-    vlcCommand('pl_empty');
+    // Fenêtre horaire (comparaison de chaînes HH:MM zéro-paddées — sûre).
+    $start = $sch['start_time'] ?? null;
+    if (!$start) return false;
+    if (!empty($sch['continuous'])) {
+        return $nowHM >= $start; // jusqu'à la fin de la journée / prochaine fenêtre
+    }
+    $end = !empty($sch['end_time']) ? $sch['end_time'] : '23:59';
+    return ($nowHM >= $start && $nowHM < $end);
+}
 
-    // Add playlist items
-    foreach ($playlist['items'] as $item) {
-        $filepath = MEDIA_PATH . '/' . basename($item);
-        if (file_exists($filepath)) {
-            vlcCommand('in_enqueue', ['input' => $filepath]);
+/* ============================ Store schedules ============================ */
+
+function schLoadSchedules() {
+    if (!is_file(SCHEDULES_FILE)) return [];
+    $d = json_decode((string)file_get_contents(SCHEDULES_FILE), true);
+    return is_array($d) ? $d : [];
+}
+
+function schFindById($schedules, $id) {
+    foreach ($schedules as $s) {
+        if ((string)($s['id'] ?? '') === (string)$id) return $s;
+    }
+    return null;
+}
+
+function schMarkRun(&$schedules, $id) {
+    $changed = false;
+    foreach ($schedules as &$s) {
+        if ((string)($s['id'] ?? '') === (string)$id) {
+            if (!isset($s['metadata']) || !is_array($s['metadata'])) $s['metadata'] = [];
+            $s['metadata']['last_run']  = date('c');
+            $s['metadata']['run_count'] = (int)($s['metadata']['run_count'] ?? 0) + 1;
+            $changed = true;
+            break;
         }
     }
-
-    // Start playing
-    vlcCommand('pl_play');
-    vlcCommand('pl_loop'); // Enable loop for scheduled playlists
-
-    logMessage("Started scheduled playlist: $playlistName");
-    return true;
+    unset($s);
+    if ($changed) {
+        @file_put_contents(SCHEDULES_FILE, json_encode($schedules, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+    }
 }
 
-// Handle CLI calls for cron jobs
-if (php_sapi_name() === 'cli' && isset($argv[1]) && $argv[1] === 'check') {
-    checkActiveSchedules();
+/* ============================ État scheduler ============================ */
+
+function schLoadState() {
+    if (is_file(SCHEDULER_STATE_FILE)) {
+        $d = json_decode((string)file_get_contents(SCHEDULER_STATE_FILE), true);
+        if (is_array($d)) return $d;
+    }
+    return [];
 }
-?>
+
+function schWriteState($activeId, $activePlaylist, $restoreSlug, $status, $activeName) {
+    $state = [
+        'active_schedule_id'   => $activeId,
+        'active_schedule_name' => $activeName,
+        'active_playlist'      => $activePlaylist,
+        'restore_slug'         => $restoreSlug,
+        'status'               => $status,        // 'active' | 'idle'
+        'evaluated_at'         => date('c'),
+    ];
+    $json = json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    $dir  = dirname(SCHEDULER_STATE_FILE);
+    $tmp  = @tempnam($dir, '.schst.');
+    if ($tmp === false) { @file_put_contents(SCHEDULER_STATE_FILE, $json); return; }
+    if (@file_put_contents($tmp, $json) !== false && @rename($tmp, SCHEDULER_STATE_FILE)) {
+        @chmod(SCHEDULER_STATE_FILE, 0664);
+    } else {
+        @unlink($tmp);
+    }
+}
+
+function schLog($message, $level = 'INFO') {
+    if (function_exists('logMessage')) {
+        logMessage('[scheduler] ' . $message, $level);
+    }
+}
