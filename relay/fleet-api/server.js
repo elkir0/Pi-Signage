@@ -127,7 +127,7 @@ async function main() {
         let body;
         try { body = await readJson(req, cfg.enroll.maxBodyBytes); }
         catch (_) { return send(res, 400, { v: 1, error: 'bad_request' }); }
-        return enrollRoute.handle(req, res, { body, ip: clientIp(req), enrollLimiter });
+        return await enrollRoute.handle(req, res, { body, ip: clientIp(req), enrollLimiter });
       }
 
       // CONSOLE BFF surface (same-origin; cookie session + CSRF inside the handler).
@@ -137,7 +137,7 @@ async function main() {
           try { body = await readJson(req, 64 * 1024); }
           catch (_) { return send(res, 400, { v: 1, error: 'bad_request' }); }
         }
-        return consoleRoute.handle(req, res, { body, ip: clientIp(req), loginLimiter: consoleLoginLimiter });
+        return await consoleRoute.handle(req, res, { body, ip: clientIp(req), loginLimiter: consoleLoginLimiter });
       }
 
       // Authenticated console/admin surface.
@@ -147,7 +147,7 @@ async function main() {
           try { body = await readJson(req, 64 * 1024); }
           catch (_) { return send(res, 400, { v: 1, error: 'bad_request' }); }
         }
-        return adminRoute.handle(req, res, { body });
+        return await adminRoute.handle(req, res, { body });
       }
 
       return send(res, 404, { v: 1, error: 'not_found' });
@@ -161,5 +161,12 @@ async function main() {
     console.log(`[fleet-api] listening on ${cfg.httpHost}:${cfg.httpPort}`);
   });
 }
+
+// Last-resort backstop: a stray rejection ANYWHERE must never take down the fleet
+// plane that manages live screens. Per-request throws are already caught in the
+// dispatcher (return await -> 500); this only catches truly detached promises.
+process.on('unhandledRejection', (reason) => {
+  console.error('[process] unhandledRejection:', reason && reason.message ? reason.message : reason);
+});
 
 main().catch((e) => { console.error('[boot] fatal:', e); process.exit(1); });

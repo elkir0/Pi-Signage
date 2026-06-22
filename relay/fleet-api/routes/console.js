@@ -89,13 +89,17 @@ function clearCookieHeader(name, httpOnly) {
   return flags.join('; ');
 }
 
-// Send with extra Set-Cookie headers.
+// Send with extra Set-Cookie headers. setHeader() accepts an array for Set-Cookie
+// but MUST be called BEFORE writeHead() flushes the head — otherwise it throws
+// ERR_HTTP_HEADERS_SENT, which (as an async-handler rejection) would crash the
+// whole relay process. Order is load-bearing.
 function sendWithCookies(res, status, obj, cookies) {
   const body = JSON.stringify(obj);
-  const headers = { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) };
-  res.writeHead(status, headers);
-  // writeHead can't take an array for Set-Cookie via plain object; set explicitly.
   if (cookies && cookies.length) res.setHeader('Set-Cookie', cookies);
+  res.writeHead(status, {
+    'Content-Type': 'application/json',
+    'Content-Length': Buffer.byteLength(body)
+  });
   res.end(body);
 }
 
