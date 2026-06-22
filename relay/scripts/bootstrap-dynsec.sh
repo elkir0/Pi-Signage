@@ -28,12 +28,12 @@ if docker exec zf-mosquitto sh -c 'grep -q REPLACE_ME /mosquitto/data/dynamic-se
 fi
 
 # 1) svc_fleetapi role + client (the privileged control-plane principal).
-$MC $CONN createRole fleet_service       2>/dev/null || true
-$MC $CONN addRoleACL fleet_service subscribePattern   'zf/#' allow 2>/dev/null || true
-$MC $CONN addRoleACL fleet_service publishClientSend    'zf/#' allow 2>/dev/null || true
-$MC $CONN addRoleACL fleet_service publishClientReceive 'zf/#' allow 2>/dev/null || true
-$MC $CONN createClient svc_fleetapi      2>/dev/null || true
-$MC $CONN setClientPassword svc_fleetapi "${MQTT_SVC_PASSWORD}"
-$MC $CONN addClientRole svc_fleetapi fleet_service 2>/dev/null || true
+$MC $CONN dynsec createRole fleet_service       2>/dev/null || true
+$MC $CONN dynsec addRoleACL fleet_service subscribePattern   'zf/#' allow 2>/dev/null || true
+$MC $CONN dynsec addRoleACL fleet_service publishClientSend    'zf/#' allow 2>/dev/null || true
+$MC $CONN dynsec addRoleACL fleet_service publishClientReceive 'zf/#' allow 2>/dev/null || true
+$MC $CONN dynsec createClient svc_fleetapi      2>/dev/null || true
+$MC $CONN dynsec setClientPassword svc_fleetapi "${MQTT_SVC_PASSWORD}"
+$MC $CONN dynsec addClientRole svc_fleetapi fleet_service 2>/dev/null || true
 
 echo 'dynsec bootstrap complete. Per-device clients are created by fleet-api at enrollment.'

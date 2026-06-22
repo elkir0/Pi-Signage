@@ -1,6 +1,7 @@
 'use strict';
 
 const mqtt = require('mqtt');
+const fs = require('fs');
 const cfg = require('./config');
 const { get } = require('./db');
 
@@ -25,13 +26,18 @@ function alreadyProcessed(msgKey, tenantId) {
 
 function connect() {
   return new Promise((resolve, reject) => {
+    let ca;
+    try { if (cfg.mqtt.caFile) ca = fs.readFileSync(cfg.mqtt.caFile); }
+    catch (e) { console.error('[mqtt] cannot read CA', cfg.mqtt.caFile, e.message); }
     client = mqtt.connect(cfg.mqtt.url, {
       username: cfg.mqtt.svcUser,
       password: cfg.mqtt.svcPassword,
       clientId: cfg.mqtt.clientId,
       reconnectPeriod: 2000,
       clean: true,
-      keepalive: 30
+      keepalive: 30,
+      ca: ca ? [ca] : undefined,
+      rejectUnauthorized: true
     });
 
     client.on('connect', () => {
