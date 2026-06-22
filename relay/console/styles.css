@@ -292,3 +292,7 @@ button{font-family:inherit}
 .ctl-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;font-size:13px}
 .ctl-actions{display:flex;gap:6px;flex:0 0 auto}
 .is-busy{opacity:.55;pointer-events:none}
+
+/* --- Mode complet button row --- */
+.mode-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:6px 0 10px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--surface-2)}
+.mode-label{min-width:0;overflow:hidden;text-overflow:ellipsis}

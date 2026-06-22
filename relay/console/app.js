@@ -368,6 +368,11 @@
         <span class="badge badge-${b.cls} drawer-badge"><i class="dot"></i>${b.label}</span>
       </div>
 
+      <div class="mode-row">
+        <span class="mode-label"><strong>Mode rapide</strong><span class="muted small"> — réglages courants ci-dessous</span></span>
+        <button class="btn btn-primary btn-sm" type="button" data-fullui ${ctlDis}>Mode complet ↗</button>
+      </div>
+
       <div class="cmd-bar" role="group" aria-label="Device commands">${cmds}</div>
       ${managedOff ? '<p class="muted small">Commands are paused while billing is inactive. The screen keeps playing locally.</p>' : ''}
 
@@ -570,6 +575,23 @@
     if (!confirm('Delete media “' + file + '”?')) return;
     try { await runCommand(id, 'delete-media', { filename: file }); toast('Media deleted.', 'success'); doLoad(id, 'media'); }
     catch (e) { toast(e.message, 'error'); }
+  }
+
+  // "Mode complet" — mint a proxy session and open the device's full LAN UI in a
+  // new tab. The tab is opened synchronously (popup-blocker-safe) then redirected.
+  async function openFullUI(id, btn) {
+    const tab = window.open('', '_blank');
+    if (tab) tab.document.write('<p style="font-family:system-ui;padding:2rem;color:#888">Ouverture du mode complet…</p>');
+    ctlBusy(btn, true);
+    try {
+      const r = await api('/devices/' + encodeURIComponent(id) + '/proxy-session', { method: 'POST', body: {} });
+      if (!r.url) throw new ApiError(502, 'no_url', 'No URL returned.');
+      if (tab) tab.location = r.url; else window.location = r.url;
+    } catch (e) {
+      if (tab) tab.close();
+      if (e.status === 402) { reflectManagedState('managed-off'); navTo('billing'); }
+      toast(e.status === 503 ? 'Le mode complet n’est pas encore activé sur le relais.' : e.message, 'error');
+    } finally { ctlBusy(btn, false); }
   }
 
   async function confirmDevice(deviceId) {
@@ -800,6 +822,7 @@
       const conf = e.target.closest('[data-confirm]');
       const ret = e.target.closest('[data-retire]');
       const pb = e.target.closest('[data-pb]');
+      const fullui = e.target.closest('[data-fullui]');
       const load = e.target.closest('[data-load]');
       const yt = e.target.closest('[data-yt]');
       const plAct = e.target.closest('[data-pl-activate]');
@@ -809,6 +832,7 @@
       if (cmd && !cmd.disabled) { if (id) sendCommand(id, cmd.dataset.cmd); }
       else if (conf && !conf.disabled) confirmDevice(conf.dataset.confirm);
       else if (ret && !ret.disabled) retireDevice(ret.dataset.retire);
+      else if (fullui && !fullui.disabled) { if (id) openFullUI(id, fullui); }
       else if (pb && !pb.disabled) { if (id) doPlayback(id, pb.dataset.pb, pb); }
       else if (load && !load.disabled) { if (id) doLoad(id, load.dataset.load, load); }
       else if (yt && !yt.disabled) { if (id) doYtDownload(id, yt); }
