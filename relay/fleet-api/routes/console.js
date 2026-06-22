@@ -263,6 +263,10 @@ async function handle(req, res, ctx) {
   if (seg[0] === 'devices') {
     if (method === 'GET' && seg.length === 1) return redispatchToAdmin(req, res, ctx, 'devices');
     if (method === 'GET' && seg.length === 2) return redispatchToAdmin(req, res, ctx, 'devices/' + encodeURIComponent(seg[1]));
+    // Poll a command result (issue via POST .../command, then GET .../command/:cmd_id).
+    if (method === 'GET' && seg.length === 4 && seg[2] === 'command') {
+      return redispatchToAdmin(req, res, ctx, 'devices/' + encodeURIComponent(seg[1]) + '/command/' + encodeURIComponent(seg[3]));
+    }
     if (method === 'POST' && seg.length === 3 &&
         (seg[2] === 'confirm' || seg[2] === 'retire' || seg[2] === 'command')) {
       return redispatchToAdmin(req, res, ctx, 'devices/' + encodeURIComponent(seg[1]) + '/' + seg[2]);

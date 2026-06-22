@@ -34,7 +34,12 @@ function scryptHash(password) {
 
 const KNOWN_CMD_TYPES = new Set([
   'push-playlist', 'switch', 'reload', 'play', 'pause', 'next', 'prev',
-  'screenshot', 'get-stats', 'reboot', 'ota'
+  'screenshot', 'get-stats', 'reboot', 'ota',
+  // remote control: read state
+  'list-playlists', 'get-playlist', 'list-media', 'list-downloads', 'get-volume',
+  // remote control: act on the player
+  'delete-playlist', 'delete-media', 'download-media', 'playmedia',
+  'set-volume', 'toggle-mute'
 ]);
 
 async function handle(req, res, ctx) {
@@ -162,6 +167,25 @@ async function handle(req, res, ctx) {
       .run(cmdId, tenantId, d.device_id, body.type, JSON.stringify(cmd.args), principal.label, ts);
     mqttClient.publishCommand(d, cmd);
     return send(res, 202, { v: 1, cmd_id: cmdId, device_id: d.device_id, type: body.type });
+  }
+
+  // ---- GET /admin/devices/:id/command/:cmd_id  (poll a command result) ----
+  // Lets the console issue a command then poll for the agent's reply (result_json
+  // carries the full result envelope incl. .detail data for read commands). Tenant-
+  // scoped: a principal can only read its own tenant's command rows.
+  if (req.method === 'GET' && seg[0] === 'devices' && seg.length === 4 && seg[2] === 'command') {
+    const tenantId = resolveTenantScope(principal, url.searchParams.get('tenant_id'));
+    if (!tenantId) return send(res, 400, { v: 1, error: 'bad_tenant' });
+    const c = get().prepare(
+      'SELECT cmd_id, type, result_code, result_json, result_at, issued_at FROM commands WHERE cmd_id=? AND tenant_id=? AND device_id=?'
+    ).get(seg[3], tenantId, seg[1]);
+    if (!c) return send(res, 404, { v: 1, error: 'not_found' });
+    let result = null;
+    if (c.result_json) { try { result = JSON.parse(c.result_json); } catch (_) { /* leave null */ } }
+    return send(res, 200, {
+      v: 1, cmd_id: c.cmd_id, type: c.type, result_code: c.result_code,
+      result, result_at: c.result_at, issued_at: c.issued_at
+    });
   }
 
   // ---- POST /admin/codes  (generate an enrollment code) ----

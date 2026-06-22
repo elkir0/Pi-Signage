@@ -274,3 +274,21 @@ button{font-family:inherit}
 @media (prefers-contrast:more){
   :root{--muted:#b8c9cc;--muted-2:#9bb0b3;--line:#34505c;--line-2:#456575}
 }
+
+/* --- Remote control panel (device drawer) --- */
+.ctl-panel{margin:8px 0 4px;padding-top:8px;border-top:1px solid var(--line)}
+.pb-bar{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px}
+.pb-bar .btn{flex:1 1 auto;min-width:62px}
+.vol-row{display:flex;align-items:center;gap:10px;margin:0 0 8px}
+.vol-row label{flex:0 0 auto;color:var(--muted)}
+.vol-row input[type=range]{flex:1 1 auto;min-width:0;accent-color:var(--emerald)}
+.vol-row #vol-val{flex:0 0 44px;text-align:right;color:var(--muted)}
+.yt-row{display:flex;gap:8px;margin:4px 0 8px}
+.yt-row input{flex:1 1 auto;min-width:0;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius-sm);color:var(--text);padding:8px 10px;font-size:13px}
+.yt-row input:focus{outline:none;border-color:var(--emerald)}
+.ctl-list{display:flex;flex-direction:column;max-height:280px;overflow:auto;margin:2px 0 6px}
+.ctl-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 2px;border-bottom:1px solid var(--line)}
+.ctl-row:last-child{border-bottom:0}
+.ctl-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;font-size:13px}
+.ctl-actions{display:flex;gap:6px;flex:0 0 auto}
+.is-busy{opacity:.55;pointer-events:none}

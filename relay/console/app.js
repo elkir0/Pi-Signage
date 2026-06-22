@@ -309,6 +309,8 @@
     try {
       const r = await api('/devices/' + encodeURIComponent(id));
       renderDrawer(r.device, r.telemetry);
+      const mo = (state.me && state.me.managed_state) === 'managed-off';
+      if (r.device && r.device.state === 'active' && !mo) loadVolume(id);
     } catch (e) {
       if (e.status !== 401) $('#drawer-body').innerHTML = `<p class="form-error">${esc(e.message)}</p>`;
     }
@@ -337,6 +339,7 @@
     const player = (tel && tel.player) || {};
     const active = d.state === 'active';
     const managedOff = (state.me && state.me.managed_state) === 'managed-off';
+    const ctlDis = (!active || managedOff) ? 'disabled' : '';
 
     const shotUrl = d.last_screenshot_url;
     const shot = shotUrl
@@ -367,6 +370,33 @@
 
       <div class="cmd-bar" role="group" aria-label="Device commands">${cmds}</div>
       ${managedOff ? '<p class="muted small">Commands are paused while billing is inactive. The screen keeps playing locally.</p>' : ''}
+
+      <div class="ctl-panel">
+        <h4 class="sec-h">Playback</h4>
+        <div class="pb-bar" role="group" aria-label="Playback controls">
+          <button class="btn btn-secondary btn-sm" type="button" data-pb="prev" ${ctlDis}>Prev</button>
+          <button class="btn btn-secondary btn-sm" type="button" data-pb="play" ${ctlDis}>Play</button>
+          <button class="btn btn-secondary btn-sm" type="button" data-pb="pause" ${ctlDis}>Pause</button>
+          <button class="btn btn-secondary btn-sm" type="button" data-pb="next" ${ctlDis}>Next</button>
+          <button class="btn btn-secondary btn-sm" type="button" data-pb="reload" ${ctlDis}>Reload</button>
+        </div>
+        <div class="vol-row">
+          <label for="vol-slider" class="small">Volume</label>
+          <input id="vol-slider" type="range" min="0" max="100" value="50" ${ctlDis}>
+          <span id="vol-val" class="mono small">—</span>
+          <button class="btn btn-ghost btn-sm" type="button" data-pb="toggle-mute" ${ctlDis}>Mute</button>
+        </div>
+
+        <h4 class="sec-h">Playlists <button class="btn btn-ghost btn-sm" type="button" data-load="playlists" ${ctlDis}>Load</button></h4>
+        <div id="pl-list" class="ctl-list"><p class="muted small">Load to activate / delete playlists.</p></div>
+
+        <h4 class="sec-h">Media library <button class="btn btn-ghost btn-sm" type="button" data-load="media" ${ctlDis}>Load</button></h4>
+        <div class="yt-row">
+          <input id="yt-url" type="url" placeholder="YouTube URL to inject…" ${ctlDis}>
+          <button class="btn btn-primary btn-sm" type="button" data-yt="download" ${ctlDis}>Add</button>
+        </div>
+        <div id="media-list" class="ctl-list"><p class="muted small">Load to play / delete media files.</p></div>
+      </div>
 
       <h4 class="sec-h">Identity</h4>
       <dl class="detail-list">
@@ -415,6 +445,131 @@
       if (e.status === 402) { reflectManagedState('managed-off'); navTo('billing'); }
       toast(e.message, 'error');
     }
+  }
+
+  // =====================================================================
+  //  REMOTE CONTROL — issue a command, poll the agent's async reply
+  // =====================================================================
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  // Issue a command and poll its result row until the agent replies (or timeout).
+  // Returns the result envelope {ok, code, detail, error}. Throws ApiError on
+  // device error / timeout / billing(402).
+  async function runCommand(deviceId, type, args) {
+    let post;
+    try {
+      post = await api('/devices/' + encodeURIComponent(deviceId) + '/command', {
+        method: 'POST', body: args ? { type, args } : { type },
+      });
+    } catch (e) {
+      if (e.status === 402) { reflectManagedState('managed-off'); navTo('billing'); }
+      throw e;
+    }
+    const cmdId = post.cmd_id;
+    if (!cmdId) throw new ApiError(502, 'no_cmd', 'Command was not queued.');
+    for (let i = 0; i < 24; i++) {
+      await sleep(i === 0 ? 600 : 1000);
+      const r = await api('/devices/' + encodeURIComponent(deviceId) + '/command/' + encodeURIComponent(cmdId));
+      if (r.result_at) {
+        const env = r.result || {};
+        if (env.ok === false) throw new ApiError(502, env.code || 'cmd_error', 'Device error: ' + (env.error || env.code || 'failed'));
+        return env;
+      }
+    }
+    throw new ApiError(504, 'timeout', 'The device did not respond in time.');
+  }
+
+  function ctlBusy(btn, busy) { if (btn) { btn.disabled = busy; btn.classList.toggle('is-busy', !!busy); } }
+  function setVolUI(v) {
+    const s = $('#vol-slider'), val = $('#vol-val');
+    if (s && v != null) s.value = v;
+    if (val) val.textContent = (v != null) ? v + '%' : '—';
+  }
+
+  async function loadVolume(id) {
+    try { const env = await runCommand(id, 'get-volume'); if (env.detail && env.detail.volume != null) setVolUI(env.detail.volume); }
+    catch (_) { /* offline / unsupported — keep default */ }
+  }
+  async function doSetVolume(id, level) {
+    try { const env = await runCommand(id, 'set-volume', { level }); setVolUI((env.detail && env.detail.volume != null) ? env.detail.volume : level); }
+    catch (e) { toast(e.message, 'error'); }
+  }
+  async function doPlayback(id, action, btn) {
+    ctlBusy(btn, true);
+    try {
+      const env = await runCommand(id, action);
+      toast(action === 'toggle-mute' ? 'Mute toggled.' : action + ' applied.', 'success');
+      if (env.detail && env.detail.volume != null) setVolUI(env.detail.volume);
+    } catch (e) { toast(e.message, 'error'); }
+    finally { ctlBusy(btn, false); }
+  }
+  async function doLoad(id, kind, btn) {
+    ctlBusy(btn, true);
+    try {
+      if (kind === 'playlists') renderPlaylists((await runCommand(id, 'list-playlists')).detail);
+      else renderMedia((await runCommand(id, 'list-media')).detail);
+    } catch (e) { toast(e.message, 'error'); }
+    finally { ctlBusy(btn, false); }
+  }
+  function renderPlaylists(detail) {
+    const el = $('#pl-list'); if (!el) return;
+    const pls = (detail && detail.playlists) || [];
+    const active = (detail && detail.active) || '';
+    if (!pls.length) { el.innerHTML = '<p class="muted small">No playlists yet.</p>'; return; }
+    el.innerHTML = pls.map((p) => {
+      const name = p.name || p.slug || '';
+      const slug = p.slug || p.name || '';
+      const isActive = slug && slug === active;
+      return `<div class="ctl-row">
+        <span class="ctl-name">${esc(name)}${isActive ? ' <span class="badge badge-online"><i class="dot"></i>Live</span>' : ''}</span>
+        <span class="ctl-actions">
+          <button class="btn btn-secondary btn-sm" type="button" data-pl-activate="${esc(name)}">Diffuser</button>
+          <button class="btn btn-ghost btn-sm danger-text" type="button" data-pl-delete="${esc(name)}">Delete</button>
+        </span></div>`;
+    }).join('');
+  }
+  function renderMedia(detail) {
+    const el = $('#media-list'); if (!el) return;
+    let files = detail;
+    if (detail && Array.isArray(detail.files)) files = detail.files;
+    if (!Array.isArray(files)) files = [];
+    const rows = files.map((f) => {
+      const name = (typeof f === 'string') ? f : (f && (f.name || f.filename)) || '';
+      if (!name) return '';
+      return `<div class="ctl-row">
+        <span class="ctl-name mono">${esc(name)}</span>
+        <span class="ctl-actions">
+          <button class="btn btn-secondary btn-sm" type="button" data-media-play="${esc(name)}">Play</button>
+          <button class="btn btn-ghost btn-sm danger-text" type="button" data-media-delete="${esc(name)}">Delete</button>
+        </span></div>`;
+    }).filter(Boolean).join('');
+    el.innerHTML = rows || '<p class="muted small">No media files.</p>';
+  }
+  async function doYtDownload(id, btn) {
+    const input = $('#yt-url'); const url = input ? input.value.trim() : '';
+    if (!url) { toast('Enter a YouTube URL to inject.', 'error'); return; }
+    ctlBusy(btn, true);
+    try { await runCommand(id, 'download-media', { url }); toast('Download started on the device — refresh the media list shortly.', 'success'); if (input) input.value = ''; }
+    catch (e) { toast(e.message, 'error'); }
+    finally { ctlBusy(btn, false); }
+  }
+  async function doPlaylistActivate(id, name) {
+    try { await runCommand(id, 'switch', { name }); toast('“' + name + '” is now live.', 'success'); doLoad(id, 'playlists'); }
+    catch (e) { toast(e.message, 'error'); }
+  }
+  async function doPlaylistDelete(id, name) {
+    if (!confirm('Delete playlist “' + name + '”?')) return;
+    try { await runCommand(id, 'delete-playlist', { name }); toast('Playlist deleted.', 'success'); doLoad(id, 'playlists'); }
+    catch (e) { toast(e.message, 'error'); }
+  }
+  async function doMediaPlay(id, file) {
+    try { await runCommand(id, 'playmedia', { file }); toast('Now playing “' + file + '”.', 'success'); }
+    catch (e) { toast(e.message, 'error'); }
+  }
+  async function doMediaDelete(id, file) {
+    if (!confirm('Delete media “' + file + '”?')) return;
+    try { await runCommand(id, 'delete-media', { filename: file }); toast('Media deleted.', 'success'); doLoad(id, 'media'); }
+    catch (e) { toast(e.message, 'error'); }
   }
 
   async function confirmDevice(deviceId) {
@@ -640,12 +795,32 @@
     $('#drawer-close').addEventListener('click', closeDrawer);
     $('#drawer-scrim').addEventListener('click', closeDrawer);
     $('#drawer-body').addEventListener('click', (e) => {
+      const id = currentDrawerId();
       const cmd = e.target.closest('[data-cmd]');
       const conf = e.target.closest('[data-confirm]');
       const ret = e.target.closest('[data-retire]');
-      if (cmd && !cmd.disabled) { const id = currentDrawerId(); if (id) sendCommand(id, cmd.dataset.cmd); }
+      const pb = e.target.closest('[data-pb]');
+      const load = e.target.closest('[data-load]');
+      const yt = e.target.closest('[data-yt]');
+      const plAct = e.target.closest('[data-pl-activate]');
+      const plDel = e.target.closest('[data-pl-delete]');
+      const mPlay = e.target.closest('[data-media-play]');
+      const mDel = e.target.closest('[data-media-delete]');
+      if (cmd && !cmd.disabled) { if (id) sendCommand(id, cmd.dataset.cmd); }
       else if (conf && !conf.disabled) confirmDevice(conf.dataset.confirm);
       else if (ret && !ret.disabled) retireDevice(ret.dataset.retire);
+      else if (pb && !pb.disabled) { if (id) doPlayback(id, pb.dataset.pb, pb); }
+      else if (load && !load.disabled) { if (id) doLoad(id, load.dataset.load, load); }
+      else if (yt && !yt.disabled) { if (id) doYtDownload(id, yt); }
+      else if (plAct && !plAct.disabled) { if (id) doPlaylistActivate(id, plAct.dataset.plActivate); }
+      else if (plDel && !plDel.disabled) { if (id) doPlaylistDelete(id, plDel.dataset.plDelete); }
+      else if (mPlay && !mPlay.disabled) { if (id) doMediaPlay(id, mPlay.dataset.mediaPlay); }
+      else if (mDel && !mDel.disabled) { if (id) doMediaDelete(id, mDel.dataset.mediaDelete); }
+    });
+    // Volume slider commits on release (change), not on every drag (input).
+    $('#drawer-body').addEventListener('change', (e) => {
+      const vol = e.target.closest('#vol-slider');
+      if (vol && !vol.disabled) { const id = currentDrawerId(); if (id) doSetVolume(id, parseInt(vol.value, 10)); }
     });
 
     // Enrollment

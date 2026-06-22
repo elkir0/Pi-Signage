@@ -103,6 +103,30 @@ func (e *executor) handle(env commandEnvelope) resultEnvelope {
 		return e.screenshot(env)
 	case "get-stats":
 		return e.getStats(env)
+	// ---- remote-control: read state ----
+	case "list-playlists":
+		return e.simpleRead(env, func() (*piResponse, error) { return e.api.listPlaylists() })
+	case "get-playlist":
+		return e.getPlaylistCmd(env)
+	case "list-media":
+		return e.simpleRead(env, func() (*piResponse, error) { return e.api.listMedia() })
+	case "list-downloads":
+		return e.simpleRead(env, func() (*piResponse, error) { return e.api.listDownloads() })
+	case "get-volume":
+		return e.simpleRead(env, func() (*piResponse, error) { return e.api.getVolume() })
+	// ---- remote-control: act on the player ----
+	case "delete-playlist":
+		return e.deletePlaylistCmd(env)
+	case "delete-media":
+		return e.deleteMediaCmd(env)
+	case "download-media":
+		return e.downloadMediaCmd(env)
+	case "playmedia":
+		return e.playMediaCmd(env)
+	case "set-volume":
+		return e.setVolumeCmd(env)
+	case "toggle-mute":
+		return e.simpleRead(env, func() (*piResponse, error) { return e.api.toggleMute() })
 	case "reboot":
 		return e.reboot(env)
 	case "ota":
@@ -282,6 +306,141 @@ func (e *executor) getStats(env commandEnvelope) resultEnvelope {
 		return errResult(env.CmdID, env.Type, "error", mapLoopErr(err))
 	}
 	return okResult(env.CmdID, env.Type, "applied", map[string]any{"system": mapSystem(st)})
+}
+
+// ---- remote-control handlers --------------------------------------------------
+
+// simpleRead calls a no-arg bridge endpoint and returns its data verbatim as the
+// result detail (used for the read/list and the idempotent toggle commands).
+func (e *executor) simpleRead(env commandEnvelope, fn func() (*piResponse, error)) resultEnvelope {
+	pr, err := fn()
+	if err != nil {
+		return errResult(env.CmdID, env.Type, "error", mapLoopErr(err))
+	}
+	return okResult(env.CmdID, env.Type, "applied", json.RawMessage(pr.Data))
+}
+
+// safeMediaFilename: a SINGLE path component, no traversal/NUL/separators, not a
+// dot-name. Defence-in-depth (PHP also basename()s + confirms under /media/).
+var reUnsafeFilename = regexp.MustCompile(`[/\\\x00]`)
+
+func safeMediaFilename(name string) bool {
+	if name == "" || len(name) > 255 {
+		return false
+	}
+	if name == "." || name == ".." || strings.HasPrefix(name, ".") || strings.Contains(name, "..") {
+		return false
+	}
+	return !reUnsafeFilename.MatchString(name)
+}
+
+func (e *executor) getPlaylistCmd(env commandEnvelope) resultEnvelope {
+	var args struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(env.Args, &args); err != nil || !rePlaylistName.MatchString(args.Name) {
+		return errResult(env.CmdID, env.Type, "rejected", "invalid_name")
+	}
+	pr, err := e.api.getPlaylist(args.Name)
+	if err != nil {
+		return errResult(env.CmdID, env.Type, "error", mapLoopErr(err))
+	}
+	return okResult(env.CmdID, env.Type, "applied", json.RawMessage(pr.Data))
+}
+
+func (e *executor) deletePlaylistCmd(env commandEnvelope) resultEnvelope {
+	var args struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(env.Args, &args); err != nil || !rePlaylistName.MatchString(args.Name) {
+		return errResult(env.CmdID, env.Type, "rejected", "invalid_name")
+	}
+	pr, err := e.api.deletePlaylist(args.Name)
+	if err != nil {
+		return errResult(env.CmdID, env.Type, "error", mapLoopErr(err))
+	}
+	return okResult(env.CmdID, env.Type, "applied", json.RawMessage(pr.Data))
+}
+
+func (e *executor) deleteMediaCmd(env commandEnvelope) resultEnvelope {
+	var args struct {
+		Filename string `json:"filename"`
+	}
+	if err := json.Unmarshal(env.Args, &args); err != nil || !safeMediaFilename(args.Filename) {
+		return errResult(env.CmdID, env.Type, "rejected", "invalid_filename")
+	}
+	pr, err := e.api.deleteMedia(args.Filename)
+	if err != nil {
+		return errResult(env.CmdID, env.Type, "error", mapLoopErr(err))
+	}
+	return okResult(env.CmdID, env.Type, "applied", json.RawMessage(pr.Data))
+}
+
+func (e *executor) playMediaCmd(env commandEnvelope) resultEnvelope {
+	var args struct {
+		File string `json:"file"`
+	}
+	if err := json.Unmarshal(env.Args, &args); err != nil || !safeMediaFilename(args.File) {
+		return errResult(env.CmdID, env.Type, "rejected", "invalid_filename")
+	}
+	pr, err := e.api.playMedia(args.File)
+	if err != nil {
+		return errResult(env.CmdID, env.Type, "error", mapLoopErr(err))
+	}
+	return okResult(env.CmdID, env.Type, "applied", json.RawMessage(pr.Data))
+}
+
+func (e *executor) downloadMediaCmd(env commandEnvelope) resultEnvelope {
+	var args struct {
+		URL       string `json:"url"`
+		Quality   string `json:"quality"`
+		Format    string `json:"format"`
+		AudioOnly bool   `json:"audio_only"`
+	}
+	if err := json.Unmarshal(env.Args, &args); err != nil || args.URL == "" {
+		return errResult(env.CmdID, env.Type, "rejected", "bad_request")
+	}
+	// Only http(s) (the PHP side additionally enforces a valid YouTube URL).
+	u, perr := url.Parse(args.URL)
+	if perr != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return errResult(env.CmdID, env.Type, "rejected", "invalid_url")
+	}
+	body := map[string]any{"url": args.URL}
+	if args.Quality != "" {
+		body["quality"] = args.Quality
+	}
+	if args.Format != "" {
+		body["format"] = args.Format
+	}
+	if args.AudioOnly {
+		body["audio_only"] = true
+	}
+	pr, err := e.api.downloadYouTube(body)
+	if err != nil {
+		return errResult(env.CmdID, env.Type, "error", mapLoopErr(err))
+	}
+	return okResult(env.CmdID, env.Type, "applied", json.RawMessage(pr.Data))
+}
+
+func (e *executor) setVolumeCmd(env commandEnvelope) resultEnvelope {
+	var args struct {
+		Level *int `json:"level"`
+	}
+	if err := json.Unmarshal(env.Args, &args); err != nil || args.Level == nil {
+		return errResult(env.CmdID, env.Type, "rejected", "bad_request")
+	}
+	lvl := *args.Level
+	if lvl < 0 {
+		lvl = 0
+	}
+	if lvl > 100 {
+		lvl = 100
+	}
+	pr, err := e.api.setVolume(lvl)
+	if err != nil {
+		return errResult(env.CmdID, env.Type, "error", mapLoopErr(err))
+	}
+	return okResult(env.CmdID, env.Type, "applied", json.RawMessage(pr.Data))
 }
 
 //  6. reboot -> agent itself runs `sudo /sbin/reboot` (grant pre-exists in sudoers).

@@ -60,8 +60,13 @@ if ($agentHeader !== '') {
         // Défense en profondeur : un processus www-data compromis qui lit agent.json
         // (0640 pi:www-data) ne pilote alors que ce périmètre — jamais settings/system/
         // media/upload/youtube/etc. Le token n'est PAS une clé d'API générale.
+        // Surface de pilotage du player (lecture + contrôle distant via la console) :
+        // stats, état/commande player, playlists, médias, téléchargement YouTube,
+        // volume (system.php). EXCLUT settings.php (mot de passe/réseau) et tout le
+        // reste. system.php expose aussi reboot/shutdown mais ces sous-actions
+        // échouent côté www-data (pas de sudo reboot) — défense en profondeur.
         $agentScript = basename($_SERVER['SCRIPT_NAME'] ?? '');
-        if (in_array($agentScript, ['stats.php', 'display.php', 'playlists.php'], true)) {
+        if (in_array($agentScript, ['stats.php', 'display.php', 'playlists.php', 'media.php', 'youtube.php', 'system.php'], true)) {
             $GLOBALS['__guard_agent'] = true;
             return;
         }

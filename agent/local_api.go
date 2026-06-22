@@ -123,6 +123,63 @@ func (a *LocalAPI) activatePlaylist(name string) (*piResponse, error) {
 	return a.do(http.MethodPost, q, nil)
 }
 
+// ---- remote-control bridge: data reads + media/playlist management ----
+
+// GET /api/playlists.php  (list all + active slug)
+func (a *LocalAPI) listPlaylists() (*piResponse, error) {
+	return a.do(http.MethodGet, "/api/playlists.php", nil)
+}
+
+// GET /api/playlists.php?name=<name>  (one playlist)
+func (a *LocalAPI) getPlaylist(name string) (*piResponse, error) {
+	return a.do(http.MethodGet, "/api/playlists.php?name="+url.QueryEscape(name), nil)
+}
+
+// DELETE /api/playlists.php?name=<name>
+func (a *LocalAPI) deletePlaylist(name string) (*piResponse, error) {
+	return a.do(http.MethodDelete, "/api/playlists.php?name="+url.QueryEscape(name), nil)
+}
+
+// GET /api/media.php?action=list
+func (a *LocalAPI) listMedia() (*piResponse, error) {
+	return a.do(http.MethodGet, "/api/media.php?action=list", nil)
+}
+
+// DELETE /api/media.php  {filename}  (PHP basename()s server-side)
+func (a *LocalAPI) deleteMedia(filename string) (*piResponse, error) {
+	return a.do(http.MethodDelete, "/api/media.php", map[string]any{"filename": filename})
+}
+
+// POST /api/youtube.php  {url,quality,format,audio_only}  (yt-dlp -> /media/)
+func (a *LocalAPI) downloadYouTube(body map[string]any) (*piResponse, error) {
+	return a.do(http.MethodPost, "/api/youtube.php", body)
+}
+
+// GET /api/youtube.php?action=queue  (download jobs)
+func (a *LocalAPI) listDownloads() (*piResponse, error) {
+	return a.do(http.MethodGet, "/api/youtube.php?action=queue", nil)
+}
+
+// POST /api/display.php?action=playmedia  {file}  (play one file as a live 1-item playlist)
+func (a *LocalAPI) playMedia(file string) (*piResponse, error) {
+	return a.do(http.MethodPost, "/api/display.php?action=playmedia", map[string]any{"file": file})
+}
+
+// GET /api/system.php?action=get_volume
+func (a *LocalAPI) getVolume() (*piResponse, error) {
+	return a.do(http.MethodGet, "/api/system.php?action=get_volume", nil)
+}
+
+// POST /api/system.php  {action:set_volume, volume:N}  (PHP clamps 0-100)
+func (a *LocalAPI) setVolume(level int) (*piResponse, error) {
+	return a.do(http.MethodPost, "/api/system.php", map[string]any{"action": "set_volume", "volume": level})
+}
+
+// POST /api/system.php  {action:toggle_mute}
+func (a *LocalAPI) toggleMute() (*piResponse, error) {
+	return a.do(http.MethodPost, "/api/system.php", map[string]any{"action": "toggle_mute"})
+}
+
 // ---- response shapes (only the fields the heartbeat/command need) ----
 
 type statsData struct {
