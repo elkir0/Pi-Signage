@@ -1,3 +1,21 @@
+> ## ⚠️ OBSOLÈTE depuis v0.12 — VLC retiré, moteur unique Chromium HTML5
+>
+> Ce guide décrit le système dual-player (VLC + MPV), supprimé en v0.12.0.
+> Il n'y a plus de bascule VLC/MPV, plus de service `pisignage-vlc`, plus
+> d'interface HTTP VLC (port 8080), plus de mot de passe VLC, ni de
+> `player-config.json`. Le moteur de lecture est désormais **unique** :
+> Chromium en mode kiosk affichant `web/player.php` (servi sur `/player`),
+> qui lit `/opt/pisignage/media/playlist.json`. Le contrôle se fait via
+> `web/api/display.php` et le volume via le volume **système ALSA**
+> (`web/api/system.php`). Les endpoints `player.php`/`player-control.php`
+> répondent HTTP 410 (dépréciés).
+>
+> Le contenu ci-dessous est conservé **à titre d'archive historique** et ne
+> reflète plus l'architecture actuelle. Voir **ARCHITECTURE.md** et
+> **API_DOCUMENTATION.md** pour la documentation à jour.
+
+---
+
 # Dual-Player Guide - PiSignage v0.8.5
 
 > **Updated for v0.8.5**: Enhanced with modular architecture for better reliability and performance

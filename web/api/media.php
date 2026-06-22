@@ -13,6 +13,7 @@
 
 require_once __DIR__ . '/_guard.php';
 require_once '../config.php';
+require_once __DIR__ . '/playlists-core.php'; // intégrité média <-> playlists (rename/suppression)
 
 // Only execute request handling if this file is called directly (not included)
 if (basename($_SERVER['SCRIPT_FILENAME']) === 'media.php') {
@@ -132,21 +133,18 @@ function handleDeleteMedia($input) {
         jsonResponse(false, null, 'File not found');
     }
 
-    // Check if file is currently being used in any playlist
-    $playlists = glob(PLAYLISTS_PATH . '/*.json');
-    $usedInPlaylists = [];
+    // Usage réel dans les playlists (items = OBJETS {url,...}, comparaison via le noyau).
+    $usage = playlistFindMediaUsage($filename);
+    $usedSlugs = array_map(function ($p) { return $p['slug']; }, $usage['playlists']);
+    $force = !empty($input['force']);
 
-    foreach ($playlists as $playlistFile) {
-        $playlist = json_decode(file_get_contents($playlistFile), true);
-        if ($playlist && isset($playlist['items']) && in_array($filename, $playlist['items'])) {
-            $usedInPlaylists[] = basename($playlistFile, '.json');
-        }
-    }
-
-    if (!empty($usedInPlaylists)) {
+    // Si utilisé et suppression non forcée : on BLOQUE et on renvoie la liste (UI -> confirme force).
+    if (!$force && (!empty($usedSlugs) || $usage['live'])) {
         jsonResponse(false, [
-            'playlists' => $usedInPlaylists
-        ], 'File is used in playlists: ' . implode(', ', $usedInPlaylists));
+            'playlists' => $usedSlugs,
+            'live'      => $usage['live'],
+            'used'      => true,
+        ], 'Fichier utilisé dans : ' . implode(', ', $usedSlugs) . ($usage['live'] ? ' (et à l\'écran)' : ''));
     }
 
     // Delete the file
@@ -157,6 +155,9 @@ function handleDeleteMedia($input) {
             unlink($thumbnailPath);
         }
 
+        // Retirer les références désormais orphelines des playlists + de la playlist LIVE.
+        $removed = playlistRemoveMediaRefs($filename);
+
         // Update database
         try {
             global $db;
@@ -166,8 +167,12 @@ function handleDeleteMedia($input) {
             logMessage("Failed to remove media from database: " . $e->getMessage(), 'ERROR');
         }
 
-        logMessage("Media file deleted: $filename");
-        jsonResponse(true, null, 'File deleted successfully');
+        $msg = 'Fichier supprimé';
+        if (!empty($removed['affected']) || $removed['live']) {
+            $msg .= ' (retiré de ' . count($removed['affected']) . ' playlist(s)' . ($removed['live'] ? ' + écran' : '') . ')';
+        }
+        logMessage("Media file deleted: $filename" . (!empty($removed['affected']) ? ' (refs nettoyées: ' . implode(',', $removed['affected']) . ')' : ''));
+        jsonResponse(true, ['removed_from' => $removed['affected'], 'live' => $removed['live']], $msg);
     } else {
         jsonResponse(false, null, 'Failed to delete file');
     }
@@ -203,8 +208,13 @@ function handleRenameMedia($input) {
     }
 
     if (rename($oldPath, $newPath)) {
-        // Update playlists that reference this file
-        updatePlaylistReferences($oldName, $newName);
+        // Propager le renommage dans toutes les playlists (items {url,...}) + la playlist LIVE.
+        $prop = playlistRenameMediaRefs($oldName, $newName);
+
+        // Renommer aussi la miniature si elle existe.
+        $oldThumb = MEDIA_PATH . '/thumbnails/' . $oldName . '.jpg';
+        $newThumb = MEDIA_PATH . '/thumbnails/' . $newName . '.jpg';
+        if (file_exists($oldThumb)) { @rename($oldThumb, $newThumb); }
 
         // Update database
         try {
@@ -215,8 +225,9 @@ function handleRenameMedia($input) {
             logMessage("Failed to update media in database: " . $e->getMessage(), 'ERROR');
         }
 
-        logMessage("Media file renamed: $oldName -> $newName");
-        jsonResponse(true, null, 'File renamed successfully');
+        logMessage("Media file renamed: $oldName -> $newName (refs: " . $prop['playlists'] . " playlist(s)" . ($prop['live'] ? ' + écran' : '') . ')');
+        jsonResponse(true, ['renamed_in' => $prop['playlists'], 'live' => $prop['live'], 'new_name' => $newName],
+            'Fichier renommé' . ($prop['playlists'] || $prop['live'] ? ' (références mises à jour)' : ''));
     } else {
         jsonResponse(false, null, 'Failed to rename file');
     }
@@ -530,27 +541,9 @@ function createImageThumbnail($sourcePath, $thumbnailPath) {
  * @since 0.8.0
  */
 function updatePlaylistReferences($oldFilename, $newFilename) {
-    $playlists = glob(PLAYLISTS_PATH . '/*.json');
-
-    foreach ($playlists as $playlistFile) {
-        $playlist = json_decode(file_get_contents($playlistFile), true);
-
-        if ($playlist && isset($playlist['items'])) {
-            $updated = false;
-
-            for ($i = 0; $i < count($playlist['items']); $i++) {
-                if ($playlist['items'][$i] === $oldFilename) {
-                    $playlist['items'][$i] = $newFilename;
-                    $updated = true;
-                }
-            }
-
-            if ($updated) {
-                file_put_contents($playlistFile, json_encode($playlist, JSON_PRETTY_PRINT));
-                logMessage("Updated playlist references: " . basename($playlistFile));
-            }
-        }
-    }
+    // Délègue au noyau unifié (items = objets {url,...} ; gère aussi la playlist LIVE).
+    // L'ancienne comparaison de chaînes était inopérante depuis l'unification du schéma.
+    return playlistRenameMediaRefs($oldFilename, $newFilename);
 }
 
 /**

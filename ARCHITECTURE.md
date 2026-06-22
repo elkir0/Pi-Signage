@@ -1,4 +1,4 @@
-# PiSignage v0.11.0 Architecture
+# PiSignage v0.12.0 Architecture
 
 Complete system architecture documentation for PiSignage digital signage platform.
 
@@ -8,7 +8,7 @@ Complete system architecture documentation for PiSignage digital signage platfor
 - [Technology Stack](#technology-stack)
 - [Directory Structure](#directory-structure)
 - [Component Architecture](#component-architecture)
-- [Display Modes](#display-modes)
+- [Playback Pipeline](#playback-pipeline)
 - [Data Flow](#data-flow)
 - [Security Architecture](#security-architecture)
 - [Deployment Architecture](#deployment-architecture)
@@ -17,18 +17,24 @@ Complete system architecture documentation for PiSignage digital signage platfor
 
 ## System Overview
 
-PiSignage is a digital signage solution running on Raspberry Pi with two display modes:
+PiSignage is a digital signage solution running on Raspberry Pi with a **single playback
+engine**: a full-screen **Chromium HTML5 player**. Since v0.12 VLC has been removed
+entirely — there is no longer a "dual-player" / display-mode switch, no VLC service, and
+no VLC HTTP interface.
 
-1. **VLC Mode (Default)** - Stable hardware-accelerated video player
-2. **Chromium Kiosk Mode** - HTML5 web-based player with advanced features
+The browser boots into kiosk mode and loads the local player page
+(`http://127.0.0.1/player`), which renders the active playlist
+(`/opt/pisignage/media/playlist.json`). Playback is steered remotely through a lightweight
+command/state API (`api/display.php`).
 
 ### Design Principles
 
-- **Stability First**: VLC as default for production reliability
-- **Flexibility**: Optional Chromium mode for advanced use cases
+- **Single engine**: One Chromium HTML5 player — fewer moving parts, one code path
+- **One source of truth**: Unified playlists in `/opt/pisignage/playlists/`, one active
+  pointer, one on-screen file
 - **Simplicity**: One-command installation and configuration
 - **Modularity**: Independent components with clear interfaces
-- **Performance**: Hardware acceleration and optimized playback
+- **Performance**: Hardware-accelerated decode via Wayland/labwc on Pi 4/5
 
 ---
 
@@ -41,34 +47,31 @@ PiSignage is a digital signage solution running on Raspberry Pi with two display
 
 ### Display Stack
 
-**VLC Mode:**
 ```
-Hardware → Linux Framebuffer → VLC Media Player → HDMI Output
-```
-
-**Chromium Kiosk Mode:**
-```
-Hardware → DRM/KMS → Wayland → labwc → Chromium → HDMI Output
+Hardware → DRM/KMS → Wayland → labwc → Chromium (kiosk) → HDMI Output
 ```
 
 ### Backend
-- **PHP 8.2+** - Web server and API
-- **Apache 2.4** - HTTP server with mod_php
-- **Bash** - System scripts and automation
+- **PHP 8.4-fpm** - Web application and REST API
+- **nginx** - HTTP server with FastCGI (PHP-FPM)
+- **Bash / POSIX sh** - System scripts and automation
 
 ### Frontend
 - **Vanilla JavaScript** - No frameworks (lightweight)
-- **Bootstrap 5.3** - UI components
-- **HTML5** - Player page with Wake Lock API
+- **Adaptive design system** - Light/dark theme, "emerald" accent, local Inter font,
+  inline SVG icons (no emoji)
+- **HTML5 player** - Chromium player page with Wake Lock API, offline fallback,
+  splash/preload (anti-flash), and info overlays (clock/banner/bilingual fr-nl cards/QR)
 
-### Media Players
-- **VLC 3.0+** - Default video player with HTTP API (port 8080)
-- **Chromium 120+** - Kiosk mode browser for HTML5 player
+### Media Player
+- **Chromium 120+** - Sole playback engine, kiosk mode, HTML5 video/image rendering
 
-### Display Managers
-- **greetd** - Session manager for Wayland (Chromium mode)
+### Display Session
+- **lightdm** - Display manager with autologin of user `pi`
 - **labwc** - Stacking Wayland compositor
 - **seatd** - Seat management daemon
+
+> "Restart the session" = `sudo systemctl restart display-manager` (lightdm).
 
 ---
 
@@ -77,61 +80,72 @@ Hardware → DRM/KMS → Wayland → labwc → Chromium → HDMI Output
 ```
 /opt/pisignage/
 ├── config/                      # Configuration files
-│   ├── display-mode.json       # Display mode config (VLC/Chromium)
-│   ├── kiosk_url               # Chromium kiosk URL
+│   ├── active-playlist.json    # Active playlist pointer
+│   ├── scheduler-state.json    # Real dayparting state (written by scheduler)
+│   ├── kiosk_url               # Chromium kiosk URL (player by default)
 │   ├── kiosk_flags             # Chromium flags
 │   └── feature_flags           # System feature flags
 │
+├── bin/                         # Managed binaries
+│   └── yt-dlp                  # YouTube downloader (self-updatable from UI)
+│
 ├── scripts/                     # System scripts
-│   ├── switch-display-mode.sh  # Display mode switcher
-│   ├── install-chromium-kiosk.sh # Chromium setup
-│   └── install-vlc.sh          # VLC setup
+│   ├── kiosk-apply             # Generates labwc autostart from config
+│   └── ...                     # Install / maintenance helpers
 │
 ├── media/                       # Media storage
+│   ├── playlist.json           # ON-SCREEN playlist (what the player renders)
 │   ├── videos/                 # Video files
 │   ├── images/                 # Image files
 │   └── thumbnails/             # Generated thumbnails
 │
-├── playlists/                   # Playlist definitions (JSON)
-├── schedules/                   # Schedule definitions (JSON)
+├── playlists/                   # Unified playlist definitions (<slug>.json)
+├── data/
+│   └── schedules.json          # Dayparting schedule definitions
 ├── logs/                        # Application logs
 └── backups/                     # Configuration backups
 
 /opt/pisignage/web/
 ├── api/                         # REST API endpoints
-│   ├── player-control.php      # VLC control (BUG-013 fix)
-│   ├── display-mode.php        # Display mode API
-│   ├── playlist.php            # Playlist management
+│   ├── display.php             # Player command/state channel + playmedia
+│   ├── playlists.php           # Unified playlist API (list/get/save/activate/delete)
+│   ├── playlists-core.php      # Shared playlist logic (single source of truth)
+│   ├── scheduler.php           # Dayparting executor (CLI, run by cron)
+│   ├── media.php               # Media library + reference integrity
+│   ├── system.php              # System info + ALSA volume control
+│   ├── kiosk.php               # Display/kiosk settings
+│   ├── youtube.php             # YouTube download (yt-dlp)
 │   ├── upload.php              # File upload
-│   ├── system.php              # System info
-│   └── ...                     # Other endpoints (23 total)
+│   └── ...                     # Other endpoints
 │
 ├── includes/                    # Shared components
 │   ├── auth.php                # Authentication
-│   ├── db.php                  # Database connection
 │   ├── navigation.php          # Navigation menu
 │   └── functions.php           # Utility functions
 │
+├── config.php                   # App config (aligns PHP timezone to /etc/timezone)
 ├── dashboard.php                # Main dashboard
-├── display-mode.php             # Display mode management
-├── playlists.php                # Playlist editor
+├── playlists.php                # Playlist composer + "Diffuser à l'écran"
+├── player.php                   # HTML5 player (served on /player) + live engine control
 ├── media.php                    # Media library
 ├── settings.php                 # System settings
-└── player.php                   # HTML5 player (Chromium mode)
+└── schedule.php                 # Real dayparting UI
+
+# Deprecated endpoints (respond HTTP 410 Gone):
+#   api/playlist-simple.php, api/player.php, api/player-control.php
 
 /home/pi/.config/
-├── labwc/                       # Wayland compositor config
-│   ├── autostart               # Chromium autostart script
-│   └── rc.xml                  # labwc configuration
-└── greetd/                      # Session manager config
+└── labwc/                       # Wayland compositor config
+    ├── autostart               # Chromium autostart (generated by kiosk-apply)
+    └── rc.xml                  # labwc configuration
 
 /etc/
-├── systemd/system/
-│   ├── pisignage-vlc.service   # VLC service
-│   └── greetd.service          # Chromium kiosk service
+├── cron.d/
+│   └── pisignage-scheduler     # Runs scheduler.php every minute as www-data
 ├── asound.conf                  # HDMI audio default
+├── timezone                     # System timezone (mirrored into PHP by config.php)
 └── sudoers.d/
-    └── pisignage-display-mode  # Display mode permissions
+    └── pisignage               # Minimal sudo for system actions (reboot, etc.)
 ```
 
 ---
@@ -142,132 +156,156 @@ Hardware → DRM/KMS → Wayland → labwc → Chromium → HDMI Output
 
 ```
 ┌─────────────────────────────────────────────┐
-│         Web Interface (Bootstrap 5)         │
+│      Web Interface (adaptive design system)  │
 │                                             │
-│  Dashboard  │  Media  │  Playlists  │ ...  │
+│  Dashboard │ Media │ Playlists │ Lecteur │…  │
 └──────────────────┬──────────────────────────┘
                    │
                    ▼
          ┌─────────────────┐
          │  REST API (PHP)  │
-         │   23 Endpoints   │
          └─────────────────┘
 ```
 
-**Key Pages:**
+**Key Pages (consolidated in v0.12):**
 - `dashboard.php` - System overview, statistics, quick actions
-- `display-mode.php` - VLC/Chromium mode switcher (NEW in v0.11.0)
-- `playlists.php` - Playlist creation and management
 - `media.php` - Media library browser and uploader
+- `playlists.php` - Playlist **composer + "Diffuser à l'écran"** in one place (single
+  unified playlist model; no duplicate playlist editor elsewhere)
+- `player.php` - The Chromium HTML5 **player** (served on `/player`) AND the
+  "Lecteur" admin page that controls the real engine (play/pause/skip/reload, ALSA
+  volume, live state)
+- `schedule.php` - **Programmation**: real dayparting UI
+- Kiosk page - **display-only** settings (kiosk mode, URL, Chromium flags, scheduled
+  screen-off, restart) — no playlist editor
 - `settings.php` - System configuration
-- `player.php` - HTML5 video player (Chromium mode)
 
 ### 2. API Layer
 
 ```
-┌───────────────────────────────────────────────────────┐
-│                     REST API Layer                     │
-│                                                        │
-│  ┌──────────────┐  ┌──────────────┐  ┌─────────────┐ │
-│  │   Player     │  │   Playlist   │  │   Media     │ │
-│  │   Control    │  │   Manager    │  │   Manager   │ │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬──────┘ │
-│         │                  │                  │        │
-└─────────┼──────────────────┼──────────────────┼────────┘
+┌────────────────────────────────────────────────────────────┐
+│                       REST API Layer                        │
+│                                                             │
+│  ┌──────────────┐  ┌──────────────┐  ┌─────────────┐       │
+│  │  display.php │  │ playlists.php│  │  media.php  │       │
+│  │  (cmd/state) │  │  (unified)   │  │ (+integrity)│       │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬──────┘       │
+│         │                  │                  │             │
+│         │          ┌───────┴───────┐          │             │
+│         │          │playlists-core │          │             │
+│         │          │  (shared)     │          │             │
+│         │          └───────┬───────┘          │             │
+└─────────┼──────────────────┼──────────────────┼─────────────┘
           │                  │                  │
           ▼                  ▼                  ▼
-    ┌─────────┐        ┌─────────┐       ┌─────────┐
-    │   VLC   │        │  JSON   │       │  File   │
-    │   API   │        │  Files  │       │ System  │
-    └─────────┘        └─────────┘       └─────────┘
+    ┌──────────┐      ┌──────────────┐    ┌─────────┐
+    │ Chromium │      │ JSON files   │    │  File   │
+    │  player  │      │ playlists/ + │    │ System  │
+    │ (poll)   │      │ media/       │    │         │
+    └──────────┘      └──────────────┘    └─────────┘
 ```
 
 **API Architecture Patterns:**
 - RESTful design with action query parameters
 - Standard JSON response format
 - Session-based authentication
-- Error handling with proper HTTP status codes
+- Error handling with proper HTTP status codes (deprecated endpoints return 410)
+- Shared logic centralised in `playlists-core.php` (one source of truth)
 
-### 3. Display Mode Architecture (NEW in v0.11.0)
+### 3. Player Control Architecture (display.php)
+
+Since v0.12 the player is **driven remotely** through a poll-based command/state channel.
+There is no direct socket into the browser — the admin UI writes commands, the player
+polls for them, and the player reports its live state back.
 
 ```
 ┌──────────────────────────────────────────────────────┐
-│            Display Mode Switcher                      │
-│         (Web UI + API + Bash Script)                  │
-└───────────────────┬──────────────────────────────────┘
-                    │
-         ┌──────────┴──────────┐
-         ▼                     ▼
-┌─────────────────┐   ┌─────────────────┐
-│    VLC Mode     │   │  Chromium Mode  │
-│   (Default)     │   │    (Optional)   │
-├─────────────────┤   ├─────────────────┤
-│ • Hardware acc. │   │ • HTML5 player  │
-│ • Stable        │   │ • FPS counter   │
-│ • Low latency   │   │ • Wake Lock API │
-│ • VLC HTTP API  │   │ • Web content   │
-└─────────────────┘   └─────────────────┘
+│   Admin UI ("Lecteur" page)                          │
+│   POST api/display.php?action=command {cmd}           │
+│   GET  api/display.php?action=state   (read state)    │
+└───────────────────────┬──────────────────────────────┘
+                        │
+                        ▼
+            ┌───────────────────────────┐
+            │      api/display.php       │
+            │  command queue + state     │
+            └───────────┬───────────────┘
+                        │
+        ┌───────────────┴───────────────┐
+        ▼                               ▼
+  GET ?action=command              POST ?action=state
+  (player polls every 2s)          (player reports state)
+        │                               ▲
+        └───────────────┬───────────────┘
+                        ▼
+            ┌───────────────────────────┐
+            │  Chromium HTML5 player      │
+            │  (player.php on /player)    │
+            └───────────────────────────┘
 ```
 
-**Switching Process:**
-1. User selects mode in web UI
-2. API call to `display-mode.php?action=switch`
-3. Execute `switch-display-mode.sh` with sudo
-4. Stop current service (VLC or greetd)
-5. Start target service
-6. Update config JSON
-7. Return success status
+**Commands** (`POST ?action=command {cmd:...}`):
+- `next` / `prev` - Skip within the active playlist
+- `play` / `pause` - Toggle playback
+- `reload` - Force the player to reload the on-screen playlist immediately
+- `playmedia` (`POST ?action=playmedia {file}`) - Play a single isolated media file
 
-### 4. VLC Player Architecture
+**State:**
+- Player reports live state via `POST ?action=state`
+- Admin reads it via `GET ?action=state`
+
+**Volume** is the **system ALSA volume**, handled separately by `api/system.php`
+(`set_volume` / `get_volume` / `toggle_mute`). There is no per-player ("VLC") volume.
+
+### 4. Playlist Engine (unified, single source of truth)
 
 ```
-┌──────────────────────────────────────────┐
-│      PHP API (player-control.php)        │
-│         VLCControl Class                 │
-└────────────┬─────────────────────────────┘
-             │ HTTP Requests
-             ▼
-┌──────────────────────────────────────────┐
-│     VLC HTTP Interface                   │
-│        localhost:8080                    │
-│     Password: pisignage                  │
-└────────────┬─────────────────────────────┘
-             │ Commands
-             ▼
-┌──────────────────────────────────────────┐
-│        VLC Media Player                  │
-│  • Hardware decoding (MMAL/V4L2)        │
-│  • Playlist management                   │
-│  • Status reporting                      │
-└──────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────┐
+│  playlists.php (UI)  →  api/playlists.php             │
+│      └── shared core: api/playlists-core.php          │
+└───────────────────────┬──────────────────────────────┘
+                        │  reads/writes
+                        ▼
+   /opt/pisignage/playlists/<slug>.json   (definitions)
+   /opt/pisignage/config/active-playlist.json   (active pointer)
+                        │
+              "Diffuser à l'écran" (activate)
+                        ▼
+   /opt/pisignage/media/playlist.json  + version++   (on-screen)
+                        │
+                        ▼
+   Chromium player reloads itself
+   (polls version every 10s, reload channel every 2s)
 ```
 
-**VLC HTTP API Commands:**
-- `status.json` - Get playback state
-- `in_enqueue` - Add to playlist
-- `pl_play` - Start playback
-- `pl_pause` - Pause/Resume
-- `pl_stop` - Stop playback
-- `pl_next` - Next item
-- `pl_previous` - Previous item
-- `pl_empty` - Clear playlist
-
-**BUG-013 Fix (v0.11.0):**
-```php
-// 4-Step Reliable Playback
-1. Clear playlist    → pl_empty
-2. Enqueue file      → in_enqueue (input=file)
-3. Start playback    → pl_play
-4. Verify state      → status.json (retry if not playing)
+**Playlist schema** (`<slug>.json`):
+```json
+{
+  "name": "...", "slug": "...", "version": 3,
+  "autoplay": true, "autoLoop": true,
+  "items": [
+    { "url": "...", "type": "video|image|url",
+      "name": "...", "duration": 10, "fit": "contain",
+      "mute": false, "loop": false, "transition": "fade" }
+  ]
+}
 ```
 
-### 5. Chromium Kiosk Architecture
+**API (`api/playlists.php`):**
+- `GET` - List playlists + the active one
+- `GET ?name=X` - Read one playlist
+- `POST {name,items,autoplay,autoLoop}` - Create / update
+- `POST ?action=activate&name=X` - "Diffuser à l'écran" (write `media/playlist.json`,
+  bump version)
+- `DELETE ?name=X` - Delete
+
+### 5. Chromium Kiosk Session
 
 ```
 ┌─────────────────────────────────────────────┐
-│  greetd (Session Manager)                   │
-│  • Auto-login as pi                         │
-│  • Start labwc session                      │
+│  lightdm (Display Manager)                  │
+│  • Autologin as pi                          │
+│  • Start labwc Wayland session              │
 └────────────┬────────────────────────────────┘
              │
              ▼
@@ -275,16 +313,18 @@ Hardware → DRM/KMS → Wayland → labwc → Chromium → HDMI Output
 │  labwc (Wayland Compositor)                 │
 │  • Window management                        │
 │  • DRM/KMS backend                          │
-│  • Execute autostart script                 │
+│  • Execute autostart (generated by          │
+│    kiosk-apply)                             │
 └────────────┬────────────────────────────────┘
              │
              ▼
 ┌─────────────────────────────────────────────┐
 │  Chromium Browser (Kiosk Mode)              │
 │  • Fullscreen --kiosk flag                  │
-│  • Navigate to http://localhost/player.php  │
+│  • Navigate to http://127.0.0.1/player      │
 │  • Hardware video decode                    │
 │  • Wake Lock API (prevent sleep)            │
+│  • Splash / offline fallback / preload      │
 └─────────────────────────────────────────────┘
 ```
 
@@ -304,127 +344,96 @@ Hardware → DRM/KMS → Wayland → labwc → Chromium → HDMI Output
 
 ---
 
-## Display Modes
+## Playback Pipeline
 
-### VLC Mode (Default)
+PiSignage v0.12 has a **single playback engine**: the Chromium HTML5 player. The boot
+chain and the kiosk session are managed by the system display manager.
 
-**Use Cases:**
-- Production digital signage displays
-- High-reliability requirements
-- Pure video/image playback
-- Low-power operation
-- Minimal UI/interaction needed
+### Boot Chain
 
-**Advantages:**
-- Most stable and reliable
-- Lower CPU/memory usage
-- Hardware-accelerated video decode
-- Battle-tested in production
-- Faster startup time
-
-**Limitations:**
-- No web content support
-- No interactive features
-- Limited UI customization
-
-**Service:**
-```ini
-[Unit]
-Description=PiSignage VLC Player
-After=network.target
-
-[Service]
-Type=simple
-User=pi
-ExecStart=/usr/bin/cvlc --http-host 0.0.0.0 --http-port 8080 --http-password pisignage
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
+```
+Boot
+ → lightdm (display manager, autologin "pi")
+ → labwc (Wayland compositor)
+ → Chromium --kiosk http://127.0.0.1/player
+ → renders /opt/pisignage/media/playlist.json
 ```
 
-### Chromium Kiosk Mode
+### Player Capabilities
 
-**Use Cases:**
-- Web content display (dashboards, websites)
-- Interactive kiosk applications
-- HTML5 animations and effects
-- Development and testing
-- Advanced UI requirements
+- HTML5 video/image rendering with hardware decode
+- Wake Lock API (prevents the display from sleeping)
+- Splash screen, offline fallback, and preloading (anti-flash) for resilience
+- Info overlays on videos: clock, banner, bilingual fr-nl cards, QR code
+- Self-reload: polls the active-playlist `version` (10s) and the `reload` command
+  channel (2s)
 
-**Advantages:**
-- Full web browser capabilities
-- HTML5 video with advanced features
-- FPS counter for monitoring
-- Wake Lock API prevents sleep
-- Flexible content types
+### Session Management
 
-**Limitations:**
-- Higher resource usage (CPU/RAM)
-- Longer startup time
-- More complex stack (greetd + labwc)
-- Requires Wayland support
-
-**Service:**
-```ini
-[Unit]
-Description=greetd Wayland Session Manager
-After=systemd-user-sessions.service
-
-[Service]
-Type=idle
-ExecStart=/usr/bin/greetd --config /etc/greetd/config.toml
-Restart=always
-
-[Install]
-WantedBy=graphical.target
-```
+- **lightdm** provides autologin and starts the labwc session
+- **labwc** is the Wayland compositor (DRM/KMS backend) and runs the autostart script
+  generated by `kiosk-apply`
+- "Restart the session" maps to `sudo systemctl restart display-manager`
+- The kiosk URL, Chromium flags, and scheduled screen-off are configured from the
+  **Kiosk** page (display-only settings)
 
 ---
 
 ## Data Flow
 
-### Video Playback Flow (VLC Mode)
+### Media → Playlists → Diffusion → Display Flow
 
 ```
-1. User uploads video
+1. User uploads media (Media page)
    ↓
 2. File saved to /opt/pisignage/media/
    ↓
-3. User creates/updates playlist
+3. User composes a playlist (Playlists page → api/playlists.php)
    ↓
-4. Playlist JSON saved to /opt/pisignage/playlists/
+4. Playlist JSON saved to /opt/pisignage/playlists/<slug>.json (via playlists-core.php)
    ↓
-5. User deploys playlist
+5. User clicks "Diffuser à l'écran" (POST ?action=activate&name=X)
    ↓
-6. API calls VLC HTTP interface
+6. active-playlist.json updated; media/playlist.json written + version++
    ↓
-7. VLC loads playlist and starts playback
+7. Chromium player notices the new version (poll 10s) or the reload command (2s)
    ↓
-8. Video output to HDMI
+8. Player reloads and renders the playlist → HDMI output
 ```
 
-### Display Mode Switch Flow
+### Player Command Flow
 
 ```
-1. User clicks mode button in web UI
+1. Operator clicks play/pause/next/prev/reload (Lecteur page)
    ↓
-2. JavaScript sends POST to /api/display-mode.php
+2. POST api/display.php?action=command {cmd}
    ↓
-3. PHP validates mode parameter
+3. Command queued server-side
    ↓
-4. Execute /opt/pisignage/scripts/switch-display-mode.sh
+4. Player polls GET api/display.php?action=command every 2s, executes it
    ↓
-5. Bash script stops current service
+5. Player reports new state via POST api/display.php?action=state
    ↓
-6. Bash script starts target service
-   ↓
-7. Update /opt/pisignage/config/display-mode.json
-   ↓
-8. Return success/error to UI
-   ↓
-9. UI updates status display
+6. UI reads GET api/display.php?action=state to show live status
 ```
+
+### Scheduling (Dayparting) Flow
+
+```
+1. cron runs api/scheduler.php (CLI) every minute as www-data
+   (/etc/cron.d/pisignage-scheduler)
+   ↓
+2. scheduler.php reads /opt/pisignage/data/schedules.json
+   ↓
+3. Picks the active playlist by time / day / recurrence / priority (idempotent)
+   ↓
+4. Activates it (same path as "Diffuser"); reverts at window end
+   ↓
+5. Writes /opt/pisignage/config/scheduler-state.json (real state, reflected in UI)
+```
+
+> `web/config.php` aligns the PHP timezone to `/etc/timezone`, so dayparting compares
+> local time to local schedules (no UTC drift).
 
 ### File Upload Flow
 
@@ -497,17 +506,19 @@ $max_size = 500 * 1024 * 1024;
 
 **Sudo Permissions:**
 ```
-# /etc/sudoers.d/pisignage-display-mode
-www-data ALL=(ALL) NOPASSWD: /opt/pisignage/scripts/switch-display-mode.sh
+# /etc/sudoers.d/pisignage
+# Minimal NOPASSWD entries for system actions invoked by the web UI
+# (e.g. reboot, restart display-manager)
 ```
-- Minimal sudo access (only specific script)
+- Minimal sudo access (only specific commands)
 - NOPASSWD for automation
-- Script validates input before execution
+- Inputs validated before execution
 
-**VLC HTTP Interface:**
-- Password protection (`pisignage`)
-- Localhost binding (0.0.0.0 for remote access)
-- No external internet exposure
+**Player Control Channel:**
+- `api/display.php` is a poll-based command/state channel (no open socket into the
+  browser)
+- Localhost player binding (`http://127.0.0.1/player`)
+- No external internet exposure of the player; admin access governed by web auth
 
 ---
 
@@ -520,13 +531,12 @@ www-data ALL=(ALL) NOPASSWD: /opt/pisignage/scripts/switch-display-mode.sh
 │      Raspberry Pi 4/5                  │
 │                                        │
 │  ┌──────────────────────────────────┐ │
-│  │  Apache + PHP + API              │ │
+│  │  nginx + PHP 8.4-fpm + API       │ │
 │  └──────────────────────────────────┘ │
 │                                        │
 │  ┌──────────────────────────────────┐ │
-│  │  VLC Player (Default)            │ │
-│  │  OR                              │ │
-│  │  Chromium Kiosk (Optional)       │ │
+│  │  lightdm → labwc → Chromium kiosk│ │
+│  │  (single HTML5 player engine)    │ │
 │  └──────────────────────────────────┘ │
 │                                        │
 │  ┌──────────────────────────────────┐ │
@@ -556,7 +566,7 @@ www-data ALL=(ALL) NOPASSWD: /opt/pisignage/scripts/switch-display-mode.sh
          ▼             ▼             ▼             ▼
     ┌────────┐    ┌────────┐    ┌────────┐    ┌────────┐
     │  Pi 1  │    │  Pi 2  │    │  Pi 3  │    │  Pi N  │
-    │  VLC   │    │ Chrome │    │  VLC   │    │  VLC   │
+    │ Chrome │    │ Chrome │    │ Chrome │    │ Chrome │
     └────────┘    └────────┘    └────────┘    └────────┘
          │             │             │             │
          ▼             ▼             ▼             ▼
@@ -566,30 +576,17 @@ www-data ALL=(ALL) NOPASSWD: /opt/pisignage/scripts/switch-display-mode.sh
 **Network Requirements:**
 - HTTP access to each Pi (port 80)
 - SSH access for management (port 22)
-- VLC HTTP interface (port 8080, optional)
 - Local network or VPN
 
 ---
 
 ## Performance Considerations
 
-### VLC Mode Performance
-
-**Hardware Acceleration:**
-- MMAL/V4L2 decoding on Pi 4/5
-- GPU-accelerated rendering
-- Zero-copy video pipeline
-
-**Resource Usage:**
-- CPU: 5-15% during playback
-- RAM: ~150MB base + video buffers
-- Disk I/O: Streaming from local storage
-
-### Chromium Kiosk Performance
+### Chromium HTML5 Player Performance
 
 **Hardware Acceleration:**
 - VA-API video decode (if available)
-- GPU compositing via Wayland
+- GPU compositing via Wayland/labwc (DRM/KMS)
 - WebGL support
 
 **Resource Usage:**
@@ -598,9 +595,9 @@ www-data ALL=(ALL) NOPASSWD: /opt/pisignage/scripts/switch-display-mode.sh
 - Disk I/O: Cache + local storage
 
 **Optimization:**
-- FPS counter for monitoring (player.php)
-- Wake Lock API prevents sleep
-- Disabled unnecessary Chrome features
+- Wake Lock API prevents the display from sleeping
+- Splash / offline fallback / preloading reduce flashes between items
+- Disabled unnecessary Chrome features (via kiosk flags)
 - Minimal extensions/plugins
 
 ---
@@ -638,17 +635,18 @@ www-data ALL=(ALL) NOPASSWD: /opt/pisignage/scripts/switch-display-mode.sh
 
 **System Logs:**
 ```bash
-# VLC service
-journalctl -u pisignage-vlc -f
+# Display manager / kiosk session
+journalctl -u display-manager -f      # lightdm
+journalctl --user -u labwc -f         # labwc compositor
 
-# Chromium/greetd service
-journalctl -u greetd -f
+# nginx access
+tail -f /var/log/nginx/access.log
 
-# Apache access
-tail -f /var/log/apache2/access.log
+# nginx errors
+tail -f /var/log/nginx/error.log
 
-# Apache errors
-tail -f /var/log/apache2/error.log
+# Scheduler (dayparting) — run by cron each minute
+grep CRON /var/log/syslog
 ```
 
 **Application Logs:**
@@ -691,47 +689,52 @@ curl http://192.168.1.62/api/system.php?action=stats
 3. Include `includes/navigation.php` for menu
 4. Add menu item in `includes/navigation.php`
 
-### Custom Display Modes
+### Customizing Kiosk Display Settings
 
-The display mode system supports extending with new modes by:
-1. Adding mode definition to `display-mode.json`
-2. Creating systemd service for the mode
-3. Updating `switch-display-mode.sh` script
-4. Adding UI option in `display-mode.php`
+The kiosk display is configured (not "switched between modes") via the Kiosk page /
+`api/kiosk.php`:
+1. Edit the kiosk URL, Chromium flags, and scheduled screen-off
+2. `kiosk-apply` regenerates the labwc autostart from config
+3. Restart the session (`sudo systemctl restart display-manager`)
 
 ---
 
 ## Technology Decisions
 
-### Why VLC as Default?
+### Why a Single Chromium HTML5 Engine?
 
-**Stability:** VLC is extremely stable and battle-tested in production environments. It rarely crashes and handles edge cases gracefully.
+**Simplicity:** One playback engine means one code path, one playlist model, and one set
+of controls — far fewer moving parts than maintaining VLC and a browser side by side.
 
-**Performance:** Hardware acceleration on Raspberry Pi is well-optimized. Lower resource usage than browser-based solutions.
+**Capability:** HTML5 covers video, images and rich web content, plus advanced APIs
+(Wake Lock, fullscreen) and the v0.12 features (info overlays, bilingual cards, QR,
+offline fallback, anti-flash preload).
 
-**Simplicity:** Fewer moving parts than Wayland + compositor + browser stack.
+**Consistency:** Authoring and the on-screen result use the same web stack, so the UI and
+the display behave identically.
 
-**Compatibility:** Works on all Raspberry Pi models (3, 4, 5) without special requirements.
+**Maintainability:** Removing VLC eliminated the VLC service, the port 8080 HTTP
+interface, the VLC password, and the dual-player display-mode switch.
 
-### Why Chromium as Optional?
+### Why Wayland (labwc) for Chromium?
 
-**Flexibility:** Some users need web content, dashboards, or interactive displays.
+**X11 Limitations:** X11 on Raspberry Pi has performance issues and complexity (X server,
+window manager, etc.).
 
-**Advanced Features:** HTML5 APIs (Wake Lock, fullscreen, etc.) enable new use cases.
-
-**Development:** Easier to test and develop UI features in browser environment.
-
-**Choice:** Different users have different needs - let them choose.
-
-### Why Wayland for Chromium?
-
-**X11 Limitations:** X11 on Raspberry Pi has performance issues and complexity (X server, window manager, etc.).
-
-**Modern Stack:** Wayland is the future, better hardware integration via DRM/KMS.
+**Modern Stack:** Wayland offers better hardware integration via DRM/KMS.
 
 **Simplicity:** labwc is lightweight (~50MB RAM) and designed for kiosk use cases.
 
 **Performance:** Direct rendering, lower latency, better frame pacing.
+
+### Why lightdm for the Session?
+
+**Autologin:** lightdm reliably autologins user `pi` and launches the labwc Wayland
+session on Trixie.
+
+**Standard control:** "Restart the session" is a single, well-understood command —
+`sudo systemctl restart display-manager` — instead of a custom session manager (greetd is
+no longer used).
 
 ---
 
@@ -750,9 +753,10 @@ The display mode system supports extending with new modes by:
    - Alert system for failures
 
 3. **Advanced Scheduling:**
-   - Calendar-based scheduling
-   - Holiday detection
-   - Dynamic content based on conditions
+   - Real dayparting is already shipped (see Scheduling flow): cron-driven
+     `scheduler.php`, `data/schedules.json`, time/day/recurrence/priority
+   - Future: calendar-based scheduling, holiday detection, dynamic content based on
+     conditions
 
 4. **Content Management:**
    - CDN integration
@@ -766,6 +770,6 @@ The display mode system supports extending with new modes by:
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: 2025-01-09  
-**PiSignage Version**: v0.11.0
+**Document Version**: 2.0  
+**Last Updated**: 2026-06-21  
+**PiSignage Version**: v0.12.0

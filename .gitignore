@@ -95,3 +95,10 @@ dist/
 # Data directory
 data/*.json
 !data/.gitkeep
+
+# Brainstorming visual companion artifacts
+.superpowers/
+
+# Playwright MCP artifacts
+.playwright-mcp/
+login-dark.png

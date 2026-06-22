@@ -1,28 +1,33 @@
-# Claude Development Protocol - PiSignage v0.11.0
+# Claude Development Protocol - PiSignage v0.12.0
+
+> **v0.12 — Diffusion unifiée (juin 2026)** : VLC a été **retiré**. Le moteur de lecture
+> est désormais **unique** : Chromium HTML5 (`web/player.php` servi sur `/player`). Un seul
+> modèle de playlist (API `playlists.php`, notion de « playlist active »), une diffusion
+> (« Diffuser à l'écran »), un scheduler **réel** (dayparting via cron), et une UI consolidée.
+> Voir la section « v0.12 — Unified Diffusion » plus bas.
 
 ## Project Overview
 
-PiSignage is a professional digital signage solution optimized for Raspberry Pi hardware. Version 0.11.0 includes:
-- **Chromium Kiosk Mode**: Wayland-based full-screen browser for HTML5 content
-- **VLC Media Player**: Traditional video playback with HTTP API control
-- **Dual Volume Control**: Independent VLC and system (ALSA) audio management
-- **Modern Web Interface**: Redesigned UI with consistent design patterns
-- **100% Reliable Playback**: Fixed single-file playback with 4-step verification
+PiSignage is a professional digital signage solution optimized for Raspberry Pi hardware. Version 0.12.0 includes:
+- **Chromium Kiosk Mode (lecteur unique)**: Wayland-based full-screen browser for HTML5 content (`/player`). C'est le SEUL moteur de lecture (VLC retiré).
+- **Diffusion unifiée**: une API playlists unique + « playlist active » + bouton « Diffuser à l'écran ».
+- **Programmation réelle (dayparting)**: exécuteur cron qui pose la playlist active selon l'heure/jour.
+- **System Volume (ALSA)**: contrôle du volume système via amixer (plus de « volume VLC »).
+- **Modern Web Interface**: design system adaptatif clair/sombre, accent emerald, icônes SVG (zéro emoji).
 
 ## Development Environment & Stack
 
 ### Hardware Target
 - **Primary**: Raspberry Pi 4/5 (2GB+ RAM)
 - **OS**: Raspberry Pi OS Trixie (Debian 13) with Wayland
-- **Network**: Raspberry Pi at 192.168.1.62
+- **Network**: Pi de test à 192.168.1.92 (SSH `pi` / mot de passe `palmer00`)
 
 ### Technology Stack
 
 #### Backend
 - **PHP 8.4**: Web application backend (php8.4-fpm)
 - **Nginx**: Web server with FastCGI
-- **VLC 3.x**: Media player with HTTP API (port 9999)
-- **Chromium**: Kiosk browser for HTML5 content
+- **Chromium**: lecteur kiosk **unique** (HTML5, `/player`). VLC a été retiré en v0.12.
 
 #### Frontend
 - **Vanilla JavaScript**: No frameworks, modular ES6+ patterns
@@ -31,9 +36,10 @@ PiSignage is a professional digital signage solution optimized for Raspberry Pi 
 - **RESTful APIs**: JSON-based communication layer
 
 #### System Components
-- **ALSA**: System-level audio control via amixer
+- **ALSA**: System-level audio control via amixer (seul contrôle de volume)
 - **Wayland (labwc)**: Display server for kiosk mode
-- **greetd**: Auto-login session manager
+- **lightdm**: Auto-login session manager (PAS greetd — autologin `pi` → labwc → Chromium)
+- **cron**: `/etc/cron.d/pisignage-scheduler` (dayparting, www-data) + `/etc/cron.d/pisignage-screen` (extinction écran)
 - **systemd**: Service management
 
 ### Development Workflow with MCP
@@ -512,15 +518,14 @@ This autonomous testing capability significantly improves code quality and debug
 
 ### New Features (v0.11.0)
 
-#### Dual Volume Control
-- **VLC Player Volume**: 0-320 range (125% max boost) via HTTP API
+#### Volume Control (ALSA, v0.12)
+> Le « volume VLC » a disparu avec VLC. Le lecteur Chromium utilise l'audio système, donc
+> il n'y a plus qu'**un** volume : le volume système (ALSA).
 - **System Volume (ALSA)**: 0-100% range via amixer commands
-- **Independent Mute**: Separate mute buttons for VLC and system
-- **API Endpoints Added to system.php**:
+- **API Endpoints (system.php)**:
   - `GET /api/system.php?action=get_volume`
   - `POST /api/system.php?action=set_volume`
   - `POST /api/system.php?action=toggle_mute`
-- **UI Components**: Dual slider controls with real-time feedback
 
 ### Development Insights
 
@@ -909,24 +914,25 @@ window.addEventListener('beforeunload', function() {
 
 ### Overview
 
-PiSignage now supports **Raspberry Pi OS Trixie (Debian 13)** with Wayland-based Chromium kiosk mode, in addition to traditional VLC media playback.
+PiSignage runs on **Raspberry Pi OS Trixie (Debian 13)** with a Wayland-based Chromium kiosk as the **single** playback engine (VLC retiré en v0.12).
 
 ### Trixie Architecture
 
 ```
-Boot → greetd (session manager)
+Boot → lightdm (autologin 'pi', session manager — PAS greetd)
      → labwc (Wayland compositor)
-     → Chromium (kiosk browser, full-screen)
+     → Chromium (kiosk browser, full-screen, --kiosk http://127.0.0.1/player)
 ```
 
 ### Key Components
 
 | Component | Purpose | Config Location |
 |-----------|---------|-----------------|
-| **greetd** | Auto-login & session init | System-level |
-| **labwc** | Wayland compositor | `~/.config/labwc/rc.xml` |
-| **Chromium** | Kiosk browser | Autostart generated by `kiosk-apply` |
-| **kiosk-apply** | Config generator | `/opt/pisignage/scripts/kiosk-apply` |
+| **lightdm** | Autologin `pi` & session init | `/etc/lightdm/lightdm.conf.d/10-pisignage-autologin.conf` |
+| **labwc** | Wayland compositor | `~/.config/labwc/rc.xml`, autostart `~/.config/labwc/autostart` |
+| **Chromium** | Kiosk browser (lecteur unique) | Autostart généré par `kiosk-apply` |
+| **kiosk-apply** | Générateur d'autostart | `/opt/pisignage/scripts/kiosk-apply` |
+| **scheduler.php** | Exécuteur dayparting (cron 1×/min, www-data) | `/etc/cron.d/pisignage-scheduler` |
 
 ### Development Guidelines for Trixie
 
@@ -1029,6 +1035,49 @@ sudo systemctl restart NetworkManager
 - **[UPGRADE_TRIXIE.md](UPGRADE_TRIXIE.md)** - Complete Trixie installation & config guide
 - **[README.md](README.md#-trixie--wayland-kiosk-mode)** - Trixie feature overview
 - **[CHANGELOG.md](CHANGELOG.md)** - Release history including Trixie updates
+
+---
+
+## v0.12 — Unified Diffusion (architecture de référence)
+
+Modèle mental : **MÉDIAS → PLAYLISTS (composer + ordonner) → DIFFUSION → ÉCRAN**, avec
+**PROGRAMMATION** qui décide quelle playlist est ACTIVE selon l'heure/jour. Un seul moteur,
+un seul modèle de playlist, un seul scheduler.
+
+### Moteur de lecture unique
+- **Chromium HTML5** : `web/player.php` servi sur `/player`, lit `/opt/pisignage/media/playlist.json`.
+  C'est le SEUL lecteur affiché en kiosk. VLC retiré (service, paquet, port 8080 supprimés).
+- Le player **poll** un canal de commande (2s) et **rapporte** son état (5s) à `api/display.php`.
+
+### APIs (source de vérité)
+- **`api/display.php`** — contrôle du moteur réel :
+  - `POST ?action=command {cmd:next|prev|play|pause|reload}` (admin) ; `GET ?action=command` (public, le player poll).
+  - `POST ?action=state` (public, le player rapporte) ; `GET ?action=state` (admin : état + online + playlist active).
+  - `POST ?action=playmedia {file}` (admin : lecture directe = playlist live 1-élément).
+- **`api/playlists.php`** — playlists unifiées : `GET` (liste + active), `GET ?name=X`, `POST` (créer/maj),
+  `POST ?action=activate&name=X` (« Diffuser »), `DELETE ?name=X`. Stockage `PLAYLISTS_PATH/<slug>.json`,
+  pointeur actif `config/active-playlist.json`. « Diffuser » écrit `media/playlist.json` + bump version → reload.
+- **`api/playlists-core.php`** — NOYAU partagé (modèle, normalisation `{file}→{url}`, `playlistActivateByName`,
+  `playlistPushLive`, intégrité média rename/suppression). Inclus par `playlists.php`, `scheduler.php`, `media.php`, `schedule.php`.
+- **`api/scheduler.php`** — EXÉCUTEUR CLI (cron 1×/min, www-data). Lit `data/schedules.json`, pose la playlist
+  active (récurrence + priorité), idempotent, revert en fin de fenêtre, écrit `config/scheduler-state.json`.
+- **`api/system.php`** — volume **ALSA** (`get_volume`/`set_volume`/`toggle_mute`), `restart-player` = `restart display-manager`.
+- **Dépréciés (HTTP 410)** : `player.php`, `player-control.php` (contrôle VLC), `playlist-simple.php` (lecture-seule + 410 en écriture).
+- **Inchangé / load-bearing** : `GET /api/playlist` (= `playlist.php`) que le player lit pour la playlist live.
+
+### Pages UI (rôles)
+- **Playlists** : composer/ordonner + **Diffuser** (au même endroit).
+- **Lecteur** (`player-control-ui.php`) : pilote le moteur réel (play/pause/skip/reload), état live, volume ALSA.
+- **Kiosk** : réglages d'**affichage** uniquement (mode, URL, flags Chromium, extinction écran, redémarrage).
+- **Programmation** : dayparting réel (badge « En cours » = état réel via `is_active_now`).
+
+### Pièges (timezone, cache, perms)
+- **Fuseau horaire** : `config.php` aligne PHP sur `/etc/timezone` (php.ini=UTC mais les heures de planning
+  sont LOCALES — sans ça le dayparting ne se déclenche jamais).
+- **Cron scheduler en www-data** (même utilisateur que l'API) → aucune divergence de permissions sur
+  `media/playlist.json`, `config/*.json`, `logs/system.log`.
+- **player.php envoie `Cache-Control: no-store`** (sinon Chromium garde l'ancienne page en cache disque).
+- Le report d'état périodique n'utilise **pas** `keepalive` (quota navigateur → battement figé sur Pi lent).
 
 ---
 

@@ -10,6 +10,19 @@
     // Ensure PiSignage namespace exists
     window.PiSignage = window.PiSignage || {};
 
+    // Inline SVG icons (design-system line style, stroke=currentColor) — no emoji.
+    const SVG_ATTRS = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"';
+    const ICONS = {
+        list:     `<svg ${SVG_ATTRS}><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>`,
+        calendar: `<svg ${SVG_ATTRS}><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>`,
+        clock:    `<svg ${SVG_ATTRS}><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>`,
+        refresh:  `<svg ${SVG_ATTRS}><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.5 9a9 9 0 0 1 14.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0 0 20.5 15"/></svg>`,
+        edit:     `<svg ${SVG_ATTRS}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>`,
+        copy:     `<svg ${SVG_ATTRS}><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`,
+        trash:    `<svg ${SVG_ATTRS}><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M10 11v6M14 11v6"/></svg>`,
+        alert:    `<svg ${SVG_ATTRS}><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>`
+    };
+
     // Schedule Module
     PiSignage.Schedule = {
         schedules: [],
@@ -23,7 +36,11 @@
         /**
          * Initialize module
          */
+        _initialized: false,
+
         init: function() {
+            if (this._initialized) return; // guard against double init (init.js + self-init)
+            this._initialized = true;
             console.log('[Schedule] Initializing module...');
 
             this.loadPlaylists();
@@ -84,7 +101,7 @@
          */
         loadPlaylists: async function() {
             try {
-                const response = await fetch('/api/playlist-simple.php');
+                const response = await fetch('/api/playlists.php');
 
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -93,7 +110,9 @@
                 const data = await response.json();
 
                 if (data.success && data.data) {
-                    this.playlists = data.data;
+                    // API unifiée : { data: { playlists:[...], active } }. Tolère l'ancien tableau direct.
+                    const d = data.data;
+                    this.playlists = Array.isArray(d) ? d : (Array.isArray(d.playlists) ? d.playlists : []);
                     this.populatePlaylistDropdown();
                     console.log('[Schedule] Loaded', this.playlists.length, 'playlists');
                 } else {
@@ -102,7 +121,7 @@
                 }
             } catch (error) {
                 console.error('[Schedule] Error loading playlists:', error);
-                showAlert('Erreur lors du chargement des playlists', 'error');
+                PiSignage.ui.toast('Erreur lors du chargement des playlists', 'error');
                 this.playlists = [];
             }
         },
@@ -115,12 +134,14 @@
             if (!select) return;
 
             // Clear existing options except first
-            select.innerHTML = '<option value="">▼ Sélectionner une playlist</option>';
+            select.innerHTML = '<option value="">Sélectionner une playlist</option>';
 
             this.playlists.forEach(playlist => {
                 const option = document.createElement('option');
-                option.value = playlist.name;
-                option.textContent = playlist.name;
+                // Valeur = slug (ce que stocke le planning et que résout l'exécuteur) ;
+                // libellé = nom lisible. Repli sur name si pas de slug (ancien format).
+                option.value = playlist.slug || playlist.name;
+                option.textContent = playlist.name || playlist.slug;
                 select.appendChild(option);
             });
         },
@@ -136,7 +157,7 @@
             if (playlist && playlist.items) {
                 const itemCount = playlist.items.length;
                 const duration = this.calculatePlaylistDuration(playlist.items);
-                preview.textContent = `📊 ${itemCount} médias, durée ~${duration}`;
+                preview.textContent = `${itemCount} médias, durée ~${duration}`;
             } else {
                 preview.textContent = '';
             }
@@ -173,12 +194,14 @@
 
                 if (data.success) {
                     this.schedules = data.data || [];
+                    // État RÉEL fourni par l'exécuteur cron (plus de "En cours" deviné côté client).
+                    this.schedulerState = data.scheduler || {};
                     this.renderSchedules();
                     this.updateStatistics();
                 }
             } catch (error) {
                 console.error('[Schedule] Error loading schedules:', error);
-                showAlert('Erreur lors du chargement des plannings', 'error');
+                PiSignage.ui.toast('Erreur lors du chargement des plannings', 'error');
             }
         },
 
@@ -243,12 +266,11 @@
 
             // Status indicator
             const statusClass = schedule.enabled ? 'active' : 'inactive';
-            const statusIcon = schedule.enabled ? '✅' : '⏸️';
             const statusText = schedule.enabled ? 'Actif' : 'Inactif';
 
             // Playlist warning message
             const playlistWarning = !playlistExists ?
-                `<div class="playlist-missing-warning">⚠️ Playlist introuvable - Ce planning ne peut pas s'exécuter</div>` : '';
+                `<div class="playlist-missing-warning">${ICONS.alert} Playlist introuvable - Ce planning ne peut pas s'exécuter</div>` : '';
 
             // Recurrence display
             const recurrenceText = this.formatRecurrence(schedule.schedule.recurrence);
@@ -288,26 +310,26 @@
                     </div>
 
                     <div class="schedule-timing">
-                        <span class="time-display">⏰ ${schedule.schedule.start_time} - ${schedule.schedule.end_time || '∞'}</span>
-                        <span class="recurrence-badge">🔁 ${recurrenceText}</span>
-                        ${daysText ? `<span class="days-display">${daysText}</span>` : ''}
+                        <span class="time-display">${this.escapeHtml(schedule.schedule.start_time)} - ${this.escapeHtml(schedule.schedule.end_time || 'sans fin')}</span>
+                        <span class="recurrence-badge">${this.escapeHtml(recurrenceText)}</span>
+                        ${daysText ? `<span class="days-display">${this.escapeHtml(daysText)}</span>` : ''}
                     </div>
 
                     <div class="schedule-status">
-                        <span class="status-indicator ${statusClass}">${statusIcon} ${statusText}</span>
-                        <span class="next-run">Prochaine: ${nextRunText}</span>
-                        <span class="priority-badge">Priorité: ${priorityText}</span>
+                        <span class="status-indicator ${statusClass}">${statusText}</span>
+                        <span class="next-run">Prochaine: ${this.escapeHtml(nextRunText)}</span>
+                        <span class="priority-badge">Priorité: ${this.escapeHtml(priorityText)}</span>
                     </div>
 
                     <div class="schedule-actions">
-                        <button class="btn btn-sm btn-glass" onclick="PiSignage.Schedule.editSchedule('${schedule.id}')">
-                            ✏️ Modifier
+                        <button class="btn btn-sm btn-secondary" onclick="PiSignage.Schedule.editSchedule('${schedule.id}')">
+                            ${ICONS.edit} Modifier
                         </button>
-                        <button class="btn btn-sm btn-glass" onclick="PiSignage.Schedule.duplicateSchedule('${schedule.id}')">
-                            📋 Dupliquer
+                        <button class="btn btn-sm btn-secondary" onclick="PiSignage.Schedule.duplicateSchedule('${schedule.id}')">
+                            ${ICONS.copy} Dupliquer
                         </button>
                         <button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); PiSignage.Schedule.deleteSchedule('${schedule.id}')">
-                            🗑️ Supprimer
+                            ${ICONS.trash} Supprimer
                         </button>
                     </div>
                 </div>
@@ -405,7 +427,8 @@
                 if (schedule.enabled) {
                     stats.active++;
 
-                    // Check if currently running
+                    // "En cours" = ce que l'exécuteur cron diffuse RÉELLEMENT (is_active_now),
+                    // pas une estimation horaire côté navigateur.
                     const nextRun = new Date(schedule.metadata.next_run);
                     if (this.isCurrentlyRunning(schedule, now)) {
                         stats.running++;
@@ -427,11 +450,14 @@
          * Check if schedule is currently running
          */
         isCurrentlyRunning: function(schedule, now) {
+            // Source de vérité = l'exécuteur cron (champ is_active_now annoté par l'API).
+            // Repli (si l'exécuteur n'a jamais tourné) : estimation horaire côté client.
+            if (typeof schedule.is_active_now === 'boolean') {
+                return schedule.is_active_now;
+            }
             const startTime = schedule.schedule.start_time;
             const endTime = schedule.schedule.end_time || '23:59';
-
             const nowTimeStr = now.toTimeString().substring(0, 5);
-
             return nowTimeStr >= startTime && nowTimeStr <= endTime;
         },
 
@@ -455,9 +481,9 @@
             });
 
             const viewIcons = {
-                'list': '📋',
-                'calendar': '📅',
-                'timeline': '⏰'
+                'list': ICONS.list,
+                'calendar': ICONS.calendar,
+                'timeline': ICONS.clock
             };
 
             const viewTitles = {
@@ -466,8 +492,10 @@
                 'timeline': 'Vue chronologie'
             };
 
-            document.getElementById('view-icon').textContent = viewIcons[view];
-            document.getElementById('view-title').textContent = viewTitles[view];
+            const viewIconEl = document.getElementById('view-icon');
+            if (viewIconEl) viewIconEl.innerHTML = viewIcons[view] || '';
+            const viewTitleEl = document.getElementById('view-title');
+            if (viewTitleEl) viewTitleEl.textContent = viewTitles[view];
 
             if (view === 'list') {
                 document.getElementById('schedule-list').classList.add('active');
@@ -513,7 +541,7 @@
                 }
 
                 console.log('[Schedule] Modal elements found! Opening modal...');
-                modalTitle.textContent = '✨ Nouveau Planning';
+                modalTitle.textContent = 'Nouveau planning';
                 modal.classList.add('show');
 
                 // Reset form AFTER modal is shown
@@ -532,7 +560,7 @@
 
             this.editingScheduleId = scheduleId;
             this.populateForm(schedule);
-            document.getElementById('modal-title').textContent = '✏️ Modifier le Planning';
+            document.getElementById('modal-title').textContent = 'Modifier le planning';
             document.getElementById('schedule-modal').classList.add('show');
         },
 
@@ -744,7 +772,7 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    showAlert(data.message || 'Planning sauvegardé avec succès', 'success');
+                    PiSignage.ui.toast(data.message || 'Planning sauvegardé avec succès', 'success');
                     this.closeModal();
                     this.loadSchedules();
                 } else if (response.status === 409) {
@@ -752,11 +780,11 @@
                     this.pendingSchedule = scheduleData;
                     this.showConflictModal(data.conflicts);
                 } else {
-                    showAlert(data.message || 'Erreur lors de la sauvegarde', 'error');
+                    PiSignage.ui.toast(data.message || 'Erreur lors de la sauvegarde', 'error');
                 }
             } catch (error) {
                 console.error('[Schedule] Save error:', error);
-                showAlert('Erreur de connexion au serveur', 'error');
+                PiSignage.ui.toast('Erreur de connexion au serveur', 'error');
             }
         },
 
@@ -831,7 +859,7 @@
             }
 
             if (errors.length > 0) {
-                showAlert(errors.join('\n'), 'error');
+                PiSignage.ui.toast(errors.join('\n'), 'error');
                 return false;
             }
 
@@ -895,15 +923,15 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    showAlert(data.message || 'Planning sauvegardé avec succès', 'success');
+                    PiSignage.ui.toast(data.message || 'Planning sauvegardé avec succès', 'success');
                     this.closeModal();
                     this.loadSchedules();
                 } else {
-                    showAlert(data.message || 'Erreur lors de la sauvegarde', 'error');
+                    PiSignage.ui.toast(data.message || 'Erreur lors de la sauvegarde', 'error');
                 }
             } catch (error) {
                 console.error('[Schedule] Save error:', error);
-                showAlert('Erreur de connexion au serveur', 'error');
+                PiSignage.ui.toast('Erreur de connexion au serveur', 'error');
             }
 
             this.pendingSchedule = null;
@@ -916,7 +944,7 @@
             // Validation stricte de l'ID
             if (!scheduleId || typeof scheduleId !== 'string' || !scheduleId.startsWith('sched_')) {
                 console.error('[Schedule] Invalid schedule ID:', scheduleId);
-                showAlert('Erreur: ID de planning invalide', 'error');
+                PiSignage.ui.toast('Erreur: ID de planning invalide', 'error');
                 return;
             }
 
@@ -939,14 +967,14 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    showAlert('Planning modifié avec succès', 'success');
+                    PiSignage.ui.toast('Planning modifié avec succès', 'success');
                     this.loadSchedules();
                 } else {
-                    showAlert(data.message || 'Erreur lors de la modification', 'error');
+                    PiSignage.ui.toast(data.message || 'Erreur lors de la modification', 'error');
                 }
             } catch (error) {
                 console.error('[Schedule] Toggle error:', error);
-                showAlert('Erreur de connexion au serveur', 'error');
+                PiSignage.ui.toast('Erreur de connexion au serveur', 'error');
                 // Rollback UI state
                 this.loadSchedules();
             }
@@ -962,7 +990,7 @@
             this.editingScheduleId = null;
             this.populateForm(schedule);
             document.getElementById('schedule-name').value = schedule.name + ' (Copie)';
-            document.getElementById('modal-title').textContent = '📋 Dupliquer le Planning';
+            document.getElementById('modal-title').textContent = 'Dupliquer le planning';
             document.getElementById('schedule-modal').classList.add('show');
         },
 
@@ -982,14 +1010,14 @@
             // Validation stricte de l'ID
             if (!scheduleId || typeof scheduleId !== 'string' || !scheduleId.startsWith('sched_')) {
                 console.error('[Schedule] Invalid schedule ID:', scheduleId);
-                showAlert('Erreur: ID de planning invalide', 'error');
+                PiSignage.ui.toast('Erreur: ID de planning invalide', 'error');
                 return;
             }
 
             const schedule = this.schedules.find(s => s.id === scheduleId);
             if (!schedule) {
                 console.error('[Schedule] Schedule not found:', scheduleId);
-                showAlert('Planning introuvable', 'error');
+                PiSignage.ui.toast('Planning introuvable', 'error');
                 return;
             }
 
@@ -1024,14 +1052,14 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    showAlert(data.message || 'Planning supprimé avec succès', 'success');
+                    PiSignage.ui.toast(data.message || 'Planning supprimé avec succès', 'success');
                     this.loadSchedules();
                 } else {
-                    showAlert(data.message || 'Erreur lors de la suppression', 'error');
+                    PiSignage.ui.toast(data.message || 'Erreur lors de la suppression', 'error');
                 }
             } catch (error) {
                 console.error('[Schedule] Delete error:', error);
-                showAlert('Erreur de connexion au serveur', 'error');
+                PiSignage.ui.toast('Erreur de connexion au serveur', 'error');
             } finally {
                 // Always unlock
                 this._isDeleting = false;
@@ -1043,7 +1071,7 @@
          */
         refresh: function() {
             this.loadSchedules();
-            showAlert('Plannings actualisés', 'success');
+            PiSignage.ui.toast('Plannings actualisés', 'success');
         },
 
         /**
@@ -1092,7 +1120,11 @@
         }
     };
 
-    // Auto-initialize when DOM is ready
+    // Lowercase alias so init.js (data-page dispatch) can call PiSignage.schedule.init().
+    // The init() guard prevents a double initialization if both paths fire.
+    PiSignage.schedule = PiSignage.Schedule;
+
+    // Fallback auto-initialize for direct loads (init() is idempotent via _initialized).
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {
             if (window.location.pathname.includes('schedule.php')) {

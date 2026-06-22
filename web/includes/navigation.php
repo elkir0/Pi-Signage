@@ -1,61 +1,60 @@
-    <!-- Sidebar -->
-    <div class="sidebar" id="sidebar">
-        <div class="logo">
-            <div>
-                🖥️ PiSignage
-                <span class="logo-version">v<?= $config['version'] ?></span>
-            </div>
-        </div>
-
-        <div class="nav-section">
-            <div class="nav-title">Principal</div>
-            <a href="dashboard.php" class="nav-item <?= getCurrentPage() === 'dashboard' ? 'active' : '' ?>">
-                <span>📊</span>
-                <span>Dashboard</span>
-            </a>
-            <a href="media.php" class="nav-item <?= getCurrentPage() === 'media' ? 'active' : '' ?>">
-                <span>📁</span>
-                <span>Médias</span>
-            </a>
-            <a href="playlists.php" class="nav-item <?= getCurrentPage() === 'playlists' ? 'active' : '' ?>">
-                <span>🎵</span>
-                <span>Playlists</span>
-            </a>
-            <a href="youtube.php" class="nav-item <?= getCurrentPage() === 'youtube' ? 'active' : '' ?>">
-                <span>📺</span>
-                <span>YouTube</span>
-            </a>
-        </div>
-
-        <div class="nav-section">
-            <div class="nav-title">Contrôle</div>
-            <a href="player-control-ui.php" class="nav-item <?= getCurrentPage() === 'player-control-ui' ? 'active' : '' ?>">
-                <span>▶️</span>
-                <span>Lecteur</span>
-            </a>
-            <a href="schedule.php" class="nav-item <?= getCurrentPage() === 'schedule' ? 'active' : '' ?>">
-                <span>📅</span>
-                <span>Programmation</span>
-            </a>
-            <a href="screenshot.php" class="nav-item <?= getCurrentPage() === 'screenshot' ? 'active' : '' ?>">
-                <span>📸</span>
-                <span>Capture</span>
-            </a>
-        </div>
-
-        <div class="nav-section">
-            <div class="nav-title">Système</div>
-            <a href="settings.php" class="nav-item <?= getCurrentPage() === 'settings' ? 'active' : '' ?>">
-                <span>⚙️</span>
-                <span>Paramètres</span>
-            </a>
-            <a href="logs.php" class="nav-item <?= getCurrentPage() === 'logs' ? 'active' : '' ?>">
-                <span>📋</span>
-                <span>Logs</span>
-            </a>
-            <a href="#" class="nav-item" onclick="event.preventDefault(); logout();">
-                <span>🚪</span>
-                <span>Déconnexion</span>
-            </a>
+<?php
+/**
+ * PiSignage — Sidebar navigation. SVG icons, 3 sections. No emoji.
+ * Requires icons.php (loaded by header.php) and getCurrentPage().
+ */
+require_once __DIR__ . '/icons.php';
+$cur = getCurrentPage();
+$nav = [
+    'Principal' => [
+        ['dashboard.php',          'dashboard', 'Tableau de bord', 'dashboard'],
+        ['media.php',              'media',     'Médias',          'media'],
+        ['playlists.php',          'playlists', 'Playlists',       'playlist'],
+        ['youtube.php',            'youtube',   'YouTube',         'youtube'],
+    ],
+    'Diffusion' => [
+        ['player-control-ui.php',  'player-control-ui', 'Lecteur',      'play-line'],
+        ['kiosk.php',              'kiosk',     'Kiosk',           'kiosk'],
+        ['overlay.php',            'overlay',   'Overlay',         'layers'],
+        ['schedule.php',           'schedule',  'Programmation',   'calendar'],
+        ['screenshot.php',         'screenshot','Capture',         'camera'],
+    ],
+    'Système' => [
+        ['settings.php',           'settings',  'Paramètres',      'settings'],
+        ['logs.php',               'logs',      'Logs',            'logs'],
+    ],
+];
+?>
+<aside class="sidebar" id="sidebar">
+    <div class="brand">
+        <div class="brand-logo"><?= icon('kiosk') ?></div>
+        <div>
+            <span class="brand-name">PiSignage</span>
+            <span class="brand-ver">v<?= htmlspecialchars($config['version'] ?? '0.12.0') ?></span>
         </div>
     </div>
+
+    <?php foreach ($nav as $section => $items): ?>
+    <nav class="nav-group">
+        <div class="nav-label"><?= $section ?></div>
+        <?php foreach ($items as [$href, $page, $label, $ico]): ?>
+        <a href="<?= $href ?>" class="nav-item <?= $cur === $page ? 'active' : '' ?>">
+            <?= icon($ico) ?><span><?= $label ?></span>
+        </a>
+        <?php endforeach; ?>
+    </nav>
+    <?php endforeach; ?>
+
+    <div class="nav-spacer"></div>
+    <a href="#" class="nav-item" onclick="event.preventDefault(); PiSignage.logout();">
+        <?= icon('logout') ?><span>Déconnexion</span>
+    </a>
+    <div class="nav-user">
+        <div class="avatar"><?= strtoupper(substr($_SESSION['username'] ?? 'A', 0, 1)) ?></div>
+        <div class="nav-user-meta">
+            <b><?= htmlspecialchars($_SESSION['username'] ?? 'admin') ?></b>
+            <span>Administrateur</span>
+        </div>
+    </div>
+</aside>
+<div class="sidebar-backdrop" id="sidebar-backdrop" onclick="PiSignage.ui.toggleSidebar(false)"></div>

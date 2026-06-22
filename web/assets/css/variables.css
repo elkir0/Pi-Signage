@@ -1,19 +1,113 @@
 /**
- * PiSignage CSS Variables
- * Contains all CSS custom properties for the application
+ * PiSignage Design System — Design tokens
+ * Two themes driven by html[data-theme="dark|light"]. Accent: Emerald.
+ * v0.12.0
  */
 
 :root {
-    --primary: #4a9eff;
-    --secondary: #ff6b6b;
-    --success: #51cf66;
-    --warning: #ffd43b;
-    --danger: #ff6b6b;
-    --dark: #1a1a2e;
-    --dark-light: #16213e;
-    --light: #f0f3f7;
-    --glass: rgba(255, 255, 255, 0.05);
-    --surface: color-mix(in srgb, var(--dark-light) 88%, white 5%);
-    --surface-raised: color-mix(in srgb, var(--dark-light) 82%, white 8%);
-    --glass-border: rgba(255, 255, 255, 0.1);
+  /* Accent (emerald) — shared across themes, tuned per theme below */
+  --accent: #10b981;
+  --accent-strong: #059669;
+  --accent-bright: #34d399;
+  --accent-ring: rgba(16, 185, 129, .35);
+  --accent-contrast: #04130c;
+
+  /* Semantic hues */
+  --info: #3b82f6;
+  --warn: #f59e0b;
+  --danger: #ef4444;
+  --violet: #8b5cf6;
+
+  /* Radii */
+  --radius: 14px;
+  --radius-sm: 10px;
+  --radius-lg: 18px;
+  --radius-pill: 30px;
+
+  /* Spacing scale */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px;  --sp-4: 16px;
+  --sp-5: 20px; --sp-6: 24px; --sp-8: 32px;  --sp-10: 40px;
+
+  /* Typography */
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', 'Roboto Mono', Menlo, monospace;
+
+  /* Transitions */
+  --t-fast: .15s ease;
+  --t: .2s ease;
+
+  --sidebar-w: 248px;
+  --topbar-h: 66px;
+
+  /* ---- Backward-compat aliases (legacy class names / inline styles) ---- */
+  --primary: var(--accent);
+  --secondary: var(--violet);
+  --success: #10b981;
+  --warning: var(--warn);
+  /* --danger / --info already defined above */
+}
+
+/* ---------- DARK (default) ---------- */
+html[data-theme="dark"] {
+  --bg: #0a0f1a;
+  --bg-grad: radial-gradient(1200px 600px at 85% -10%, rgba(16,185,129,.08), transparent 60%);
+  --surface: #111827;
+  --surface-2: #0d1421;
+  --surface-3: #1a2436;
+  --surface-hover: #161f30;
+  --border: rgba(255,255,255,.07);
+  --border-strong: rgba(255,255,255,.13);
+  --text: #e6ebf2;
+  --text-dim: #8b98ad;
+  --text-faint: #5b6677;
+  --shadow: 0 10px 30px -12px rgba(0,0,0,.6);
+  --shadow-lg: 0 24px 60px -20px rgba(0,0,0,.7);
+  --overlay: rgba(3,7,14,.66);
+
+  --accent-soft: rgba(16,185,129,.14);
+  --accent-text: var(--accent-bright);
+  --info-soft: rgba(59,130,246,.16);  --info-text: #60a5fa;
+  --warn-soft: rgba(245,158,11,.16);  --warn-text: #fbbf24;
+  --danger-soft: rgba(239,68,68,.16);  --danger-text: #f87171;
+  --violet-soft: rgba(139,92,246,.16); --violet-text: #a78bfa;
+
+  /* legacy aliases (theme-dependent) */
+  --light: var(--text);
+  --dark: var(--bg);
+  --glass: var(--surface-2);
+  --glass-border: var(--border);
+  --surface-raised: var(--surface-3);
+}
+
+/* ---------- LIGHT ---------- */
+html[data-theme="light"] {
+  --bg: #eef2f7;
+  --bg-grad: radial-gradient(1200px 600px at 85% -10%, rgba(16,185,129,.10), transparent 60%);
+  --surface: #ffffff;
+  --surface-2: #f4f7fb;
+  --surface-3: #eaeff5;
+  --surface-hover: #f8fafc;
+  --border: #e4eaf1;
+  --border-strong: #d2dce7;
+  --text: #0f1b2d;
+  --text-dim: #5a6b80;
+  --text-faint: #93a1b3;
+  --shadow: 0 8px 24px -14px rgba(16,30,54,.22);
+  --shadow-lg: 0 24px 50px -18px rgba(16,30,54,.28);
+  --overlay: rgba(15,23,42,.45);
+
+  --accent: #059669;
+  --accent-text: #059669;
+  --accent-soft: #d6f5e8;
+  --info-soft: #dbeafe;  --info-text: #2563eb;
+  --warn-soft: #fef3c7;  --warn-text: #b45309;
+  --danger-soft: #fee2e2; --danger-text: #dc2626;
+  --violet-soft: #ede9fe; --violet-text: #7c3aed;
+
+  /* legacy aliases (theme-dependent) */
+  --light: var(--text);
+  --dark: var(--bg);
+  --glass: var(--surface-2);
+  --glass-border: var(--border);
+  --surface-raised: var(--surface-3);
 }

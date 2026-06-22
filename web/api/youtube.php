@@ -31,7 +31,11 @@ if (basename($_SERVER['SCRIPT_FILENAME']) === 'youtube.php' ||
             break;
 
         case 'POST':
-            handleDownloadVideo($input);
+            if (isset($input['action']) && $input['action'] === 'update_ytdlp') {
+                jsonResponse(true, updateYtDlp(), 'yt-dlp update');
+            } else {
+                handleDownloadVideo($input);
+            }
             break;
 
         case 'DELETE':
@@ -80,8 +84,18 @@ function handleGetDownloads() {
             break;
 
         case 'check_ytdlp':
-            $ytdlpInfo = checkYtDlpInstallation();
-            jsonResponse(true, $ytdlpInfo, 'yt-dlp installation status');
+            jsonResponse(true, getYtDlpStatus(isset($_GET['refresh'])), 'yt-dlp installation status');
+            break;
+
+        case 'update_ytdlp':
+            jsonResponse(true, updateYtDlp(), 'yt-dlp update');
+            break;
+
+        case 'log':
+            if (!isset($_GET['id'])) {
+                jsonResponse(false, null, 'Download ID required');
+            }
+            jsonResponse(true, getDownloadLog($_GET['id']), 'Download log retrieved');
             break;
 
         default:
@@ -139,11 +153,21 @@ function handleDownloadVideo($input) {
 
     if ($success) {
         logMessage("YouTube download started: $url (ID: $downloadId)");
-        jsonResponse(true, [
-            'download_id' => $downloadId,
-            'status' => 'started',
-            'estimated_time' => 'Unknown'
-        ], 'Download started successfully');
+        // Send the response and close the client connection immediately. The detached worker
+        // inherits a copy of the FastCGI socket; without this, nginx keeps the HTTP request
+        // open until the worker exits (i.e. for the whole download). fastcgi_finish_request()
+        // flushes FCGI_END_REQUEST so nginx completes the request right away.
+        header('Content-Type: application/json');
+        echo json_encode([
+            'success' => true,
+            'data' => ['download_id' => $downloadId, 'status' => 'started', 'estimated_time' => 'Unknown'],
+            'message' => 'Download started successfully',
+            'timestamp' => date('Y-m-d H:i:s'),
+        ]);
+        if (function_exists('fastcgi_finish_request')) {
+            fastcgi_finish_request();
+        }
+        exit;
     } else {
         jsonResponse(false, null, 'Failed to start download');
     }
@@ -177,47 +201,118 @@ function handleCancelDownload($input) {
  * @return array Installation info with available, path, version
  * @since 0.8.0
  */
+/**
+ * Candidate yt-dlp paths, in priority order.
+ * The PiSignage-managed copy (/opt/pisignage/bin/yt-dlp, owned by www-data) comes first:
+ * it is self-updatable via `yt-dlp -U` without sudo, unlike the distro apt package.
+ */
+function ytdlpCandidatePaths() {
+    return ['/opt/pisignage/bin/yt-dlp', '/usr/local/bin/yt-dlp', '/usr/bin/yt-dlp'];
+}
+
 function checkYtDlpInstallation() {
-    $ytdlpPath = '/usr/local/bin/yt-dlp';
-    $alternative = '/usr/bin/yt-dlp';
-
-    // Check primary location
-    if (file_exists($ytdlpPath) && is_executable($ytdlpPath)) {
-        $version = getYtDlpVersion($ytdlpPath);
-        return [
-            'available' => true,
-            'path' => $ytdlpPath,
-            'version' => $version
-        ];
-    }
-
-    // Check alternative location
-    if (file_exists($alternative) && is_executable($alternative)) {
-        $version = getYtDlpVersion($alternative);
-        return [
-            'available' => true,
-            'path' => $alternative,
-            'version' => $version
-        ];
+    // Fast: only resolve availability + path. The standalone yt-dlp zipapp takes ~3-5s to
+    // start, so we MUST NOT run `--version` on the download hot path (it is called twice per
+    // download). The version is computed lazily by getYtDlpStatus() for the UI only.
+    foreach (ytdlpCandidatePaths() as $path) {
+        if (is_file($path) && is_executable($path)) {
+            return ['available' => true, 'path' => $path];
+        }
     }
 
     // Check if it's in PATH
     $result = executeCommand('which yt-dlp 2>/dev/null');
     if ($result['success'] && !empty($result['output'])) {
         $path = trim($result['output'][0]);
-        $version = getYtDlpVersion($path);
-        return [
-            'available' => true,
-            'path' => $path,
-            'version' => $version
-        ];
+        return ['available' => true, 'path' => $path];
     }
 
     return [
         'available' => false,
         'path' => null,
-        'version' => null,
         'suggestion' => 'Install/update yt-dlp: yt-dlp -U'
+    ];
+}
+
+/**
+ * Latest yt-dlp version published on GitHub, cached locally to avoid API rate limits.
+ *
+ * @param bool $force Bypass the cache
+ * @return string|null Latest version tag (e.g. "2026.06.09") or null if unreachable
+ */
+function getLatestYtDlpVersion($force = false) {
+    $cacheFile = CONFIG_PATH . '/ytdlp_latest.json';
+    if (!$force && is_file($cacheFile)) {
+        $cached = json_decode(@file_get_contents($cacheFile), true);
+        if (is_array($cached) && isset($cached['version'], $cached['fetched_at'])
+            && (time() - $cached['fetched_at']) < 21600) { // 6h
+            return $cached['version'];
+        }
+    }
+
+    $ctx = stream_context_create(['http' => [
+        'timeout' => 6,
+        'header'  => "User-Agent: PiSignage\r\nAccept: application/vnd.github+json\r\n",
+    ]]);
+    $json = @file_get_contents('https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest', false, $ctx);
+    if ($json === false) {
+        return null;
+    }
+    $data = json_decode($json, true);
+    $version = $data['tag_name'] ?? null;
+    if ($version) {
+        @file_put_contents($cacheFile, json_encode(['version' => $version, 'fetched_at' => time()]));
+    }
+    return $version;
+}
+
+/**
+ * Full yt-dlp status for the UI: installed version, latest published version,
+ * whether an update is available, and the managed path.
+ */
+function getYtDlpStatus($force = false) {
+    $install = checkYtDlpInstallation();
+    // Compute the (slow) version only here, for the UI status card.
+    $install['version'] = $install['available'] ? getYtDlpVersion($install['path']) : null;
+    $latest = getLatestYtDlpVersion($force);
+    $current = $install['version'] ?? null;
+    $install['latest'] = $latest;
+    $install['managed_path'] = '/opt/pisignage/bin/yt-dlp';
+    $install['managed'] = ($install['path'] ?? '') === '/opt/pisignage/bin/yt-dlp';
+    $install['update_available'] = ($latest && $current && $current !== 'Unknown'
+        && version_compare($current, $latest, '<'));
+    return $install;
+}
+
+/**
+ * Update yt-dlp. The managed copy self-updates via `-U`; if yt-dlp is only present
+ * as a non-writable distro package, (re)install the standalone binary into
+ * /opt/pisignage/bin (owned by www-data) so future updates are one-click.
+ */
+function updateYtDlp() {
+    $managed = '/opt/pisignage/bin/yt-dlp';
+    if (is_file($managed) && is_executable($managed)) {
+        $res = executeCommand(escapeshellarg($managed) . ' -U 2>&1');
+        $out = is_array($res['output'] ?? null) ? implode("\n", $res['output']) : (string)($res['output'] ?? '');
+        getLatestYtDlpVersion(true); // refresh cache
+        return [
+            'success' => $res['success'] ?? false,
+            'version' => getYtDlpVersion($managed),
+            'output'  => trim($out),
+        ];
+    }
+
+    // Bootstrap the managed binary (first-time install).
+    @mkdir('/opt/pisignage/bin', 0755, true);
+    $url = 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp';
+    $res = executeCommand('curl -fsSL --max-time 60 ' . escapeshellarg($url)
+        . ' -o ' . escapeshellarg($managed) . ' 2>&1 && chmod 0755 ' . escapeshellarg($managed) . ' 2>&1');
+    $ok = ($res['success'] ?? false) && is_file($managed);
+    getLatestYtDlpVersion(true);
+    return [
+        'success' => $ok,
+        'version' => $ok ? getYtDlpVersion($managed) : null,
+        'output'  => $ok ? 'yt-dlp installé dans /opt/pisignage/bin' : 'Échec de l\'installation de yt-dlp',
     ];
 }
 
@@ -395,11 +490,67 @@ function getDownloadStatus($downloadId) {
         $queue = json_decode(file_get_contents($queueFile), true) ?: [];
 
         if (isset($queue[$downloadId])) {
-            return $queue[$downloadId];
+            $item = $queue[$downloadId];
+            // Merge LIVE progress parsed from the yt-dlp log while downloading.
+            if (($item['status'] ?? '') === 'downloading') {
+                $logFile = LOGS_PATH . '/youtube_' . sanitizeDownloadId($downloadId) . '.log';
+                $p = parseProgressFromLog($logFile);
+                if ($p !== null) {
+                    if ($p['percent'] > (float)($item['progress'] ?? 0)) {
+                        $item['progress'] = $p['percent'];
+                    }
+                    $item['speed'] = $p['speed'];
+                    $item['eta'] = $p['eta'];
+                }
+            }
+            return $item;
         }
     }
 
     return null;
+}
+
+/** Keep only safe characters from a download id used in filenames. */
+function sanitizeDownloadId($downloadId) {
+    return preg_replace('/[^a-zA-Z0-9_]/', '', (string)$downloadId);
+}
+
+/**
+ * Parse the latest download progress from a yt-dlp log (run with --newline).
+ *
+ * @return array{percent: float, speed: ?string, eta: ?string}|null
+ */
+function parseProgressFromLog($logFile) {
+    if (!is_file($logFile)) {
+        return null;
+    }
+    $log = str_replace("\r", "\n", (string)file_get_contents($logFile));
+    if (preg_match_all('/\[download\]\s+([0-9.]+)%(?:[^\n]*?at\s+([0-9.]+\s*\S+\/s))?(?:[^\n]*?ETA\s+([0-9:]+))?/', $log, $m, PREG_SET_ORDER)) {
+        $last = end($m);
+        return [
+            'percent' => (float)$last[1],
+            'speed'   => isset($last[2]) ? trim($last[2]) : null,
+            'eta'     => isset($last[3]) ? trim($last[3]) : null,
+        ];
+    }
+    return null;
+}
+
+/**
+ * Return the (sanitised) log tail for a download, for the "Détails" panel.
+ *
+ * @return array{id: string, log: string}
+ */
+function getDownloadLog($downloadId) {
+    $logFile = LOGS_PATH . '/youtube_' . sanitizeDownloadId($downloadId) . '.log';
+    $log = is_file($logFile) ? (string)file_get_contents($logFile) : '';
+    // Collapse \r progress spam into readable lines, keep the last 250 non-empty lines.
+    $log = str_replace("\r", "\n", $log);
+    $lines = array_values(array_filter(array_map('rtrim', explode("\n", $log)), function ($l) {
+        return trim($l) !== '';
+    }));
+    $lines = array_slice($lines, -250);
+    return ['id' => (string)$downloadId, 'log' => implode("\n", $lines)];
 }
 
 /**
@@ -461,6 +612,9 @@ function startDownload($downloadId, $url, $quality, $format, $audioOnly) {
     // Build the yt-dlp invocation as an argument array (no shell interpolation).
     $ytdlpArgs = [$ytdlpCheck['path']];
 
+    // Emit progress on discrete lines so the log can be parsed for a live % (see parseProgressFromLog).
+    $ytdlpArgs[] = '--newline';
+
     if ($audioOnly) {
         $ytdlpArgs[] = '-f';
         $ytdlpArgs[] = 'bestaudio/best';
@@ -500,8 +654,11 @@ function startDownload($downloadId, $url, $quality, $format, $audioOnly) {
         return false;
     }
 
-    // Update status to downloading
-    updateDownloadStatus($downloadId, 'downloading', 0);
+    // NOTE: the worker is the SOLE owner of status transitions (queued -> downloading ->
+    // completed/error). We must NOT set 'downloading' here: a fast (cached/short) download
+    // can complete before this line runs, and this call would clobber the worker's
+    // 'completed' back to 'downloading' (race). The entry stays 'queued' until the worker
+    // flips it to 'downloading'.
 
     logMessage("YouTube download worker launched (ID: $downloadId) for URL: $url");
 
@@ -539,17 +696,39 @@ function launchDownloadWorker($downloadId, array $ytdlpArgs, $logFile) {
 
     // Launch the worker detached from this request via proc_open with an argv array
     // (array form bypasses /bin/sh entirely). setsid detaches it from the FPM process group.
-    $cmd = ['setsid', PHP_BINARY, $workerPath, $jobFile];
+    // IMPORTANT: under php-fpm, PHP_BINARY points to the FPM master (not a CLI interpreter),
+    // so the detached worker would never run. Resolve an explicit CLI php binary instead.
+    $phpCli = null;
+    foreach (['/usr/bin/php8.4', '/usr/bin/php', '/usr/local/bin/php'] as $cand) {
+        if (is_executable($cand)) { $phpCli = $cand; break; }
+    }
+    if ($phpCli === null) {
+        $which = trim((string) shell_exec('command -v php8.4 || command -v php 2>/dev/null'));
+        if ($which !== '') {
+            $phpCli = $which;
+        } elseif (defined('PHP_BINARY') && PHP_BINARY !== '' && strpos(PHP_BINARY, 'fpm') === false) {
+            $phpCli = PHP_BINARY;
+        } else {
+            $phpCli = 'php';
+        }
+    }
+    // Fully detach so THIS request returns immediately while the worker keeps running.
+    // KEY: `setsid -f` FORCES a fork — setsid creates the new session, forks the worker
+    // into it, and exits straight away. Plain `setsid` (or proc_open without it) does NOT
+    // fork when the child isn't a process-group leader, so proc_close() would block for the
+    // entire download, stalling the HTTP response. With -f, proc_close() returns instantly.
+    // std streams go to /dev/null; the user URL lives in the job JSON, never on argv.
+    $cmd = ['setsid', '-f', $phpCli, $workerPath, $jobFile];
     $descriptors = [
         0 => ['file', '/dev/null', 'r'],
-        1 => ['file', '/dev/null', 'a'],
-        2 => ['file', '/dev/null', 'a'],
+        1 => ['file', '/dev/null', 'w'],
+        2 => ['file', '/dev/null', 'w'],
     ];
     $proc = proc_open($cmd, $descriptors, $pipes);
     if (!is_resource($proc)) {
         return false;
     }
-    proc_close($proc); // setsid forks the worker, so this returns immediately
+    proc_close($proc);
 
     return true;
 }

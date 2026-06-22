@@ -1,348 +1,347 @@
 <?php
 require_once 'includes/auth.php';
 requireAuth();
+$pageTitle = 'Programmation';
 include 'includes/header.php';
+include 'includes/navigation.php';
+require_once 'includes/components.php';
+
+$actions = '<button class="icon-btn" type="button" title="Actualiser" onclick="PiSignage.Schedule.refresh()">' . icon('refresh') . '</button>'
+    . '<button class="btn btn-primary btn-sm" type="button" onclick="PiSignage.Schedule.openAddModal()">' . icon('plus') . 'Nouveau planning</button>';
 ?>
+<div class="main">
+    <?php pageHeader('Programmation', 'Planification horaire des playlists', $actions); ?>
 
-<?php include 'includes/navigation.php'; ?>
-    <!-- Add/Edit Schedule Modal -->
-    <div id="schedule-modal" class="modal">
-        <div class="modal-content schedule-modal-content">
-            <div class="modal-header">
-                <h2 id="modal-title">✨ Nouveau Planning</h2>
-                <button class="btn-close" onclick="PiSignage.Schedule.closeModal()" aria-label="Fermer">✕</button>
-            </div>
+    <div class="content">
+      <div class="content-inner">
 
-            <!-- Tabs -->
-            <div class="modal-tabs">
-                <button class="tab-btn active" data-tab="general" onclick="PiSignage.Schedule.switchTab('general')">
-                    Général
-                </button>
-                <button class="tab-btn" data-tab="timing" onclick="PiSignage.Schedule.switchTab('timing')">
-                    Horaires
-                </button>
-                <button class="tab-btn" data-tab="recurrence" onclick="PiSignage.Schedule.switchTab('recurrence')">
-                    Récurrence
-                </button>
-                <button class="tab-btn" data-tab="advanced" onclick="PiSignage.Schedule.switchTab('advanced')">
-                    Avancé
-                </button>
-            </div>
-
-            <div class="modal-body">
-                <!-- Tab: General -->
-                <div class="tab-content active" data-tab="general">
-                    <div class="form-group">
-                        <label for="schedule-name">Nom du planning <span class="required">*</span></label>
-                        <input type="text" id="schedule-name" class="form-control" placeholder="Ex: Annonces du matin" required>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="schedule-playlist">Playlist à lire <span class="required">*</span></label>
-                        <select id="schedule-playlist" class="form-control" required>
-                            <option value="">▼ Sélectionner une playlist</option>
-                            <!-- Playlists will be loaded dynamically -->
-                        </select>
-                        <small class="form-help" id="playlist-preview"></small>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="schedule-description">Description (optionnel)</label>
-                        <textarea id="schedule-description" class="form-control" rows="3" placeholder="Décrivez ce planning..."></textarea>
-                    </div>
+        <!-- Statistics -->
+        <div class="card">
+            <div class="schedule-stats">
+                <div class="stat-item">
+                    <span class="stat-value" id="stat-active">0</span>
+                    <span class="stat-label">Actifs</span>
                 </div>
-
-                <!-- Tab: Timing -->
-                <div class="tab-content" data-tab="timing">
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="schedule-start-time">Heure de début <span class="required">*</span></label>
-                            <input type="time" id="schedule-start-time" class="form-control" required>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="schedule-end-time">Heure de fin</label>
-                            <input type="time" id="schedule-end-time" class="form-control">
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="schedule-continuous">
-                            <span>Lecture continue (ignorer heure de fin)</span>
-                        </label>
-                    </div>
-
-                    <div class="form-group">
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="schedule-once-only">
-                            <span>Jouer une seule fois puis arrêter</span>
-                        </label>
-                    </div>
-
-                    <div class="form-info">
-                        <strong>Durée estimée:</strong> <span id="duration-estimate">-</span>
-                    </div>
+                <div class="stat-item">
+                    <span class="stat-value" id="stat-inactive">0</span>
+                    <span class="stat-label">Inactifs</span>
                 </div>
-
-                <!-- Tab: Recurrence -->
-                <div class="tab-content" data-tab="recurrence">
-                    <div class="form-group">
-                        <label>Type de récurrence <span class="required">*</span></label>
-                        <div class="radio-group">
-                            <label class="radio-label">
-                                <input type="radio" name="recurrence-type" value="once">
-                                <span>Une seule fois</span>
-                            </label>
-                            <label class="radio-label">
-                                <input type="radio" name="recurrence-type" value="daily" checked>
-                                <span>Quotidien</span>
-                            </label>
-                            <label class="radio-label">
-                                <input type="radio" name="recurrence-type" value="weekly">
-                                <span>Hebdomadaire</span>
-                            </label>
-                            <label class="radio-label">
-                                <input type="radio" name="recurrence-type" value="monthly">
-                                <span>Mensuel</span>
-                            </label>
-                        </div>
-                    </div>
-
-                    <div class="form-group" id="weekly-days-group" style="display: none;">
-                        <label>Jours de la semaine</label>
-                        <div class="days-selector">
-                            <label class="day-btn">
-                                <input type="checkbox" value="1">
-                                <span>Lun</span>
-                            </label>
-                            <label class="day-btn">
-                                <input type="checkbox" value="2">
-                                <span>Mar</span>
-                            </label>
-                            <label class="day-btn">
-                                <input type="checkbox" value="3">
-                                <span>Mer</span>
-                            </label>
-                            <label class="day-btn">
-                                <input type="checkbox" value="4">
-                                <span>Jeu</span>
-                            </label>
-                            <label class="day-btn">
-                                <input type="checkbox" value="5">
-                                <span>Ven</span>
-                            </label>
-                            <label class="day-btn">
-                                <input type="checkbox" value="6">
-                                <span>Sam</span>
-                            </label>
-                            <label class="day-btn">
-                                <input type="checkbox" value="0">
-                                <span>Dim</span>
-                            </label>
-                        </div>
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="schedule-start-date">Date de début</label>
-                            <input type="date" id="schedule-start-date" class="form-control">
-                        </div>
-
-                        <div class="form-group">
-                            <label for="schedule-end-date">Date de fin</label>
-                            <input type="date" id="schedule-end-date" class="form-control">
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="schedule-no-end-date">
-                            <span>Pas de date de fin</span>
-                        </label>
-                    </div>
+                <div class="stat-item">
+                    <span class="stat-value" id="stat-running">0</span>
+                    <span class="stat-label">En cours</span>
                 </div>
-
-                <!-- Tab: Advanced -->
-                <div class="tab-content" data-tab="advanced">
-                    <div class="form-group">
-                        <label for="schedule-priority">Priorité</label>
-                        <select id="schedule-priority" class="form-control">
-                            <option value="0">Basse</option>
-                            <option value="1" selected>Normale</option>
-                            <option value="2">Haute</option>
-                            <option value="3">Urgente</option>
-                        </select>
-                        <small class="form-help">En cas de conflit, la priorité la plus haute l'emporte</small>
-                    </div>
-
-                    <div class="form-group">
-                        <label>Comportement en conflit</label>
-                        <div class="radio-group">
-                            <label class="radio-label">
-                                <input type="radio" name="conflict-behavior" value="ignore" checked>
-                                <span>Ignorer (priorité la plus haute gagne)</span>
-                            </label>
-                            <label class="radio-label">
-                                <input type="radio" name="conflict-behavior" value="interrupt">
-                                <span>Interrompre le planning en cours</span>
-                            </label>
-                            <label class="radio-label">
-                                <input type="radio" name="conflict-behavior" value="queue">
-                                <span>Mettre en file d'attente</span>
-                            </label>
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label>Actions post-lecture</label>
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="post-action-revert" checked>
-                            <span>Revenir au planning par défaut</span>
-                        </label>
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="post-action-stop">
-                            <span>Arrêter la lecture</span>
-                        </label>
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="post-action-screenshot">
-                            <span>Capturer une screenshot</span>
-                        </label>
-                    </div>
+                <div class="stat-item">
+                    <span class="stat-value" id="stat-upcoming">0</span>
+                    <span class="stat-label">À venir</span>
                 </div>
             </div>
+        </div>
 
-            <div class="modal-footer">
-                <button class="btn btn-glass" onclick="PiSignage.Schedule.closeModal()">
-                    Annuler
+        <!-- View Mode Selector -->
+        <div class="card">
+            <div class="view-selector">
+                <button class="view-btn active" data-view="list" onclick="PiSignage.Schedule.switchView('list')">
+                    <?= icon('list') ?>Liste
                 </button>
-                <button class="btn btn-primary" onclick="PiSignage.Schedule.saveSchedule()">
-                    💾 Sauvegarder
+                <button class="view-btn" data-view="calendar" onclick="PiSignage.Schedule.switchView('calendar')">
+                    <?= icon('calendar') ?>Calendrier
                 </button>
-                <button class="btn btn-success" onclick="PiSignage.Schedule.saveSchedule(true)">
-                    ▶️ Sauvegarder & Activer
+                <button class="view-btn" data-view="timeline" onclick="PiSignage.Schedule.switchView('timeline')">
+                    <?= icon('clock') ?>Chronologie
                 </button>
             </div>
         </div>
-    </div>
 
-    <!-- Conflict Warning Modal -->
-    <div id="conflict-modal" class="modal">
-        <div class="modal-content modal-sm">
-            <div class="modal-header">
-                <h2>⚠️ Conflit détecté</h2>
-            </div>
-            <div class="modal-body">
-                <p id="conflict-message"></p>
-                <div id="conflict-list"></div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-glass" onclick="PiSignage.Schedule.closeConflictModal()">
-                    Modifier
-                </button>
-                <button class="btn btn-warning" onclick="PiSignage.Schedule.saveScheduleIgnoreConflicts()">
-                    Ignorer et sauvegarder
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Main Content -->
-    <div class="main-content">
-        <!-- Schedule Section -->
-        <div id="schedule" class="content-section active">
-            <div class="header">
-                <h1 class="page-title">Programmation</h1>
-                <div class="header-actions">
-                    <button class="btn btn-glass" onclick="PiSignage.Schedule.refresh()">
-                        🔄 Actualiser
-                    </button>
-                    <button class="btn btn-primary" onclick="PiSignage.Schedule.openAddModal()">
-                        ➕ Nouveau Planning
-                    </button>
-                </div>
-            </div>
-
-            <!-- Statistics -->
-            <div class="card">
-                <div class="schedule-stats">
-                    <div class="stat-item">
-                        <span class="stat-value" id="stat-active">0</span>
-                        <span class="stat-label">✅ Actifs</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-value" id="stat-inactive">0</span>
-                        <span class="stat-label">⏸️ Inactifs</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-value" id="stat-running">0</span>
-                        <span class="stat-label">▶️ En cours</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-value" id="stat-upcoming">0</span>
-                        <span class="stat-label">⏳ À venir</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- View Mode Selector -->
-            <div class="card">
-                <div class="view-selector">
-                    <button class="view-btn active" data-view="list" onclick="PiSignage.Schedule.switchView('list')">
-                        📋 Liste
-                    </button>
-                    <button class="view-btn" data-view="calendar" onclick="PiSignage.Schedule.switchView('calendar')">
-                        📅 Calendrier
-                    </button>
-                    <button class="view-btn" data-view="timeline" onclick="PiSignage.Schedule.switchView('timeline')">
-                        ⏰ Chronologie
-                    </button>
-                </div>
-            </div>
-
-            <!-- Schedules Container -->
-            <div class="card">
-                <h3 class="card-title">
-                    <span id="view-icon">📋</span>
+        <!-- Schedules Container -->
+        <div class="card">
+            <div class="card-head">
+                <h2 class="card-title">
+                    <span id="view-icon"><?= icon('list') ?></span>
                     <span id="view-title">Liste des plannings</span>
-                </h3>
+                </h2>
+            </div>
 
-                <!-- List View -->
-                <div id="schedule-list" class="schedule-view active">
-                    <!-- Schedule items will be loaded here -->
-                    <div class="empty-state" id="empty-state">
-                        <div class="empty-icon">📅</div>
-                        <h3>Aucun planning configuré</h3>
-                        <p>Créez votre premier planning pour automatiser la diffusion de vos playlists</p>
-                        <button class="btn btn-primary" onclick="PiSignage.Schedule.openAddModal()">
-                            ➕ Créer un planning
-                        </button>
-                    </div>
+            <!-- List View -->
+            <div id="schedule-list" class="schedule-view active">
+                <!-- Schedule items will be loaded here -->
+                <div class="empty-state" id="empty-state">
+                    <?= icon('calendar') ?>
+                    <h3>Aucun planning configuré</h3>
+                    <p>Créez votre premier planning pour automatiser la diffusion de vos playlists.</p>
+                    <button class="btn btn-primary" onclick="PiSignage.Schedule.openAddModal()">
+                        <?= icon('plus') ?>Créer un planning
+                    </button>
                 </div>
+            </div>
 
-                <!-- Calendar View -->
-                <div id="schedule-calendar" class="schedule-view">
-                    <div class="calendar-header">
-                        <button class="btn btn-sm btn-glass" onclick="PiSignage.Schedule.prevMonth()">◀</button>
-                        <h3 id="calendar-month-year">Octobre 2025</h3>
-                        <button class="btn btn-sm btn-glass" onclick="PiSignage.Schedule.nextMonth()">▶</button>
-                    </div>
-                    <div id="calendar-grid" class="calendar-grid">
-                        <!-- Calendar will be rendered here -->
-                    </div>
-                    <div id="calendar-events" class="calendar-events">
-                        <!-- Events for selected date -->
-                    </div>
+            <!-- Calendar View -->
+            <div id="schedule-calendar" class="schedule-view">
+                <div class="calendar-header">
+                    <button class="btn btn-sm btn-secondary" onclick="PiSignage.Schedule.prevMonth()" title="Mois précédent"><?= icon('chevron', '', 'style="transform:rotate(180deg)"') ?></button>
+                    <h3 id="calendar-month-year">—</h3>
+                    <button class="btn btn-sm btn-secondary" onclick="PiSignage.Schedule.nextMonth()" title="Mois suivant"><?= icon('chevron') ?></button>
                 </div>
+                <div id="calendar-grid" class="calendar-grid">
+                    <!-- Calendar will be rendered here -->
+                </div>
+                <div id="calendar-events" class="calendar-events">
+                    <!-- Events for selected date -->
+                </div>
+            </div>
 
-                <!-- Timeline View -->
-                <div id="schedule-timeline" class="schedule-view">
-                    <div class="timeline-container">
-                        <!-- Timeline will be rendered here -->
-                    </div>
+            <!-- Timeline View -->
+            <div id="schedule-timeline" class="schedule-view">
+                <div class="timeline-container">
+                    <!-- Timeline will be rendered here -->
                 </div>
             </div>
         </div>
+
+      </div>
     </div>
+</div>
+
+<!-- Add/Edit Schedule Modal -->
+<div id="schedule-modal" class="modal">
+    <div class="modal-content schedule-modal-content">
+        <div class="modal-header">
+            <h3 id="modal-title">Nouveau planning</h3>
+            <button class="btn-close" onclick="PiSignage.Schedule.closeModal()" aria-label="Fermer"><?= icon('close') ?></button>
+        </div>
+
+        <!-- Tabs -->
+        <div class="modal-tabs">
+            <button class="tab-btn active" data-tab="general" onclick="PiSignage.Schedule.switchTab('general')">
+                Général
+            </button>
+            <button class="tab-btn" data-tab="timing" onclick="PiSignage.Schedule.switchTab('timing')">
+                Horaires
+            </button>
+            <button class="tab-btn" data-tab="recurrence" onclick="PiSignage.Schedule.switchTab('recurrence')">
+                Récurrence
+            </button>
+            <button class="tab-btn" data-tab="advanced" onclick="PiSignage.Schedule.switchTab('advanced')">
+                Avancé
+            </button>
+        </div>
+
+        <div class="modal-body">
+            <!-- Tab: General -->
+            <div class="tab-content active" data-tab="general">
+                <div class="form-group">
+                    <label for="schedule-name">Nom du planning <span class="required">*</span></label>
+                    <input type="text" id="schedule-name" class="form-control" placeholder="Ex: Annonces du matin" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="schedule-playlist">Playlist à lire <span class="required">*</span></label>
+                    <select id="schedule-playlist" class="form-control" required>
+                        <option value="">Sélectionner une playlist</option>
+                        <!-- Playlists will be loaded dynamically -->
+                    </select>
+                    <small class="form-help" id="playlist-preview"></small>
+                </div>
+
+                <div class="form-group">
+                    <label for="schedule-description">Description (optionnel)</label>
+                    <textarea id="schedule-description" class="form-control" rows="3" placeholder="Décrivez ce planning..."></textarea>
+                </div>
+            </div>
+
+            <!-- Tab: Timing -->
+            <div class="tab-content" data-tab="timing">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="schedule-start-time">Heure de début <span class="required">*</span></label>
+                        <input type="time" id="schedule-start-time" class="form-control" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="schedule-end-time">Heure de fin</label>
+                        <input type="time" id="schedule-end-time" class="form-control">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="schedule-continuous">
+                        <span>Lecture continue (ignorer heure de fin)</span>
+                    </label>
+                </div>
+
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="schedule-once-only">
+                        <span>Jouer une seule fois puis arrêter</span>
+                    </label>
+                </div>
+
+                <div class="form-info">
+                    <strong>Durée estimée:</strong> <span id="duration-estimate">-</span>
+                </div>
+            </div>
+
+            <!-- Tab: Recurrence -->
+            <div class="tab-content" data-tab="recurrence">
+                <div class="form-group">
+                    <label>Type de récurrence <span class="required">*</span></label>
+                    <div class="radio-group">
+                        <label class="radio-label">
+                            <input type="radio" name="recurrence-type" value="once">
+                            <span>Une seule fois</span>
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="recurrence-type" value="daily" checked>
+                            <span>Quotidien</span>
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="recurrence-type" value="weekly">
+                            <span>Hebdomadaire</span>
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="recurrence-type" value="monthly">
+                            <span>Mensuel</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-group" id="weekly-days-group" style="display: none;">
+                    <label>Jours de la semaine</label>
+                    <div class="days-selector">
+                        <label class="day-btn">
+                            <input type="checkbox" value="1">
+                            <span>Lun</span>
+                        </label>
+                        <label class="day-btn">
+                            <input type="checkbox" value="2">
+                            <span>Mar</span>
+                        </label>
+                        <label class="day-btn">
+                            <input type="checkbox" value="3">
+                            <span>Mer</span>
+                        </label>
+                        <label class="day-btn">
+                            <input type="checkbox" value="4">
+                            <span>Jeu</span>
+                        </label>
+                        <label class="day-btn">
+                            <input type="checkbox" value="5">
+                            <span>Ven</span>
+                        </label>
+                        <label class="day-btn">
+                            <input type="checkbox" value="6">
+                            <span>Sam</span>
+                        </label>
+                        <label class="day-btn">
+                            <input type="checkbox" value="0">
+                            <span>Dim</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="schedule-start-date">Date de début</label>
+                        <input type="date" id="schedule-start-date" class="form-control">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="schedule-end-date">Date de fin</label>
+                        <input type="date" id="schedule-end-date" class="form-control">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="schedule-no-end-date">
+                        <span>Pas de date de fin</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Tab: Advanced -->
+            <div class="tab-content" data-tab="advanced">
+                <div class="form-group">
+                    <label for="schedule-priority">Priorité</label>
+                    <select id="schedule-priority" class="form-control">
+                        <option value="0">Basse</option>
+                        <option value="1" selected>Normale</option>
+                        <option value="2">Haute</option>
+                        <option value="3">Urgente</option>
+                    </select>
+                    <small class="form-help">En cas de conflit, la priorité la plus haute l'emporte</small>
+                </div>
+
+                <div class="form-group">
+                    <label>Comportement en conflit</label>
+                    <div class="radio-group">
+                        <label class="radio-label">
+                            <input type="radio" name="conflict-behavior" value="ignore" checked>
+                            <span>Ignorer (priorité la plus haute gagne)</span>
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="conflict-behavior" value="interrupt">
+                            <span>Interrompre le planning en cours</span>
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="conflict-behavior" value="queue">
+                            <span>Mettre en file d'attente</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Actions post-lecture</label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="post-action-revert" checked>
+                        <span>Revenir au planning par défaut</span>
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="post-action-stop">
+                        <span>Arrêter la lecture</span>
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="post-action-screenshot">
+                        <span>Capturer une screenshot</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="PiSignage.Schedule.closeModal()">
+                Annuler
+            </button>
+            <button class="btn btn-primary" onclick="PiSignage.Schedule.saveSchedule()">
+                <?= icon('check') ?>Sauvegarder
+            </button>
+            <button class="btn btn-success" onclick="PiSignage.Schedule.saveSchedule(true)">
+                <?= icon('play') ?>Sauvegarder & activer
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Conflict Warning Modal -->
+<div id="conflict-modal" class="modal">
+    <div class="modal-content modal-sm">
+        <div class="modal-header">
+            <h3><?= icon('alert') ?>Conflit détecté</h3>
+            <button class="btn-close" onclick="PiSignage.Schedule.closeConflictModal()" aria-label="Fermer"><?= icon('close') ?></button>
+        </div>
+        <div class="modal-body">
+            <p id="conflict-message"></p>
+            <div id="conflict-list"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="PiSignage.Schedule.closeConflictModal()">
+                Modifier
+            </button>
+            <button class="btn btn-warning" onclick="PiSignage.Schedule.saveScheduleIgnoreConflicts()">
+                Ignorer et sauvegarder
+            </button>
+        </div>
+    </div>
+</div>
 
 <?php include 'includes/footer.php'; ?>

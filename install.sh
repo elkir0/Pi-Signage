@@ -224,7 +224,6 @@ install_dependencies() {
         "php${PHP_VERSION}-curl"
         "php${PHP_VERSION}-zip"
         "sqlite3"
-        "vlc"
         "ffmpeg"
         "yt-dlp"
         "xinit"
@@ -301,6 +300,23 @@ install_dependencies() {
     fi
 
     log_info "Toutes les dépendances installées"
+}
+
+# Installe un yt-dlp géré par PiSignage : binaire standalone dans /opt/pisignage/bin,
+# propriété www-data, donc auto-updatable via `yt-dlp -U` (et depuis l'UI) SANS sudo.
+# Le paquet apt yt-dlp ne peut pas se self-update et vieillit vite (échecs de téléchargement).
+install_managed_ytdlp() {
+    log_step "Installation de yt-dlp géré (auto-updatable)"
+    sudo mkdir -p "$INSTALL_DIR/bin"
+    if sudo curl -fsSL --max-time 60 \
+        https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
+        -o "$INSTALL_DIR/bin/yt-dlp" 2>/dev/null; then
+        sudo chmod 0755 "$INSTALL_DIR/bin/yt-dlp"
+        sudo chown -R www-data:www-data "$INSTALL_DIR/bin"
+        log_info "yt-dlp géré installé: $(sudo -u www-data "$INSTALL_DIR/bin/yt-dlp" --version 2>/dev/null || echo 'version inconnue')"
+    else
+        log_info "ATTENTION: téléchargement de yt-dlp géré échoué — repli sur le paquet apt (mises à jour limitées)"
+    fi
 }
 
 # Création de la structure de dossiers
@@ -392,6 +408,12 @@ clone_from_github() {
         # Copier tous les fichiers web dans /opt/pisignage
         log_info "Déploiement des fichiers de l'application..."
         sudo cp -r "$TEMP_DIR/web"/* "$INSTALL_DIR/web/" 2>/dev/null || true
+
+        # Déployer les scripts runtime du dépôt (kiosk-apply, screen-power.sh,
+        # screen-schedule-tick.sh, grim-capture.sh, screenshot-wayland.sh, rotate-logs.sh…).
+        # Certains scripts (start-vlc.sh, autostart.sh) sont (re)générés inline plus loin.
+        sudo cp -r "$TEMP_DIR/scripts"/* "$INSTALL_DIR/scripts/" 2>/dev/null || true
+        sudo chmod +x "$INSTALL_DIR/scripts/"*.sh "$INSTALL_DIR/scripts/kiosk-apply" 2>/dev/null || true
 
         # SOURCE OF TRUTH: install.sh GÉNÈRE nginx/php/systemd. On ne copie depuis
         # config/ que la DATA runtime (whitelist), JAMAIS la config serveur du repo
@@ -688,71 +710,47 @@ KANSHI
         log_warn "kiosk-apply script not found or not executable"
     fi
 
+    # Autologin lightdm (R1) : sur ce Pi4/Trixie le gestionnaire de session est lightdm
+    # (et non greetd). On garantit l'autologin de 'pi' vers la session par défaut (labwc)
+    # pour un boot kiosk fiable OTB, sans dépendre des défauts de l'image.
+    if command -v lightdm >/dev/null 2>&1; then
+        sudo mkdir -p /etc/lightdm/lightdm.conf.d
+        sudo tee /etc/lightdm/lightdm.conf.d/10-pisignage-autologin.conf >/dev/null <<'LIGHTDM'
+[Seat:*]
+autologin-user=pi
+autologin-user-timeout=0
+LIGHTDM
+        log_info "Autologin lightdm configuré (utilisateur pi)"
+    fi
+
+    # Cron d'extinction d'écran programmée (D1) : applique screen_schedule.json chaque minute
+    # via screen-schedule-tick.sh -> screen-power.sh (wlr-randr dans la session de 'pi').
+    if [ -f "$INSTALL_DIR/scripts/screen-schedule-tick.sh" ]; then
+        sudo chmod +x "$INSTALL_DIR/scripts/screen-schedule-tick.sh"
+        echo '* * * * * root /opt/pisignage/scripts/screen-schedule-tick.sh >/dev/null 2>&1' | \
+            sudo tee /etc/cron.d/pisignage-screen >/dev/null
+        sudo chmod 0644 /etc/cron.d/pisignage-screen
+        log_info "Cron d'extinction d'écran programmée installé"
+    fi
+
+    # Cron de PROGRAMMATION (dayparting réel, Phase 3) : exécuteur 1×/min qui lit
+    # data/schedules.json et pose la playlist active selon l'heure/jour (api/scheduler.php).
+    # Exécuté en www-data (même utilisateur que l'API web -> aucune divergence de permissions
+    # sur media/playlist.json, config/*.json, logs/system.log).
+    if [ -f "$INSTALL_DIR/web/api/scheduler.php" ]; then
+        echo '* * * * * www-data /usr/bin/php /opt/pisignage/web/api/scheduler.php >/dev/null 2>&1' | \
+            sudo tee /etc/cron.d/pisignage-scheduler >/dev/null
+        sudo chmod 0644 /etc/cron.d/pisignage-scheduler
+        log_info "Cron de programmation (dayparting) installé"
+    fi
+
     log_info "Kiosk configuration completed"
 }
 
-# Création du script de démarrage VLC
-create_vlc_script() {
+# Création du script d'autostart (lancé par pisignage.service au boot).
+# En mode Chromium (défaut), il ne fait rien de plus : le kiosk est lancé par labwc/kiosk-apply.
+create_autostart_script() {
     log_step "Création des scripts de contrôle"
-
-    sudo tee $INSTALL_DIR/scripts/start-vlc.sh > /dev/null << 'ENDOFFILE'
-#!/bin/bash
-
-echo "=== PiSignage v0.11.0 - Démarrage VLC ==="
-
-# Arrêt gracieux des lecteurs existants
-systemctl --user stop pisignage-vlc.service 2>/dev/null || true
-pkill -TERM vlc 2>/dev/null || true
-sleep 2
-
-# Configuration de l'environnement
-export DISPLAY=${DISPLAY:-:0}
-export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
-
-# Détection Wayland/X11
-if [ -n "$WAYLAND_DISPLAY" ]; then
-    echo "Environnement: Wayland"
-    VLC_OPTIONS="--intf dummy --vout gles2 --fullscreen --loop --no-video-title-show --quiet"
-else
-    echo "Environnement: X11"
-    VLC_OPTIONS="--intf dummy --vout x11 --fullscreen --loop --no-video-title-show --quiet"
-fi
-
-# Fichier vidéo
-VIDEO="/opt/pisignage/media/BigBuckBunny_720p.mp4"
-
-# Si pas de BBB, chercher une autre vidéo
-if [ ! -f "$VIDEO" ]; then
-    VIDEO=$(find /opt/pisignage/media -name "*.mp4" -o -name "*.mkv" | head -1)
-fi
-
-# Démarrer VLC avec la commande stabilisée (compatible avec le service unifié)
-if [ -n "$VIDEO" ]; then
-    # Utilisation de la configuration unifiée avec HTTP interface
-    vlc --intf http \
-        --extraintf dummy \
-        --http-host 0.0.0.0 \
-        --http-port 8080 \
-        --http-password pisignage \
-        --fullscreen \
-        --loop \
-        --no-video-title-show \
-        --video-on-top \
-        --no-osd \
-        --quiet \
-        "$VIDEO" > /opt/pisignage/logs/vlc.log 2>&1 &
-
-    VLC_PID=$!
-    echo $VLC_PID > /opt/pisignage/vlc.pid
-    echo "✓ VLC démarré avec $(basename "$VIDEO") et HTTP interface (PID: $VLC_PID)"
-    echo "  Interface HTTP: http://localhost:8080 (mot de passe: pisignage)"
-else
-    echo "✗ Aucune vidéo trouvée"
-    exit 1
-fi
-ENDOFFILE
-
-    sudo chmod +x $INSTALL_DIR/scripts/start-vlc.sh
 
     # Script d'autostart
     sudo tee $INSTALL_DIR/scripts/autostart.sh > /dev/null << 'ENDOFFILE'
@@ -782,17 +780,10 @@ if [ "$USE_CHROMIUM" = "1" ]; then
     exit 0
 fi
 
-# Mode VLC: démarrer le service unifié et surveiller.
-sudo systemctl start pisignage-vlc.service || true
-
-# Watchdog - vérifier le service VLC (uniquement en mode VLC)
-while true; do
-    if ! systemctl is-active --quiet pisignage-vlc.service; then
-        echo "Service VLC arrêté, redémarrage..."
-        sudo systemctl restart pisignage-vlc.service
-    fi
-    sleep 30
-done
+# VLC retiré (v0.12) : il n'existe plus de lecteur de secours.
+# USE_CHROMIUM_PLAYER=0 n'est plus supporté — on sort proprement sans rien démarrer.
+echo "USE_CHROMIUM_PLAYER=0 obsolète : VLC a été retiré. Réactivez le mode Chromium."
+exit 0
 ENDOFFILE
 
     sudo chmod +x $INSTALL_DIR/scripts/autostart.sh
@@ -1088,111 +1079,12 @@ ENDOFFILE
 
     log_info "Service de démarrage automatique configuré"
 
-    # Créer le script de démarrage VLC
-    sudo tee $INSTALL_DIR/scripts/autostart-vlc.sh > /dev/null << 'ENDOFSCRIPT'
-#!/bin/bash
-# Script de démarrage automatique VLC pour PiSignage
-
-# Attendre que le système soit prêt
-sleep 10
-
-# Créer le répertoire runtime si nécessaire
-export XDG_RUNTIME_DIR=/run/user/1000
-mkdir -p $XDG_RUNTIME_DIR
-sudo chown pi:pi $XDG_RUNTIME_DIR
-
-# Arrêter toute instance VLC existante proprement
-systemctl --user stop pisignage-vlc.service 2>/dev/null || true
-pkill -TERM vlc 2>/dev/null || true
-sleep 3
-
-# Démarrer le service VLC unifié (recommandé)
-systemctl --user start pisignage-vlc.service 2>/dev/null || \
-sudo systemctl start pisignage-vlc.service
-
-echo "Service VLC unifié démarré avec succès"
-echo "Interface HTTP disponible sur: http://localhost:8080"
-echo "Mot de passe: pisignage"
-ENDOFSCRIPT
-    sudo chmod +x $INSTALL_DIR/scripts/autostart-vlc.sh
-
-    # Détection modèle Pi pour le décodage matériel VLC sous Wayland/KMS.
-    # Pi4 (BCM2711): décodage H.264 matériel via v4l2m2m.
-    # Pi5 (BCM2712): pas de bloc H.264 matériel -> décodage logiciel.
-    PI_MODEL_STRING=""
-    if [ -f /proc/device-tree/model ]; then
-        PI_MODEL_STRING=$(tr -d '\0' < /proc/device-tree/model 2>/dev/null)
-    fi
-    case "$PI_MODEL_STRING" in
-        *"Raspberry Pi 5"*)
-            VLC_HWACCEL_FLAG="--avcodec-hw=none"
-            ;;
-        *)
-            # Pi4 et assimilés
-            VLC_HWACCEL_FLAG="--avcodec-hw=v4l2m2m"
-            ;;
-    esac
-
-    # Créer le service systemd unifié pour VLC avec interface HTTP.
-    # NOTE: c'est le lecteur de SECOURS. En mode Chromium par défaut, pisignage.service
-    # (autostart.sh) ne le démarre PAS — voir create_vlc_script().
-    # Sortie Wayland/KMS (gles2), AUCUN reliquat X11, AUCUN profil MMAL.
-    sudo tee /etc/systemd/system/pisignage-vlc.service > /dev/null << ENDOFSERVICE
-[Unit]
-Description=PiSignage VLC Media Player with HTTP Interface
-After=network.target display-manager.service
-Requires=network.target
-
-[Service]
-Type=simple
-User=pi
-Group=video
-Environment="HOME=/home/pi"
-Environment="XDG_RUNTIME_DIR=/run/user/1000"
-Environment="WAYLAND_DISPLAY=wayland-0"
-WorkingDirectory=/opt/pisignage
-
-# Start VLC with both display output (Wayland/KMS) and HTTP interface
-ExecStart=/usr/bin/vlc \\
-    --intf http \\
-    --extraintf dummy \\
-    --http-host 0.0.0.0 \\
-    --http-port 8080 \\
-    --http-password pisignage \\
-    --vout=gles2 \\
-    ${VLC_HWACCEL_FLAG} \\
-    --no-video-title-show \\
-    --loop \\
-    --playlist-autostart \\
-    --no-osd \\
-    /opt/pisignage/media/
-
-# Graceful shutdown - no more pkill/killall conflicts
-ExecStop=/bin/kill -TERM \$MAINPID
-TimeoutStopSec=15
-KillMode=mixed
-Restart=on-failure
-RestartSec=5
-StandardOutput=append:/opt/pisignage/logs/vlc.log
-StandardError=append:/opt/pisignage/logs/vlc.log
-
-[Install]
-WantedBy=multi-user.target
-ENDOFSERVICE
-
-    sudo systemctl daemon-reload
-    sudo systemctl enable pisignage-vlc.service
-
-    # Ne PAS démarrer VLC tout de suite si Chromium est le lecteur par défaut
-    # (évite le double-propriétaire d'affichage). Le démarrage est piloté par
-    # autostart.sh selon le flag USE_CHROMIUM_PLAYER.
-    if [ "${USE_CHROMIUM_PLAYER:-1}" = "0" ]; then
-        sudo systemctl start pisignage-vlc.service || true
-    else
-        log_info "Mode Chromium par défaut: VLC fallback activé mais non démarré"
-    fi
-
-    log_info "Service VLC configuré pour démarrage automatique"
+    # VLC retiré (v0.12) : Chromium HTML5 (player.php sur /player) est le moteur de
+    # lecture UNIQUE. Plus aucun service pisignage-vlc n'est créé / activé / démarré
+    # (libère ~135 Mo RAM, supprime le « lecteur fantôme »). Le kiosk est lancé par
+    # labwc/kiosk-apply ; pisignage.service ne fait qu'exécuter autostart.sh
+    # (no-op en mode Chromium). Voir docs unification de la diffusion.
+    log_info "Lecteur unique: Chromium kiosk (VLC retiré)"
 }
 
 # Configuration des permissions sudo (pour redémarrage)
@@ -1204,12 +1096,39 @@ configure_sudo() {
 # PiSignage sudo permissions
 pi ALL=(ALL) NOPASSWD: /sbin/shutdown, /sbin/reboot, /bin/systemctl
 www-data ALL=(ALL) NOPASSWD: /usr/bin/amixer, /usr/bin/raspi-config
+# Capture d'écran Wayland: www-data (php-fpm) lance grim dans la session labwc de 'pi'
+www-data ALL=(pi) NOPASSWD: /opt/pisignage/scripts/grim-capture.sh
+# Extinction d'écran programmée (kiosk): on/off via wlr-randr dans la session de 'pi'
+www-data ALL=(pi) NOPASSWD: /opt/pisignage/scripts/screen-power.sh
+www-data ALL=(pi) NOPASSWD: /usr/bin/wlr-randr
+# Redémarrer la session kiosk complète (alias générique lightdm/greetd)
+www-data ALL=(root) NOPASSWD: /usr/bin/systemctl restart display-manager
 SUDOERS
 
     # Ajouter www-data au groupe video (accès framebuffer pour screenshots)
     sudo usermod -aG video www-data
 
-    log_info "Permissions configurées (www-data: video group + amixer sudo)"
+    # Helper de capture d'écran Wayland (grim) exécuté dans la session labwc de 'pi'.
+    # php-fpm (www-data) l'invoque via `sudo -u pi` (cf. règle sudoers ci-dessus).
+    sudo mkdir -p "$INSTALL_DIR/scripts"
+    sudo tee "$INSTALL_DIR/scripts/grim-capture.sh" > /dev/null << 'GRIMCAP'
+#!/bin/sh
+# PiSignage — Capture l'écran Wayland (labwc) du kiosk. Appelé par www-data via:
+#   sudo -u pi /opt/pisignage/scripts/grim-capture.sh
+# Écrit un PNG dans /tmp et imprime son chemin sur stdout.
+set -eu
+RUNTIME_DIR="/run/user/$(id -u)"
+export XDG_RUNTIME_DIR="$RUNTIME_DIR"
+WL="$(ls "$RUNTIME_DIR" 2>/dev/null | grep -m1 '^wayland-[0-9]*$' || true)"
+export WAYLAND_DISPLAY="${WL:-wayland-0}"
+OUT="/tmp/pisignage-screenshot.png"
+/usr/bin/grim -t png "$OUT" 2>/dev/null
+chmod 0644 "$OUT" 2>/dev/null || true
+echo "$OUT"
+GRIMCAP
+    sudo chmod 0755 "$INSTALL_DIR/scripts/grim-capture.sh"
+
+    log_info "Permissions configurées (www-data: video group + amixer sudo + grim-capture)"
 }
 
 # Test de l'installation
@@ -1226,15 +1145,6 @@ test_installation() {
         log_warn "Serveur web ne répond pas encore"
     fi
 
-    # Vérifier le service VLC unifié
-    if systemctl is-active --quiet pisignage-vlc.service; then
-        log_info "Service VLC unifié en cours d'exécution"
-    else
-        log_warn "Service VLC unifié n'est pas encore démarré"
-        # Essayer de le démarrer
-        sudo systemctl start pisignage-vlc.service || true
-    fi
-
     # Vérifier le service
     if systemctl is-active --quiet pisignage; then
         log_info "Service PiSignage actif"
@@ -1242,18 +1152,11 @@ test_installation() {
         log_warn "Service PiSignage inactif"
     fi
 
-    # Vérification finale de la configuration unifiée
-    if systemctl is-enabled --quiet pisignage-vlc.service; then
-        log_info "✓ Service VLC unifié correctement configuré"
+    # Vérifier que le lecteur kiosk (player.php) répond
+    if curl -s --connect-timeout 5 http://localhost/player >/dev/null 2>&1; then
+        log_info "✓ Lecteur kiosk (/player) accessible"
     else
-        log_warn "Service VLC unifié non activé"
-    fi
-
-    # Vérifier l'interface HTTP
-    if curl -s --connect-timeout 5 http://localhost:8080 >/dev/null 2>&1; then
-        log_info "✓ Interface HTTP VLC accessible"
-    else
-        log_warn "Interface HTTP VLC non accessible (normal au premier démarrage)"
+        log_warn "Lecteur kiosk (/player) non accessible (vérifier nginx/php-fpm)"
     fi
 
     log_info "Tests terminés"
@@ -1277,12 +1180,13 @@ main() {
     update_system
     install_dependencies
     create_structure
+    install_managed_ytdlp
     clone_from_github
     download_bbb
     create_config_php
     create_config
     configure_kiosk_trixie
-    create_vlc_script
+    create_autostart_script
     configure_webserver
     configure_sudo
     configure_autostart
@@ -1305,11 +1209,10 @@ main() {
     echo "🚀 PiSignage démarre automatiquement au boot!"
     echo ""
     echo "💡 Commandes utiles:"
-    echo "   sudo systemctl status pisignage     # Voir le statut principal"
-    echo "   sudo systemctl status pisignage-vlc # Voir le statut VLC"
-    echo "   sudo systemctl restart pisignage-vlc # Redémarrer VLC"
-    echo "   tail -f $INSTALL_DIR/logs/vlc.log   # Voir les logs VLC"
-    echo "   Interface HTTP VLC: http://${ip}:8080 (mot de passe: pisignage)"
+    echo "   sudo systemctl status pisignage       # Voir le statut principal"
+    echo "   Lecteur kiosk: http://${ip}/player    # Page affichée par Chromium"
+    echo "   bash $INSTALL_DIR/scripts/kiosk-apply # Régénérer l'autostart kiosk"
+    echo "   tail -f $INSTALL_DIR/logs/player.log  # Logs lecteur (si présents)"
     echo ""
     echo "📝 Documentation: $INSTALL_DIR/CLAUDE.md"
     echo ""

@@ -1,943 +1,677 @@
 /**
- * PiSignage Playlists Module
- * Handles playlist creation, editing, management and advanced playlist editor
+ * PiSignage — Module PLAYLISTS (Phase 1 de l'unification diffusion).
+ *
+ * Pilote l'API unifiée /api/playlists.php :
+ *   - liste + playlist ACTIVE (diffusée à l'écran)
+ *   - composition (éditeur) + enregistrement
+ *   - "Diffuser à l'écran" (activate)
+ *
+ * Un item de playlist = { url:<media.path>, type, name, duration, fit, mute, loop }.
+ * Réorganisation par boutons monter/descendre (robuste) + glisser depuis la bibliothèque.
  */
 
-// Ensure PiSignage namespace exists
 window.PiSignage = window.PiSignage || {};
 
-// Playlist management functionality
 PiSignage.playlists = {
-    currentPlaylists: [],
 
-    // Advanced playlist editor state
-    currentPlaylist: {
+    /* ----------------------------- État ----------------------------- */
+    list: [],              // playlists normalisées (depuis l'API)
+    activeSlug: null,      // slug diffusé à l'écran
+    media: [],             // bibliothèque média {name, path, type, size_formatted}
+    mediaFilter: 'all',
+    mediaSearch: '',
+
+    // Playlist en cours d'édition
+    editing: {
+        slug: null,        // null = nouvelle playlist
         name: '',
-        items: [],
-        settings: {
-            loop: true,
-            shuffle: false,
-            auto_advance: true,
-            fade_duration: 1000
-        }
+        autoplay: true,
+        autoLoop: true,
+        items: []          // [{url, type, name, duration, fit, mute, loop}]
+    },
+    selectedIndex: null,
+
+    /* ------------------------- Icônes SVG inline ------------------------- */
+    _svg: function (inner) {
+        return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+             + 'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + inner + '</svg>';
+    },
+    _icons: {
+        video:   '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>',
+        audio:   '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a9 9 0 0 1 0 14"/>',
+        image:   '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/>',
+        file:    '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',
+        plus:    '<path d="M12 5v14M5 12h14"/>',
+        trash:   '<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M10 11v6M14 11v6"/>',
+        play:    '<polygon points="6 4 20 12 6 20 6 4"/>',
+        edit:    '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/>',
+        up:      '<path d="m18 15-6-6-6 6"/>',
+        down:    '<path d="m6 9 6 6 6-6"/>',
+        drag:    '<circle cx="9" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="9" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="9" cy="18" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="18" r="1.4" fill="currentColor" stroke="none"/>',
+        playlist:'<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>'
     },
 
-    mediaLibrary: [],
-    selectedItem: null,
-    draggedElement: null,
-    playlistModified: false,
-
-    init: function() {
-        console.log('🎵 Initializing playlist management...');
-        this.loadPlaylists();
-        this.setupGlobalFunctions();
-
-        // Initialize playlist editor if on playlists.php page
-        if (window.location.pathname.includes('playlists.php')) {
-            this.initPlaylistEditor();
-        }
-    },
-
-    loadPlaylists: async function() {
-        try {
-            const data = await PiSignage.api.playlists.list();
-            if (data.success) {
-                this.currentPlaylists = data.data || [];
-                this.renderPlaylistsList();
-                this.updatePlaylistSelects();
-                console.log(`🎵 Loaded ${this.currentPlaylists.length} playlists`);
-            } else {
-                console.error('Failed to load playlists:', data.message);
-            }
-        } catch (error) {
-            console.error('Error loading playlists:', error);
-            showAlert('Erreur de chargement des playlists', 'error');
-        }
-    },
-
-    renderPlaylistsList: function() {
-        const container = document.getElementById('playlist-container');
-        if (!container) return;
-
-        if (this.currentPlaylists.length === 0) {
-            container.innerHTML = `
-                <div class="empty-state" style="text-align: center; padding: 40px; color: #666;">
-                    <h3>🎵 Aucune playlist</h3>
-                    <p>Créez votre première playlist pour organiser vos médias</p>
-                </div>
-            `;
-            return;
-        }
-
-        container.innerHTML = '';
-
-        this.currentPlaylists.forEach(playlist => {
-            const card = document.createElement('div');
-            card.className = 'card playlist-card';
-            card.innerHTML = `
-                <div class="playlist-header">
-                    <h3 class="card-title">${playlist.name}</h3>
-                    <div class="playlist-info">
-                        <span class="item-count">${playlist.items ? playlist.items.length : 0} fichiers</span>
-                        ${playlist.duration ? `<span class="duration">${this.formatDuration(playlist.duration)}</span>` : ''}
-                    </div>
-                </div>
-                <div class="playlist-actions">
-                    <button class="btn btn-primary btn-sm" onclick="PiSignage.playlists.playPlaylist('${playlist.name}')" title="Lire cette playlist">
-                        ▶️ Lire
-                    </button>
-                    <button class="btn btn-glass btn-sm" onclick="PiSignage.playlists.editPlaylist('${playlist.name}')" title="Modifier cette playlist">
-                        ✏️ Modifier
-                    </button>
-                    <button class="btn btn-danger btn-sm" onclick="PiSignage.playlists.deletePlaylist('${playlist.name}')" title="Supprimer cette playlist">
-                        🗑️ Supprimer
-                    </button>
-                </div>
-            `;
-            container.appendChild(card);
+    /* ----------------------------- Helpers ----------------------------- */
+    esc: function (s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
         });
     },
 
-    updatePlaylistSelects: function() {
-        // Update playlist select in player section
-        const playlistSelect = document.getElementById('playlist-select');
-        if (playlistSelect) {
-            playlistSelect.innerHTML = '<option value="">-- Sélectionner une playlist --</option>';
-            this.currentPlaylists.forEach(playlist => {
-                const option = document.createElement('option');
-                option.value = playlist.name;
-                option.textContent = playlist.name;
-                playlistSelect.appendChild(option);
-            });
-        }
+    typeIcon: function (type) {
+        var t = (type || '').toLowerCase();
+        if (t.indexOf('video') !== -1) return this._svg(this._icons.video);
+        if (t.indexOf('audio') !== -1) return this._svg(this._icons.audio);
+        if (t.indexOf('image') !== -1) return this._svg(this._icons.image);
+        return this._svg(this._icons.file);
     },
 
-    formatDuration: function(seconds) {
-        if (!seconds || isNaN(seconds)) return '';
-        const mins = Math.floor(seconds / 60);
-        const secs = seconds % 60;
-        return `${mins}:${secs.toString().padStart(2, '0')}`;
-    },
-
-    createPlaylist: async function() {
-        const name = prompt('Nom de la nouvelle playlist:');
-        if (!name) return;
-
-        // Get selected files from media section
-        const selectedFiles = Array.from(document.querySelectorAll('#media input[type="checkbox"]:checked'))
-            .map(cb => cb.value);
-
-        try {
-            const data = await PiSignage.api.playlists.create(name, selectedFiles);
-            if (data.success) {
-                showAlert('Playlist créée!', 'success');
-                this.loadPlaylists();
-            } else {
-                showAlert('Erreur: ' + data.message, 'error');
-            }
-        } catch (error) {
-            console.error('Create playlist error:', error);
-            showAlert('Erreur de création', 'error');
-        }
-    },
-
-    editPlaylist: async function(name) {
-        try {
-            const data = await PiSignage.api.playlists.getInfo(name);
-            if (data.success && data.data) {
-                this.showEditModal(data.data);
-            } else {
-                showAlert('Erreur lors du chargement de la playlist', 'error');
-            }
-        } catch (error) {
-            console.error('Edit playlist error:', error);
-            showAlert('Erreur de chargement', 'error');
-        }
-    },
-
-    showEditModal: function(playlist) {
-        const modalHTML = `
-            <div id="editPlaylistModal" class="modal" style="
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background: rgba(0,0,0,0.7);
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                z-index: 10000;
-            ">
-                <div class="modal-content" style="
-                    background: #2a2d3a;
-                    padding: 30px;
-                    border-radius: 15px;
-                    width: 600px;
-                    max-width: 90%;
-                    max-height: 80vh;
-                    overflow-y: auto;
-                    position: relative;
-                ">
-                    <span class="close" style="
-                        position: absolute;
-                        top: 15px;
-                        right: 20px;
-                        font-size: 24px;
-                        cursor: pointer;
-                        color: #ccc;
-                    " onclick="PiSignage.playlists.closeEditModal()">&times;</span>
-
-                    <h2 style="margin: 0 0 20px; color: #4a9eff;">✏️ Modifier Playlist: ${playlist.name}</h2>
-
-                    <div style="margin-bottom: 20px;">
-                        <label style="display: block; margin-bottom: 5px; color: #ccc;">Nom de la playlist:</label>
-                        <input type="text" id="edit-playlist-name" value="${playlist.name}" style="
-                            width: 100%;
-                            padding: 10px;
-                            background: #1a1a2e;
-                            border: 1px solid #4a9eff;
-                            border-radius: 5px;
-                            color: white;
-                            font-size: 14px;
-                        ">
-                    </div>
-
-                    <div style="margin-bottom: 20px;">
-                        <label style="display: block; margin-bottom: 5px; color: #ccc;">Fichiers dans la playlist:</label>
-                        <div id="edit-playlist-items" style="
-                            max-height: 200px;
-                            overflow-y: auto;
-                            border: 1px solid #4a9eff;
-                            padding: 15px;
-                            border-radius: 5px;
-                            background: rgba(26, 26, 46, 0.5);
-                        ">
-                            ${playlist.items.map(item => `
-                                <div style="margin-bottom: 8px; display: flex; align-items: center;">
-                                    <input type="checkbox" id="item-${item}" value="${item}" checked style="margin-right: 10px;">
-                                    <label for="item-${item}" style="color: white; flex: 1;">${item}</label>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-
-                    <div style="margin-bottom: 20px;">
-                        <label style="display: block; margin-bottom: 5px; color: #ccc;">Ajouter des fichiers:</label>
-                        <select id="add-files-select" multiple style="
-                            width: 100%;
-                            height: 120px;
-                            background: #1a1a2e;
-                            border: 1px solid #4a9eff;
-                            color: white;
-                            border-radius: 5px;
-                            padding: 5px;
-                        ">
-                            <!-- Will be populated with available files -->
-                        </select>
-                    </div>
-
-                    <div style="text-align: right;">
-                        <button class="btn btn-primary" onclick="PiSignage.playlists.savePlaylistChanges('${playlist.name}')">💾 Sauvegarder</button>
-                        <button class="btn btn-secondary" onclick="PiSignage.playlists.closeEditModal()">Annuler</button>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        document.body.insertAdjacentHTML('beforeend', modalHTML);
-
-        // Populate available files
-        this.populateAvailableFiles(playlist.items);
-
-        // Get modal reference
-        const modal = document.getElementById('editPlaylistModal');
-        if (!modal) return;
-
-        // Add click handler to close on background click
-        const backgroundClickHandler = function(e) {
-            if (e.target.id === 'editPlaylistModal') {
-                PiSignage.playlists.closeEditModal();
-            }
-        };
-        modal.addEventListener('click', backgroundClickHandler);
-        modal._backgroundClickHandler = backgroundClickHandler;
-
-        // Add ESC key handler to close modal
-        const escapeHandler = function(e) {
-            if (e.key === 'Escape') {
-                PiSignage.playlists.closeEditModal();
-            }
-        };
-        document.addEventListener('keydown', escapeHandler);
-        modal._escapeHandler = escapeHandler;
-    },
-
-    populateAvailableFiles: async function(currentItems) {
-        try {
-            const data = await PiSignage.api.media.list();
-            if (data.success && data.data) {
-                const select = document.getElementById('add-files-select');
-                if (select) {
-                    data.data.forEach(file => {
-                        if (!currentItems.includes(file.name)) {
-                            const option = document.createElement('option');
-                            option.value = file.name;
-                            option.textContent = file.name;
-                            select.appendChild(option);
-                        }
-                    });
-                }
-            }
-        } catch (error) {
-            console.error('Error loading available files:', error);
-        }
-    },
-
-    closeEditModal: function() {
-        const modal = document.getElementById('editPlaylistModal');
-        if (modal) {
-            // Remove event handlers
-            if (modal._escapeHandler) {
-                document.removeEventListener('keydown', modal._escapeHandler);
-            }
-            if (modal._backgroundClickHandler) {
-                modal.removeEventListener('click', modal._backgroundClickHandler);
-            }
-            modal.remove();
-        }
-    },
-
-    savePlaylistChanges: async function(originalName) {
-        const newName = document.getElementById('edit-playlist-name').value;
-
-        // Get selected existing items
-        const selectedItems = Array.from(document.querySelectorAll('#edit-playlist-items input:checked'))
-            .map(cb => cb.value);
-
-        // Get newly selected files
-        const newFiles = Array.from(document.getElementById('add-files-select').selectedOptions)
-            .map(option => option.value);
-
-        const allItems = [...selectedItems, ...newFiles];
-
-        try {
-            const data = await PiSignage.api.playlists.update(originalName, newName, allItems);
-            if (data.success) {
-                showAlert('Playlist modifiée!', 'success');
-                this.closeEditModal();
-                this.loadPlaylists();
-            } else {
-                showAlert('Erreur: ' + data.message, 'error');
-            }
-        } catch (error) {
-            console.error('Save playlist error:', error);
-            showAlert('Erreur de sauvegarde', 'error');
-        }
-    },
-
-    deletePlaylist: async function(name) {
-        if (!confirm(`Supprimer la playlist "${name}"?`)) return;
-
-        try {
-            const data = await PiSignage.api.playlists.delete(name);
-            if (data.success) {
-                showAlert('Playlist supprimée!', 'success');
-                this.loadPlaylists();
-            } else {
-                showAlert('Erreur: ' + data.message, 'error');
-            }
-        } catch (error) {
-            console.error('Delete playlist error:', error);
-            showAlert('Erreur de suppression', 'error');
-        }
-    },
-
-    playPlaylist: async function(name) {
-        try {
-            const currentPlayer = PiSignage.player.getCurrentPlayer();
-            const data = await PiSignage.api.player.playPlaylist(name, currentPlayer);
-            if (data.success) {
-                showAlert(`Playlist ${name} lancée!`, 'success');
-                // Update player status
-                setTimeout(() => {
-                    if (typeof updatePlayerStatus === 'function') {
-                        updatePlayerStatus();
-                    }
-                }, 500);
-            } else {
-                showAlert('Erreur: ' + data.message, 'error');
-            }
-        } catch (error) {
-            console.error('Play playlist error:', error);
-            showAlert('Erreur de lecture', 'error');
-        }
-    },
-
-    // Advanced Playlist Editor Functions
-    initPlaylistEditor: function() {
-        console.log('🎬 Initializing advanced playlist editor...');
-        this.loadMediaLibrary();
-        this.resetPlaylistEditor();
-        this.setupEventListeners();
-    },
-
-    loadMediaLibrary: async function() {
-        try {
-            const data = await PiSignage.api.media.list();
-            if (data.success) {
-                this.mediaLibrary = data.data || [];
-                this.renderMediaLibrary();
-            }
-        } catch (error) {
-            console.error('Error loading media library:', error);
-        }
-    },
-
-    renderMediaLibrary: function() {
-        const container = document.getElementById('media-library-list');
-        if (!container) return;
-
-        const searchTerm = document.getElementById('media-search')?.value.toLowerCase() || '';
-        const activeFilter = document.querySelector('.filter-btn.active')?.dataset.type || 'all';
-
-        const filteredMedia = this.mediaLibrary.filter(file => {
-            const matchesSearch = !searchTerm || file.name.toLowerCase().includes(searchTerm);
-            const matchesFilter = activeFilter === 'all' || this.getMediaType(file.type) === activeFilter;
-            return matchesSearch && matchesFilter;
-        });
-
-        container.innerHTML = filteredMedia.map(file => {
-            const mediaType = this.getMediaType(file.type);
-            const icon = this.getMediaIcon(mediaType);
-            const duration = file.duration ? PiSignage.utils.formatTime(file.duration) : '';
-            const size = file.size_formatted || '';
-
-            return `
-                <div class="media-item" draggable="true" data-file="${file.name}" data-type="${mediaType}">
-                    <div class="media-item-icon ${mediaType}">
-                        ${icon}
-                    </div>
-                    <div class="media-item-info">
-                        <div class="media-item-name" title="${file.name}">${file.name}</div>
-                        <div class="media-item-meta">${duration} ${size}</div>
-                    </div>
-                    <div class="media-item-actions">
-                        <button class="btn-add" onclick="PiSignage.playlists.addMediaToPlaylist('${file.name}')" title="Ajouter à la playlist">
-                            +
-                        </button>
-                    </div>
-                </div>
-            `;
-        }).join('');
-
-        // Add drag listeners
-        container.querySelectorAll('.media-item').forEach(item => {
-            item.addEventListener('dragstart', this.handleMediaDragStart.bind(this));
-            item.addEventListener('dragend', this.handleMediaDragEnd.bind(this));
-        });
-    },
-
-    getMediaType: function(mimeType) {
-        if (mimeType.startsWith('video/')) return 'video';
-        if (mimeType.startsWith('audio/')) return 'audio';
-        if (mimeType.startsWith('image/')) return 'image';
+    // Classe courte (video/image/audio/file) à partir d'un type MIME ou simple.
+    typeClass: function (type) {
+        var t = (type || '').toLowerCase();
+        if (t.indexOf('video') !== -1) return 'video';
+        if (t.indexOf('audio') !== -1) return 'audio';
+        if (t.indexOf('image') !== -1) return 'image';
         return 'file';
     },
 
-    getMediaIcon: function(type) {
-        const icons = {
-            video: '🎬',
-            audio: '🎵',
-            image: '🖼️',
-            file: '📄'
-        };
-        return icons[type] || icons.file;
+    fmtDate: function (mtime) {
+        if (!mtime) return '';
+        var d = new Date(mtime * 1000);
+        if (isNaN(d.getTime())) return '';
+        return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
     },
 
-    setupEventListeners: function() {
-        // Drop zone listeners
-        const dropZone = document.getElementById('playlist-drop-zone');
-        if (dropZone) {
-            dropZone.addEventListener('dragover', this.handleDragOver.bind(this));
-            dropZone.addEventListener('drop', this.handleDrop.bind(this));
-            dropZone.addEventListener('dragleave', this.handleDragLeave.bind(this));
+    /* ------------------------------ Init ------------------------------ */
+    init: function () {
+        this.bindEditorChrome();
+        this.load();
+    },
+
+    // Recharge la liste + l'état "active" depuis l'API unifiée.
+    load: async function () {
+        try {
+            var res = await PiSignage.api.request('/api/playlists.php');
+            if (res && res.success && res.data) {
+                this.list = res.data.playlists || [];
+                this.activeSlug = res.data.active || null;
+            } else {
+                this.list = [];
+                this.activeSlug = null;
+            }
+        } catch (e) {
+            console.error('Erreur chargement playlists:', e);
+            PiSignage.ui.toast('Erreur de chargement des playlists', 'error');
+            this.list = [];
+            this.activeSlug = null;
         }
+        this.renderActiveBanner();
+        this.renderCards();
+    },
 
-        // Playlist workspace listeners
-        const workspace = document.getElementById('playlist-workspace');
-        if (workspace) {
-            workspace.addEventListener('dragover', this.handleDragOver.bind(this));
-            workspace.addEventListener('drop', this.handleDrop.bind(this));
+    activePlaylist: function () {
+        if (!this.activeSlug) return null;
+        for (var i = 0; i < this.list.length; i++) {
+            if (this.list[i].slug === this.activeSlug) return this.list[i];
+        }
+        return null;
+    },
+
+    /* ============================ VUE LISTE ============================ */
+
+    renderActiveBanner: function () {
+        var banner = document.getElementById('pl-active-banner');
+        var pill = document.getElementById('pl-active-pill');
+        var active = this.activePlaylist();
+        if (!banner) return;
+
+        if (!active) {
+            banner.style.display = 'none';
+            if (pill) pill.style.display = 'none';
+            return;
+        }
+        banner.style.display = '';
+        var nameEl = document.getElementById('pl-active-name');
+        var metaEl = document.getElementById('pl-active-meta');
+        if (nameEl) nameEl.textContent = active.name;
+        if (metaEl) {
+            var n = active.item_count != null ? active.item_count : (active.items ? active.items.length : 0);
+            metaEl.textContent = n + (n === 1 ? ' élément' : ' éléments') + ' · diffusée à l\'écran';
+        }
+        var editBtn = document.getElementById('pl-active-edit-btn');
+        if (editBtn) {
+            var slug = active.slug;
+            editBtn.onclick = function () { PiSignage.playlists.edit(slug); };
+        }
+        // Pastille discrète dans la topbar.
+        if (pill) {
+            pill.style.display = '';
+            var pt = document.getElementById('pl-active-pill-text');
+            if (pt) pt.textContent = 'À l\'écran : ' + active.name;
         }
     },
 
-    handleMediaDragStart: function(e) {
-        this.draggedElement = e.target;
-        e.target.classList.add('dragging');
-        e.dataTransfer.setData('text/plain', e.target.dataset.file);
-        e.dataTransfer.effectAllowed = 'copy';
-    },
-
-    handleMediaDragEnd: function(e) {
-        e.target.classList.remove('dragging');
-        this.draggedElement = null;
-    },
-
-    handleDragOver: function(e) {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'copy';
-
-        const dropZone = document.getElementById('playlist-drop-zone');
-        if (dropZone && !dropZone.classList.contains('hidden')) {
-            dropZone.classList.add('drag-over');
-        }
-    },
-
-    handleDragLeave: function(e) {
-        const dropZone = document.getElementById('playlist-drop-zone');
-        if (dropZone) {
-            dropZone.classList.remove('drag-over');
-        }
-    },
-
-    handleDrop: function(e) {
-        e.preventDefault();
-        const fileName = e.dataTransfer.getData('text/plain');
-
-        const dropZone = document.getElementById('playlist-drop-zone');
-        if (dropZone) {
-            dropZone.classList.remove('drag-over');
-        }
-
-        if (fileName) {
-            this.addMediaToPlaylist(fileName);
-        }
-    },
-
-    addMediaToPlaylist: function(fileName) {
-        const mediaFile = this.mediaLibrary.find(file => file.name === fileName);
-        if (!mediaFile) return;
-
-        const playlistItem = {
-            file: fileName,
-            duration: this.getDefaultDuration(mediaFile.type),
-            transition: 'none',
-            order: this.currentPlaylist.items.length
-        };
-
-        this.currentPlaylist.items.push(playlistItem);
-        this.renderPlaylistItems();
-        this.updatePlaylistStats();
-        this.setPlaylistModified(true);
-        this.showDropZone(false);
-    },
-
-    getDefaultDuration: function(mimeType) {
-        if (mimeType.startsWith('image/')) return 10;
-        if (mimeType.startsWith('video/')) return 30;
-        if (mimeType.startsWith('audio/')) return 60;
-        return 10;
-    },
-
-    renderPlaylistItems: function() {
-        const container = document.getElementById('playlist-items');
+    renderCards: function () {
+        var container = document.getElementById('pl-cards');
         if (!container) return;
 
-        container.innerHTML = this.currentPlaylist.items.map((item, index) => {
-            const mediaFile = this.mediaLibrary.find(file => file.name === item.file);
-            const mediaType = mediaFile ? this.getMediaType(mediaFile.type) : 'file';
-            const icon = this.getMediaIcon(mediaType);
+        if (!this.list.length) {
+            container.innerHTML =
+                '<div class="empty-state" style="grid-column:1/-1">'
+              + this._svg(this._icons.playlist)
+              + '<h3>Aucune playlist</h3>'
+              + '<p>Créez votre première playlist pour composer et diffuser vos médias.</p>'
+              + '<button class="btn btn-primary" type="button" style="margin-top:16px" onclick="PiSignage.playlists.newPlaylist()">'
+              + this._svg(this._icons.plus) + 'Nouvelle playlist</button>'
+              + '</div>';
+            return;
+        }
 
-            return `
-                <div class="playlist-item" data-index="${index}" onclick="PiSignage.playlists.selectPlaylistItem(${index})">
-                    <div class="drag-handle">⋮⋮</div>
-                    <div class="playlist-item-icon ${mediaType}">
-                        ${icon}
-                    </div>
-                    <div class="playlist-item-content">
-                        <div class="playlist-item-name" title="${item.file}">${item.file}</div>
-                        <div class="playlist-item-details">
-                            <span>Durée: ${item.duration}s</span>
-                            <span>Transition: ${item.transition}</span>
-                            <span>Position: ${index + 1}</span>
-                        </div>
-                    </div>
-                    <div class="playlist-item-actions">
-                        <button class="btn btn-sm btn-danger" onclick="PiSignage.playlists.removePlaylistItem(${index})" title="Supprimer">
-                            🗑️
-                        </button>
-                    </div>
-                </div>
-            `;
+        var self = this;
+        container.innerHTML = this.list.map(function (pl) {
+            var isActive = pl.slug === self.activeSlug;
+            var count = pl.item_count != null ? pl.item_count : (pl.items ? pl.items.length : 0);
+            var slug = self.esc(pl.slug);
+            var name = self.esc(pl.name);
+
+            return '<div class="card">'
+                +   '<div class="card-head" style="margin-bottom:12px">'
+                +     '<h3 class="card-title" style="min-width:0">'
+                +       '<span style="display:inline-flex;color:var(--text-dim)">' + self._svg(self._icons.playlist) + '</span>'
+                +       '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + name + '</span>'
+                +     '</h3>'
+                +     (isActive ? '<span class="badge badge-success"><span class="live-dot"></span>À l\'écran</span>' : '')
+                +   '</div>'
+                +   '<div style="font-size:12px;color:var(--text-faint);margin-bottom:14px">'
+                +     count + (count === 1 ? ' élément' : ' éléments')
+                +     (pl.modified ? ' · ' + self.fmtDate(pl.modified) : '')
+                +   '</div>'
+                +   '<div class="row" style="gap:8px;flex-wrap:wrap">'
+                +     '<button class="btn btn-primary btn-sm" type="button" onclick="PiSignage.playlists.activate(\'' + slug + '\')" title="Mettre cette playlist à l\'écran">'
+                +       self._svg(self._icons.play) + (isActive ? 'Rediffuser' : 'Diffuser à l\'écran') + '</button>'
+                +     '<button class="btn btn-secondary btn-sm" type="button" onclick="PiSignage.playlists.edit(\'' + slug + '\')">'
+                +       self._svg(self._icons.edit) + 'Modifier</button>'
+                +     '<button class="btn btn-danger btn-sm" type="button" onclick="PiSignage.playlists.remove(\'' + slug + '\',\'' + name + '\')">'
+                +       self._svg(self._icons.trash) + 'Supprimer</button>'
+                +   '</div>'
+                + '</div>';
+        }).join('');
+    },
+
+    /* "Diffuser à l'écran" : POST ?action=activate&name=SLUG */
+    activate: async function (slug) {
+        try {
+            var res = await PiSignage.api.request(
+                '/api/playlists.php?action=activate&name=' + encodeURIComponent(slug),
+                { method: 'POST' }
+            );
+            if (res && res.success) {
+                PiSignage.ui.toast('Playlist diffusée à l\'écran', 'success');
+                await this.load();
+            } else {
+                PiSignage.ui.toast('Erreur : ' + ((res && res.message) || 'diffusion impossible'), 'error');
+            }
+        } catch (e) {
+            console.error('Erreur activation playlist:', e);
+            PiSignage.ui.toast('Erreur lors de la diffusion', 'error');
+        }
+    },
+
+    /* Suppression (avec confirmation) : DELETE ?name=SLUG */
+    remove: async function (slug, name) {
+        if (!PiSignage.ui.confirm('Supprimer la playlist « ' + name + ' » ?')) return;
+        try {
+            var res = await PiSignage.api.request(
+                '/api/playlists.php?name=' + encodeURIComponent(slug),
+                { method: 'DELETE' }
+            );
+            if (res && res.success) {
+                PiSignage.ui.toast('Playlist supprimée', 'success');
+                await this.load();
+            } else {
+                PiSignage.ui.toast('Erreur : ' + ((res && res.message) || 'suppression impossible'), 'error');
+            }
+        } catch (e) {
+            console.error('Erreur suppression playlist:', e);
+            PiSignage.ui.toast('Erreur lors de la suppression', 'error');
+        }
+    },
+
+    /* ============================ VUE ÉDITEUR ============================ */
+
+    showList: function () {
+        document.getElementById('pl-editor-view').style.display = 'none';
+        document.getElementById('pl-list-view').style.display = '';
+        var newBtn = document.getElementById('pl-new-btn');
+        if (newBtn) newBtn.style.display = '';
+        this.selectedIndex = null;
+    },
+
+    showEditor: function () {
+        document.getElementById('pl-list-view').style.display = 'none';
+        document.getElementById('pl-editor-view').style.display = '';
+        var newBtn = document.getElementById('pl-new-btn');
+        if (newBtn) newBtn.style.display = 'none';
+    },
+
+    newPlaylist: function () {
+        this.editing = { slug: null, name: '', autoplay: true, autoLoop: true, items: [] };
+        this.selectedIndex = null;
+        this.syncEditorForm();
+        this.showEditor();
+        this.loadMedia();
+        this.renderItems();
+        this.renderItemOptions();
+        var nameInput = document.getElementById('pl-name');
+        if (nameInput) nameInput.focus();
+    },
+
+    /* Charge une playlist existante et ouvre l'éditeur : GET ?name=SLUG */
+    edit: async function (slug) {
+        try {
+            var res = await PiSignage.api.request('/api/playlists.php?name=' + encodeURIComponent(slug));
+            if (!res || !res.success || !res.data || res.data.exists === false) {
+                PiSignage.ui.toast('Playlist introuvable', 'error');
+                return;
+            }
+            var pl = res.data;
+            this.editing = {
+                slug: pl.slug || slug,
+                name: pl.name || '',
+                autoplay: pl.autoplay !== false,
+                autoLoop: pl.autoLoop !== false,
+                items: (pl.items || []).map(function (it) {
+                    return {
+                        url: it.url,
+                        type: it.type || '',
+                        name: it.name || '',
+                        duration: typeof it.duration === 'number' ? it.duration : (parseFloat(it.duration) || 0),
+                        fit: (it.fit === 'cover') ? 'cover' : 'contain',
+                        mute: !!it.mute,
+                        loop: !!it.loop
+                    };
+                })
+            };
+            this.selectedIndex = null;
+            this.syncEditorForm();
+            this.showEditor();
+            this.loadMedia();
+            this.renderItems();
+            this.renderItemOptions();
+        } catch (e) {
+            console.error('Erreur chargement playlist:', e);
+            PiSignage.ui.toast('Erreur de chargement de la playlist', 'error');
+        }
+    },
+
+    // Branche les contrôles statiques de l'éditeur (nom, toggles, recherche, filtres, drop-zone).
+    bindEditorChrome: function () {
+        var self = this;
+
+        var nameInput = document.getElementById('pl-name');
+        if (nameInput) nameInput.addEventListener('input', function () { self.editing.name = this.value; });
+
+        var autoplay = document.getElementById('pl-autoplay');
+        if (autoplay) autoplay.addEventListener('change', function () { self.editing.autoplay = this.checked; });
+
+        var autoloop = document.getElementById('pl-autoloop');
+        if (autoloop) autoloop.addEventListener('change', function () { self.editing.autoLoop = this.checked; });
+
+        var search = document.getElementById('pl-media-search');
+        if (search) search.addEventListener('input', function () {
+            self.mediaSearch = this.value.toLowerCase();
+            self.renderMedia();
+        });
+
+        var filters = document.getElementById('pl-media-filters');
+        if (filters) filters.addEventListener('click', function (e) {
+            var btn = e.target.closest('.filter-btn');
+            if (!btn) return;
+            self.mediaFilter = btn.dataset.type || 'all';
+            filters.querySelectorAll('.filter-btn').forEach(function (b) {
+                b.classList.toggle('active', b === btn);
+            });
+            self.renderMedia();
+        });
+
+        // Drop-zone : accepte les médias glissés depuis la bibliothèque.
+        var dz = document.getElementById('pl-drop-zone');
+        var ws = document.getElementById('pl-items');
+        [dz, ws].forEach(function (zone) {
+            if (!zone) return;
+            zone.addEventListener('dragover', function (e) {
+                if (self._dragPath) { e.preventDefault(); if (dz) dz.classList.add('drag-over'); }
+            });
+            zone.addEventListener('dragleave', function () { if (dz) dz.classList.remove('drag-over'); });
+            zone.addEventListener('drop', function (e) {
+                e.preventDefault();
+                if (dz) dz.classList.remove('drag-over');
+                var path = e.dataTransfer.getData('text/plain') || self._dragPath;
+                if (path) self.addByPath(path);
+            });
+        });
+    },
+
+    syncEditorForm: function () {
+        var nameInput = document.getElementById('pl-name');
+        if (nameInput) nameInput.value = this.editing.name || '';
+        var autoplay = document.getElementById('pl-autoplay');
+        if (autoplay) autoplay.checked = this.editing.autoplay !== false;
+        var autoloop = document.getElementById('pl-autoloop');
+        if (autoloop) autoloop.checked = this.editing.autoLoop !== false;
+    },
+
+    /* -------------------------- Bibliothèque média -------------------------- */
+    loadMedia: async function () {
+        var container = document.getElementById('pl-media-list');
+        try {
+            var res = await PiSignage.api.request('/api/media.php');
+            this.media = (res && res.success && res.data) ? res.data : [];
+        } catch (e) {
+            console.error('Erreur chargement médias:', e);
+            this.media = [];
+            if (container) container.innerHTML = '<div class="empty-state"><p>Erreur de chargement des médias</p></div>';
+            return;
+        }
+        this.renderMedia();
+    },
+
+    renderMedia: function () {
+        var container = document.getElementById('pl-media-list');
+        if (!container) return;
+        var self = this;
+
+        var items = this.media.filter(function (m) {
+            var matchType = self.mediaFilter === 'all' || self.typeClass(m.type) === self.mediaFilter;
+            var matchSearch = !self.mediaSearch || (m.name || '').toLowerCase().indexOf(self.mediaSearch) !== -1;
+            return matchType && matchSearch;
+        });
+
+        if (!items.length) {
+            container.innerHTML = '<div class="empty-state" style="padding:24px 8px"><p>Aucun média</p></div>';
+            return;
+        }
+
+        container.innerHTML = items.map(function (m) {
+            var cls = self.typeClass(m.type);
+            return '<div class="media-item" draggable="true" data-path="' + self.esc(m.path) + '">'
+                +    '<div class="media-item-icon ' + cls + '">' + self.typeIcon(m.type) + '</div>'
+                +    '<div class="media-item-info">'
+                +      '<div class="media-item-name" title="' + self.esc(m.name) + '">' + self.esc(m.name) + '</div>'
+                +      '<div class="media-item-meta">' + self.esc(m.size_formatted || '') + '</div>'
+                +    '</div>'
+                +    '<div class="media-item-actions">'
+                +      '<button class="icon-btn" type="button" title="Ajouter à la playlist" data-add="' + self.esc(m.path) + '">'
+                +        self._svg(self._icons.plus) + '</button>'
+                +    '</div>'
+                +  '</div>';
         }).join('');
 
-        this.showDropZone(this.currentPlaylist.items.length === 0);
-    },
-
-    showDropZone: function(show) {
-        const dropZone = document.getElementById('playlist-drop-zone');
-        if (dropZone) {
-            dropZone.classList.toggle('hidden', !show);
-        }
-    },
-
-    selectPlaylistItem: function(index) {
-        this.selectedItem = index;
-
-        // Update visual selection
-        document.querySelectorAll('.playlist-item').forEach((item, i) => {
-            item.classList.toggle('selected', i === index);
+        // Clic "+" pour ajouter.
+        container.querySelectorAll('[data-add]').forEach(function (btn) {
+            btn.addEventListener('click', function () { self.addByPath(this.getAttribute('data-add')); });
         });
-
-        this.updatePropertiesPanel();
-    },
-
-    updatePropertiesPanel: function() {
-        const propertiesSection = document.getElementById('item-properties');
-        if (!propertiesSection) return;
-
-        if (this.selectedItem !== null && this.currentPlaylist.items[this.selectedItem]) {
-            const item = this.currentPlaylist.items[this.selectedItem];
-
-            const selectedFileNameEl = document.getElementById('selected-file-name');
-            if (selectedFileNameEl) selectedFileNameEl.textContent = item.file;
-
-            const itemDurationEl = document.getElementById('item-duration');
-            if (itemDurationEl) itemDurationEl.value = item.duration;
-
-            const itemTransitionEl = document.getElementById('item-transition');
-            if (itemTransitionEl) itemTransitionEl.value = item.transition;
-
-            propertiesSection.style.display = 'block';
-        } else {
-            propertiesSection.style.display = 'none';
-        }
-    },
-
-    removePlaylistItem: function(index) {
-        this.currentPlaylist.items.splice(index, 1);
-
-        // Update order values
-        this.currentPlaylist.items.forEach((item, i) => {
-            item.order = i;
+        // Glisser depuis la bibliothèque.
+        container.querySelectorAll('.media-item').forEach(function (el) {
+            el.addEventListener('dragstart', function (e) {
+                self._dragPath = el.getAttribute('data-path');
+                e.dataTransfer.setData('text/plain', self._dragPath);
+                e.dataTransfer.effectAllowed = 'copy';
+                el.classList.add('dragging');
+            });
+            el.addEventListener('dragend', function () {
+                self._dragPath = null;
+                el.classList.remove('dragging');
+            });
         });
-
-        this.renderPlaylistItems();
-        this.updatePlaylistStats();
-        this.setPlaylistModified(true);
-
-        // Clear selection if removed item was selected
-        if (this.selectedItem === index) {
-            this.selectedItem = null;
-            this.updatePropertiesPanel();
-        } else if (this.selectedItem > index) {
-            this.selectedItem--;
-        }
     },
 
-    updatePlaylistStats: function() {
-        const itemCount = this.currentPlaylist.items.length;
-        const totalDuration = this.currentPlaylist.items.reduce((sum, item) => sum + item.duration, 0);
-
-        const itemCountEl = document.getElementById('item-count');
-        if (itemCountEl) itemCountEl.textContent = `${itemCount} élément${itemCount !== 1 ? 's' : ''}`;
-
-        const totalDurationEl = document.getElementById('total-duration');
-        if (totalDurationEl) totalDurationEl.textContent = PiSignage.utils.formatTime(totalDuration);
-
-        // Enable/disable buttons
-        const hasItems = itemCount > 0;
-        const previewBtn = document.getElementById('preview-btn');
-        if (previewBtn) previewBtn.disabled = !hasItems;
-
-        const saveBtn = document.getElementById('save-playlist-btn');
-        if (saveBtn) saveBtn.disabled = !hasItems || !this.currentPlaylist.name;
+    // Durée par défaut : images 10s, vidéo/audio 0 (= durée native gérée par le player).
+    defaultDuration: function (type) {
+        return this.typeClass(type) === 'image' ? 10 : 0;
     },
 
-    resetPlaylistEditor: function() {
-        this.currentPlaylist = {
-            name: '',
-            items: [],
-            settings: {
-                loop: true,
-                shuffle: false,
-                auto_advance: true,
-                fade_duration: 1000
-            }
-        };
-
-        this.selectedItem = null;
-        this.setPlaylistModified(false);
-
-        // Update UI elements
-        const nameInput = document.getElementById('playlist-name-input');
-        if (nameInput) nameInput.value = '';
-
-        const nameDisplay = document.getElementById('playlist-name-display');
-        if (nameDisplay) nameDisplay.textContent = 'Nouvelle Playlist';
-
-        this.renderPlaylistItems();
-        this.updatePlaylistStats();
-        this.updatePropertiesPanel();
-
-        // Show visual feedback
-        if (typeof showAlert === 'function') {
-            showAlert('✨ Nouvelle playlist créée - Prête à être éditée', 'success');
+    addByPath: function (path) {
+        var m = null;
+        for (var i = 0; i < this.media.length; i++) {
+            if (this.media[i].path === path) { m = this.media[i]; break; }
         }
-        console.log('✨ Éditeur de playlist réinitialisé');
+        var type = m ? m.type : '';
+        var name = m ? m.name : (path.split('/').pop() || path);
+        this.editing.items.push({
+            url: path,
+            type: type,
+            name: name,
+            duration: this.defaultDuration(type),
+            fit: 'contain',
+            mute: false,
+            loop: false
+        });
+        this.renderItems();
+        PiSignage.ui.toast('« ' + name + ' » ajouté', 'success');
     },
 
-    updatePlaylistName: function() {
-        const nameInput = document.getElementById('playlist-name-input');
-        if (nameInput) {
-            const newName = nameInput.value.trim();
-            this.currentPlaylist.name = newName;
+    /* ------------------------- Items de la playlist ------------------------- */
+    renderItems: function () {
+        var container = document.getElementById('pl-items');
+        var dropZone = document.getElementById('pl-drop-zone');
+        var countEl = document.getElementById('pl-item-count');
+        if (!container) return;
+        var self = this;
+        var items = this.editing.items;
 
-            // Update display
-            const nameDisplay = document.getElementById('playlist-name-display');
-            if (nameDisplay) {
-                nameDisplay.textContent = newName || 'Nouvelle Playlist';
-            }
+        if (countEl) countEl.textContent = items.length + (items.length === 1 ? ' élément' : ' éléments');
+        if (dropZone) dropZone.classList.toggle('hidden', items.length > 0);
 
-            // Update save button state
-            this.setPlaylistModified(true);
-            console.log('📝 Playlist name updated:', newName);
-        }
+        container.innerHTML = items.map(function (it, i) {
+            var cls = self.typeClass(it.type);
+            var dur = (cls === 'image' || it.duration > 0) ? (it.duration || 0) + 's' : 'durée native';
+            var selected = (self.selectedIndex === i) ? ' selected' : '';
+            return '<div class="playlist-item' + selected + '" data-index="' + i + '">'
+                +    '<div class="drag-handle" title="Position ' + (i + 1) + '">' + self._svg(self._icons.drag) + '</div>'
+                +    '<div class="playlist-item-icon ' + cls + '">' + self.typeIcon(it.type) + '</div>'
+                +    '<div class="playlist-item-content">'
+                +      '<div class="playlist-item-name" title="' + self.esc(it.name) + '">' + self.esc(it.name) + '</div>'
+                +      '<div class="playlist-item-details"><span>' + (i + 1) + '</span><span>' + dur + '</span><span>' + self.esc(it.fit) + '</span></div>'
+                +    '</div>'
+                +    '<div class="playlist-item-actions">'
+                +      '<button class="icon-btn" type="button" title="Monter" data-move="up" data-index="' + i + '"' + (i === 0 ? ' disabled' : '') + '>' + self._svg(self._icons.up) + '</button>'
+                +      '<button class="icon-btn" type="button" title="Descendre" data-move="down" data-index="' + i + '"' + (i === items.length - 1 ? ' disabled' : '') + '>' + self._svg(self._icons.down) + '</button>'
+                +      '<button class="icon-btn" type="button" title="Retirer" data-remove="' + i + '">' + self._svg(self._icons.trash) + '</button>'
+                +    '</div>'
+                +  '</div>';
+        }).join('');
+
+        // Sélection (clic sur la ligne).
+        container.querySelectorAll('.playlist-item').forEach(function (row) {
+            row.addEventListener('click', function () {
+                self.selectItem(parseInt(this.getAttribute('data-index'), 10));
+            });
+        });
+        // Boutons monter/descendre.
+        container.querySelectorAll('[data-move]').forEach(function (btn) {
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                self.move(parseInt(this.getAttribute('data-index'), 10), this.getAttribute('data-move'));
+            });
+        });
+        // Retirer.
+        container.querySelectorAll('[data-remove]').forEach(function (btn) {
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                self.removeItem(parseInt(this.getAttribute('data-remove'), 10));
+            });
+        });
     },
 
-    setPlaylistModified: function(modified) {
-        this.playlistModified = modified;
-        const saveBtn = document.getElementById('save-playlist-btn');
-        if (saveBtn) {
-            saveBtn.disabled = !modified || !this.currentPlaylist.name || this.currentPlaylist.items.length === 0;
-        }
+    move: function (index, dir) {
+        var items = this.editing.items;
+        var target = dir === 'up' ? index - 1 : index + 1;
+        if (target < 0 || target >= items.length) return;
+        var tmp = items[index];
+        items[index] = items[target];
+        items[target] = tmp;
+        if (this.selectedIndex === index) this.selectedIndex = target;
+        else if (this.selectedIndex === target) this.selectedIndex = index;
+        this.renderItems();
+        this.renderItemOptions();
     },
 
-    saveCurrentPlaylist: async function() {
-        if (!this.currentPlaylist.name) {
-            const name = prompt('Nom de la playlist:');
-            if (!name) return;
-            this.currentPlaylist.name = name;
+    removeItem: function (index) {
+        this.editing.items.splice(index, 1);
+        if (this.selectedIndex === index) this.selectedIndex = null;
+        else if (this.selectedIndex != null && this.selectedIndex > index) this.selectedIndex--;
+        this.renderItems();
+        this.renderItemOptions();
+    },
 
-            const nameInput = document.getElementById('playlist-name-input');
-            if (nameInput) nameInput.value = name;
+    selectItem: function (index) {
+        this.selectedIndex = index;
+        this.renderItems();
+        this.renderItemOptions();
+    },
 
-            const nameDisplay = document.getElementById('playlist-name-display');
-            if (nameDisplay) nameDisplay.textContent = name;
-        }
+    /* ---------------------- Options de l'élément sélectionné ---------------------- */
+    renderItemOptions: function () {
+        var box = document.getElementById('pl-item-options');
+        if (!box) return;
+        var self = this;
+        var idx = this.selectedIndex;
 
-        if (this.currentPlaylist.items.length === 0) {
-            showAlert('La playlist doit contenir au moins un élément', 'warning');
+        if (idx == null || !this.editing.items[idx]) {
+            box.innerHTML = '<div class="empty-state" style="padding:24px 8px">'
+                + this._svg(this._icons.playlist)
+                + '<p>Sélectionnez un élément de la playlist pour ajuster ses options.</p></div>';
             return;
         }
+
+        var it = this.editing.items[idx];
+        var isImage = this.typeClass(it.type) === 'image';
+        var isAudio = this.typeClass(it.type) === 'audio';
+
+        var html = '<div class="form-group"><label>Élément</label>'
+            + '<div style="font-size:13px;font-weight:600;color:var(--text);word-break:break-word">' + this.esc(it.name) + '</div></div>';
+
+        // Durée : pertinente pour les images (les vidéos/audios utilisent leur durée native si 0).
+        html += '<div class="form-group"><label>Durée (secondes)</label>'
+            + '<input type="number" id="pl-opt-duration" class="form-control" min="0" max="86400" value="' + (it.duration || 0) + '">'
+            + '<p style="font-size:11.5px;color:var(--text-faint);margin-top:6px">'
+            + (isImage ? 'Temps d\'affichage de l\'image.' : '0 = durée native du fichier.') + '</p></div>';
+
+        // Ajustement (fit) — utile pour images/vidéos.
+        if (!isAudio) {
+            html += '<div class="form-group"><label>Ajustement</label>'
+                + '<select id="pl-opt-fit" class="form-control">'
+                + '<option value="contain"' + (it.fit !== 'cover' ? ' selected' : '') + '>Contenir (entier)</option>'
+                + '<option value="cover"' + (it.fit === 'cover' ? ' selected' : '') + '>Remplir (recadré)</option>'
+                + '</select></div>';
+        }
+
+        // Muet (vidéo/audio).
+        if (!isImage) {
+            html += '<div class="form-group"><label class="row" style="justify-content:space-between;gap:12px;margin:0;cursor:pointer">'
+                + '<span>Couper le son</span>'
+                + '<span class="toggle-switch"><input type="checkbox" id="pl-opt-mute"' + (it.mute ? ' checked' : '') + '><span class="toggle-slider"></span></span>'
+                + '</label></div>';
+        }
+
+        // Boucle de l'élément.
+        html += '<div class="form-group"><label class="row" style="justify-content:space-between;gap:12px;margin:0;cursor:pointer">'
+            + '<span>Boucler cet élément</span>'
+            + '<span class="toggle-switch"><input type="checkbox" id="pl-opt-loop"' + (it.loop ? ' checked' : '') + '><span class="toggle-slider"></span></span>'
+            + '</label></div>';
+
+        html += '<button class="btn btn-danger btn-block btn-sm" type="button" id="pl-opt-remove">'
+            + this._svg(this._icons.trash) + 'Retirer de la playlist</button>';
+
+        box.innerHTML = html;
+
+        var dur = document.getElementById('pl-opt-duration');
+        if (dur) dur.addEventListener('input', function () {
+            var v = parseFloat(this.value);
+            it.duration = (isNaN(v) || v < 0) ? 0 : v;
+            self.renderItems();
+        });
+        var fit = document.getElementById('pl-opt-fit');
+        if (fit) fit.addEventListener('change', function () {
+            it.fit = (this.value === 'cover') ? 'cover' : 'contain';
+            self.renderItems();
+        });
+        var mute = document.getElementById('pl-opt-mute');
+        if (mute) mute.addEventListener('change', function () { it.mute = this.checked; });
+        var loop = document.getElementById('pl-opt-loop');
+        if (loop) loop.addEventListener('change', function () { it.loop = this.checked; });
+        var rem = document.getElementById('pl-opt-remove');
+        if (rem) rem.addEventListener('click', function () { self.removeItem(idx); });
+    },
+
+    /* ----------------------------- Enregistrement ----------------------------- */
+    // save(andBroadcast): POST /api/playlists.php ; si andBroadcast -> activate ensuite.
+    save: async function (andBroadcast) {
+        var name = (this.editing.name || '').trim();
+        if (!name) {
+            PiSignage.ui.toast('Donnez un nom à la playlist', 'warning');
+            var nameInput = document.getElementById('pl-name');
+            if (nameInput) nameInput.focus();
+            return;
+        }
+        if (!this.editing.items.length) {
+            PiSignage.ui.toast('Ajoutez au moins un élément', 'warning');
+            return;
+        }
+
+        var payload = {
+            name: name,
+            autoplay: this.editing.autoplay !== false,
+            autoLoop: this.editing.autoLoop !== false,
+            items: this.editing.items.map(function (it) {
+                return {
+                    url: it.url,
+                    duration: it.duration || 0,
+                    fit: (it.fit === 'cover') ? 'cover' : 'contain',
+                    mute: !!it.mute,
+                    loop: !!it.loop
+                };
+            })
+        };
 
         try {
-            const data = await PiSignage.api.playlists.save(this.currentPlaylist);
-            if (data.success) {
-                showAlert(`Playlist "${this.currentPlaylist.name}" sauvegardée!`, 'success');
-                this.setPlaylistModified(false);
-                this.loadPlaylists(); // Refresh main playlist list
-            } else {
-                showAlert('Erreur: ' + (data.message || 'Échec de la sauvegarde'), 'error');
-            }
-        } catch (error) {
-            console.error('Save error:', error);
-            showAlert('Erreur de connexion lors de la sauvegarde', 'error');
-        }
-    },
-
-    // Function to show playlist selection modal
-    loadExistingPlaylist: function() {
-        if (this.currentPlaylists.length === 0) {
-            showAlert('Aucune playlist disponible', 'info');
-            return;
-        }
-
-        // Create modal for playlist selection
-        const modal = document.createElement('div');
-        modal.className = 'modal show';
-        modal.style.cssText = 'display: flex; align-items: center; justify-content: center; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000;';
-
-        modal.innerHTML = `
-            <div class="modal-content" style="background: white; padding: 30px; border-radius: 8px; max-width: 500px; width: 90%;">
-                <h3>Charger une Playlist</h3>
-                <div class="playlist-list" style="max-height: 400px; overflow-y: auto; margin: 20px 0;">
-                    ${this.currentPlaylists.map(playlist => `
-                        <div class="playlist-item" style="padding: 10px; margin: 5px 0; border: 1px solid #ddd; border-radius: 4px; cursor: pointer;"
-                             onclick="PiSignage.playlists.selectAndLoadPlaylist('${playlist.name}')">
-                            <strong>${playlist.name}</strong>
-                            <span style="float: right;">${playlist.items ? playlist.items.length : 0} éléments</span>
-                        </div>
-                    `).join('')}
-                </div>
-                <button class="btn btn-secondary" onclick="this.closest('.modal').remove()">Annuler</button>
-            </div>
-        `;
-
-        document.body.appendChild(modal);
-    },
-
-    selectAndLoadPlaylist: function(playlistName) {
-        const playlist = this.currentPlaylists.find(p => p.name === playlistName);
-        if (playlist) {
-            this.currentPlaylist = {
-                name: playlist.name,
-                items: playlist.items || [],
-                settings: playlist.settings || {
-                    loop: true,
-                    shuffle: false,
-                    auto_advance: true,
-                    fade_duration: 1000
-                }
-            };
-            this.renderPlaylistItems();
-            this.renderMediaLibrary();
-            this.updatePropertiesPanel();
-            document.querySelector('.modal.show')?.remove();
-            showAlert(`Playlist "${playlistName}" chargée`, 'success');
-        }
-    },
-
-    // Setup global functions for backward compatibility
-    setupGlobalFunctions: function() {
-        window.loadPlaylists = this.loadPlaylists.bind(this);
-        window.createPlaylist = this.createPlaylist.bind(this);
-        window.editPlaylist = this.editPlaylist.bind(this);
-        window.deletePlaylist = this.deletePlaylist.bind(this);
-        window.playPlaylist = this.playPlaylist.bind(this);
-        window.initPlaylistEditor = this.initPlaylistEditor.bind(this);
-        window.saveCurrentPlaylist = this.saveCurrentPlaylist.bind(this);
-        window.createNewPlaylist = this.resetPlaylistEditor.bind(this);
-        window.loadExistingPlaylist = this.loadExistingPlaylist.bind(this);
-        window.selectAndLoadPlaylist = this.selectAndLoadPlaylist.bind(this);
-        window.updatePlaylistName = this.updatePlaylistName.bind(this);
-
-        // Media library functions
-        window.refreshMediaLibrary = this.loadMediaLibrary.bind(this);
-        window.filterMediaLibrary = this.renderMediaLibrary.bind(this);
-        window.filterMediaType = function(type) {
-            // Update active button
-            document.querySelectorAll('.filter-btn').forEach(btn => {
-                btn.classList.toggle('active', btn.dataset.type === type);
+            var res = await PiSignage.api.request('/api/playlists.php', {
+                method: 'POST',
+                body: JSON.stringify(payload)
             });
-            // Re-render with new filter
-            PiSignage.playlists.renderMediaLibrary();
-        };
+            if (!res || !res.success) {
+                PiSignage.ui.toast('Erreur : ' + ((res && res.message) || 'enregistrement impossible'), 'error');
+                return;
+            }
+            // Slug renvoyé par l'API (dérivé du nom).
+            var slug = (res.data && res.data.slug) ? res.data.slug : null;
+            this.editing.slug = slug;
 
-        // Playlist settings functions
-        window.updatePlaylistSettings = this.updatePropertiesPanel.bind(this);
+            if (andBroadcast && slug) {
+                var act = await PiSignage.api.request(
+                    '/api/playlists.php?action=activate&name=' + encodeURIComponent(slug),
+                    { method: 'POST' }
+                );
+                if (act && act.success) {
+                    PiSignage.ui.toast('Playlist enregistrée et diffusée à l\'écran', 'success');
+                } else {
+                    PiSignage.ui.toast('Enregistrée, mais diffusion impossible', 'warning');
+                }
+            } else {
+                PiSignage.ui.toast('Playlist enregistrée', 'success');
+            }
+
+            await this.load();
+            this.showList();
+        } catch (e) {
+            console.error('Erreur enregistrement playlist:', e);
+            PiSignage.ui.toast('Erreur lors de l\'enregistrement', 'error');
+        }
     }
 };
 
-// Ensure global functions are available immediately when script loads
-// This handles onclick bindings in HTML before DOMContentLoaded
-if (typeof window !== 'undefined') {
-    console.log('🔧 Setting up global functions for playlists...');
-    if (typeof PiSignage !== 'undefined' && PiSignage.playlists) {
-        PiSignage.playlists.setupGlobalFunctions();
-        console.log('✅ Global playlist functions ready:', typeof window.createNewPlaylist);
-    } else {
-        console.error('❌ PiSignage.playlists not ready for global function setup');
-    }
-}
+/* Compat : certains appels historiques utilisent window.loadPlaylists(). */
+window.loadPlaylists = function () { return PiSignage.playlists.load(); };
 
-// CSS for playlist styling
-const playlistStyles = document.createElement('style');
-playlistStyles.textContent = `
-    .playlist-card {
-        transition: transform 0.2s, box-shadow 0.2s;
-    }
-
-    .playlist-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-    }
-
-    .playlist-header {
-        margin-bottom: 15px;
-    }
-
-    .playlist-info {
-        display: flex;
-        gap: 15px;
-        font-size: 12px;
-        color: #ccc;
-        margin-top: 5px;
-    }
-
-    .playlist-actions {
-        display: flex;
-        gap: 10px;
-        justify-content: flex-end;
-    }
-
-    .media-item {
-        cursor: grab;
-        transition: transform 0.2s;
-    }
-
-    .media-item:hover {
-        transform: scale(1.02);
-    }
-
-    .media-item.dragging {
-        opacity: 0.5;
-        cursor: grabbing;
-    }
-
-    .playlist-item {
-        display: flex;
-        align-items: center;
-        padding: 10px;
-        border: 1px solid #444;
-        border-radius: 5px;
-        margin-bottom: 5px;
-        cursor: pointer;
-        transition: background-color 0.2s;
-    }
-
-    .playlist-item:hover {
-        background-color: rgba(74, 158, 255, 0.1);
-    }
-
-    .playlist-item.selected {
-        background-color: rgba(74, 158, 255, 0.2);
-        border-color: #4a9eff;
-    }
-
-    .drag-handle {
-        margin-right: 10px;
-        color: #666;
-        cursor: grab;
-    }
-
-    .playlist-item-icon {
-        margin-right: 10px;
-        font-size: 18px;
-    }
-
-    .playlist-item-content {
-        flex: 1;
-    }
-
-    .playlist-item-name {
-        font-weight: bold;
-        margin-bottom: 5px;
-    }
-
-    .playlist-item-details {
-        font-size: 12px;
-        color: #ccc;
-        display: flex;
-        gap: 15px;
-    }
-
-    #playlist-drop-zone.drag-over {
-        border-color: #4a9eff;
-        background-color: rgba(74, 158, 255, 0.1);
-    }
-`;
-document.head.appendChild(playlistStyles);
-
-console.log('✅ PiSignage Playlists module loaded - Playlist management and editor ready');
+console.log('PiSignage Playlists module loaded (API unifiée)');

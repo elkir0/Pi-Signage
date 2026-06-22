@@ -1,278 +1,191 @@
 /**
- * PiSignage Dashboard Module
- * Handles dashboard-specific functionality including stats display and quick actions
+ * PiSignage Dashboard module — wires the dashboard UI to live APIs.
+ * Stats donuts, media/playlist counts, now-playing, transport, quick actions.
  */
-
-// Ensure PiSignage namespace exists
 window.PiSignage = window.PiSignage || {};
 
-// Dashboard functionality
 PiSignage.dashboard = {
-    intervals: {
-        stats: null
+    timers: { stats: null, player: null },
+
+    init() {
+        this.refreshAll();
+        this.timers.stats = setInterval(() => this.refreshStats(), 5000);
+        this.timers.player = setInterval(() => this.refreshPlayer(), 3000);
     },
 
-    init: function() {
-        console.log('📊 Initializing dashboard...');
-        this.loadInitialStats();
-        this.startStatsRefresh();
-        this.setupQuickActions();
+    refreshAll() {
+        this.refreshStats();
+        this.refreshCounts();
+        this.refreshPlayer();
     },
 
-    loadInitialStats: function() {
-        // Load stats immediately on dashboard load
-        setTimeout(() => {
-            this.refreshStats();
-        }, 100);
+    /* ---------- helpers ---------- */
+    _el(id) { return document.getElementById(id); },
+
+    _fmtBytes(b) {
+        if (!b || isNaN(b)) return '0';
+        const u = ['o', 'Ko', 'Mo', 'Go', 'To'];
+        const i = Math.floor(Math.log(b) / Math.log(1024));
+        return (b / Math.pow(1024, i)).toFixed(i >= 3 ? 1 : 0).replace('.', ',') + ' ' + u[i];
     },
 
-    refreshStats: async function() {
+    _fmtTime(s) {
+        s = Math.max(0, Math.floor(s || 0));
+        const m = Math.floor(s / 60), sec = s % 60;
+        return String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+    },
+
+    _donut(id, pct, text) {
+        const el = this._el(id);
+        if (!el) return;
+        pct = Math.max(0, Math.min(100, pct || 0));
+        el.style.setProperty('--val', pct);
+        const span = el.querySelector('span');
+        if (span) span.textContent = text;
+    },
+
+    /* ---------- system stats ---------- */
+    async refreshStats() {
         try {
-            const data = await PiSignage.api.system.getStats();
-            if (data.success && data.data) {
-                this.updateStatsDisplay(data.data);
-            }
-        } catch (error) {
-            console.error('Error refreshing stats:', error);
+            const r = await PiSignage.api.system.getStats();
+            if (!r || !r.success || !r.data) return;
+            const s = r.data;
+            const cpu = (s.cpu && s.cpu.usage) || 0;
+            const ram = (s.memory && s.memory.percent) || 0;
+            const temp = s.temperature || 0;
+            const disk = s.disk || {};
+            this._donut('g-cpu', cpu, Math.round(cpu) + '%');
+            this._donut('g-ram', ram, Math.round(ram) + '%');
+            this._donut('g-tmp', Math.min(100, temp), Math.round(temp) + '°');
+            this._donut('g-dsk', disk.percent || 0, Math.round(disk.percent || 0) + '%');
+
+            const stor = this._el('stat-storage');
+            if (stor && disk.total) stor.innerHTML = this._fmtBytes(disk.used) + ' <small>/ ' + this._fmtBytes(disk.total) + '</small>';
+            const bar = this._el('stat-storage-bar');
+            if (bar) bar.style.width = (disk.percent || 0) + '%';
+
+            const up = this._el('stat-uptime');
+            if (up && s.uptime) up.textContent = String(s.uptime).replace(/^up\s+/, '');
+
+            this._setUndervoltage(s.throttled);
+        } catch (e) { /* silent — transient */ }
+    },
+
+    /* ---------- under-voltage alert ---------- */
+    _setUndervoltage(t) {
+        const badge = this._el('undervoltage-badge');
+        if (!badge) return;
+        // t is null on non-Pi hardware or when vcgencmd is unavailable.
+        const alert = !!(t && (t.under_voltage_now || t.under_voltage_occurred));
+        badge.style.display = alert ? 'inline-flex' : 'none';
+        if (alert) {
+            badge.title = t.under_voltage_now
+                ? "Sous-alimentation en cours — vérifiez l'alimentation du Raspberry Pi"
+                : "Une sous-alimentation s'est produite depuis le démarrage";
         }
     },
 
-    updateStatsDisplay: function(stats) {
-        const updateElement = (id, value) => {
-            const el = document.getElementById(id);
-            if (el) {
-                el.textContent = value;
-                // Add animation class for visual feedback
-                el.classList.add('stat-updated');
-                setTimeout(() => el.classList.remove('stat-updated'), 500);
-            }
-        };
-
-        // Update CPU, RAM, Temperature
-        updateElement('cpu-usage', ((stats.cpu && stats.cpu.usage) || 0) + '%');
-        updateElement('ram-usage', ((stats.memory && stats.memory.percent) || 0) + '%');
-        updateElement('temperature', (stats.temperature || 0) + '°C');
-
-        // Update system stats
-        updateElement('uptime', stats.uptime || '--');
-        updateElement('network', stats.network || '--');
-        updateElement('media-count', (stats.media_count || 0) + ' fichiers');
-
-        // Update storage with formatted info
-        const storageEl = document.getElementById('storage');
-        if (storageEl && stats.disk) {
-            storageEl.textContent = `${stats.disk.used_formatted} / ${stats.disk.total_formatted} (${stats.disk.percent}%)`;
-        }
-
-        // Update additional storage indicator
-        const storageUsageEl = document.getElementById('storage-usage');
-        if (storageUsageEl && stats.disk) {
-            storageUsageEl.textContent = stats.disk.percent + '%';
-        }
-    },
-
-    startStatsRefresh: function() {
-        // Clear existing interval
-        if (this.intervals.stats) {
-            clearInterval(this.intervals.stats);
-        }
-
-        // Start new interval
-        this.intervals.stats = setInterval(() => {
-            this.refreshStats();
-        }, 5000);
-
-        console.log('📊 Dashboard stats refresh started (5s interval)');
-    },
-
-    stopStatsRefresh: function() {
-        if (this.intervals.stats) {
-            clearInterval(this.intervals.stats);
-            this.intervals.stats = null;
-            console.log('📊 Dashboard stats refresh stopped');
-        }
-    },
-
-    setupQuickActions: function() {
-        // Quick screenshot functionality
-        this.setupQuickScreenshot();
-    },
-
-    setupQuickScreenshot: function() {
-        // Make takeQuickScreenshot globally available
-        window.takeQuickScreenshot = this.takeQuickScreenshot.bind(this);
-    },
-
-    takeQuickScreenshot: async function(source = 'dashboard') {
-        showAlert(`Capture depuis ${source}...`, 'info');
-
+    /* ---------- counts ---------- */
+    async refreshCounts() {
         try {
-            const data = await PiSignage.api.screenshot.capture();
-            if (data.success) {
-                this.showScreenshotModal(data.data.url);
-                showAlert('Capture réalisée!', 'success');
-            } else {
-                showAlert('Erreur: ' + data.message, 'error');
-            }
-        } catch (error) {
-            console.error('Screenshot error:', error);
-            showAlert('Erreur lors de la capture', 'error');
-        }
-    },
-
-    showScreenshotModal: function(imageUrl) {
-        // Create modal for quick screenshot display
-        const modal = document.createElement('div');
-        modal.className = 'modal active';
-        modal.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.8);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 10000;
-        `;
-
-        modal.innerHTML = `
-            <div class="modal-content" style="
-                background: #2a2d3a;
-                border-radius: 15px;
-                padding: 30px;
-                max-width: 90%;
-                max-height: 90%;
-                position: relative;
-                box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-            ">
-                <h3 style="margin-bottom: 20px; color: #4a9eff; text-align: center;">📸 Capture d'écran</h3>
-                <img src="${imageUrl}?${Date.now()}" style="
-                    width: 100%;
-                    max-width: 800px;
-                    border-radius: 10px;
-                    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-                ">
-                <button class="btn btn-primary" style="
-                    margin-top: 20px;
-                    width: 100%;
-                    padding: 12px;
-                    font-size: 16px;
-                " onclick="this.closest('.modal').remove()">
-                    Fermer
-                </button>
-            </div>
-        `;
-
-        // Close on background click
-        modal.addEventListener('click', function(e) {
-            if (e.target === modal) {
-                modal.remove();
-            }
-        });
-
-        document.body.appendChild(modal);
-    },
-
-    // Player switcher functionality for dashboard
-    getCurrentPlayer: async function() {
+            const m = await PiSignage.api.media.list();
+            const el = this._el('stat-media');
+            if (el && m && m.success) el.textContent = Array.isArray(m.data) ? m.data.length : 0;
+        } catch (e) {}
         try {
-            const data = await PiSignage.api.system.getCurrentPlayer();
-            if (data.success) {
-                const player = data.player || 'vlc';
-                PiSignage.player.setCurrentPlayer(player);
-                this.updatePlayerInterface();
-
-                // Update radio buttons
-                const radioBtn = document.getElementById('player-' + player);
-                if (radioBtn) {
-                    radioBtn.checked = true;
-                }
+            const p = await PiSignage.api.playlists.list();
+            const el = this._el('stat-playlists');
+            if (el && p && p.success) {
+                const d = p.data;
+                el.textContent = Array.isArray(d) ? d.length : (d && Array.isArray(d.playlists) ? d.playlists.length : 0);
             }
-        } catch (error) {
-            console.error('Get player error:', error);
-            // Use VLC as default fallback
-            PiSignage.player.setCurrentPlayer('vlc');
-            this.updatePlayerInterface();
+        } catch (e) {}
+    },
+
+    /* ---------- now playing (moteur réel via /api/display.php) ---------- */
+    async refreshPlayer() {
+        try {
+            const r = await PiSignage.api.request('/api/display.php?action=state');
+            if (!r || !r.success || !r.data) { this._setPlayer(null); return; }
+            this._setPlayer(r.data);
+        } catch (e) { this._setPlayer(null); }
+    },
+
+    // d = { state:{status,name,index,count,current{...}}, online, active{slug,name} }
+    _setPlayer(d) {
+        const pill = this._el('topbar-status');
+        const title = this._el('np-title'), sub = this._el('np-sub'),
+              fill = this._el('np-fill'), cur = this._el('np-cur'),
+              dur = this._el('np-dur'), badge = this._el('np-badge');
+
+        const st = d && d.state ? d.state : null;
+        const online = !!(d && d.online);
+        const active = d && d.active ? d.active : null;
+        const status = st ? st.status : null;
+        const playing = status === 'playing';
+        this._playing = playing;
+
+        if (!st || !online || status === 'idle' || !st.current) {
+            if (title) title.textContent = online ? 'Aucune lecture' : 'Lecteur hors ligne';
+            if (sub) sub.textContent = '—';
+            if (fill) fill.style.width = '0%';
+            if (cur) cur.textContent = '—';
+            if (dur) dur.textContent = '—';
+            if (badge) badge.style.display = 'none';
+            if (pill) { pill.className = 'status-pill is-stopped'; pill.querySelector('.pill-text').textContent = online ? 'Lecteur · arrêté' : 'Lecteur · hors ligne'; }
+            return;
+        }
+
+        const c = st.current || {};
+        const idx = (st.index | 0) + 1;
+        const count = st.count | 0;
+        const activeName = (active && active.name) ? active.name : (st.name || '');
+
+        if (title) title.textContent = c.name || c.url || 'Média';
+        if (sub) sub.textContent = (count ? ('Élément ' + idx + ' / ' + count) : 'Lecture directe') + (activeName ? ' · ' + activeName : '');
+        if (fill) fill.style.width = (count ? Math.min(100, idx / count * 100) : 0) + '%';
+        if (cur) cur.textContent = count ? String(idx) : '—';
+        if (dur) dur.textContent = count ? String(count) : '—';
+        if (badge) badge.style.display = playing ? 'block' : 'none';
+        if (pill) {
+            pill.className = 'status-pill ' + (playing ? 'is-playing' : 'is-paused');
+            pill.querySelector('.pill-text').textContent = 'Lecteur · ' + (playing ? 'en lecture' : 'pause');
         }
     },
 
-    updatePlayerInterface: function() {
-        const player = PiSignage.player.getCurrentPlayer();
-        // Ensure player is a string with fallback to 'vlc'
-        const playerStr = (typeof player === 'string' && player) ? player : 'vlc';
-        const playerName = playerStr.toUpperCase();
-
-        // Update main status display
-        const currentPlayerEl = document.getElementById('current-player');
-        if (currentPlayerEl) {
-            currentPlayerEl.textContent = playerName;
-            currentPlayerEl.style.color = playerStr === 'vlc' ? '#4a9eff' : '#51cf66';
-        }
-
-        // Update controls section if present
-        const controlsNameEl = document.getElementById('player-controls-name');
-        if (controlsNameEl) {
-            controlsNameEl.textContent = `Contrôles ${playerName}`;
-        }
-
-        // Update restart button text
-        const restartTextEl = document.getElementById('restart-player-text');
-        if (restartTextEl) {
-            restartTextEl.textContent = `Redémarrer ${playerName}`;
-        }
-
-        // Update radio buttons
-        document.querySelectorAll('input[name="player"]').forEach(radio => {
-            radio.checked = (radio.value === playerStr);
-        });
-
-        // Adapt button colors based on player
-        const playerButtons = document.querySelectorAll('.player-btn');
-        playerButtons.forEach(btn => {
-            if (playerStr === 'vlc') {
-                btn.style.background = 'linear-gradient(135deg, #4a9eff, #3d7edb)';
-            } else {
-                btn.style.background = 'linear-gradient(135deg, #51cf66, #3eb854)';
-            }
-        });
+    /* ---------- actions (transport vers le moteur réel) ---------- */
+    async control(action) {
+        // Mappe les boutons dashboard vers les commandes display.php.
+        // 'play' agit en bascule lecture/pause ; 'stop' = pause (pas de stop pour le kiosk).
+        const map = { previous: 'prev', next: 'next', stop: 'pause' };
+        let cmd = map[action] || action;
+        if (action === 'play') cmd = this._playing ? 'pause' : 'play';
+        try {
+            const r = await PiSignage.api.request('/api/display.php?action=command', {
+                method: 'POST',
+                body: JSON.stringify({ cmd: cmd })
+            });
+            if (r && r.success === false) PiSignage.ui.toast(r.message || 'Erreur', 'error');
+            setTimeout(() => this.refreshPlayer(), 600);
+        } catch (e) { PiSignage.ui.toast('Erreur de communication', 'error'); }
     },
 
-    switchPlayer: async function() {
-        // PiSignage v0.11.0 uses VLC exclusively - player switching removed
-        showAlert('PiSignage utilise désormais VLC exclusivement pour une expérience optimale', 'info');
-        return;
+    async screenshot() {
+        PiSignage.ui.toast('Capture en cours…', 'info');
+        try {
+            const r = await PiSignage.api.screenshot.capture();
+            if (r && r.success) PiSignage.ui.toast('Capture réalisée', 'success');
+            else PiSignage.ui.toast((r && r.message) || 'Échec de la capture', 'error');
+        } catch (e) { PiSignage.ui.toast('Erreur lors de la capture', 'error'); }
+    },
+
+    async restartPlayer() {
+        if (!PiSignage.ui.confirm('Redémarrer le lecteur ?')) return;
+        try {
+            const r = await PiSignage.api.system.systemAction('restart-player');
+            PiSignage.ui.toast((r && r.success) ? 'Lecteur redémarré' : ((r && r.message) || 'Erreur'), (r && r.success) ? 'success' : 'error');
+        } catch (e) { PiSignage.ui.toast('Erreur système', 'error'); }
     }
 };
 
-// Global functions for backward compatibility
-window.switchPlayer = function() {
-    // PiSignage v0.11.0 - VLC only
-    showAlert('PiSignage utilise VLC exclusivement', 'info');
-};
-
-window.getCurrentPlayer = function() {
-    return 'vlc'; // PiSignage v0.11.0
-};
-
-window.updatePlayerInterface = function() {
-    // No-op in VLC-only mode
-};
-
-// CSS for stat update animation
-const dashboardStyles = document.createElement('style');
-dashboardStyles.textContent = `
-    .stat-updated {
-        animation: statPulse 0.5s ease-out;
-    }
-
-    @keyframes statPulse {
-        0% { transform: scale(1); }
-        50% { transform: scale(1.05); }
-        100% { transform: scale(1); }
-    }
-`;
-document.head.appendChild(dashboardStyles);
-
-console.log('✅ PiSignage Dashboard module loaded - Stats and quick actions ready');
+console.log('PiSignage Dashboard module loaded');

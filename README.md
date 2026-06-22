@@ -1,77 +1,88 @@
-# PiSignage v0.11.0
+# PiSignage v0.12.0
 
-Professional digital signage solution for Raspberry Pi with modular web interface and advanced media management.
+Professional digital signage solution for Raspberry Pi with a single Chromium HTML5 playback engine, unified playlist publishing, and a modern modular web interface.
 
-## 🚀 What's New in v0.11.0
+## 🚀 What's New in v0.12.0
 
-### 🎭 **Display Mode Switcher**
-- **Toggle Between Modes**: Switch between VLC (stable, default) and Chromium kiosk (HTML5, advanced) via web UI or API
-- **Production Ready**: VLC mode for reliable 24/7 operation, Chromium for web content and advanced features
-- **Seamless Switching**: One-click mode change with automatic service management
-- **Web UI Control**: New Display Mode page (`/display-mode.php`) for easy configuration
-- **HDMI Audio Default**: System-wide HDMI audio output configuration
+### 🎬 **Single Chromium HTML5 Engine**
+- **VLC Removed**: One playback engine only — Chromium in kiosk mode renders the player page (`web/player.php` served at `/player`)
+- **Unified Source of Truth**: The player reads `/opt/pisignage/media/playlist.json` and reloads itself automatically
+- **No More VLC**: No `pisignage-vlc` service, no VLC HTTP interface, no VLC port, no VLC password
+- **System Volume Only**: Audio is the ALSA system volume via `web/api/system.php` (`set_volume`/`get_volume`/`toggle_mute`)
 
-### 🔧 **BUG-013 Fix - Single File Playback**
-- **100% Reliable**: Fixed unreliable single file playback with 4-step verification process
-- **Smart Retry**: Automatic retry logic ensures playback starts every time
-- **Playlist Management**: Proper playlist clearing prevents conflicts
-- **API Enhancement**: `player-control.php` now includes enhanced reliability
+### 📺 **Unified Playlist Publishing**
+- **Single API**: `web/api/playlists.php` handles list, read, create/update, activate, and delete
+- **One JSON Schema**: `/opt/pisignage/playlists/<slug>.json` with `{name, slug, version, autoplay, autoLoop, items[...]}`
+- **"Diffuser à l'écran"**: Activating a playlist writes `/opt/pisignage/media/playlist.json` and bumps `version` — the player reloads on its own
+- **Active Pointer**: `/opt/pisignage/config/active-playlist.json` tracks the playlist on screen
+- **Shared Core**: Common logic in `web/api/playlists-core.php`
 
-### 📚 **Comprehensive Documentation**
+### 🖥️ **Player Control API**
+- **`web/api/display.php`**: `POST ?action=command {cmd:next|prev|play|pause|reload}`; the player polls `GET ?action=command` every 2s
+- **Live State**: The player reports state via `POST ?action=state`; the admin reads it with `GET ?action=state`
+- **Isolated Playback**: `POST ?action=playmedia {file}` to play a single media item
+
+### ⏰ **Real Dayparting (Scheduler)**
+- **CLI Executor**: `web/api/scheduler.php` runs once per minute via cron (as `www-data`, `/etc/cron.d/pisignage-scheduler`)
+- **Schedule-driven**: Reads `/opt/pisignage/data/schedules.json` and picks the active playlist by time/day/recurrence/priority (idempotent, reverts at window end)
+- **State Tracking**: Real state written to `/opt/pisignage/config/scheduler-state.json` and reflected in the UI
+- **Timezone Fix**: `web/config.php` aligns PHP timezone with `/etc/timezone`
+
+### 🎨 **UI Redesign**
+- **Adaptive Light/Dark Design System**: Emerald accent, local Inter font, SVG icons (no emoji)
+- **Consolidated Pages**: Playlists (compose + publish), Player (real engine control + ALSA volume + live state), Kiosk (display settings only), Programmation (real dayparting)
+- **Video Info Overlays**: Clock, ticker, bilingual fr-nl cards, QR codes
+- **Player Resilience**: Splash, offline fallback, anti-flash preloading
+- **YouTube**: Live progress bar and 1-click yt-dlp update (yt-dlp managed in `/opt/pisignage/bin`)
+
+### 🧩 **Media Integrity**
+- **Reference Propagation**: Renaming or deleting a media item updates/cleans references across all playlists and the playlist on screen (`web/api/media.php` + `playlists-core.php`)
+
+### 📚 **Documentation**
 - **API Documentation**: Complete REST API reference with examples ([API_DOCUMENTATION.md](API_DOCUMENTATION.md))
 - **Architecture Guide**: Full system architecture documentation ([ARCHITECTURE.md](ARCHITECTURE.md))
 - **Migration Guide**: Step-by-step upgrade instructions ([MIGRATION.md](MIGRATION.md))
 
-### 🧹 **Code Cleanup**
-- **Legacy Removal**: Removed unused index-pi.php (2,620 lines) and youtube-simple.php
-- **Cleaner Codebase**: Improved maintainability and reduced technical debt
-
-### Previous (v0.8.9)
-- **VLC Exclusive Player**: Removed MPV support for better reliability and maintainability
-- **Simplified Architecture**: -400 lines of code with cleaner, more focused implementation
-- **Enhanced Stability**: Mature VLC HTTP API provides robust playback control
-- **Better Performance**: Streamlined player management reduces overhead
-- **100% API Compatibility**: All existing integrations continue to work seamlessly
+### Previous (v0.11.0)
+- **Display Mode Switcher** (now removed): toggled between VLC and Chromium kiosk
+- **Code Cleanup**: Removed legacy `index-pi.php` and `youtube-simple.php`
 
 ## ✨ Features
 
 ### Core Features
-- **Modular Web Interface**: Individual pages for dashboard, media, playlists, player control, and settings
-- **Multiple Media Formats**: Full support for video (MP4, AVI, MKV) and images (JPG, PNG, GIF)
-- **Advanced Playlist Management**: Create, edit, and schedule playlists with drag-and-drop interface
+- **Modular Web Interface**: Individual pages for dashboard, media, playlists, player control, kiosk, and settings
+- **Multiple Media Formats**: Full support for video (MP4, AVI, MKV) and images (JPG, PNG, GIF), rendered as HTML5
+- **Unified Playlist Management**: Create, edit, schedule, and publish playlists to the screen from one place
 - **Real-time System Monitoring**: Live CPU, RAM, temperature, and network monitoring
-- **VLC Media Player**: Exclusive VLC support with mature HTTP API for reliable playback (MPV removed in v0.8.9)
-- **Hardware Acceleration**: Optimized for Raspberry Pi GPU acceleration
+- **Single Chromium HTML5 Engine**: One playback engine — Chromium kiosk renders the player page (VLC removed in v0.12.0)
+- **System (ALSA) Volume Control**: Independent system volume and mute via `web/api/system.php`
+- **Hardware Acceleration**: Optimized for Raspberry Pi GPU acceleration under Wayland
 
-### New in v0.8.9
-- **VLC Exclusive**: Removed MPV player support for simplified, more reliable architecture
-- **Code Reduction**: -400 lines of code with cleaner implementation
-- **Enhanced Stability**: Single player backend eliminates switching complexity
-- **Improved Maintainability**: Focused codebase easier to debug and extend
-- **Better Performance**: Reduced overhead from removing dual-player abstraction layer
-- **Mature API**: VLC HTTP API provides robust, well-documented control interface
+### New in v0.12.0
+- **VLC Removed**: A single Chromium HTML5 playback engine replaces VLC entirely (no `pisignage-vlc` service, no VLC HTTP port, no VLC password)
+- **Unified Playlists**: One JSON schema and one API (`playlists.php` + `playlists-core.php`); "Diffuser à l'écran" publishes to the player which reloads itself
+- **Real Dayparting**: `scheduler.php` runs via cron once per minute and selects the active playlist by schedule
+- **Media Integrity**: Renaming/deleting media propagates across all playlists and the live screen
+- **UI Redesign**: Adaptive light/dark design system, emerald accent, local Inter font, SVG icons (no emoji)
 
 ## Requirements
 
-- Raspberry Pi 3/4/5
-- Raspbian OS (Bullseye or newer)
-  - **Trixie (Debian 13)** supported with Wayland kiosk mode
-  - ⚠️ **For Trixie: Desktop edition REQUIRED** (not Lite)
+- Raspberry Pi 4 / 5
+- **Raspberry Pi OS Trixie (Debian 13)** with Wayland (labwc)
+  - ⚠️ **Desktop edition REQUIRED** (not Lite)
 - 2GB+ RAM recommended
 - Network connectivity
 - Display connected via HDMI
 
 ### 🆕 Trixie / Wayland Kiosk Mode
 
-**New in feature/trixie-kiosk-chromium branch:**
+Pi-Signage targets **Raspberry Pi OS Trixie (Debian 13)** with a modern Wayland-based kiosk mode as its single playback engine:
 
-Pi-Signage now supports **Raspberry Pi OS Trixie (Debian 13)** with a modern Wayland-based kiosk mode:
-
-- ✅ **Chromium Browser Kiosk** - Full-screen web dashboard display
+- ✅ **Chromium HTML5 Engine** - Full-screen kiosk renders the player page (`http://127.0.0.1/player`)
 - ✅ **Wayland Compositor (labwc)** - Modern, lightweight display server
-- ✅ **Remote Configuration** - Change kiosk URL/flags via REST API
-- ✅ **Clean Boot Experience** - greetd + plymouth for seamless startup
-- ✅ **Backward Compatible** - VLC player and existing API remain functional
+- ✅ **Autologin via lightdm** - The `pi` session starts labwc, then Chromium kiosk
+- ✅ **Remote Configuration** - Change kiosk URL/flags via REST API and the Kiosk page
+- ✅ **Restart the Session** - `sudo systemctl restart display-manager`
 
 **Target Hardware:** Raspberry Pi 4 / Pi 5
 
@@ -126,10 +137,10 @@ sudo systemctl start pisignage
 sudo systemctl enable pisignage  # Auto-start on boot
 ```
 
-### VLC Player Control
+### Display / Kiosk Session
+The display engine is the Chromium kiosk started by the autologin session (lightdm → labwc → Chromium). To restart the on-screen display:
 ```bash
-sudo systemctl start pisignage-vlc
-sudo systemctl stop pisignage-vlc
+sudo systemctl restart display-manager
 ```
 
 ## API Documentation
@@ -148,24 +159,35 @@ Upload media:
 curl -X POST -F "file=@video.mp4" http://[pi-ip]/api/upload.php
 ```
 
-Create playlist:
+Create / update a playlist:
 ```bash
-curl -X POST http://[pi-ip]/api/playlist-simple.php \
+curl -X POST http://[pi-ip]/api/playlists.php \
   -H "Content-Type: application/json" \
-  -d '{"name":"My Playlist","items":[{"file":"video.mp4","duration":30}]}'
+  -d '{"name":"My Playlist","autoplay":true,"autoLoop":true,"items":[{"url":"video.mp4","type":"video","duration":30}]}'
+```
+
+Publish a playlist to the screen ("Diffuser"):
+```bash
+curl -X POST "http://[pi-ip]/api/playlists.php?action=activate&name=My%20Playlist"
+```
+
+Control the player:
+```bash
+curl -X POST http://[pi-ip]/api/display.php?action=command \
+  -H "Content-Type: application/json" \
+  -d '{"cmd":"next"}'   # next | prev | play | pause | reload
 ```
 
 ## Configuration
 
-### Player Configuration
-Edit `/opt/pisignage/config/player-config.json`:
-```json
-{
-  "player": {
-    "default": "vlc",
-    "autostart": true
-  }
-}
+### Active Playlist
+The playlist on screen is published to `/opt/pisignage/media/playlist.json` and tracked by `/opt/pisignage/config/active-playlist.json`. Use the Playlists page ("Diffuser à l'écran") or the API rather than editing these by hand.
+
+### Kiosk / Display Configuration
+```bash
+/opt/pisignage/config/kiosk_url       # Target URL (default: http://127.0.0.1/player)
+/opt/pisignage/config/kiosk_flags     # Chromium flags
+/opt/pisignage/config/feature_flags   # ENABLE_KIOSK=1 or 0
 ```
 
 ### Network Settings
@@ -174,9 +196,10 @@ Configure via web interface or edit system files directly.
 ## Troubleshooting
 
 ### No Video Display
-1. Check VLC service: `sudo systemctl status pisignage-vlc`
-2. Verify media files: `ls -la /opt/pisignage/media/`
-3. Check logs: `tail -f /opt/pisignage/logs/vlc.log`
+1. Check the kiosk session: `sudo systemctl status display-manager`
+2. Verify the published playlist: `cat /opt/pisignage/media/playlist.json`
+3. Verify media files: `ls -la /opt/pisignage/media/`
+4. Reload the player: `curl -X POST http://localhost/api/display.php?action=command -d '{"cmd":"reload"}'`
 
 ### Web Interface Not Loading
 1. Check nginx: `sudo systemctl status nginx`
@@ -190,20 +213,28 @@ Configure via web interface or edit system files directly.
 
 ## Development
 
-### Project Structure (v0.8.9)
+### Project Structure (v0.12.0)
 ```
 /opt/pisignage/
 ├── web/                    # Modular web interface
 │   ├── dashboard.php       # Main dashboard page
 │   ├── media.php          # Media management
-│   ├── playlists.php      # Playlist editor
-│   ├── player.php         # Player controls
+│   ├── playlists.php      # Playlist composer + "Diffuser à l'écran"
+│   ├── player.php         # Chromium HTML5 player page (served at /player)
+│   ├── player-control-ui.php # Player engine control (play/pause/skip/reload + ALSA volume)
+│   ├── kiosk.php          # Display/kiosk settings only
+│   ├── schedule.php       # Real dayparting (scheduler)
 │   ├── settings.php       # System settings
 │   ├── logs.php           # Log viewer
 │   ├── screenshot.php     # Screenshot utility
 │   ├── youtube.php        # YouTube downloader
-│   ├── schedule.php       # Schedule management
 │   ├── api/               # REST API endpoints
+│   │   ├── playlists.php      # Unified playlists API
+│   │   ├── playlists-core.php # Shared playlist logic
+│   │   ├── display.php        # Player command/state channel
+│   │   ├── scheduler.php      # CLI dayparting executor (cron)
+│   │   ├── media.php          # Media + reference integrity
+│   │   └── system.php         # System stats + ALSA volume
 │   ├── assets/
 │   │   ├── css/           # Modular CSS files
 │   │   │   ├── main.css
@@ -265,25 +296,25 @@ Developed for reliable digital signage on Raspberry Pi hardware.
 | Navigation | Instant (when working) | 1s | Reliable |
 | File Size | 4,724 lines | ~500 lines/page | **90% more manageable** |
 | Maintainability | 2/10 | 9/10 | **450% improvement** |
-| Player Code | Dual support | VLC exclusive | **-400 LOC** |
+
+*(Historical comparison; v0.12.0 later removed VLC entirely in favor of a single Chromium HTML5 engine.)*
 
 ## 🛠 Migration from Earlier Versions
-
-Upgrading to v0.8.9 is seamless with 100% backward compatibility:
 
 ```bash
 # Backup current installation
 sudo cp -r /opt/pisignage /opt/pisignage-backup
 
-# Update to v0.8.9
+# Update to v0.12.0
 cd /opt/pisignage
 git pull origin main
 
-# Restart services
+# Restart services and the kiosk session
 sudo systemctl restart pisignage nginx
+sudo systemctl restart display-manager
 ```
 
-**Note**: v0.8.9 removes MPV player support. If you were using MPV, the system will automatically switch to VLC.
+**Note**: v0.12.0 removes VLC entirely. The single Chromium HTML5 engine renders the player page and reads `/opt/pisignage/media/playlist.json`. The `pisignage-vlc` service, the VLC HTTP interface, and the VLC password no longer exist. Deprecated playlist/player endpoints (`playlist-simple.php`, `player.php` API, `player-control.php`) now respond with HTTP 410.
 
 For detailed migration guide, see [docs/MIGRATION.md](docs/MIGRATION.md).
 
@@ -297,6 +328,6 @@ For detailed migration guide, see [docs/MIGRATION.md](docs/MIGRATION.md).
 
 ---
 
-**PiSignage v0.8.9** - Modular, Fast, Reliable Digital Signage
+**PiSignage v0.12.0** - Modular, Fast, Reliable Digital Signage
 
 *Built with modern web architecture for Raspberry Pi performance*

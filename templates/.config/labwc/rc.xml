@@ -8,9 +8,18 @@
     - Chromium window forced fullscreen via windowRules
 
     Note: idle/blanking is handled by the absence of an idle daemon
-    (do not run swayidle in autostart); cursor hiding is handled by
-    labwc's native cursor mechanism. The non-schema <hideCursor/> and
-    <idle><disable/></idle> elements were removed (silently ignored by labwc).
+    (do not run swayidle in autostart).
+
+    Cursor hiding (D5):
+    labwc does NOT expose a permanent "always hide cursor" toggle in rc.xml
+    (no schema element exists for it; <hideCursor/> is silently ignored).
+    The schema-valid mechanism available in rc.xml is <core><hideCursorOnKey>,
+    which hides the pointer as soon as a key is pressed, plus a minimal cursor
+    <size>1</size>. To guarantee the cursor is never visible even without
+    keyboard input, pair this with a transparent XCURSOR theme exported from
+    the labwc environment file (~/.config/labwc/environment), e.g.
+    XCURSOR_THEME=transparent (a blank cursor theme). That env-file step lives
+    outside this rc.xml and is documented in the deployment notes.
 -->
 <labwc_config>
 
@@ -20,10 +29,21 @@
     <cornerRadius>0</cornerRadius>
   </theme>
 
-  <!-- Cursor theme (kiosk mode) -->
+  <!-- Core behaviour (kiosk) -->
+  <core>
+    <!-- Hide the pointer as soon as any key is pressed. Schema-valid in
+         labwc; complemented by a transparent XCURSOR theme (see header note
+         and templates/.config/labwc/environment) so the cursor is also
+         invisible without keyboard input. -->
+    <hideCursorOnKey>yes</hideCursorOnKey>
+  </core>
+
+  <!-- Cursor theme (kiosk mode). The size is kept minimal; a transparent
+       XCURSOR_THEME (set in the labwc environment file) renders the pointer
+       fully invisible across the whole session. -->
   <cursor>
     <theme>Adwaita</theme>
-    <size>24</size>
+    <size>1</size>
   </cursor>
 
   <!-- Window placement and behavior -->

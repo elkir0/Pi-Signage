@@ -1,9 +1,9 @@
 # Pi-Signage Upgrade to Trixie (Debian 13) - Wayland Kiosk Mode
 
-**Version:** 1.0
+**Version:** 1.1 (aligned with PiSignage v0.12)
 **Target OS:** Raspberry Pi OS Trixie (Debian 13)
 **Target Hardware:** Raspberry Pi 4 / Pi 5
-**Display Stack:** Wayland + labwc + Chromium kiosk
+**Display Stack:** Wayland + labwc + Chromium kiosk (lightdm autologin)
 
 ---
 
@@ -24,14 +24,13 @@
 
 ## Overview
 
-This upgrade adds **Chromium kiosk mode on Wayland** support for Pi-Signage running on Raspberry Pi OS **Trixie (Debian 13)**. The new stack provides:
+This guide covers **Chromium kiosk mode on Wayland** for Pi-Signage running on Raspberry Pi OS **Trixie (Debian 13)**. Since **v0.12 the only playback engine is the Chromium HTML5 player** (VLC removed). The stack provides:
 
 - ✅ **Modern display server:** Wayland via `labwc` compositor
-- ✅ **Stable kiosk:** Chromium browser in full-screen kiosk mode
-- ✅ **Clean boot:** `greetd` + `plymouth` for seamless startup
+- ✅ **Single engine:** Chromium browser in full-screen kiosk mode serving `http://127.0.0.1/player`
+- ✅ **Clean boot:** `lightdm` (autologin `pi`) + `plymouth` for seamless startup
 - ✅ **Scriptable:** All configuration via files in `/opt/pisignage/config`
-- ✅ **API-driven:** Remote control of kiosk URL, flags, and restart
-- ✅ **Backward compatible:** Existing VLC player and API remain functional
+- ✅ **API-driven:** Remote control of kiosk URL, flags, and display restart
 
 ---
 
@@ -68,7 +67,7 @@ VERSION_ID="13"
 
 ## Architecture
 
-### Traditional Stack (Pre-Trixie)
+### Legacy Stack (Pre-Trixie, removed in v0.12)
 ```
 ┌────────────────────────────────────┐
 │  X11 + VLC fullscreen              │
@@ -76,15 +75,15 @@ VERSION_ID="13"
 └────────────────────────────────────┘
 ```
 
-### Trixie Stack (New)
+### Trixie Stack (current)
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│  greetd (init) → labwc (Wayland) → Chromium kiosk            │
+│  lightdm (autologin pi) → labwc (Wayland) → Chromium kiosk   │
 │                                                               │
-│  • greetd: Auto-login and session manager                    │
+│  • lightdm: Auto-login & session manager                     │
 │  • labwc: Lightweight Wayland compositor                     │
-│  • Chromium: Kiosk browser (configurable URL + flags)        │
-│  • VLC: Still available for media playback                   │
+│  • Chromium: Kiosk browser (--kiosk http://127.0.0.1/player) │
+│  • Player: HTML5 engine (web/player.php) — sole media player │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -92,7 +91,7 @@ VERSION_ID="13"
 
 | Component | Role | Config File |
 |-----------|------|-------------|
-| **greetd** | Auto-login & session init | `/etc/greetd/config.toml` |
+| **lightdm** | Auto-login (`pi`) & session init | `/etc/lightdm/lightdm.conf` |
 | **labwc** | Wayland compositor | `~/.config/labwc/rc.xml` |
 | **Chromium** | Kiosk browser | `/opt/pisignage/config/kiosk_url`<br>`/opt/pisignage/config/kiosk_flags` |
 | **kiosk-apply** | Config generator | `/opt/pisignage/scripts/kiosk-apply` |
@@ -118,7 +117,7 @@ bash install.sh
 
 The installer will:
 - ✅ Detect Trixie (Debian 13)
-- ✅ Install: `chromium-browser`, `labwc`, `greetd`, `plymouth`
+- ✅ Install: `chromium-browser`, `labwc`, `lightdm`, `plymouth`
 - ✅ Create kiosk configs in `/opt/pisignage/config/`
 - ✅ Deploy labwc template to `~/.config/labwc/rc.xml`
 - ✅ Generate initial `~/.config/labwc/autostart`
@@ -141,7 +140,7 @@ bash /path/to/Pi-Signage/install.sh
 
 **Verify installation:**
 ```bash
-dpkg -l | grep -E 'chromium-browser|labwc|greetd'
+dpkg -l | grep -E 'chromium-browser|labwc|lightdm'
 ls -la /opt/pisignage/config/kiosk_*
 cat ~/.config/labwc/autostart
 ```
@@ -156,7 +155,7 @@ After installation, these files are created:
 
 | File | Purpose | Default Value |
 |------|---------|---------------|
-| `/opt/pisignage/config/kiosk_url` | Target URL | `https://time.is` |
+| `/opt/pisignage/config/kiosk_url` | Target URL | `http://127.0.0.1/player` |
 | `/opt/pisignage/config/kiosk_flags` | Chromium flags | `--incognito --noerrdialogs --disable-translate --no-first-run` |
 | `/opt/pisignage/config/feature_flags` | Enable/disable kiosk | `ENABLE_KIOSK=1` |
 
@@ -187,14 +186,14 @@ Apply changes:
 bash /opt/pisignage/scripts/kiosk-apply
 ```
 
-### Disabling Kiosk Mode (Rollback to VLC)
+### Disabling Kiosk Mode
 
 Set feature flag to `0`:
 ```bash
 echo "ENABLE_KIOSK=0" | sudo tee /opt/pisignage/config/feature_flags
 ```
 
-Kiosk will not start on next boot. VLC player remains functional.
+Kiosk Chromium will not start on next boot (the system boots to a console / blank session). Re-enable with `ENABLE_KIOSK=1` and reboot.
 
 ---
 
@@ -220,7 +219,7 @@ curl http://<pi-ip>/api/kiosk.php
   "success": true,
   "data": {
     "enabled": true,
-    "url": "https://time.is",
+    "url": "http://127.0.0.1/player",
     "flags": "--incognito --noerrdialogs",
     "chromium_running": true,
     "autostart_exists": true
@@ -257,7 +256,17 @@ curl -X PUT http://<pi-ip>/api/kiosk.php/flags \
 curl -X POST http://<pi-ip>/api/kiosk.php/restart
 ```
 
-**Note:** Chromium restart requires user logout/login or labwc restart for immediate effect.
+**Note:** Chromium restart requires a session restart for immediate effect — restart the display manager: `sudo systemctl restart display-manager` (alias for `lightdm`).
+
+#### 7. Reload the playlist live (no restart)
+
+To reload the on-screen content without restarting the browser, signal the player engine via the display control API:
+```bash
+curl -X POST "http://<pi-ip>/api/display.php?action=command" \
+  -H "Content-Type: application/json" \
+  -d '{"cmd":"reload"}'
+```
+The player polls `GET /api/display.php?action=command` every 2s and the active-playlist version every 10s, so changes propagate on their own.
 
 ---
 
@@ -281,7 +290,7 @@ bash scripts/tests/api.sh
 
 | Test | Command | Expected Result |
 |------|---------|----------------|
-| **1. Boot to greetd** | `systemctl status greetd` | Active (running) |
+| **1. Boot to lightdm** | `systemctl status lightdm` | Active (running) |
 | **2. labwc running** | `pgrep -a labwc` | Process found |
 | **3. Chromium kiosk** | `pgrep -fa chromium.*kiosk` | Process found |
 | **4. Network ready** | `ping -c1 8.8.8.8` | 0% packet loss |
@@ -301,9 +310,9 @@ bash scripts/tests/api.sh
 
 2. **Expected behavior:**
    - Plymouth splash screen (optional)
-   - Auto-login via greetd
+   - Auto-login (`pi`) via lightdm
    - labwc starts
-   - Chromium opens fullscreen to configured URL
+   - Chromium opens fullscreen to `http://127.0.0.1/player`
    - No cursor visible
    - Screen does not blank/sleep
 
@@ -322,7 +331,7 @@ echo "ENABLE_KIOSK=0" | sudo tee /opt/pisignage/config/feature_flags
 sudo reboot
 ```
 
-Chromium kiosk will not start. System boots to console or VLC player (if configured).
+Chromium kiosk will not start. System boots to a console / blank session.
 
 ### Full Rollback to Previous Branch
 
@@ -336,7 +345,7 @@ sudo reboot
 ### Uninstall Trixie Packages
 
 ```bash
-sudo apt remove --purge chromium-browser labwc greetd plymouth
+sudo apt remove --purge chromium-browser labwc lightdm plymouth
 sudo apt autoremove
 sudo reboot
 ```
@@ -376,13 +385,13 @@ journalctl --user -u labwc -n 50
 
 3. **Restart labwc session:**
    ```bash
-   sudo systemctl restart greetd
+   sudo systemctl restart display-manager   # lightdm
    ```
 
 ### Swapchain / Graphics Errors (Lite Edition)
 
 **Symptoms:**
-- greetd service fails repeatedly with "start-limit-hit"
+- lightdm service fails repeatedly with "start-limit-hit"
 - labwc logs show: `Swapchain for output 'HDMI-A-1' failed test`
 - Error: `Failed to create allocator` or `unable to create backend`
 
@@ -400,7 +409,7 @@ You are running **Raspberry Pi OS Lite** which lacks critical Wayland/graphics i
 **Diagnosis Commands:**
 ```bash
 # Check for swapchain errors:
-journalctl -u greetd -n 100 | grep -i swapchain
+journalctl -u lightdm -n 100 | grep -i swapchain
 
 # Verify OS edition:
 dpkg -l | grep -E "task-desktop|task-gnome|task-lxde"
@@ -433,7 +442,7 @@ sudo systemctl restart nginx
 
 **Check PHP-FPM:**
 ```bash
-sudo systemctl status php8.2-fpm
+sudo systemctl status php8.4-fpm
 ```
 
 **Test API directly:**
@@ -531,168 +540,199 @@ wlr-randr --output HDMI-A-2 --mode 1920x1080 --pos 1920,0
 
 ## Chromium HTML5 Player
 
-**Version:** 0.11.0+
-**Feature:** Native HTML5 video playback in Chromium instead of VLC
+**Version:** 0.12.0+
+**Feature:** Native HTML5 media playback in Chromium — the **sole** playback engine (VLC removed in v0.12)
 
 ### Overview
 
-Pi-Signage now includes a **Chromium HTML5 Player** mode that replaces VLC for media playback. This provides:
+Since v0.12, Pi-Signage plays all media through the **Chromium HTML5 Player** (`web/player.php`, served at `http://127.0.0.1/player`). There is no VLC fallback. This provides:
 
 - ✅ **HTML5 `<video>` playback** with hardware acceleration
-- ✅ **Playlist management** via JSON configuration
-- ✅ **Web-based control** through Kiosk Control UI
-- ✅ **Autoplay, loop, mute** configurable per item
+- ✅ **Unified playlist management** via the `playlists.php` API
+- ✅ **Live engine control** through the **Lecteur** (Player) page and `display.php`
+- ✅ **Autoplay, loop, mute, fit, transition** configurable per item
 - ✅ **Wake Lock API** to prevent screen sleep
 - ✅ **Support for MP4, WebM, MKV** formats
+- ✅ **Resilience:** splash, offline fallback, anti-flash preloading
 
 ### Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│ greetd → labwc → Chromium kiosk (http://127.0.0.1/player) │
-│                                                          │
-│  Player Page (HTML5):                                   │
-│  • Reads /opt/pisignage/content/playlist.json           │
-│  • <video> element with autoplay/loop                   │
-│  • Auto-advance, error handling, retry logic            │
-│  • Wake Lock, cursor hiding                             │
-│                                                          │
-│  Backend APIs:                                          │
-│  • GET /api/playlist - Fetch playlist                   │
-│  • PUT /api/playlist - Update playlist                  │
-│  • POST /api/playlist/validate - Check URLs             │
-│  • POST /api/playlist/upload - Upload media             │
-└─────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│ lightdm → labwc → Chromium kiosk (http://127.0.0.1/player)    │
+│                                                               │
+│  Player Page (HTML5, web/player.php):                        │
+│  • Reads /opt/pisignage/media/playlist.json                  │
+│  • <video> element with autoplay/loop                        │
+│  • Polls GET /api/display.php?action=command every 2s        │
+│    (next|prev|play|pause|reload)                             │
+│  • Polls active-playlist version every 10s (auto reload)     │
+│  • Reports live state via POST /api/display.php?action=state │
+│  • Auto-advance, error handling, retry, Wake Lock            │
+│                                                               │
+│  Backend APIs:                                               │
+│  • playlists.php  - unified playlist CRUD + "Diffuser"        │
+│  • display.php    - live engine control & state              │
+│  • system.php     - ALSA system volume (set/get/toggle_mute) │
+└──────────────────────────────────────────────────────────────┘
 ```
+
+> Volume is the **system (ALSA)** volume via `system.php` (`set_volume`/`get_volume`/`toggle_mute`). There is no separate "VLC volume" anymore.
 
 ### Feature Flags
 
-Control player mode with `/opt/pisignage/config/feature_flags`:
+Control kiosk mode with `/opt/pisignage/config/feature_flags`:
 
 ```bash
 # Enable Chromium kiosk mode (default: 1)
 ENABLE_KIOSK=1
-
-# Use Chromium HTML5 player (default: 1)
-USE_CHROMIUM_PLAYER=1  # Chromium plays playlist
-USE_CHROMIUM_PLAYER=0  # VLC fallback mode
 ```
+
+The `USE_CHROMIUM_PLAYER` / VLC-fallback flag from earlier versions is gone — Chromium HTML5 is the only engine.
 
 **Apply changes:**
 ```bash
 bash /opt/pisignage/scripts/kiosk-apply
-sudo systemctl restart greetd
+sudo systemctl restart display-manager   # lightdm
 ```
 
-### Playlist Configuration
+### Playlists & On-Screen Content
 
-**Location:** `/opt/pisignage/content/playlist.json`
+Playlists are unified under one source of truth managed by `web/api/playlists.php`
+(shared core: `web/api/playlists-core.php`):
 
-**Format:**
+- **Library:** `/opt/pisignage/playlists/<slug>.json`
+- **Active-playlist pointer:** `/opt/pisignage/config/active-playlist.json`
+- **On-screen render file (consumed by the player):** `/opt/pisignage/media/playlist.json`
+
+Hitting "Diffuser à l'écran" (`POST /api/playlists.php?action=activate&name=X`) writes
+`/opt/pisignage/media/playlist.json` and bumps its `version`; the player reloads on its own.
+
+**Playlist schema:**
 ```json
 {
-  "version": 1,
+  "name": "Lobby",
+  "slug": "lobby",
+  "version": 3,
+  "autoplay": true,
+  "autoLoop": true,
   "items": [
     {
-      "url": "file:///opt/pisignage/content/video.mp4",
+      "url": "file:///opt/pisignage/media/video.mp4",
+      "type": "video",
+      "name": "video.mp4",
+      "duration": 0,
+      "fit": "contain",
       "mute": false,
       "loop": false,
-      "fit": "contain",
-      "duration": 0
-    },
-    {
-      "url": "http://example.com/stream.mp4",
-      "mute": true,
-      "loop": false,
-      "fit": "cover",
-      "duration": 30
+      "transition": "fade"
     }
-  ],
-  "autoLoop": true,
-  "autoplay": true
+  ]
 }
 ```
 
-**Fields:**
+**Item fields:**
 - `url`: File path (`file://`) or HTTP(S) URL
+- `type`: `video`, `image`, etc.
+- `name`: Display label
+- `duration`: Seconds (0 = auto-detect from video)
+- `fit`: `contain` (preserve aspect) or `cover` (fill screen)
 - `mute`: Boolean, mute audio
 - `loop`: Boolean, loop this item indefinitely
-- `fit`: `contain` (preserve aspect) or `cover` (fill screen)
-- `duration`: Seconds (0 = auto-detect from video)
-- `autoLoop`: Restart playlist when finished
-- `autoplay`: Start playing immediately on load
+- `transition`: Transition effect (e.g. `fade`)
+- `autoLoop`: Restart playlist when finished (playlist-level)
+- `autoplay`: Start playing immediately on load (playlist-level)
 
-### Kiosk Control UI
+### Web UI Pages (v0.12)
 
-**Access:** `http://<pi-ip>/kiosk.php`
+The interface is consolidated. Each concern lives on a single page:
 
-**Features:**
-1. **Mode Switching**
-   - Toggle Kiosk ON/OFF
-   - Switch between Chromium Player and VLC fallback
-
-2. **Playlist Management**
-   - Add/edit/delete items
-   - Reorder with ↑↓ buttons
+1. **Playlists** (`playlists.php`) — compose playlists *and* "Diffuser à l'écran" in one place
+   - Add/edit/delete/reorder items
    - Upload media files (max 500MB)
-   - Validate URLs accessibility
+   - Activate (push) a playlist to the screen
 
-3. **Configuration**
-   - Set kiosk URL (for dashboard mode)
-   - Edit Chromium flags
-   - Auto-refresh status (5s interval)
+2. **Lecteur** (Player, `player.php` UI / `display.php` API) — control the real engine
+   - Play / Pause / Next / Prev / Reload
+   - System (ALSA) volume + mute
+   - Live player state
 
-4. **Actions**
-   - Restart Chromium
-   - Reload playlist
-   - Preview player in new window
+3. **Kiosk** (`kiosk.php`) — **display settings only**
+   - Toggle Kiosk ON/OFF
+   - Set kiosk URL & edit Chromium flags
+   - Scheduled screen blanking
+   - Restart Chromium / display session
+   - (no playlist editor here — that lives on the Playlists page)
+
+4. **Programmation** (Schedule) — real dayparting (see `scheduler.php`)
 
 ### API Endpoints
 
 **Base:** `/api`
 
-#### Playlist API (`/api/playlist`)
+#### Playlists API (`/api/playlists.php`) — unified source of truth
 
 ```bash
-# Get current playlist
-curl http://localhost/api/playlist
+# List playlists + active playlist
+curl http://localhost/api/playlists.php
 
-# Update playlist
-curl -X PUT http://localhost/api/playlist \
+# Get one playlist
+curl "http://localhost/api/playlists.php?name=lobby"
+
+# Create / update a playlist
+curl -X POST http://localhost/api/playlists.php \
   -H "Content-Type: application/json" \
-  -d @playlist.json
+  -d '{"name":"Lobby","items":[...],"autoplay":true,"autoLoop":true}'
 
-# Validate playlist (checks URL accessibility)
-curl -X POST http://localhost/api/playlist/validate \
-  -H "Content-Type: application/json" \
-  -d @playlist.json
+# Activate ("Diffuser à l'écran") — writes media/playlist.json + bumps version
+curl -X POST "http://localhost/api/playlists.php?action=activate&name=lobby"
 
-# Signal player to reload
-curl -X POST http://localhost/api/playlist/refresh
-
-# Upload media file
-curl -X POST http://localhost/api/playlist/upload \
-  -F "file=@video.mp4"
+# Delete a playlist
+curl -X DELETE "http://localhost/api/playlists.php?name=lobby"
 ```
 
-#### Kiosk API (`/api/kiosk`)
+> **Deprecated endpoints** (return HTTP 410): `playlist-simple.php`, `player.php`, `player-control.php`.
+
+#### Player control API (`/api/display.php`)
 
 ```bash
-# Get kiosk status (includes player mode)
-curl http://localhost/api/kiosk
+# Send a command to the engine (player polls every 2s)
+curl -X POST "http://localhost/api/display.php?action=command" \
+  -H "Content-Type: application/json" \
+  -d '{"cmd":"next"}'    # next|prev|play|pause|reload
+
+# Play a single media in isolation
+curl -X POST "http://localhost/api/display.php?action=playmedia" \
+  -H "Content-Type: application/json" \
+  -d '{"file":"clip.mp4"}'
+
+# Read current player state (admin)
+curl "http://localhost/api/display.php?action=state"
+```
+
+#### System volume API (`/api/system.php`) — ALSA
+
+```bash
+curl "http://localhost/api/system.php?action=get_volume"
+curl -X POST "http://localhost/api/system.php?action=set_volume" \
+  -H "Content-Type: application/json" -d '{"volume":70}'
+curl -X POST "http://localhost/api/system.php?action=toggle_mute"
+```
+
+#### Kiosk API (`/api/kiosk.php`)
+
+```bash
+# Get kiosk status
+curl http://localhost/api/kiosk.php
 
 # Enable/disable kiosk mode
-curl -X PUT http://localhost/api/kiosk/enable \
+curl -X PUT http://localhost/api/kiosk.php/enable \
   -H "Content-Type: application/json" \
   -d '{"enabled": true}'
 
-# Switch player mode
-curl -X PUT http://localhost/api/kiosk/mode \
-  -H "Content-Type: application/json" \
-  -d '{"useChromiumPlayer": true}'
-
-# Health check
-curl http://localhost/api/kiosk/health
+# Update kiosk URL / flags / restart Chromium
+curl -X PUT http://localhost/api/kiosk.php/url \
+  -H "Content-Type: application/json" -d '{"url":"http://127.0.0.1/player"}'
 ```
 
 ### Chromium Flags for Player
@@ -723,26 +763,27 @@ curl http://localhost/api/kiosk/health
 - HTML5 video autoplay may require `mute: true` on first item
 - Chromium flag `--autoplay-policy=no-user-gesture-required` should be set
 
-**Check file accessibility:**
+**Check the active playlist:**
 ```bash
-# Validate playlist URLs
-curl -X POST http://localhost/api/playlist/validate \
-  -H "Content-Type: application/json" \
-  -d @/opt/pisignage/content/playlist.json
+# What the player is currently rendering:
+cat /opt/pisignage/media/playlist.json
+
+# What the admin marked active:
+cat /opt/pisignage/config/active-playlist.json
 ```
 
 **Check player logs:**
 ```bash
 # Open browser console (if accessible)
-# Or check Chromium logs:
-journalctl -u greetd -n 100
+# Or check session/Chromium logs:
+journalctl -u lightdm -n 100
 ```
 
 #### Player shows blank screen
 
-**Verify playlist exists:**
+**Verify the on-screen playlist exists:**
 ```bash
-cat /opt/pisignage/content/playlist.json
+cat /opt/pisignage/media/playlist.json
 ```
 
 **Check Chromium is running:**
@@ -750,42 +791,29 @@ cat /opt/pisignage/content/playlist.json
 pgrep -f chromium
 ```
 
-**Restart Chromium:**
+**Restart Chromium / session:**
 ```bash
-curl -X POST http://localhost/api/kiosk/restart
+curl -X POST http://localhost/api/kiosk.php/restart
 # OR
-sudo systemctl restart greetd
+sudo systemctl restart display-manager   # lightdm
 ```
 
 #### Switching between Player and Dashboard mode
 
-**Player mode** (default):
+Kiosk always runs Chromium; the only difference is the URL it loads.
+
+**Player mode** (default) — point the kiosk at the local HTML5 player:
 ```bash
-# Edit feature flags
-sudo nano /opt/pisignage/config/feature_flags
-
-# Set:
-USE_CHROMIUM_PLAYER=1
-
-# Apply:
+echo "http://127.0.0.1/player" | sudo tee /opt/pisignage/config/kiosk_url
 bash /opt/pisignage/scripts/kiosk-apply
-sudo systemctl restart greetd
+sudo systemctl restart display-manager   # lightdm
 ```
 
-**Dashboard mode** (show custom URL):
+**Dashboard mode** — show a custom URL instead:
 ```bash
-# Edit feature flags
-sudo nano /opt/pisignage/config/feature_flags
-
-# Set:
-USE_CHROMIUM_PLAYER=0
-
-# Set custom URL:
 echo "https://grafana.local" | sudo tee /opt/pisignage/config/kiosk_url
-
-# Apply:
 bash /opt/pisignage/scripts/kiosk-apply
-sudo systemctl restart greetd
+sudo systemctl restart display-manager   # lightdm
 ```
 
 ### Supported Media Formats
@@ -814,7 +842,7 @@ sudo systemctl restart greetd
   "version": 1,
   "items": [
     {
-      "url": "file:///opt/pisignage/content/promo.mp4",
+      "url": "file:///opt/pisignage/media/promo.mp4",
       "mute": false,
       "loop": true,
       "fit": "contain",
@@ -832,8 +860,8 @@ sudo systemctl restart greetd
 {
   "version": 1,
   "items": [
-    {"url": "file:///opt/pisignage/content/video1.mp4", "duration": 30, "fit": "cover"},
-    {"url": "file:///opt/pisignage/content/video2.mp4", "duration": 45, "fit": "cover"},
+    {"url": "file:///opt/pisignage/media/video1.mp4", "duration": 30, "fit": "cover"},
+    {"url": "file:///opt/pisignage/media/video2.mp4", "duration": 45, "fit": "cover"},
     {"url": "http://cdn.example.com/ad.mp4", "duration": 0, "mute": true}
   ],
   "autoLoop": true,
@@ -847,7 +875,7 @@ sudo systemctl restart greetd
 {
   "version": 1,
   "items": [
-    {"url": "file:///opt/pisignage/content/local.mp4", "fit": "contain"},
+    {"url": "file:///opt/pisignage/media/local.mp4", "fit": "contain"},
     {"url": "https://cdn.example.com/stream.mp4", "fit": "contain", "mute": true}
   ],
   "autoLoop": true,
@@ -879,6 +907,7 @@ sudo systemctl restart greetd
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.1 | 2026-06-21 | v0.12: greetd → lightdm autologin; VLC removed (Chromium HTML5 sole engine); unified `playlists.php`; live control via `display.php`; ALSA system volume via `system.php`; default kiosk URL `http://127.0.0.1/player` |
 | 1.0 | 2025-11-09 | Initial Trixie/Wayland kiosk implementation |
 
 ---

@@ -30,6 +30,23 @@ define('ALLOWED_AUDIO_EXTENSIONS', ['mp3', 'wav', 'ogg', 'flac', 'm4a', 'aac']);
 define('SCREENSHOT_QUALITY', 85);
 define('SCREENSHOT_COOLDOWN', 5); // Secondes entre captures
 
+// Aligner PHP sur le fuseau horaire SYSTÈME. Indispensable à la programmation : les heures
+// de planning (HH:MM) sont des heures LOCALES, et l'horloge overlay (côté navigateur Chromium)
+// utilise déjà le fuseau système. Or PHP par défaut = UTC -> sans cet alignement, l'exécuteur
+// cron compare l'heure UTC à des fenêtres locales (décalage = dayparting inopérant).
+// (php.ini fixe souvent date.timezone=UTC ; sur cette appliance l'heure LOCALE prime, donc
+//  on aligne toujours sur /etc/timezone quand on peut le détecter.)
+$sysTz = @trim((string)@file_get_contents('/etc/timezone'));
+if ($sysTz === '' && is_link('/etc/localtime')) {
+    $lp = @readlink('/etc/localtime');
+    if ($lp !== false && ($zp = strpos($lp, 'zoneinfo/')) !== false) {
+        $sysTz = substr($lp, $zp + strlen('zoneinfo/'));
+    }
+}
+if ($sysTz !== '' && @timezone_open($sysTz)) {
+    date_default_timezone_set($sysTz);
+}
+
 // Fonctions utilitaires
 function jsonResponse($success, $data = null, $message = '', $httpCode = 200) {
     http_response_code($httpCode);

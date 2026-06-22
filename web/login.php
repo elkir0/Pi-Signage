@@ -22,144 +22,73 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Identifiants incorrects';
     }
 }
-?>
-<!DOCTYPE html>
-<html lang="fr">
+require_once 'includes/icons.php';
+?><!DOCTYPE html>
+<html lang="fr" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PiSignage - Connexion</title>
-    <link rel="stylesheet" href="assets/css/main.css">
+    <meta name="color-scheme" content="dark light">
+    <title>PiSignage · Connexion</title>
+    <script>
+      (function(){try{var t=localStorage.getItem('pisignage-theme');if(!t){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
+    </script>
+    <link rel="stylesheet" href="assets/css/main.css?v=<?= ASSET_VERSION ?>">
     <style>
-        body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            margin: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        }
-
-        .login-container {
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 20px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-            padding: 40px;
-            width: 100%;
-            max-width: 400px;
-        }
-
-        .login-header {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-
-        .login-header h1 {
-            color: #667eea;
-            font-size: 32px;
-            margin: 0 0 10px 0;
-        }
-
-        .login-header p {
-            color: #666;
-            margin: 0;
-        }
-
-        .form-group {
-            margin-bottom: 20px;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            color: #333;
-            font-weight: 500;
-        }
-
-        .form-group input {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-size: 16px;
-            transition: border-color 0.3s;
-            box-sizing: border-box;
-        }
-
-        .form-group input:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-
-        .error-message {
-            background: #fee;
-            border: 1px solid #fcc;
-            color: #c33;
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            text-align: center;
-        }
-
-        .btn-login {
-            width: 100%;
-            padding: 14px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-
-        .btn-login:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-        }
-
-        .btn-login:active {
-            transform: translateY(0);
-        }
-
-        .login-footer {
-            text-align: center;
-            margin-top: 20px;
-            color: #666;
-            font-size: 14px;
-        }
+      body{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px}
+      .auth-wrap{width:100%;max-width:400px}
+      .auth-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);padding:34px 30px}
+      .auth-logo{width:58px;height:58px;border-radius:16px;margin:0 auto 18px;background:linear-gradient(135deg,var(--accent-bright),var(--accent-strong));display:flex;align-items:center;justify-content:center;box-shadow:0 10px 26px -8px var(--accent-ring)}
+      .auth-logo svg{width:30px;height:30px;stroke:var(--accent-contrast);stroke-width:2.2}
+      .auth-card h1{text-align:center;font-size:23px;margin:0 0 4px}
+      .auth-sub{text-align:center;color:var(--text-dim);font-size:13.5px;margin-bottom:26px}
+      .auth-field{margin-bottom:16px}
+      .auth-field label{display:block;font-size:13px;font-weight:600;color:var(--text-dim);margin-bottom:7px}
+      .auth-error{display:flex;align-items:center;gap:9px;background:var(--danger-soft);color:var(--danger-text);border:1px solid color-mix(in srgb,var(--danger) 30%,transparent);padding:11px 13px;border-radius:var(--radius-sm);font-size:13.5px;font-weight:500;margin-bottom:18px}
+      .auth-error svg{width:18px;height:18px;flex-shrink:0}
+      .auth-foot{text-align:center;color:var(--text-faint);font-size:12px;margin-top:20px}
+      .auth-toggle{position:fixed;top:20px;right:20px}
     </style>
 </head>
 <body>
-    <div class="login-container">
-        <div class="login-header">
-            <h1>🎬 PiSignage</h1>
-            <p>Digital Signage Management</p>
+    <button class="icon-btn theme-toggle auth-toggle" id="theme-toggle" type="button" title="Basculer le thème" aria-label="Basculer le thème">
+        <span class="theme-ico-dark"><?= icon('moon') ?></span>
+        <span class="theme-ico-light"><?= icon('sun') ?></span>
+    </button>
+
+    <div class="auth-wrap">
+        <div class="auth-card">
+            <div class="auth-logo"><?= icon('kiosk') ?></div>
+            <h1>PiSignage</h1>
+            <p class="auth-sub">Gestion d'affichage dynamique</p>
+
+            <?php if ($error): ?>
+                <div class="auth-error"><?= icon('alert') ?><span><?= htmlspecialchars($error) ?></span></div>
+            <?php endif; ?>
+
+            <form method="POST" action="">
+                <div class="auth-field">
+                    <label for="username">Nom d'utilisateur</label>
+                    <input type="text" id="username" name="username" autocomplete="username" required autofocus>
+                </div>
+                <div class="auth-field">
+                    <label for="password">Mot de passe</label>
+                    <input type="password" id="password" name="password" autocomplete="current-password" required>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block btn-lg">Se connecter</button>
+            </form>
         </div>
-
-        <?php if ($error): ?>
-            <div class="error-message"><?= htmlspecialchars($error) ?></div>
-        <?php endif; ?>
-
-        <form method="POST" action="">
-            <div class="form-group">
-                <label for="username">Nom d'utilisateur</label>
-                <input type="text" id="username" name="username" required autofocus>
-            </div>
-
-            <div class="form-group">
-                <label for="password">Mot de passe</label>
-                <input type="password" id="password" name="password" required>
-            </div>
-
-            <button type="submit" class="btn-login">Se connecter</button>
-        </form>
-
-        <div class="login-footer">
-            PiSignage v0.11.0
-        </div>
+        <p class="auth-foot">PiSignage v<?= htmlspecialchars($config['version']) ?></p>
     </div>
+
+    <script>
+      (function(){
+        var b=document.getElementById('theme-toggle');
+        b&&b.addEventListener('click',function(){
+          var r=document.documentElement,n=r.getAttribute('data-theme')==='dark'?'light':'dark';
+          r.setAttribute('data-theme',n);try{localStorage.setItem('pisignage-theme',n);}catch(e){}
+        });
+      })();
+    </script>
 </body>
 </html>

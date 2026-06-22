@@ -12,7 +12,7 @@
  */
 
 require_once __DIR__ . '/_guard.php';
-require_once '../config.php';
+require_once __DIR__ . '/playlists-core.php'; // modèle unifié (playlistLoad slug-tolérant) + config.php
 
 header('Content-Type: application/json');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, PATCH');
@@ -36,8 +36,9 @@ define('SCHEDULES_FILE', '/opt/pisignage/data/schedules.json');
  * @since 0.8.0
  */
 function playlistExists($playlistName) {
-    $playlistFile = PLAYLISTS_PATH . '/' . $playlistName . '.json';
-    return file_exists($playlistFile);
+    // Slug-tolérant via le noyau unifié : accepte aussi bien le slug ("apres-midi")
+    // que le nom lisible ("Après-midi"), tous deux résolus vers <slug>.json.
+    return playlistLoad($playlistName) !== null;
 }
 
 /**
@@ -349,10 +350,25 @@ if ($method === 'GET' && empty($id)) {
         return strcmp($aNext, $bNext);
     });
 
+    // État RÉEL fourni par l'exécuteur cron (config/scheduler-state.json) : quelle
+    // planification est effectivement à l'écran maintenant. Fin du badge "En cours"
+    // calculé côté navigateur (qui mentait si l'exécuteur n'avait pas tourné).
+    $schedulerStateFile = CONFIG_PATH . '/scheduler-state.json';
+    $schedulerState = [];
+    if (file_exists($schedulerStateFile)) {
+        $schedulerState = json_decode(file_get_contents($schedulerStateFile), true) ?: [];
+    }
+    $activeId = $schedulerState['active_schedule_id'] ?? null;
+    foreach ($schedules as &$s) {
+        $s['is_active_now'] = ($activeId !== null && ($s['id'] ?? null) === $activeId);
+    }
+    unset($s);
+
     sendResponse([
         'success' => true,
         'data' => array_values($schedules),
         'count' => count($schedules),
+        'scheduler' => $schedulerState,
         'timestamp' => date('c')
     ]);
 }

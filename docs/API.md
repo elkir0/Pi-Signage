@@ -1,21 +1,18 @@
-# Documentation API - PiSignage v0.8.9
+# Documentation API - PiSignage v0.12.0
 
-## Nouveautés v0.8.9
+## Nouveautés v0.12.0
 
-- **Performance améliorée**: Réponses API 80% plus rapides
-- **Fiabilité renforcée**: Architecture modulaire éliminant les conflits JavaScript
-- **Compatibilité 100%**: Tous les endpoints API restent inchangés
-- **Sécurité améliorée**: Validation d'entrée et gestion d'erreurs renforcées
+- **Moteur de lecture unique Chromium HTML5**: VLC retiré. Le player (`web/player.php` servi sur `/player`) lit `/opt/pisignage/media/playlist.json` et se recharge seul.
+- **Endpoints unifiés**: playlists via `/api/playlists.php` (source de vérité unique), contrôle du moteur via `/api/display.php`.
+- **Endpoints dépréciés (HTTP 410)**: `playlist-simple.php`, `player.php`, `player-control.php`.
+- **Volume = ALSA système**: plus de « volume VLC ». Le volume passe par `/api/system.php` (`set_volume`/`get_volume`/`toggle_mute`).
+- **Programmation (dayparting) réelle**: `/api/scheduler.php` est un exécuteur CLI lancé par cron 1×/minute (www-data).
 
 ## Vue d'ensemble
 
-PiSignage v0.8.9 expose une API REST complète permettant de contrôler l'ensemble des fonctionnalités via des requêtes HTTP. L'API supporte les formats JSON et les uploads multipart/form-data.
+PiSignage v0.12.0 expose une API REST complète permettant de contrôler l'ensemble des fonctionnalités via des requêtes HTTP. L'API supporte les formats JSON et les uploads multipart/form-data.
 
-**Améliorations v0.8.9**:
-- Réponses plus rapides grâce à l'architecture modulaire
-- Gestion d'erreurs améliorée avec messages détaillés
-- Validation d'entrée renforcée
-- Meilleure stabilité et fiabilité
+Le moteur de lecture unique est **Chromium HTML5** en mode kiosk (Wayland/labwc). Le player web poll `/api/display.php` pour les commandes (toutes les 2s) et la version de playlist (toutes les 10s), puis se recharge automatiquement. VLC, MPV, l'interface HTTP VLC (port 8080) et le mot de passe VLC n'existent plus.
 
 ### URL de base
 ```
@@ -33,7 +30,7 @@ Toutes les réponses sont au format JSON avec la structure suivante :
 ```
 
 ### Authentification
-Tous les endpoints API nécessitent une authentification via session PHP (v0.8.9). Les utilisateurs doivent être connectés via `/login.php` avant d'accéder aux APIs. Pour un déploiement en production externe, configurez HTTPS et un reverse proxy.
+Tous les endpoints API nécessitent une authentification via session PHP. Les utilisateurs doivent être connectés via `/login.php` avant d'accéder aux APIs. Pour un déploiement en production externe, configurez HTTPS et un reverse proxy.
 
 ---
 
@@ -49,8 +46,8 @@ Retourne les informations système complètes.
   "data": {
     "hostname": "raspberrypi",
     "ip": "192.168.1.100",
-    "version": "0.8.9",
-    "php_version": "8.2.7",
+    "version": "0.12.0",
+    "php_version": "8.4.0",
     "platform": "Linux",
     "cpu_usage": 15.4,
     "memory": {
@@ -67,11 +64,11 @@ Retourne les informations système complètes.
     },
     "temperature": 45.2,
     "uptime": "2 days, 14:30:25",
-    "player_status": "VLC running",
-    "current_player": "vlc",
+    "player_status": "Chromium kiosk running",
+    "engine": "chromium",
     "media_files": 15,
     "playlist_count": 3,
-    "last_screenshot": "2025-09-25 14:30:00"
+    "last_screenshot": "2026-06-20 14:30:00"
   }
 }
 ```
@@ -95,109 +92,102 @@ Exécute des actions système.
 }
 ```
 
-~~#### Basculer le lecteur~~
-> **Note v0.8.9**: Action obsolète - MPV retiré, VLC exclusif
-
-#### Redémarrer le service
+#### Redémarrer la session graphique
+Redémarre la session d'affichage (lightdm → labwc → Chromium kiosk). Équivaut à `sudo systemctl restart display-manager`.
 ```json
 {
   "action": "restart-player"
 }
 ```
 
----
+### Contrôle du volume (ALSA système)
 
-## Endpoints lecteur
+Le volume est le **volume système ALSA** (amixer). Il n'y a plus de « volume VLC ».
 
-### GET /api/player.php
-Obtient le statut du lecteur actuel.
+#### Obtenir le volume
+```
+GET /api/system.php?action=get_volume
+```
 
-**Paramètres de requête :**
-- `action=current` : Retourne le lecteur actuel uniquement
-
-**Réponse statut complet :**
+**Réponse :**
 ```json
 {
   "success": true,
   "data": {
-    "status": "VLC running",
-    "running": true,
-    "current_player": "vlc",
-    "available_players": ["vlc"],
-    "current_media": "BigBuckBunny.mp4",
-    "position": 125.7,
-    "duration": 596.0,
-    "volume": 85
+    "volume": 75,
+    "muted": false
   }
-}
-```
-
-**Réponse lecteur actuel (`action=current`) :**
-```json
-{
-  "success": true,
-  "current_player": "vlc"
-}
-```
-
-### POST /api/player.php
-Contrôle le lecteur multimédia.
-
-**Actions de lecture :**
-
-#### Démarrer la lecture
-```json
-{
-  "action": "play"
-}
-```
-
-#### Arrêter la lecture
-```json
-{
-  "action": "stop"
-}
-```
-
-#### Mettre en pause
-```json
-{
-  "action": "pause"
-}
-```
-
-#### Media suivant
-```json
-{
-  "action": "next"
-}
-```
-
-#### Media précédent
-```json
-{
-  "action": "previous"
 }
 ```
 
 #### Régler le volume
 ```json
 {
-  "action": "volume",
+  "action": "set_volume",
   "value": 75
 }
 ```
+- `value` : 0-100 (pourcentage ALSA)
 
-#### Jouer un fichier spécifique
+#### Basculer la sourdine
 ```json
 {
-  "action": "play-file",
+  "action": "toggle_mute"
+}
+```
+
+---
+
+## Endpoints lecteur (moteur Chromium HTML5)
+
+> Le contrôle du moteur de lecture réel passe par `/api/display.php`. Le player web (`/player`) poll `GET ?action=command` toutes les 2s et rapporte son état via `POST ?action=state`.
+
+### POST /api/display.php?action=command
+Envoie une commande au player en cours.
+
+```json
+{
+  "cmd": "next"
+}
+```
+- `cmd` : `next` | `prev` | `play` | `pause` | `reload`
+
+### GET /api/display.php?action=command
+Poll utilisé par le player pour récupérer la prochaine commande en attente.
+
+### POST /api/display.php?action=state
+Le player rapporte son état (média courant, index, lecture/pause).
+
+### GET /api/display.php?action=state
+Lecture de l'état live du player (pour l'admin).
+
+**Réponse :**
+```json
+{
+  "success": true,
+  "data": {
+    "playing": true,
+    "current_media": "BigBuckBunny.mp4",
+    "index": 2,
+    "playlist": "default",
+    "version": 7
+  }
+}
+```
+
+### POST /api/display.php?action=playmedia
+Lit un média isolé (sans modifier la playlist active).
+
+```json
+{
+  "action": "playmedia",
   "file": "video.mp4"
 }
 ```
 
-~~#### Basculer entre VLC et MPV~~
-> **Note v0.8.9**: Action obsolète - MPV retiré, VLC exclusif
+> **Note**: pour le réglage du volume, voir « Contrôle du volume (ALSA système) » dans les endpoints système. Le player Chromium HTML5 gère le `mute` par média (champ `mute` du schéma de playlist), distinct du volume ALSA global.
+
+> **Endpoints dépréciés (HTTP 410)**: `player.php`, `player-control.php`. Utilisez `/api/display.php`.
 
 ---
 
@@ -271,94 +261,124 @@ Actions sur les médias.
 
 ---
 
-## Endpoints playlists
+## Endpoints playlists (unifiés)
 
-### GET /api/playlist.php
-Gestion des listes de lecture.
+> **Source de vérité unique** : `/api/playlists.php` (noyau partagé `web/api/playlists-core.php`).
+> Chaque playlist est stockée dans `/opt/pisignage/playlists/<slug>.json`.
+> Le pointeur de playlist active est `/opt/pisignage/config/active-playlist.json`.
+> « Diffuser à l'écran » écrit `/opt/pisignage/media/playlist.json` et incrémente `version` ; le player recharge seul (poll version 10s + canal reload 2s).
+>
+> **Endpoint déprécié (HTTP 410)** : `playlist-simple.php`. Utilisez `/api/playlists.php`.
 
-**Paramètres de requête :**
+**Schéma de playlist :**
+```json
+{
+  "name": "Ma playlist",
+  "slug": "ma-playlist",
+  "version": 3,
+  "autoplay": true,
+  "autoLoop": true,
+  "items": [
+    {
+      "url": "video1.mp4",
+      "type": "video",
+      "name": "video1.mp4",
+      "duration": 0,
+      "fit": "contain",
+      "mute": false,
+      "loop": false,
+      "transition": "none"
+    }
+  ]
+}
+```
 
-#### Lister toutes les playlists
-```
-GET /api/playlist.php?action=list
-```
-
-#### Obtenir une playlist spécifique
-```
-GET /api/playlist.php?action=get&name=playlist1
-```
+### GET /api/playlists.php
+Liste toutes les playlists et indique la playlist active.
 
 **Réponse :**
 ```json
 {
   "success": true,
   "data": {
-    "name": "playlist1",
-    "files": [
-      "video1.mp4",
-      "image1.jpg",
-      "video2.mp4"
+    "playlists": [
+      { "name": "Ma playlist", "slug": "ma-playlist", "items": 5 }
     ],
-    "loop": true,
-    "shuffle": false,
-    "created": "2025-09-25 10:00:00",
-    "modified": "2025-09-25 14:30:00"
+    "active": "ma-playlist"
   }
 }
 ```
 
-### POST /api/playlist.php
-Créer ou modifier une playlist.
+### GET /api/playlists.php?name=X
+Obtient une playlist spécifique (par slug ou nom).
+
+**Réponse :** objet playlist complet (voir schéma ci-dessus).
+
+### POST /api/playlists.php
+Créer ou mettre à jour une playlist.
 
 ```json
 {
-  "name": "ma_playlist",
-  "files": [
-    "video1.mp4",
-    "image1.jpg"
+  "name": "Ma playlist",
+  "items": [
+    { "url": "video1.mp4", "type": "video", "duration": 0 },
+    { "url": "image1.jpg", "type": "image", "duration": 10 }
   ],
-  "loop": true,
-  "shuffle": false
+  "autoplay": true,
+  "autoLoop": true
 }
 ```
 
-### DELETE /api/playlist.php
+### POST /api/playlists.php?action=activate&name=X
+« Diffuser à l'écran » : désigne la playlist comme active, écrit `/opt/pisignage/media/playlist.json` et incrémente `version`.
+
+**Réponse :**
+```json
+{
+  "success": true,
+  "data": { "active": "ma-playlist", "version": 4 },
+  "message": "Playlist diffusée à l'écran"
+}
+```
+
+### DELETE /api/playlists.php?name=X
 Supprimer une playlist.
 
 ```json
 {
-  "name": "playlist_a_supprimer"
+  "name": "playlist-a-supprimer"
 }
 ```
 
 ---
 
-## Endpoints programmation
+## Endpoints programmation (dayparting réel)
 
-### GET /api/scheduler.php
-Gestion de la programmation horaire.
+> **Architecture v0.12** : `web/api/scheduler.php` est un **exécuteur CLI** lancé par cron 1×/minute (en `www-data`, via `/etc/cron.d/pisignage-scheduler`). À chaque exécution il lit `/opt/pisignage/data/schedules.json` et désigne la playlist active selon heure/jour/récurrence/priorité (idempotent ; revert de la playlist en fin de fenêtre). L'état réel est écrit dans `/opt/pisignage/config/scheduler-state.json` et reflété dans l'UI.
+>
+> `web/config.php` aligne le fuseau horaire PHP sur `/etc/timezone` (sinon le dayparting comparerait des heures UTC à des heures locales).
+>
+> Les programmes sont gérés depuis l'UI « Programmation » et persistés dans `/opt/pisignage/data/schedules.json`.
 
-#### Lister tous les programmes
-```
-GET /api/scheduler.php?action=list
-```
-
-#### Obtenir le programme actuel
-```
-GET /api/scheduler.php?action=current
-```
-
-### POST /api/scheduler.php
-Créer ou modifier un programme.
-
+**Schéma d'un programme (`schedules.json`) :**
 ```json
 {
   "name": "Programme matinal",
   "start_time": "08:00",
   "end_time": "12:00",
   "days": ["monday", "tuesday", "wednesday", "thursday", "friday"],
-  "playlist": "playlist_travail",
+  "playlist": "playlist-travail",
+  "priority": 10,
   "enabled": true
+}
+```
+
+**État courant (`scheduler-state.json`) :**
+```json
+{
+  "active_schedule": "Programme matinal",
+  "active_playlist": "playlist-travail",
+  "applied_at": "2026-06-20T08:00:00+02:00"
 }
 ```
 
@@ -601,13 +621,13 @@ curl -X POST http://[pi-ip]/api/kiosk.php/restart
 Accès aux fichiers de logs.
 
 **Paramètres de requête :**
-- `file=pisignage|vlc|system` (requis)
+- `file=pisignage|system|nginx` (requis)
 - `lines=nombre` (défaut: 100)
 - `tail=true` (dernières lignes, défaut: true)
 
 **Exemple :**
 ```
-GET /api/logs.php?file=vlc&lines=50
+GET /api/logs.php?file=pisignage&lines=50
 ```
 
 ### GET /api/performance.php
@@ -656,8 +676,19 @@ Métriques de performance temps réel.
 | 400 | Requête malformée |
 | 404 | Endpoint non trouvé |
 | 405 | Méthode HTTP non supportée |
+| 410 | Endpoint déprécié et supprimé (voir « Endpoints dépréciés ») |
 | 413 | Fichier trop volumineux |
 | 500 | Erreur serveur interne |
+
+### Endpoints dépréciés (HTTP 410)
+
+Les endpoints suivants ont été supprimés en v0.12.0 et répondent désormais **HTTP 410 Gone** :
+
+| Ancien endpoint | Remplacement |
+|-----------------|--------------|
+| `playlist-simple.php` | `/api/playlists.php` |
+| `player.php` | `/api/display.php` |
+| `player-control.php` | `/api/display.php` |
 
 ### Exemples de réponses d'erreur
 
@@ -679,11 +710,11 @@ Métriques de performance temps réel.
 const systemStatus = await fetch('/api/system.php')
   .then(response => response.json());
 
-// Démarrer la lecture
-await fetch('/api/player.php', {
+// Démarrer la lecture (commande au moteur Chromium)
+await fetch('/api/display.php?action=command', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ action: 'play' })
+  body: JSON.stringify({ cmd: 'play' })
 });
 
 // Upload d'un fichier
@@ -702,10 +733,15 @@ await fetch('/api/upload.php', {
 # Statut système
 curl http://192.168.1.100/api/system.php
 
-# Contrôler le lecteur
-curl -X POST http://192.168.1.100/api/player.php \
+# Contrôler le lecteur (moteur Chromium)
+curl -X POST "http://192.168.1.100/api/display.php?action=command" \
   -H "Content-Type: application/json" \
-  -d '{"action": "play"}'
+  -d '{"cmd": "play"}'
+
+# Régler le volume système (ALSA)
+curl -X POST http://192.168.1.100/api/system.php \
+  -H "Content-Type: application/json" \
+  -d '{"action": "set_volume", "value": 75}'
 
 # Upload d'un fichier
 curl -X POST http://192.168.1.100/api/upload.php \
@@ -721,9 +757,9 @@ import requests
 response = requests.get('http://192.168.1.100/api/system.php')
 system_info = response.json()
 
-# Contrôler le lecteur
-requests.post('http://192.168.1.100/api/player.php',
-              json={'action': 'play'})
+# Contrôler le lecteur (moteur Chromium)
+requests.post('http://192.168.1.100/api/display.php?action=command',
+              json={'cmd': 'play'})
 
 # Upload d'un fichier
 files = {'media_files[]': open('video.mp4', 'rb')}
@@ -740,8 +776,8 @@ requests.post('http://192.168.1.100/api/upload.php',
 Les webhooks peuvent être configurés dans `/opt/pisignage/config/webhooks.json` pour recevoir des notifications d'événements.
 
 **Événements disponibles :**
-- `player.started` : Lecteur VLC démarré
-- `player.stopped` : Lecteur VLC arrêté
+- `player.started` : Player Chromium démarré
+- `player.stopped` : Player Chromium arrêté
 - `media.uploaded` : Nouveau média uploadé
 - `system.error` : Erreur système critique
 
@@ -751,12 +787,16 @@ Les webhooks peuvent être configurés dans `/opt/pisignage/config/webhooks.json
 - Les logs peuvent contenir des informations sensibles
 - Configurez HTTPS en production
 
-Cette documentation couvre l'API complète de PiSignage v0.8.9. Pour des questions spécifiques, consultez les logs ou ouvrez une issue sur GitHub.
+Cette documentation couvre l'API complète de PiSignage v0.12.0. Pour des questions spécifiques, consultez les logs ou ouvrez une issue sur GitHub.
 
 ## Migration depuis versions précédentes
 
-Toutes les intégrations API existantes continuent de fonctionner sans modification. Les versions 0.8.9 apportent:
-- **VLC exclusif**: Support MPV complètement retiré pour stabilité maximale
-- **Authentification renforcée**: Système d'auth sur toutes les pages
-- **Contrôle audio amélioré**: Gestion volume complète via VLC
-- **Performance optimisée**: Architecture modulaire MPA
+La version 0.12.0 introduit des changements majeurs côté API :
+- **Moteur unique Chromium HTML5**: VLC retiré (plus de service `pisignage-vlc`, plus d'interface HTTP VLC port 8080, plus de mot de passe VLC).
+- **Contrôle du lecteur via `/api/display.php`**: commandes `next|prev|play|pause|reload`, état live, lecture isolée `playmedia`.
+- **Playlists unifiées via `/api/playlists.php`**: source de vérité unique (`/opt/pisignage/playlists/<slug>.json`), activation « Diffuser à l'écran ».
+- **Volume = ALSA système** via `/api/system.php` (`set_volume`/`get_volume`/`toggle_mute`).
+- **Dayparting réel**: `scheduler.php` est un exécuteur CLI lancé par cron 1×/minute.
+- **Endpoints dépréciés (HTTP 410)**: `playlist-simple.php`, `player.php`, `player-control.php`.
+
+Les intégrations basées sur `player.php` ou `playlist-simple.php` doivent migrer vers `display.php` et `playlists.php`.

@@ -1,504 +1,273 @@
 /**
- * PiSignage Media Management Module
- * Handles media file operations, upload, delete, and display
+ * PiSignage Media module — design-system rewrite.
+ * Lists media in a .media-grid, drives the upload modal (drag&drop + progress),
+ * handles delete, search and type filters. Wires to PiSignage.api.media.*.
+ * No emoji, toasts via PiSignage.ui, no functions.js dependency.
  */
-
-// Ensure PiSignage namespace exists
 window.PiSignage = window.PiSignage || {};
 
-// Media management functionality
 PiSignage.media = {
-    currentFiles: [],
-    uploadInProgress: false,
+    files: [],
+    filter: 'all',
+    query: '',
+    uploading: false,
 
-    init: function() {
-        console.log('📁 Initializing media management...');
+    /* SVG icon markup (line style, stroke=currentColor) — JS-side equivalents of icon(). */
+    _svg(inner, w = 18) {
+        return '<svg viewBox="0 0 24 24" width="' + w + '" height="' + w + '" fill="none" stroke="currentColor" '
+             + 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + inner + '</svg>';
+    },
+    _icons: {
+        media: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/>',
+        play:  '<polygon points="6 4 20 12 6 20 6 4"/>',
+        trash: '<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M10 11v6M14 11v6"/>',
+        audio: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
+        folder:'<path d="M4 20a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2z"/>'
+    },
+
+    init() {
+        this.cacheDom();
+        this.bindEvents();
         this.loadMediaFiles();
-        this.setupUploadHandlers();
-        this.setupEventListeners();
     },
 
-    loadMediaFiles: async function() {
-        try {
-            const data = await PiSignage.api.media.list();
-            if (data.success) {
-                this.currentFiles = data.data || [];
-                this.renderMediaList();
-                this.updateFileSelects();
-                console.log(`📁 Loaded ${this.currentFiles.length} media files`);
-            } else {
-                console.error('Failed to load media files:', data.message);
-            }
-        } catch (error) {
-            console.error('Error loading media files:', error);
-            showAlert('Erreur de chargement des fichiers', 'error');
-        }
+    cacheDom() {
+        this.$grid = document.getElementById('media-grid');
+        this.$search = document.getElementById('media-search');
+        this.$filters = document.getElementById('media-filters');
+        this.$modal = document.getElementById('upload-modal');
+        this.$zone = document.getElementById('upload-zone');
+        this.$input = document.getElementById('upload-input');
+        this.$progress = document.getElementById('upload-progress');
+        this.$progressFill = document.getElementById('upload-progress-fill');
+        this.$progressPct = document.getElementById('upload-progress-pct');
+        this.$progressLabel = document.getElementById('upload-progress-label');
     },
 
-    renderMediaList: function() {
-        const container = document.getElementById('media-list');
-        if (!container) return;
-
-        if (this.currentFiles.length === 0) {
-            container.innerHTML = `
-                <div class="empty-state" style="text-align: center; padding: 40px; color: #666;">
-                    <h3>📂 Aucun fichier média</h3>
-                    <p>Commencez par uploader des fichiers vidéo, audio ou image</p>
-                </div>
-            `;
-            return;
-        }
-
-        container.innerHTML = '';
-
-        this.currentFiles.forEach(file => {
-            const card = document.createElement('div');
-            card.className = 'card media-file-card';
-            card.innerHTML = `
-                <div style="display: flex; align-items: center; margin-bottom: 10px;">
-                    <input type="checkbox" id="media-${file.name}" value="${file.name}" style="margin-right: 10px;">
-                    <h4 style="margin: 0; flex: 1;" title="${file.name}">${this.truncateFilename(file.name)}</h4>
-                </div>
-                <div class="file-info">
-                    <p><strong>Taille:</strong> ${(file.size / 1024 / 1024).toFixed(2)} MB</p>
-                    <p><strong>Type:</strong> ${file.type}</p>
-                    ${file.duration ? `<p><strong>Durée:</strong> ${this.formatDuration(file.duration)}</p>` : ''}
-                </div>
-                <div class="file-actions" style="margin-top: 15px;">
-                    <button class="btn btn-primary btn-sm" onclick="PiSignage.media.playFile('${file.name}')" title="Lire ce fichier">
-                        ▶️ Lire
-                    </button>
-                    <button class="btn btn-danger btn-sm" onclick="PiSignage.media.deleteFile('${file.name}')" title="Supprimer ce fichier">
-                        🗑️ Supprimer
-                    </button>
-                </div>
-            `;
-            container.appendChild(card);
-        });
-    },
-
-    updateFileSelects: function() {
-        // Update single file select dropdown
-        const fileSelect = document.getElementById('single-file-select');
-        if (fileSelect) {
-            fileSelect.innerHTML = '<option value="">-- Choisir --</option>';
-            this.currentFiles.forEach(file => {
-                const option = document.createElement('option');
-                option.value = file.name;
-                option.textContent = file.name;
-                fileSelect.appendChild(option);
+    bindEvents() {
+        if (this.$search) {
+            this.$search.addEventListener('input', (e) => {
+                this.query = (e.target.value || '').toLowerCase().trim();
+                this.renderGrid();
             });
         }
-
-        // Update media select in player section
-        const mediaSelect = document.getElementById('media-select');
-        if (mediaSelect) {
-            mediaSelect.innerHTML = '<option value="">-- Sélectionner un fichier --</option>';
-            this.currentFiles.forEach(file => {
-                const option = document.createElement('option');
-                option.value = file.name;
-                option.textContent = file.name;
-                mediaSelect.appendChild(option);
+        if (this.$filters) {
+            this.$filters.addEventListener('click', (e) => {
+                const btn = e.target.closest('.filter-btn');
+                if (!btn) return;
+                this.$filters.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                this.filter = btn.dataset.filter || 'all';
+                this.renderGrid();
             });
         }
-    },
-
-    truncateFilename: function(filename, maxLength = 30) {
-        if (filename.length <= maxLength) return filename;
-        const extension = filename.split('.').pop();
-        const nameWithoutExt = filename.substring(0, filename.lastIndexOf('.'));
-        const truncated = nameWithoutExt.substring(0, maxLength - extension.length - 4) + '...';
-        return truncated + '.' + extension;
-    },
-
-    formatDuration: function(seconds) {
-        if (!seconds || isNaN(seconds)) return '';
-        const mins = Math.floor(seconds / 60);
-        const secs = seconds % 60;
-        return `${mins}:${secs.toString().padStart(2, '0')}`;
-    },
-
-    deleteFile: async function(filename) {
-        if (!confirm(`Supprimer le fichier "${filename}" ?`)) return;
-
-        try {
-            const data = await PiSignage.api.media.delete(filename);
-            if (data.success) {
-                showAlert('Fichier supprimé!', 'success');
-                this.loadMediaFiles(); // Refresh the list
-            } else {
-                showAlert('Erreur: ' + data.message, 'error');
-            }
-        } catch (error) {
-            console.error('Delete file error:', error);
-            showAlert('Erreur de suppression', 'error');
-        }
-    },
-
-    playFile: async function(filename) {
-        try {
-            const currentPlayer = PiSignage.player.getCurrentPlayer();
-            const data = await PiSignage.api.player.playFile(filename, currentPlayer);
-            if (data.success) {
-                showAlert(`Lecture de ${filename} démarrée`, 'success');
-                // Refresh player status
-                setTimeout(() => {
-                    if (typeof updatePlayerStatus === 'function') {
-                        updatePlayerStatus();
-                    }
-                }, 500);
-            } else {
-                showAlert('Erreur: ' + data.message, 'error');
-            }
-        } catch (error) {
-            console.error('Play file error:', error);
-            showAlert('Erreur de lecture', 'error');
-        }
-    },
-
-    setupUploadHandlers: function() {
-        // Make upload functions globally available
-        window.showUploadModal = this.showUploadModal.bind(this);
-        window.openUploadModal = this.showUploadModal.bind(this); // Alternative name for compatibility
-    },
-
-    setupEventListeners: function() {
-        // Global drag and drop for the entire media section
-        const mediaSection = document.getElementById('media');
-        if (mediaSection) {
-            mediaSection.addEventListener('dragover', this.handleDragOver.bind(this));
-            mediaSection.addEventListener('drop', this.handleDrop.bind(this));
-            mediaSection.addEventListener('dragleave', this.handleDragLeave.bind(this));
-        }
-    },
-
-    handleDragOver: function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        e.dataTransfer.dropEffect = 'copy';
-
-        const mediaSection = document.getElementById('media');
-        if (mediaSection) {
-            mediaSection.classList.add('drag-over');
-        }
-    },
-
-    handleDragLeave: function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-
-        const mediaSection = document.getElementById('media');
-        if (mediaSection) {
-            mediaSection.classList.remove('drag-over');
-        }
-    },
-
-    handleDrop: function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-
-        const mediaSection = document.getElementById('media');
-        if (mediaSection) {
-            mediaSection.classList.remove('drag-over');
-        }
-
-        const files = e.dataTransfer.files;
-        if (files.length > 0) {
-            this.uploadFiles(Array.from(files));
-        }
-    },
-
-    showUploadModal: function() {
-        if (this.uploadInProgress) {
-            showAlert('Upload en cours, veuillez attendre', 'warning');
-            return;
-        }
-
-        // Show basic upload modal
-        this.showBasicUploadModal();
-    },
-
-    showBasicUploadModal: function() {
-        const modalHTML = `
-            <div id="uploadModal" class="modal" style="
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background-color: rgba(0, 0, 0, 0.7);
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                z-index: 10000;
-            ">
-                <div class="modal-content" style="
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    border-radius: 15px;
-                    padding: 30px;
-                    max-width: 500px;
-                    width: 90%;
-                    position: relative;
-                    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-                    color: white;
-                ">
-                    <span class="close" style="
-                        position: absolute;
-                        top: 10px;
-                        right: 15px;
-                        font-size: 28px;
-                        cursor: pointer;
-                        color: white;
-                    " onclick="PiSignage.media.closeUploadModal()">&times;</span>
-
-                    <h2 style="margin-bottom: 20px; text-align: center;">📤 Upload de fichiers</h2>
-
-                    <div class="upload-area" style="
-                        border: 3px dashed rgba(255,255,255,0.5);
-                        border-radius: 10px;
-                        padding: 40px;
-                        text-align: center;
-                        cursor: pointer;
-                        background-color: rgba(255,255,255,0.1);
-                        transition: all 0.3s;
-                    " onclick="document.getElementById('fileInput').click()">
-                        <h3 style="margin-bottom: 10px;">📁 Sélectionner des fichiers</h3>
-                        <p>ou glisser-déposer ici</p>
-                        <p style="font-size: 12px; opacity: 0.8;">Formats: MP4, AVI, MKV, MOV, JPG, PNG</p>
-                        <input type="file" id="fileInput" multiple accept="video/*,image/*,audio/*" style="display: none;" onchange="PiSignage.media.handleFileSelection(this.files)">
-                    </div>
-
-                    <div class="modal-footer" style="text-align: right; margin-top: 20px;">
-                        <button class="btn btn-secondary" onclick="PiSignage.media.closeUploadModal()">Annuler</button>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        document.body.insertAdjacentHTML('beforeend', modalHTML);
-
-        // Add drag and drop to upload area
-        const uploadArea = document.querySelector('#uploadModal .upload-area');
-        if (uploadArea) {
-            uploadArea.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                uploadArea.style.backgroundColor = 'rgba(255,255,255,0.2)';
-            });
-
-            uploadArea.addEventListener('dragleave', (e) => {
-                e.preventDefault();
-                uploadArea.style.backgroundColor = 'rgba(255,255,255,0.1)';
-            });
-
-            uploadArea.addEventListener('drop', (e) => {
-                e.preventDefault();
-                uploadArea.style.backgroundColor = 'rgba(255,255,255,0.1)';
-                const files = e.dataTransfer.files;
-                if (files.length > 0) {
-                    this.closeUploadModal();
-                    this.uploadFiles(Array.from(files));
+        if (this.$input) {
+            this.$input.addEventListener('change', () => {
+                if (this.$input.files && this.$input.files.length) {
+                    this.upload(Array.from(this.$input.files));
+                    this.$input.value = '';
                 }
             });
         }
-    },
-
-    closeUploadModal: function() {
-        const modal = document.getElementById('uploadModal');
-        if (modal) {
-            modal.remove();
+        if (this.$zone) {
+            this.$zone.addEventListener('click', () => { if (!this.uploading) this.$input.click(); });
+            this.$zone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                this.$zone.classList.add('dragging');
+            });
+            this.$zone.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                this.$zone.classList.remove('dragging');
+            });
+            this.$zone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                this.$zone.classList.remove('dragging');
+                const dropped = e.dataTransfer && e.dataTransfer.files;
+                if (dropped && dropped.length) this.upload(Array.from(dropped));
+            });
         }
     },
 
-    handleFileSelection: function(files) {
-        if (files && files.length > 0) {
-            this.closeUploadModal();
-            this.uploadFiles(Array.from(files));
+    /* ---------- data ---------- */
+    async loadMediaFiles() {
+        try {
+            const r = await PiSignage.api.media.list();
+            if (r && r.success) {
+                this.files = Array.isArray(r.data) ? r.data : [];
+                this.renderGrid();
+            } else {
+                this.renderError((r && r.message) || 'Réponse invalide');
+            }
+        } catch (e) {
+            this.renderError('Erreur de chargement des médias');
         }
     },
 
-    uploadFiles: async function(files) {
-        if (this.uploadInProgress) {
-            showAlert('Upload déjà en cours', 'warning');
+    /* ---------- helpers ---------- */
+    _fmtSize(file) {
+        if (file.size_formatted) return file.size_formatted;
+        const b = file.size || 0;
+        if (!b) return '0 o';
+        const u = ['o', 'Ko', 'Mo', 'Go', 'To'];
+        const i = Math.floor(Math.log(b) / Math.log(1024));
+        return (b / Math.pow(1024, i)).toFixed(i >= 2 ? 1 : 0).replace('.', ',') + ' ' + u[i];
+    },
+
+    _typeLabel(type) {
+        return ({ video: 'Vidéo', image: 'Image', audio: 'Audio' })[type] || 'Fichier';
+    },
+
+    _esc(s) {
+        return String(s).replace(/[&<>"']/g, c => (
+            { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+        ));
+    },
+
+    _visibleFiles() {
+        return this.files.filter(f => {
+            if (this.filter !== 'all' && f.type !== this.filter) return false;
+            if (this.query && !(f.name || '').toLowerCase().includes(this.query)) return false;
+            return true;
+        });
+    },
+
+    /* ---------- render ---------- */
+    renderError(msg) {
+        if (!this.$grid) return;
+        this.$grid.innerHTML =
+            '<div class="empty-state">' + this._svg(this._icons.media, 54) +
+            '<h3>Impossible de charger les médias</h3><p>' + this._esc(msg) + '</p></div>';
+    },
+
+    renderGrid() {
+        if (!this.$grid) return;
+
+        if (this.files.length === 0) {
+            this.$grid.innerHTML =
+                '<div class="empty-state">' + this._svg(this._icons.media, 54) +
+                '<h3>Aucun média</h3><p>Téléversez des vidéos, images ou fichiers audio pour commencer.</p></div>';
             return;
         }
 
-        this.uploadInProgress = true;
-        const totalSize = files.reduce((sum, file) => sum + file.size, 0);
+        const list = this._visibleFiles();
+        if (list.length === 0) {
+            this.$grid.innerHTML =
+                '<div class="empty-state">' + this._svg(this._icons.media, 54) +
+                '<h3>Aucun résultat</h3><p>Aucun média ne correspond à votre recherche.</p></div>';
+            return;
+        }
 
-        showAlert(`📤 Upload de ${files.length} fichier(s) - ${(totalSize/1024/1024).toFixed(1)}MB`, 'info');
+        this.$grid.innerHTML = list.map(f => this._cardHtml(f)).join('');
+    },
 
-        // Show progress indicator
-        const progressDiv = this.createProgressIndicator();
-        document.body.appendChild(progressDiv);
+    _cardHtml(f) {
+        const name = this._esc(f.name);
+        let thumb;
+        if (f.type === 'image' && f.path) {
+            thumb = '<img src="' + this._esc(f.path) + '" alt="' + name + '" loading="lazy">';
+        } else if (f.type === 'audio') {
+            thumb = this._svg(this._icons.audio, 34);
+        } else {
+            thumb = this._svg(this._icons.media, 34);
+        }
+        return '' +
+            '<div class="media-card" data-name="' + name + '">' +
+                '<div class="media-card-thumb">' + thumb + '</div>' +
+                '<div class="media-card-body">' +
+                    '<div class="media-card-name" title="' + name + '">' + name + '</div>' +
+                    '<div class="media-card-meta">' + this._typeLabel(f.type) + ' · ' + this._fmtSize(f) + '</div>' +
+                    '<div class="row" style="gap:6px;margin-top:10px">' +
+                        '<button class="btn btn-ghost btn-sm" type="button" title="Lire" ' +
+                            'onclick="PiSignage.media.playFile(\'' + name.replace(/'/g, "\\'") + '\')">' +
+                            this._svg(this._icons.play, 14) + 'Lire</button>' +
+                        '<button class="btn btn-danger btn-sm" type="button" title="Supprimer" ' +
+                            'onclick="PiSignage.media.deleteFile(\'' + name.replace(/'/g, "\\'") + '\')">' +
+                            this._svg(this._icons.trash, 14) + '</button>' +
+                    '</div>' +
+                '</div>' +
+            '</div>';
+    },
+
+    /* ---------- actions ---------- */
+    openUpload() {
+        if (this.$progress) this.$progress.style.display = 'none';
+        if (this.$progressFill) this.$progressFill.style.width = '0%';
+        if (this.$progressPct) this.$progressPct.textContent = '0%';
+        PiSignage.ui.openModal('upload-modal');
+    },
+
+    async deleteFile(name) {
+        if (!PiSignage.ui.confirm('Supprimer le fichier "' + name + '" ?')) return;
+        try {
+            let r = await PiSignage.api.media.delete(name);
+            // Fichier utilisé dans des playlists : proposer une suppression forcée (qui
+            // retire aussi les références orphelines des playlists + de l'écran).
+            if (r && !r.success && r.data && r.data.used) {
+                const where = (r.data.playlists || []).join(', ') + (r.data.live ? (r.data.playlists && r.data.playlists.length ? ' + écran' : 'écran') : '');
+                if (!PiSignage.ui.confirm('« ' + name + ' » est utilisé dans : ' + where + '.\nSupprimer quand même et le retirer de ces playlists ?')) return;
+                r = await PiSignage.api.media.delete(name, true);
+            }
+            if (r && r.success) {
+                PiSignage.ui.toast((r.message) || 'Fichier supprimé', 'success');
+                this.loadMediaFiles();
+            } else {
+                PiSignage.ui.toast((r && r.message) || 'Suppression impossible', 'error');
+            }
+        } catch (e) {
+            PiSignage.ui.toast('Erreur de suppression', 'error');
+        }
+    },
+
+    async playFile(name) {
+        try {
+            const r = await PiSignage.api.player.playFile(name);
+            if (r && r.success) PiSignage.ui.toast('Lecture de ' + name, 'success');
+            else PiSignage.ui.toast((r && r.message) || 'Lecture impossible', 'error');
+        } catch (e) {
+            PiSignage.ui.toast('Erreur de lecture', 'error');
+        }
+    },
+
+    /* ---------- upload ---------- */
+    async upload(files) {
+        if (this.uploading) {
+            PiSignage.ui.toast('Téléversement déjà en cours', 'warning');
+            return;
+        }
+        if (!files || !files.length) return;
+
+        this.uploading = true;
+        if (this.$progress) this.$progress.style.display = 'block';
+        if (this.$progressLabel) {
+            const total = files.reduce((s, f) => s + (f.size || 0), 0);
+            this.$progressLabel.textContent = files.length + ' fichier(s) · ' + this._fmtSize({ size: total });
+        }
+        this._setProgress(0);
 
         try {
-            const data = await PiSignage.api.media.upload(files, (progress) => {
-                this.updateProgress(progressDiv, progress);
-            });
-
-            if (data.success) {
-                showAlert('✅ Upload terminé avec succès!', 'success');
-
-                // Auto-refresh media list with multiple strategies
-                setTimeout(() => {
-                    this.refreshMediaAfterUpload();
-                }, 1000);
+            const r = await PiSignage.api.media.upload(files, (p) => this._setProgress(p.percent));
+            if (r && r.success) {
+                PiSignage.ui.toast('Téléversement terminé', 'success');
+                PiSignage.ui.closeModal('upload-modal');
+                this.loadMediaFiles();
             } else {
-                showAlert('Erreur: ' + data.message, 'error');
+                PiSignage.ui.toast((r && r.message) || 'Échec du téléversement', 'error');
             }
-        } catch (error) {
-            console.error('Upload error:', error);
-            showAlert('❌ Erreur upload: ' + error.message, 'error');
+        } catch (e) {
+            PiSignage.ui.toast('Erreur de téléversement : ' + e.message, 'error');
         } finally {
-            this.uploadInProgress = false;
-            setTimeout(() => {
-                if (progressDiv.parentNode) {
-                    progressDiv.remove();
-                }
-            }, 2000);
+            this.uploading = false;
         }
     },
 
-    createProgressIndicator: function() {
-        const progressDiv = document.createElement('div');
-        progressDiv.id = 'upload-progress-indicator';
-        progressDiv.style.cssText = `
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: #2a2d3a;
-            padding: 20px;
-            border-radius: 10px;
-            z-index: 10001;
-            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
-            min-width: 250px;
-        `;
-
-        progressDiv.innerHTML = `
-            <div style="color: #4a9eff; margin-bottom: 10px; font-weight: bold;">📤 Upload en cours...</div>
-            <div style="width: 200px; height: 12px; background: rgba(255,255,255,0.1); border-radius: 6px; overflow: hidden;">
-                <div id="upload-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #4a9eff, #51cf66); transition: width 0.3s; border-radius: 6px;"></div>
-            </div>
-            <div id="upload-status" style="margin-top: 8px; font-size: 12px; color: #ccc;">Initialisation...</div>
-        `;
-
-        return progressDiv;
-    },
-
-    updateProgress: function(progressDiv, progress) {
-        const progressBar = progressDiv.querySelector('#upload-progress-bar');
-        const statusDiv = progressDiv.querySelector('#upload-status');
-
-        if (progressBar) {
-            progressBar.style.width = progress.percent + '%';
-        }
-
-        if (statusDiv) {
-            const mbLoaded = (progress.loaded / (1024 * 1024)).toFixed(1);
-            const mbTotal = (progress.total / (1024 * 1024)).toFixed(1);
-            statusDiv.textContent = `${mbLoaded} MB / ${mbTotal} MB (${progress.percent}%)`;
-        }
-    },
-
-    refreshMediaAfterUpload: function() {
-        console.log('🔄 Refreshing media after upload...');
-
-        // Strategy 1: Direct refresh
-        this.loadMediaFiles();
-
-        // Strategy 2: Dispatch custom event
-        const refreshEvent = new CustomEvent('mediaListUpdated', {
-            detail: { source: 'upload', timestamp: Date.now() }
-        });
-        document.dispatchEvent(refreshEvent);
-
-        // Strategy 3: Switch to media section if not already there
-        setTimeout(() => {
-            const currentSection = document.querySelector('.content-section.active');
-            if (currentSection && currentSection.id !== 'media') {
-                console.log('📂 Auto-switching to media section');
-                if (typeof showSection === 'function') {
-                    showSection('media');
-                }
-            }
-        }, 500);
-    },
-
-    // Utility functions for media type detection
-    getMediaType: function(mimeType) {
-        if (mimeType.startsWith('video/')) return 'video';
-        if (mimeType.startsWith('audio/')) return 'audio';
-        if (mimeType.startsWith('image/')) return 'image';
-        return 'file';
-    },
-
-    getMediaIcon: function(type) {
-        const icons = {
-            video: '🎬',
-            audio: '🎵',
-            image: '🖼️',
-            file: '📄'
-        };
-        return icons[type] || icons.file;
+    _setProgress(pct) {
+        pct = Math.max(0, Math.min(100, Math.round(pct || 0)));
+        if (this.$progressFill) this.$progressFill.style.width = pct + '%';
+        if (this.$progressPct) this.$progressPct.textContent = pct + '%';
     }
 };
 
-// Global functions for backward compatibility
-window.loadMediaFiles = function() {
-    PiSignage.media.loadMediaFiles();
-};
+/* Backward-compat global used elsewhere (e.g. init.js youtube auto-refresh). */
+window.loadMediaFiles = () => PiSignage.media.loadMediaFiles();
 
-window.deleteFile = function(filename) {
-    PiSignage.media.deleteFile(filename);
-};
-
-window.uploadFiles = function(files) {
-    PiSignage.media.uploadFiles(Array.from(files));
-};
-
-// CSS for drag and drop styling
-const mediaStyles = document.createElement('style');
-mediaStyles.textContent = `
-    #media.drag-over {
-        background-color: rgba(74, 158, 255, 0.1);
-        border: 2px dashed #4a9eff;
-        border-radius: 10px;
-    }
-
-    .media-file-card {
-        transition: transform 0.2s, box-shadow 0.2s;
-        /* Virtualize long media lists: skip rendering off-screen cards. */
-        content-visibility: auto;
-        contain-intrinsic-size: auto 140px;
-    }
-
-    /* Same virtualization for playlist cards (long playlist grids). */
-    .playlist-card {
-        content-visibility: auto;
-        contain-intrinsic-size: auto 140px;
-    }
-
-    .media-file-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-    }
-
-    .file-info p {
-        margin: 5px 0;
-        font-size: 14px;
-        color: #ccc;
-    }
-
-    .file-actions {
-        display: flex;
-        gap: 10px;
-    }
-
-    .btn-sm {
-        padding: 6px 12px;
-        font-size: 12px;
-    }
-`;
-document.head.appendChild(mediaStyles);
-
-console.log('✅ PiSignage Media module loaded - File management ready');
+console.log('PiSignage Media module loaded');

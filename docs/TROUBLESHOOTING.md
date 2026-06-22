@@ -1,20 +1,21 @@
-# Guide de dépannage - PiSignage v0.8.9
+# Guide de dépannage - PiSignage v0.12
 
 ## Vue d'ensemble
 
-Ce guide présente les solutions aux problèmes les plus fréquents rencontrés lors de l'utilisation de PiSignage v0.8.9. Grâce à l'architecture modulaire et à l'utilisation exclusive de VLC, de nombreux problèmes ont été éliminés, mais ce guide reste essentiel pour le dépannage général.
+Ce guide présente les solutions aux problèmes les plus fréquents rencontrés lors de l'utilisation de PiSignage v0.12. Depuis cette version, le moteur de lecture est **unique : Chromium HTML5 en mode kiosk Wayland** (la page `web/player.php` servie sur `/player`). VLC a été entièrement retiré (plus de service `pisignage-vlc`, plus d'interface HTTP VLC sur le port 8080, plus de « volume VLC »). Ce guide se concentre donc sur le dépannage du kiosk Chromium, de l'API de contrôle du lecteur et de la programmation (dayparting).
 
-### Améliorations v0.8.9
-- **VLC exclusif**: Support MPV complètement retiré pour stabilité maximale
-- **80% moins d'erreurs JavaScript** grâce à l'architecture modulaire
-- **Navigation plus fiable** entre les sections
-- **Performances améliorées** de 80% sur Raspberry Pi
-- **Authentification complète** sur toutes les pages
-- **Support Trixie**: Mode kiosk Chromium + Wayland (optionnel)
+### Architecture de lecture v0.12
+- **Moteur unique Chromium HTML5**: `chromium --kiosk http://127.0.0.1/player`, lit `/opt/pisignage/media/playlist.json`
+- **Session graphique lightdm**: autologin `pi` → compositeur Wayland `labwc` → Chromium kiosk (PAS greetd)
+- **Contrôle du lecteur via API**: `web/api/display.php` (commandes `next|prev|play|pause|reload`, état live, lecture média isolé)
+- **Volume = ALSA système**: via `web/api/system.php` (`set_volume`/`get_volume`/`toggle_mute`)
+- **Playlists unifiées**: `web/api/playlists.php`, une seule source de vérité (`/opt/pisignage/playlists/<slug>.json`)
+- **Programmation réelle (dayparting)**: `web/api/scheduler.php` lancé par cron 1×/minute
+- **Cible**: Raspberry Pi 4/5, Raspberry Pi OS Trixie (Debian 13), Wayland/labwc, PHP 8.4-fpm + nginx
 
 ---
 
-## Problèmes spécifiques v0.8.9
+## Problèmes spécifiques v0.12
 
 ### Navigation entre pages qui ne fonctionne pas
 
@@ -22,19 +23,16 @@ Ce guide présente les solutions aux problèmes les plus fréquents rencontrés 
 - Navigation entre pages qui échoue
 - Pages qui ne se chargent pas correctement
 
-**Solution v0.8.9 :**
+**Solution :**
 ```bash
-# Vérifier que vous êtes bien en v0.8.9
-grep version /opt/pisignage/web/assets/js/core.js
-
 # Vider le cache du navigateur
 # Ctrl+Shift+Delete ou Cmd+Shift+Delete
 
 # Accès direct aux pages modulaires
 http://[IP-PI]/dashboard.php
 http://[IP-PI]/media.php
-http://[IP-PI]/playlists.php
-http://[IP-PI]/player.php
+http://[IP-PI]/playlists.php          # composer + Diffuser à l'écran
+http://[IP-PI]/player-control-ui.php  # page « Lecteur » : contrôle du moteur réel (play/pause/skip/reload + volume ALSA)
 http://[IP-PI]/settings.php
 ```
 
@@ -45,20 +43,20 @@ http://[IP-PI]/settings.php
 # Tester le chargement des pages
 time curl -s http://localhost/dashboard.php > /dev/null
 
-# Vérifier processus VLC
-ps aux | grep vlc
+# Vérifier le moteur de lecture Chromium kiosk
+ps aux | grep chromium
 ```
 
 **Solution :**
 ```bash
 # Vider tous les caches
-sudo systemctl restart nginx php8.2-fpm
+sudo systemctl restart nginx php8.4-fpm
 
 # Forcer le rechargement CSS/JS
 rm -rf /opt/pisignage/web/assets/cache/* 2>/dev/null
 
-# Redémarrer le lecteur VLC
-sudo systemctl restart pisignage
+# Redémarrer la session graphique (relance le kiosk Chromium)
+sudo systemctl restart display-manager
 ```
 
 ---
@@ -125,152 +123,192 @@ done
 
 ---
 
-## Problèmes de service
+## Problèmes de session graphique (kiosk)
 
-### Le service PiSignage refuse de démarrer
+> **v0.12**: Il n'y a plus de service systemd `pisignage`/`pisignage-vlc`. Le « lecteur » est la session graphique : `lightdm` (display-manager) auto-logge l'utilisateur `pi`, lance le compositeur Wayland `labwc`, qui démarre Chromium en mode kiosk sur `http://127.0.0.1/player`.
+
+### La session graphique ne démarre pas
 
 **Symptômes observés :**
-- La commande `systemctl status pisignage` affiche un état "failed"
-- Le lecteur vidéo ne se lance pas automatiquement au démarrage
+- Écran noir au démarrage
+- Aucun navigateur affiché
+- Le kiosk Chromium ne se lance pas automatiquement
 
 **Phase de diagnostic :**
 ```bash
-# Examiner les logs en temps réel
-sudo journalctl -u pisignage -f
+# État du gestionnaire d'affichage (lightdm)
+sudo systemctl status display-manager
+sudo journalctl -u lightdm -n 50
 
-# Tester manuellement le gestionnaire de lecteur
-sudo -u pi /opt/pisignage/scripts/player-manager-v0.8.1.sh test
+# Vérifier l'environnement graphique Wayland
+echo $WAYLAND_DISPLAY
+ps aux | grep -E "(labwc|chromium)"
 
-# Vérifier l'environnement graphique
-echo $DISPLAY  # Doit afficher :0
-ps aux | grep -E "(Xorg|Wayland)"
+# Vérifier les logs de la session utilisateur
+journalctl --user -xe
 ```
 
 **Procédures de résolution :**
 
-**Première approche - Réinitialisation complète du service :**
+**Première approche - Redémarrer la session graphique :**
 ```bash
-sudo systemctl stop pisignage
-sudo systemctl disable pisignage
-sudo systemctl enable pisignage
-sudo systemctl start pisignage
+# Relance lightdm → labwc → Chromium kiosk (« Redémarrer la session »)
+sudo systemctl restart display-manager
 ```
 
-**Deuxième approche - Configuration de l'environnement systemd :**
+**Deuxième approche - Vérifier que lightdm est bien activé :**
 ```bash
-sudo systemctl edit pisignage
-# Ajouter les lignes suivantes dans l'éditeur :
-# [Service]
-# Environment=DISPLAY=:0
-# Environment=XDG_RUNTIME_DIR=/run/user/1000
+sudo systemctl enable lightdm
+sudo systemctl status display-manager   # doit pointer vers lightdm.service
 ```
 
-**Troisième approche - Vérification des permissions :**
+**Troisième approche - Régénérer la configuration kiosk :**
 ```bash
-sudo chown pi:pi /opt/pisignage/scripts/player-manager-v0.8.1.sh
-sudo chmod +x /opt/pisignage/scripts/player-manager-v0.8.1.sh
+# Régénère l'autostart labwc à partir de la config
+/opt/pisignage/scripts/kiosk-apply
+sudo systemctl restart display-manager
 ```
 
-### Le service se relance continuellement
+### Le kiosk Chromium se relance en boucle
 
 **Symptômes observés :**
-- Le service redémarre en boucle sans s'arrêter
-- Les logs montrent des erreurs qui se répètent
+- L'écran clignote / Chromium réapparaît sans cesse
+- Les logs de session montrent des erreurs qui se répètent
 
 **Phase de diagnostic :**
 ```bash
-# Analyser l'historique des redémarrages
-sudo systemctl status pisignage | grep -i restart
+# Examiner les logs de la session utilisateur
+journalctl --user --since="10 minutes ago"
 
-# Examiner les logs récents
-sudo journalctl -u pisignage --since="10 minutes ago"
+# Vérifier l'autostart labwc et l'URL kiosk
+cat ~/.config/labwc/autostart
+cat /opt/pisignage/config/kiosk_url
+
+# Vérifier que /player répond bien en local
+curl -I http://127.0.0.1/player
 ```
 
 **Procédures de résolution :**
 
-**Augmentation des délais de redémarrage :**
+**Vérifier que la pile web fonctionne (sinon /player renvoie une erreur et Chromium boucle) :**
 ```bash
-sudo systemctl edit pisignage
-# Ajouter dans l'éditeur :
-# [Service]
-# RestartSec=30
-# StartLimitInterval=300
-# StartLimitBurst=3
+sudo systemctl status nginx php8.4-fpm
+sudo systemctl restart nginx php8.4-fpm
 ```
 
-**Désactivation temporaire du redémarrage automatique :**
+**Tester la page kiosk dans une session contrôlée :**
 ```bash
-sudo systemctl edit pisignage
-# Ajouter dans l'éditeur :
-# [Service]
-# Restart=no
+# Tuer Chromium pour forcer une relance propre
+pkill -f "/usr/bin/chromium"
 ```
 
 ---
 
-## Problèmes de lecteurs vidéo
+## Problèmes du lecteur (Chromium HTML5)
 
-### VLC refuse de se lancer
+> **v0.12**: Le moteur de lecture est uniquement Chromium en mode kiosk affichant `/player`. Il n'y a plus de VLC ni de MPV.
+
+### La page /player ne s'affiche pas (écran noir / page d'erreur)
 
 **Symptômes observés :**
-- L'écran reste complètement noir
-- Les logs de VLC contiennent des messages d'erreur
+- L'écran reste noir ou affiche une page d'erreur du navigateur
+- Le splash PiSignage ne disparaît jamais
+- Aucun média ne tourne
 
 **Phase de diagnostic :**
 ```bash
-# Vérifier l'installation de VLC
-cvlc --version
-which cvlc
+# Vérifier que Chromium kiosk tourne
+ps aux | grep chromium
 
-# Test de lecture manuel
-export DISPLAY=:0
-cvlc --intf dummy --fullscreen /opt/pisignage/media/BigBuckBunny_720p.mp4
+# Vérifier l'URL kiosk configurée (doit pointer vers /player en local)
+cat /opt/pisignage/config/kiosk_url
+# Attendu : http://127.0.0.1/player
 
-# Vérifier les processus en cours
-ps aux | grep vlc
+# Tester /player en local
+curl -I http://127.0.0.1/player
+
+# Vérifier que la playlist à l'écran existe et est valide
+cat /opt/pisignage/media/playlist.json | head
 ```
 
 **Procédures de résolution :**
 
-**Réinitialisation de la configuration VLC :**
+**Corriger l'URL kiosk et régénérer l'autostart :**
 ```bash
-rm -rf /home/pi/.config/vlc
-mkdir -p /home/pi/.config/vlc
-cat > /home/pi/.config/vlc/vlcrc << 'EOF'
-[core]
-intf=dummy
-vout=drm
-fullscreen=1
-loop=1
-no-video-title-show=1
-quiet=1
-EOF
+echo "http://127.0.0.1/player" | sudo tee /opt/pisignage/config/kiosk_url
+/opt/pisignage/scripts/kiosk-apply
+sudo systemctl restart display-manager
 ```
 
-**Configuration de la sortie vidéo :**
+**Vérifier la pile web (nginx + PHP) qui sert /player :**
 ```bash
-# Vérifier et modifier le script de lancement si nécessaire
-/opt/pisignage/scripts/start-vlc.sh
-# Le script doit inclure l'option --vout drm
+sudo systemctl status nginx php8.4-fpm
+sudo nginx -t
+sudo systemctl restart nginx php8.4-fpm
+curl -I http://127.0.0.1/player
 ```
 
-**Vérification de l'accélération matérielle :**
+**Vérifier l'accélération matérielle (rendu vidéo HTML5) :**
 ```bash
 vcgencmd get_config int | grep gpu_mem
 # La valeur doit être d'au moins 64MB
 ```
 
-### ~~MPV ne fonctionne pas correctement~~
+### Le lecteur ne répond pas aux commandes (play/pause/skip/reload)
 
-> **Note v0.8.9**: Support MPV complètement retiré. PiSignage utilise maintenant VLC exclusivement. Cette section est conservée uniquement pour référence historique.
+**Symptômes observés :**
+- Les boutons de la page « Lecteur » (play/pause/next/prev/reload) restent sans effet
+- L'état live ne se met pas à jour dans l'UI
 
-~~Cette section n'est plus applicable depuis v0.8.9.~~
+**Rappel du fonctionnement (v0.12) :**
+- L'admin POST une commande sur `web/api/display.php` : `POST ?action=command {cmd:next|prev|play|pause|reload}`
+- Le player (page `/player`) poll `GET ?action=command` toutes les 2s, exécute la commande, puis rapporte son état via `POST ?action=state`
+- L'admin lit l'état live via `GET ?action=state`
+- Lecture d'un média isolé : `POST ?action=playmedia {file}`
 
-### ~~Le basculement entre VLC et MPV ne fonctionne pas~~
+**Phase de diagnostic :**
+```bash
+# Lire l'état rapporté par le player
+curl 'http://localhost/api/display.php?action=state'
 
-> **Note v0.8.9**: Le basculement entre lecteurs a été supprimé. PiSignage v0.8.9 utilise VLC exclusivement pour une meilleure stabilité et performance.
+# Envoyer une commande de test (next)
+curl -X POST 'http://localhost/api/display.php?action=command' \
+  -H "Content-Type: application/json" -d '{"cmd":"next"}'
 
-~~Cette section n'est plus applicable depuis v0.8.9.~~
+# Vérifier le fichier de commande partagé et ses permissions
+ls -la /opt/pisignage/config/player-command.json
+
+# Vérifier les logs PHP/nginx
+sudo tail -f /var/log/nginx/error.log
+```
+
+**Procédures de résolution :**
+
+**Corriger les permissions du fichier de commande / d'état :**
+```bash
+# www-data (PHP) doit pouvoir lire/écrire player-command.json
+sudo chown www-data:www-data /opt/pisignage/config/player-command.json
+sudo chmod 664 /opt/pisignage/config/player-command.json
+```
+
+**Forcer le player à recharger (si le poll semble figé) :**
+```bash
+curl -X POST 'http://localhost/api/display.php?action=command' \
+  -H "Content-Type: application/json" -d '{"cmd":"reload"}'
+
+# Ou relancer la session graphique si le navigateur ne poll plus
+sudo systemctl restart display-manager
+```
+
+**Vérifier le volume (volume SYSTÈME ALSA, pas « volume VLC ») :**
+```bash
+# Lecture de l'état du volume
+curl 'http://localhost/api/system.php?action=get_volume'
+
+# Réglage du volume (ALSA)
+curl -X POST 'http://localhost/api/system.php?action=set_volume' \
+  -H "Content-Type: application/json" -d '{"volume":80}'
+```
 
 ---
 
@@ -285,7 +323,7 @@ vcgencmd get_config int | grep gpu_mem
 **Phase de diagnostic :**
 ```bash
 # Vérifier l'état des services web
-sudo systemctl status nginx php8.2-fpm
+sudo systemctl status nginx php8.4-fpm
 
 # Tester l'accès local au serveur web
 curl -I http://localhost
@@ -293,14 +331,14 @@ curl -v http://localhost
 
 # Examiner les logs d'erreur
 tail -f /var/log/nginx/error.log
-tail -f /var/log/php8.2-fpm.log
+tail -f /var/log/php8.4-fpm.log
 ```
 
 **Procédures de résolution :**
 
 **Redémarrage des services web :**
 ```bash
-sudo systemctl restart nginx php8.2-fpm
+sudo systemctl restart nginx php8.4-fpm
 ```
 
 **Vérification et correction de la configuration Nginx :**
@@ -323,10 +361,16 @@ sudo chmod -R 755 /opt/pisignage/web
 
 **Phase de diagnostic :**
 ```bash
-# Tester individuellement chaque endpoint
+# Tester individuellement chaque endpoint actif (v0.12)
 curl http://localhost/api/system.php
-curl http://localhost/api/player.php
+curl 'http://localhost/api/display.php?action=state'
+curl http://localhost/api/playlists.php
 curl http://localhost/api/media.php
+
+# Endpoints DÉPRÉCIÉS : doivent répondre HTTP 410 Gone
+curl -I http://localhost/api/player.php
+curl -I http://localhost/api/player-control.php
+curl -I http://localhost/api/playlist-simple.php
 
 # Vérifier les permissions sur les fichiers API
 ls -la /opt/pisignage/web/api/
@@ -337,7 +381,7 @@ ls -la /opt/pisignage/web/api/
 **Retéléchargement des fichiers API :**
 ```bash
 cd /opt/pisignage/web/api
-for api in system player media screenshot; do
+for api in system display media playlists screenshot; do
     wget -O ${api}.php \
         https://raw.githubusercontent.com/elkir0/Pi-Signage/main/web/api/${api}.php
 done
@@ -373,10 +417,10 @@ df -h /opt/pisignage/media/
 
 **Augmentation des limites PHP :**
 ```bash
-sudo sed -i 's/upload_max_filesize = .*/upload_max_filesize = 500M/' /etc/php/8.2/fpm/php.ini
-sudo sed -i 's/post_max_size = .*/post_max_size = 500M/' /etc/php/8.2/fpm/php.ini
-sudo sed -i 's/max_execution_time = .*/max_execution_time = 300/' /etc/php/8.2/fpm/php.ini
-sudo systemctl restart php8.2-fpm
+sudo sed -i 's/upload_max_filesize = .*/upload_max_filesize = 500M/' /etc/php/8.4/fpm/php.ini
+sudo sed -i 's/post_max_size = .*/post_max_size = 500M/' /etc/php/8.4/fpm/php.ini
+sudo sed -i 's/max_execution_time = .*/max_execution_time = 300/' /etc/php/8.4/fpm/php.ini
+sudo systemctl restart php8.4-fpm
 ```
 
 **Configuration du répertoire temporaire :**
@@ -407,12 +451,12 @@ sudo chmod 755 /opt/pisignage/media
 vcgencmd display_power
 tvservice -s
 
-# Contrôler les processus de lecture vidéo
-ps aux | grep vlc
+# Contrôler le moteur de lecture (Chromium kiosk)
+ps aux | grep chromium
 
-# Tenter une réactivation manuelle de l'affichage
-export DISPLAY=:0
-xset dpms force on
+# Réveiller l'affichage (Wayland/labwc — l'extinction d'écran est gérée
+# par l'extinction programmée du kiosk ; relancer la session si besoin)
+sudo systemctl restart display-manager
 ```
 
 **Procédures de résolution :**
@@ -456,20 +500,22 @@ sudo sed -i 's/#disable_overscan=1/disable_overscan=1/' /boot/config.txt
 sudo reboot
 ```
 
-**Configuration du ratio d'aspect pour VLC :**
+**Ajustement du cadrage côté player HTML5 :**
 ```bash
-cat > /home/pi/.config/vlc/vlcrc << 'EOF'
-[core]
-intf=dummy
-vout=drm
-fullscreen=1
-video-on-top=1
-aspect-ratio=16:9
-EOF
+# Le cadrage de chaque média est défini dans la playlist (champ "fit" :
+# contain | cover | fill) — voir l'éditeur de playlist dans l'UI.
+# Inspecter la playlist active :
+cat /opt/pisignage/media/playlist.json | python3 -m json.tool
+
+# Forcer un échelonnage d'affichage via les flags Chromium (4K, etc.) :
+echo "--kiosk --force-device-scale-factor=1" | sudo tee /opt/pisignage/config/kiosk_flags
+/opt/pisignage/scripts/kiosk-apply
+sudo systemctl restart display-manager
 ```
 
-~~**Configuration du ratio d'aspect pour MPV :**~~
-> **Note v0.8.9**: MPV n'est plus supporté. Utilisez uniquement la configuration VLC ci-dessus.
+> **Note v0.12**: Le cadrage (aspect/zoom) n'est plus géré par un fichier de
+> configuration VLC mais par le champ `fit` de chaque élément de playlist et
+> par les flags Chromium. VLC a été retiré.
 
 ### Absence de son
 
@@ -495,15 +541,15 @@ amixer cset numid=3 2  # Force l'audio HDMI
 sudo alsactl store
 ```
 
-**Configuration audio spécifique pour VLC :**
+**Vérifier le volume système (ALSA) via l'API PiSignage :**
 ```bash
-cat >> /home/pi/.config/vlc/vlcrc << 'EOF'
-[alsa]
-alsa-audio-device=hw:0,1
+# Le son du player HTML5 suit le volume SYSTÈME ALSA (plus de « volume VLC »)
+curl 'http://localhost/api/system.php?action=get_volume'
+curl -X POST 'http://localhost/api/system.php?action=set_volume' \
+  -H "Content-Type: application/json" -d '{"volume":80}'
 
-[core]
-aout=alsa
-EOF
+# Vérifier que le média n'est pas en sourdine dans la playlist (champ "mute")
+cat /opt/pisignage/media/playlist.json | grep -i mute
 ```
 
 **Configuration système audio globale :**
@@ -564,25 +610,27 @@ sudo find /tmp -type f -atime +7 -delete
 
 **Procédures d'optimisation :**
 
-**Optimisation des paramètres de cache pour VLC :**
+**Optimiser le rendu vidéo HTML5 (Chromium) :**
 ```bash
-cat > /home/pi/.config/vlc/vlcrc << 'EOF'
-[core]
-intf=dummy
-vout=mmal_xsplitter
-file-caching=3000
-network-caching=3000
-sout-mux-caching=3000
-EOF
+# Privilégier les médias H.264/MP4 (décodage matériel) ; éviter les codecs
+# logiciels lourds (VP9/AV1 haute résolution) sur Pi 4.
+# Le player précharge le média suivant pour éviter les "flashs" entre clips.
+
+# Vérifier/ajuster les flags Chromium pour le rendu :
+cat /opt/pisignage/config/kiosk_flags
+echo "--kiosk --enable-features=VaapiVideoDecoder --ignore-gpu-blocklist" \
+  | sudo tee /opt/pisignage/config/kiosk_flags
+/opt/pisignage/scripts/kiosk-apply
+sudo systemctl restart display-manager
 ```
 
-~~**Optimisation des paramètres de cache pour MPV :**~~
-> **Note v0.8.9**: MPV n'est plus supporté. Utilisez uniquement l'optimisation VLC ci-dessus.
+> **Note v0.12**: Le cache de lecture VLC n'existe plus. La fluidité dépend du
+> décodage matériel de Chromium et du format des médias. VLC a été retiré.
 
-**Overclocking modéré (uniquement pour Raspberry Pi 3) :**
+**Vérification de l'accélération matérielle GPU :**
 ```bash
-echo "arm_freq=1300" | sudo tee -a /boot/config.txt
-echo "core_freq=500" | sudo tee -a /boot/config.txt
+vcgencmd get_config int | grep gpu_mem
+# La valeur doit être d'au moins 128MB pour le décodage vidéo
 ```
 
 ---
@@ -629,7 +677,7 @@ sudo systemctl restart nginx
 
 ## Problèmes spécifiques Trixie/Kiosk Mode
 
-> **Note**: Cette section s'applique uniquement à Raspberry Pi OS Trixie (Debian 13) avec le mode kiosk Chromium activé.
+> **Note**: Cette section s'applique à Raspberry Pi OS Trixie (Debian 13). En v0.12 le kiosk Chromium est le moteur de lecture par défaut (affiche `/player`). La session est gérée par **lightdm** (display-manager), pas greetd.
 
 ### Chromium kiosk ne se lance pas
 
@@ -649,7 +697,8 @@ ps aux | grep chromium
 # Vérifier configuration labwc
 cat ~/.config/labwc/autostart
 
-# Vérifier logs session
+# Vérifier le gestionnaire d'affichage (lightdm) et les logs de session
+sudo systemctl status display-manager
 journalctl --user -xe
 ```
 
@@ -660,8 +709,8 @@ journalctl --user -xe
 # Régénérer autostart labwc
 /opt/pisignage/scripts/kiosk-apply
 
-# Redémarrer session (méthode propre)
-sudo systemctl restart greetd
+# Redémarrer la session (méthode propre) : lightdm → labwc → Chromium
+sudo systemctl restart display-manager
 
 # Ou tuer Chromium pour relance automatique
 pkill -f "/usr/bin/chromium"
@@ -767,7 +816,8 @@ curl -X PUT http://localhost/api/kiosk.php/flags \
 
 ### Désactiver temporairement kiosk mode
 
-**Pour revenir au mode VLC player uniquement :**
+> **v0.12**: Le kiosk Chromium est le seul moteur de lecture (VLC retiré). Désactiver le kiosk laisse la session graphique sans lecteur — à n'utiliser que pour la maintenance/diagnostic.
+
 ```bash
 # Désactiver kiosk
 echo "ENABLE_KIOSK=0" | sudo tee /opt/pisignage/config/feature_flags
@@ -782,6 +832,65 @@ sudo reboot
 
 ---
 
+## Problèmes de programmation (dayparting)
+
+> **v0.12**: La programmation est exécutée par `web/api/scheduler.php` en mode **CLI**, lancé par cron **1×/minute** (sous `www-data`, via `/etc/cron.d/pisignage-scheduler`). Il lit `/opt/pisignage/data/schedules.json`, désigne la playlist active selon heure/jour/récurrence/priorité (idempotent, revert en fin de fenêtre), et écrit l'état dans `/opt/pisignage/config/scheduler-state.json`.
+
+### Les programmations ne se déclenchent pas
+
+**Symptômes observés :**
+- La playlist ne change pas à l'heure prévue
+- Le badge « En cours » ne reflète pas la programmation
+- `scheduler-state.json` ne se met pas à jour
+
+**Phase de diagnostic :**
+```bash
+# Vérifier que le cron du scheduler est installé
+cat /etc/cron.d/pisignage-scheduler
+
+# Vérifier que cron tourne
+systemctl status cron
+
+# Lancer le scheduler manuellement (comme le ferait cron) et lire la sortie
+sudo -u www-data php /opt/pisignage/web/api/scheduler.php
+
+# Inspecter les programmations et l'état courant
+cat /opt/pisignage/data/schedules.json | python3 -m json.tool
+cat /opt/pisignage/config/scheduler-state.json
+```
+
+**Procédures de résolution :**
+
+**Vérifier le fuseau horaire (cause fréquente) :**
+```bash
+# Le dayparting compare des heures LOCALES. PHP doit être aligné sur /etc/timezone
+# (web/config.php force le fuseau PHP sur /etc/timezone).
+cat /etc/timezone
+date                      # heure locale du système
+php -r 'echo date_default_timezone_get(), " ", date("H:i"), "\n";'
+
+# Corriger le fuseau si nécessaire
+sudo timedatectl set-timezone Europe/Brussels
+sudo systemctl restart php8.4-fpm
+```
+
+**Corriger les permissions (www-data doit lire/écrire l'état) :**
+```bash
+sudo chown www-data:www-data /opt/pisignage/data/schedules.json
+sudo chown www-data:www-data /opt/pisignage/config/scheduler-state.json
+sudo chown www-data:www-data /opt/pisignage/config/active-playlist.json
+sudo chmod 664 /opt/pisignage/config/scheduler-state.json
+```
+
+**Réinstaller le cron du scheduler :**
+```bash
+# Le cron exécute le scheduler chaque minute sous www-data
+ls -la /etc/cron.d/pisignage-scheduler
+sudo systemctl restart cron
+```
+
+---
+
 ## Outils de diagnostic
 
 ### Script de diagnostic automatique
@@ -792,7 +901,7 @@ Ce script génère un rapport complet de l'état du système :
 # Création du script de diagnostic
 cat > /opt/pisignage/scripts/diagnostic.sh << 'EOF'
 #!/bin/bash
-echo "=== Rapport de diagnostic PiSignage v0.8.9 ==="
+echo "=== Rapport de diagnostic PiSignage v0.12 ==="
 echo "Date du diagnostic: $(date)"
 echo "Temps de fonctionnement: $(uptime)"
 echo ""
@@ -807,12 +916,14 @@ echo ""
 
 echo "=== État des services ==="
 systemctl is-active nginx && echo "✓ Nginx: Actif" || echo "✗ Nginx: Inactif"
-systemctl is-active php8.2-fpm && echo "✓ PHP-FPM: Actif" || echo "✗ PHP-FPM: Inactif"
-systemctl is-active pisignage && echo "✓ PiSignage: Actif" || echo "✗ PiSignage: Inactif"
+systemctl is-active php8.4-fpm && echo "✓ PHP-FPM: Actif" || echo "✗ PHP-FPM: Inactif"
+systemctl is-active display-manager && echo "✓ Session graphique (lightdm): Active" || echo "✗ Session graphique (lightdm): Inactive"
+systemctl is-active cron && echo "✓ Cron (scheduler): Actif" || echo "✗ Cron (scheduler): Inactif"
 echo ""
 
-echo "=== Lecteur vidéo ==="
-pgrep vlc > /dev/null && echo "✓ VLC: En fonctionnement" || echo "✗ VLC: Arrêté"
+echo "=== Moteur de lecture (Chromium kiosk) ==="
+pgrep -f chromium > /dev/null && echo "✓ Chromium kiosk: En fonctionnement" || echo "✗ Chromium kiosk: Arrêté"
+echo "Playlist à l'écran: $(ls -l /opt/pisignage/media/playlist.json 2>/dev/null | awk '{print $5" octets"}' || echo absente)"
 echo ""
 
 echo "=== Configuration réseau ==="
@@ -830,8 +941,8 @@ echo "=== Journaux récents ==="
 echo "Dernières erreurs Nginx :"
 tail -5 /var/log/nginx/error.log 2>/dev/null || echo "Aucune erreur trouvée"
 echo ""
-echo "Derniers événements du service PiSignage :"
-journalctl -u pisignage --no-pager -n 5 2>/dev/null || echo "Aucun journal disponible"
+echo "Derniers événements de la session graphique (kiosk) :"
+journalctl -u lightdm --no-pager -n 5 2>/dev/null || echo "Aucun journal disponible"
 EOF
 
 chmod +x /opt/pisignage/scripts/diagnostic.sh
@@ -854,9 +965,9 @@ echo "Collecte des informations de diagnostic..."
 
 echo "Extraction des journaux système..."
 # Journaux des services système
-journalctl -u pisignage --no-pager > $LOGDIR/pisignage-service.log
+journalctl -u lightdm --no-pager > $LOGDIR/lightdm-session.log
 journalctl -u nginx --no-pager > $LOGDIR/nginx-service.log
-journalctl -u php8.2-fpm --no-pager > $LOGDIR/php-service.log
+journalctl -u php8.4-fpm --no-pager > $LOGDIR/php-service.log
 
 echo "Copie des logs applicatifs..."
 # Logs des applications
@@ -888,32 +999,37 @@ chmod +x /opt/pisignage/scripts/collect-logs.sh
 
 Voici l'emplacement des principaux fichiers de logs pour le diagnostic :
 
-- **Service PiSignage** : `journalctl -u pisignage -f`
+- **Session graphique (kiosk)** : `journalctl -u lightdm -f` et `journalctl --user -xe`
 - **Serveur web Nginx** : `/var/log/nginx/error.log`
-- **Processeur PHP-FPM** : `/var/log/php8.2-fpm.log`
-- **Lecteur VLC** : `/opt/pisignage/logs/vlc.log`
+- **Processeur PHP-FPM** : `/var/log/php8.4-fpm.log`
 - **Système PiSignage** : `/opt/pisignage/logs/pisignage.log`
+- **État du lecteur** : `curl 'http://localhost/api/display.php?action=state'`
+- **État du scheduler** : `/opt/pisignage/config/scheduler-state.json`
 
 ### Commandes de maintenance courantes
 
 ```bash
-# Redémarrage de tous les services PiSignage
-sudo systemctl restart nginx php8.2-fpm pisignage
+# Redémarrage des services web
+sudo systemctl restart nginx php8.4-fpm
 
-# Vérification rapide de l'état de tous les services
-sudo systemctl status nginx php8.2-fpm pisignage
+# Redémarrage de la session graphique (relance le kiosk Chromium)
+sudo systemctl restart display-manager
 
-# Arrêt forcé des processus de lecture bloqués
-sudo pkill -9 vlc
+# Vérification rapide de l'état des services
+sudo systemctl status nginx php8.4-fpm display-manager cron
 
-# Test de fonctionnement de l'interface web
+# Relance du moteur de lecture (tuer Chromium → relance auto par labwc)
+sudo pkill -f "/usr/bin/chromium"
+
+# Test de fonctionnement de l'interface web et de la page player
 curl -I http://localhost
+curl -I http://127.0.0.1/player
 
-# Surveillance en temps réel du lecteur vidéo
-watch -n 5 'ps aux | grep vlc | grep -v grep'
+# Surveillance en temps réel du moteur de lecture
+watch -n 5 'ps aux | grep chromium | grep -v grep'
 
-# Vérifier API VLC (contrôle audio/vidéo)
-curl http://localhost:8080/requests/status.json
+# Lire l'état rapporté par le player (remplace l'ancienne API VLC port 8080)
+curl 'http://localhost/api/display.php?action=state'
 ```
 
 ### Ressources de support

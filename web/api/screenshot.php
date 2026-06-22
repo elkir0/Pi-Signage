@@ -66,9 +66,12 @@ class ScreenshotManager {
      * @since 0.8.0
      */
     private function detectAvailableMethods() {
-        // Détection de la session Wayland ou X11
+        // Détection de la session Wayland ou X11.
+        // NOTE: php-fpm tourne en www-data SANS variable WAYLAND_DISPLAY/XDG_SESSION_TYPE,
+        // donc on détecte aussi la présence d'un socket Wayland sur disque (session labwc de 'pi').
         $isWayland = getenv('WAYLAND_DISPLAY') !== false ||
-                     strpos(shell_exec('echo $XDG_SESSION_TYPE 2>/dev/null') ?: '', 'wayland') !== false;
+                     strpos(shell_exec('echo $XDG_SESSION_TYPE 2>/dev/null') ?: '', 'wayland') !== false ||
+                     !empty(glob('/run/user/*/wayland-[0-9]*'));
 
         // Vérifier si VLC est en cours d'exécution
         $vlcRunning = !empty(trim(shell_exec('pgrep -x vlc 2>/dev/null')));
@@ -119,9 +122,10 @@ class ScreenshotManager {
             array_unshift($this->availableMethods, 'grim');
         }
 
-        // Prioriser ffmpeg-vlc en mode console quand VLC est actif
+        // Prioriser ffmpeg-vlc en mode console quand VLC est actif — SAUF sous Wayland,
+        // où grim capture l'écran composité complet (y compris la vidéo VLC/Chromium).
         $noX11 = getenv('DISPLAY') === false || getenv('DISPLAY') === '';
-        if ($vlcRunning && $noX11 && in_array('ffmpeg-vlc', $this->availableMethods)) {
+        if (!$isWayland && $vlcRunning && $noX11 && in_array('ffmpeg-vlc', $this->availableMethods)) {
             $this->availableMethods = array_diff($this->availableMethods, ['ffmpeg-vlc']);
             array_unshift($this->availableMethods, 'ffmpeg-vlc');
             logMessage("Mode console avec VLC actif - ffmpeg-vlc priorisé");
@@ -340,36 +344,51 @@ class ScreenshotManager {
      * @since 0.8.0
      */
     private function captureWithGrim($outputFile, $quality = null) {
-        $format = pathinfo($outputFile, PATHINFO_EXTENSION);
-        $cmd = "grim";
-
-        // Format et qualité
-        if ($format === 'jpg' || $format === 'jpeg') {
-            $cmd .= " -t jpeg";
-            if ($quality) {
-                $cmd .= " -q $quality";
-            }
-        } elseif ($format === 'png') {
-            $cmd .= " -t png";
-            // PNG utilise la compression, pas la qualité (0-9, 9 = max compression)
-            if ($quality) {
-                // Convertir la qualité (0-100) en compression (9-0)
-                $compression = 9 - floor($quality / 11);
-                $cmd .= " -l $compression";
-            }
-        }
-
-        $cmd .= " '$outputFile'";
-
+        // grim doit s'exécuter DANS la session Wayland (labwc) de l'utilisateur 'pi'.
+        // php-fpm tourne en www-data sans environnement Wayland, donc on passe par un
+        // helper exécuté via `sudo -u pi` (autorisé par /etc/sudoers.d/pisignage) qui
+        // capture l'écran composité (vidéo VLC/Chromium incluse) vers un fichier /tmp.
+        $helper = '/opt/pisignage/scripts/grim-capture.sh';
         $startTime = microtime(true);
-        $result = executeCommand($cmd);
+        $result = executeCommand("sudo -n -u pi " . escapeshellarg($helper) . " 2>/dev/null");
         $duration = microtime(true) - $startTime;
 
-        if ($result['success'] && file_exists($outputFile)) {
-            return ['success' => true, 'method' => 'grim', 'time' => $duration];
+        // executeCommand() renvoie 'output' sous forme de tableau de lignes : on normalise.
+        $out = $result['output'] ?? '';
+        if (is_array($out)) { $out = implode("\n", $out); }
+        $out = trim($out);
+
+        // Le helper imprime le chemin du PNG temporaire (dernière ligne) ; repli sur le chemin fixe.
+        $tmp = '';
+        foreach (array_reverse(preg_split('/\r?\n/', $out)) as $line) {
+            $line = trim($line);
+            if ($line !== '' && $line[0] === '/') { $tmp = $line; break; }
+        }
+        if ($tmp === '' || !is_file($tmp)) {
+            $tmp = '/tmp/pisignage-screenshot.png';
+        }
+        if (!is_file($tmp) || filesize($tmp) === 0) {
+            return ['success' => false, 'error' => 'grim (sudo -u pi) failed: ' . $out];
         }
 
-        return ['success' => false, 'error' => $result['output']];
+        // Déplacer/convertir vers le fichier final servi par le web (www-data).
+        $format = strtolower(pathinfo($outputFile, PATHINFO_EXTENSION));
+        $hasConvert = (bool) shell_exec('which convert 2>/dev/null');
+        if (($format === 'jpg' || $format === 'jpeg') && $hasConvert) {
+            $q = $quality ?: 90;
+            executeCommand("convert " . escapeshellarg($tmp) . " -quality $q " . escapeshellarg($outputFile));
+        } else {
+            @copy($tmp, $outputFile);
+            if ($quality && $quality < 100 && $hasConvert) {
+                executeCommand("convert " . escapeshellarg($outputFile) . " -quality $quality " . escapeshellarg($outputFile));
+            }
+        }
+        @chmod($outputFile, 0644);
+
+        if (is_file($outputFile) && filesize($outputFile) > 0) {
+            return ['success' => true, 'method' => 'grim', 'time' => $duration];
+        }
+        return ['success' => false, 'error' => 'grim: copy to output failed'];
     }
 
     /**

@@ -1,34 +1,24 @@
-    <!-- Alert Container -->
-    <div id="alert-container" style="position: fixed; top: 20px; right: 20px; z-index: 3000;"></div>
+<?php
+/**
+ * PiSignage — Shared footer: toast container + versioned scripts.
+ */
+if (!defined('ASSET_VERSION')) { define('ASSET_VERSION', $config['version'] ?? '0.12.0'); }
+$v = ASSET_VERSION;
+?>
+    <!-- Toast / notification container -->
+    <div id="toast-container" aria-live="polite" aria-atomic="true"></div>
 
-    <!-- PiSignage Modular JavaScript - Loaded in correct dependency order -->
-    <script src="functions.js?v=v0.11.0" defer></script>
-    <script src="assets/js/core.js?v=v0.11.0" defer></script>
-    <script src="assets/js/api.js?v=v0.11.0" defer></script>
-    <script src="assets/js/dashboard.js?v=v0.11.0" defer></script>
-    <script src="assets/js/media.js?v=v0.11.0" defer></script>
-    <script src="assets/js/playlists.js?v=v0.11.0" defer></script>
-    <script src="assets/js/player.js?v=v0.11.0" defer></script>
-    <script src="assets/js/schedule.js?v=v0.11.0" defer></script>
-    <script src="assets/js/settings.js?v=v0.11.0" defer></script>
-    <script src="assets/js/init.js?v=v0.11.0" defer></script>
-
-    <script>
-        // Minimal compatibility globals for any remaining inline onclick handlers
-        let currentSection = '<?= getCurrentPage() ?>';
-        let autoScreenshotInterval = null;
-        let systemStatsInterval = null;
-        let currentPlayer = 'vlc'; // Défaut VLC
-        let selectedPlayer = 'vlc';
-
-        // Mobile menu toggle function
-        function toggleSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            sidebar.classList.toggle('active');
-        }
-
-        // All initialization is now handled by assets/js/init.js?v=v0.11.0
-        console.log('📄 Multi-page architecture: Basic globals defined, modular initialization will take over');
-    </script>
+    <!-- PiSignage modular JS — dependency order (core establishes namespace first) -->
+    <script src="assets/js/core.js?v=<?= $v ?>" defer></script>
+    <script src="assets/js/api.js?v=<?= $v ?>" defer></script>
+    <script src="assets/js/theme.js?v=<?= $v ?>" defer></script>
+    <script src="assets/js/ui.js?v=<?= $v ?>" defer></script>
+    <script src="assets/js/dashboard.js?v=<?= $v ?>" defer></script>
+    <script src="assets/js/media.js?v=<?= $v ?>" defer></script>
+    <script src="assets/js/playlists.js?v=<?= $v ?>" defer></script>
+    <script src="assets/js/player.js?v=<?= $v ?>" defer></script>
+    <script src="assets/js/schedule.js?v=<?= $v ?>" defer></script>
+    <script src="assets/js/settings.js?v=<?= $v ?>" defer></script>
+    <script src="assets/js/init.js?v=<?= $v ?>" defer></script>
 </body>
 </html>

@@ -1,376 +1,344 @@
 <?php
 require_once 'includes/auth.php';
 requireAuth();
+$pageTitle = 'Logs système';
 include 'includes/header.php';
+include 'includes/navigation.php';
+require_once 'includes/components.php';
+
+$actions =
+      '<button class="icon-btn" id="logs-refresh" type="button" title="Actualiser">' . icon('refresh') . '</button>';
 ?>
+<div class="main">
+    <?php pageHeader('Logs système', 'Visionneuse multi-sources', $actions); ?>
 
-<?php include 'includes/navigation.php'; ?>
+    <div class="content">
+      <div class="content-inner">
 
-    <!-- Main Content -->
-    <div class="main-content">
-        <!-- Logs Section -->
-        <div id="logs" class="content-section active">
-            <div class="header">
-                <h1 class="page-title">Logs Système</h1>
-                <div class="header-actions">
-                    <select id="log-source" onchange="refreshLogs()" class="form-control" style="width: auto; display: inline-block; margin-right: 10px;">
-                        <option value="pisignage">📝 PiSignage App</option>
-                        <option value="system">🖥️ System</option>
-                        <option value="vlc">🎵 VLC Player</option>
-                        <option value="nginx_error">🌐 Nginx Errors</option>
-                        <option value="nginx_access">📊 Nginx Access</option>
-                        <option value="all">🔍 All Sources</option>
+        <!-- STAT CARDS -->
+        <div class="grid grid-3">
+            <div class="card stat">
+                <div class="stat-top"><div class="stat-ico blue"><?= icon('folder') ?></div></div>
+                <div><div class="stat-val" id="sources-count">--</div><div class="stat-label">Sources disponibles</div></div>
+            </div>
+            <div class="card stat">
+                <div class="stat-top"><div class="stat-ico danger"><?= icon('alert') ?></div></div>
+                <div><div class="stat-val" id="error-count">--</div><div class="stat-label">Erreurs</div></div>
+            </div>
+            <div class="card stat">
+                <div class="stat-top"><div class="stat-ico amber"><?= icon('storage') ?></div></div>
+                <div><div class="stat-val" id="total-size" style="font-size:20px">--</div><div class="stat-label">Taille totale</div></div>
+            </div>
+        </div>
+
+        <!-- LOG VIEWER -->
+        <div class="card" style="margin-top:18px">
+            <div class="card-head">
+                <h2 class="card-title"><?= icon('logs') ?><span id="log-title">Logs récents</span></h2>
+            </div>
+
+            <!-- Toolbar -->
+            <div class="form-row" style="align-items:flex-end">
+                <div class="form-group">
+                    <label for="log-source">Source</label>
+                    <select id="log-source" class="form-control">
+                        <option value="pisignage">PiSignage (application)</option>
+                        <option value="syslog">Système</option>
+                        <option value="nginx_error">Nginx · erreurs</option>
+                        <option value="nginx_access">Nginx · accès</option>
+                        <option value="php_error">PHP-FPM</option>
+                        <option value="kern">Noyau</option>
                     </select>
-                    <select id="log-lines" onchange="refreshLogs()" class="form-control" style="width: auto; display: inline-block; margin-right: 10px;">
+                </div>
+                <div class="form-group">
+                    <label for="log-lines">Lignes</label>
+                    <select id="log-lines" class="form-control">
                         <option value="50">50 lignes</option>
                         <option value="100" selected>100 lignes</option>
                         <option value="200">200 lignes</option>
                         <option value="500">500 lignes</option>
                     </select>
-                    <button class="btn btn-primary" onclick="refreshLogs()">
-                        🔄 Actualiser
-                    </button>
-                    <button class="btn btn-secondary" onclick="toggleAutoRefresh()">
-                        <span id="auto-refresh-icon">⏸️</span> Auto
-                    </button>
-                    <button class="btn btn-danger" onclick="rotateLogs()">
-                        🔄 Rotation & Nettoyage
-                    </button>
+                </div>
+                <div class="form-group" style="flex:1 1 220px">
+                    <label for="log-filter">Filtre</label>
+                    <input type="text" id="log-filter" class="form-control" placeholder="Filtrer les logs…">
                 </div>
             </div>
 
-            <!-- Log Stats -->
-            <div class="grid grid-3" id="log-stats">
-                <div class="card">
-                    <h4>📊 Sources Disponibles</h4>
-                    <div id="sources-count" style="font-size: 2rem; color: #4a9eff;">-</div>
-                </div>
-                <div class="card">
-                    <h4>⚠️ Erreurs</h4>
-                    <div id="error-count" style="font-size: 2rem; color: #ff6b6b;">-</div>
-                </div>
-                <div class="card">
-                    <h4>💾 Taille Totale</h4>
-                    <div id="total-size" style="font-size: 2rem; color: #51cf66;">-</div>
-                </div>
+            <div class="row" style="gap:12px;flex-wrap:wrap;align-items:center;margin-top:12px">
+                <label class="toggle-switch" title="Rafraîchissement automatique (5s)">
+                    <input type="checkbox" id="auto-refresh">
+                    <span class="toggle-slider"></span>
+                </label>
+                <span class="text-dim" style="font-size:13px">Auto‑actualisation</span>
+                <span style="flex:1"></span>
+                <button class="btn btn-secondary btn-sm" id="logs-scroll-top" type="button"><?= icon('chevron') ?>Haut</button>
+                <button class="btn btn-secondary btn-sm" id="logs-scroll-bottom" type="button"><?= icon('chevron') ?>Bas</button>
+                <button class="btn btn-danger btn-sm" id="logs-rotate" type="button"><?= icon('refresh') ?>Rotation &amp; nettoyage</button>
             </div>
 
-            <div class="card">
-                <div class="card-header">
-                    <h3 class="card-title">
-                        <span>📋</span>
-                        <span id="log-title">Logs récents</span>
-                    </h3>
-                    <div style="display: flex; gap: 10px;">
-                        <input type="text" id="log-filter" placeholder="Filtrer les logs..." class="form-control" style="width: 300px;" onkeyup="filterLogs()">
-                        <button class="btn btn-outline-primary" onclick="scrollToBottom()">⬇️ Bas</button>
-                        <button class="btn btn-outline-primary" onclick="scrollToTop()">⬆️ Haut</button>
-                    </div>
-                </div>
-                <div id="logs-content" style="background: rgba(0,0,0,0.3); padding: 20px; border-radius: 10px; font-family: 'Courier New', monospace; font-size: 13px; max-height: 600px; overflow-y: auto; line-height: 1.6;">
-                    <div style="color: #888; text-align: center; padding: 20px;">
-                        Chargement des logs...
-                    </div>
-                </div>
-            </div>
-
-            <!-- Available Sources -->
-            <div class="card">
-                <div class="card-header">
-                    <h3 class="card-title">
-                        <span>📂</span>
-                        Sources de Logs Disponibles
-                    </h3>
-                </div>
-                <div id="available-sources" style="max-height: 300px; overflow-y: auto;">
-                    <!-- Sources list -->
-                </div>
+            <div class="log-viewer" id="logs-content" style="margin-top:14px">
+                <div class="log-line log-info">Chargement des logs…</div>
             </div>
         </div>
+
+        <!-- AVAILABLE SOURCES -->
+        <div class="card" style="margin-top:18px">
+            <div class="card-head">
+                <h2 class="card-title"><?= icon('list') ?>Sources de logs disponibles</h2>
+            </div>
+            <div id="available-sources">
+                <div class="empty-state"><?= icon('folder') ?><h3>Chargement…</h3></div>
+            </div>
+        </div>
+
+      </div>
     </div>
+</div>
 
 <style>
-.log-line {
-    margin-bottom: 2px;
-    padding: 4px 8px;
-    border-radius: 3px;
-    transition: background 0.2s;
-}
-
-.log-line:hover {
-    background: rgba(255,255,255,0.05);
-}
-
-.log-line.error {
-    background: rgba(255, 107, 107, 0.1);
-    border-left: 3px solid #ff6b6b;
-}
-
-.log-line.warning {
-    background: rgba(255, 200, 50, 0.1);
-    border-left: 3px solid #ffc832;
-}
-
-.log-line.info {
-    border-left: 3px solid #4a9eff;
-}
-
-.log-timestamp {
-    color: #888;
-    margin-right: 10px;
-}
-
-.log-level {
-    font-weight: bold;
-    margin-right: 10px;
-    padding: 2px 6px;
-    border-radius: 3px;
-    font-size: 11px;
-}
-
-.log-level.ERROR {
-    background: #ff6b6b;
-    color: white;
-}
-
-.log-level.WARNING {
-    background: #ffc832;
-    color: #333;
-}
-
-.log-level.INFO {
-    background: #4a9eff;
-    color: white;
-}
-
-.log-message {
-    color: #eee;
-}
-
-.source-item {
-    padding: 10px;
-    border-bottom: 1px solid rgba(255,255,255,0.1);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.source-item:hover {
-    background: rgba(255,255,255,0.05);
-}
+/* Page-local: source list rows + log line layout (tokens only, no hardcoded colors) */
+.logs-source-row{display:flex;justify-content:space-between;align-items:center;gap:12px;
+    padding:10px 12px;border-bottom:1px solid var(--border)}
+.logs-source-row:last-child{border-bottom:0}
+.logs-source-row:hover{background:var(--surface-hover)}
+.logs-source-row .lsr-name{font-weight:600;color:var(--text)}
+.logs-source-row .lsr-meta{color:var(--text-dim);font-size:12px}
+.logs-source-row .lsr-right{text-align:right;color:var(--text-dim);font-size:12px;white-space:nowrap}
+.log-line{display:flex;gap:8px;align-items:baseline}
+.log-line .ll-time{color:var(--text-faint);flex:0 0 auto}
+.log-line .ll-level{flex:0 0 auto;font-weight:700;font-size:10.5px;letter-spacing:.04em;
+    padding:0 6px;border-radius:var(--radius-pill);text-transform:uppercase}
+.log-line .ll-level.lvl-error{background:var(--danger-soft);color:var(--danger-text)}
+.log-line .ll-level.lvl-warning{background:var(--warn-soft);color:var(--warn-text)}
+.log-line .ll-level.lvl-info{background:var(--info-soft);color:var(--info-text)}
+.log-line .ll-msg{flex:1 1 auto;word-break:break-word}
 </style>
 
 <script>
-let autoRefreshInterval = null;
-let allLogsData = [];
+/* Logs page — self-contained module (auto-executed on DOMContentLoaded so the
+   deferred PiSignage.* modules are ready). Wires via addEventListener to avoid
+   collision with the legacy window.refreshLogs handler in init.js. */
+(function () {
+    'use strict';
 
-// Load logs on page load
-document.addEventListener('DOMContentLoaded', function() {
-    refreshLogs();
-    loadLogSources();
-    loadLogStats();
-});
-
-async function refreshLogs() {
-    const source = document.getElementById('log-source').value;
-    const lines = document.getElementById('log-lines').value;
-    const logsContent = document.getElementById('logs-content');
-    const logTitle = document.getElementById('log-title');
-
-    logTitle.textContent = `Logs: ${source} (${lines} lignes)`;
-    logsContent.innerHTML = '<div style="color: #888; text-align: center; padding: 20px;">Chargement...</div>';
-
-    try {
-        const response = await fetch(`/api/logs.php?action=recent&source=${source}&lines=${lines}`);
-        const data = await response.json();
-
-        if (data.success && data.data && data.data.logs) {
-            allLogsData = data.data.logs;
-            displayLogs(allLogsData);
+    function ready(fn) {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', fn, { once: true });
         } else {
-            logsContent.innerHTML = '<div style="color: #ff6b6b;">Erreur: Aucun log disponible</div>';
+            fn();
         }
-    } catch (error) {
-        console.error('Error loading logs:', error);
-        logsContent.innerHTML = '<div style="color: #ff6b6b;">Erreur de chargement des logs</div>';
-    }
-}
-
-function displayLogs(logs) {
-    const logsContent = document.getElementById('logs-content');
-
-    if (!logs || logs.length === 0) {
-        logsContent.innerHTML = '<div style="color: #888; text-align: center; padding: 20px;">Aucun log disponible</div>';
-        return;
     }
 
-    let html = '';
-    logs.forEach(log => {
-        const level = log.level || 'INFO';
-        const levelClass = level.toUpperCase();
-        const lineClass = levelClass === 'ERROR' ? 'error' : levelClass === 'WARNING' ? 'warning' : 'info';
+    ready(function () {
+        var page = (document.body && document.body.getAttribute('data-page')) || '';
+        if (page !== 'logs') return;
 
-        html += `<div class="log-line ${lineClass}">`;
-        html += `<span class="log-timestamp">${log.timestamp || ''}</span>`;
-        html += `<span class="log-level ${levelClass}">${level}</span>`;
-        html += `<span class="log-message">${escapeHtml(log.message || log.raw)}</span>`;
-        html += `</div>`;
-    });
+        var els = {
+            source:      document.getElementById('log-source'),
+            lines:       document.getElementById('log-lines'),
+            filter:      document.getElementById('log-filter'),
+            auto:        document.getElementById('auto-refresh'),
+            title:       document.getElementById('log-title'),
+            content:     document.getElementById('logs-content'),
+            sources:     document.getElementById('available-sources'),
+            sourcesCount:document.getElementById('sources-count'),
+            errorCount:  document.getElementById('error-count'),
+            totalSize:   document.getElementById('total-size'),
+            btnRefresh:  document.getElementById('logs-refresh'),
+            btnRotate:   document.getElementById('logs-rotate'),
+            btnTop:      document.getElementById('logs-scroll-top'),
+            btnBottom:   document.getElementById('logs-scroll-bottom')
+        };
 
-    logsContent.innerHTML = html;
-}
+        var allLogs = [];
+        var autoTimer = null;
 
-function filterLogs() {
-    const filter = document.getElementById('log-filter').value.toLowerCase();
-
-    if (!filter) {
-        displayLogs(allLogsData);
-        return;
-    }
-
-    const filtered = allLogsData.filter(log => {
-        const message = (log.message || log.raw || '').toLowerCase();
-        const level = (log.level || '').toLowerCase();
-        return message.includes(filter) || level.includes(filter);
-    });
-
-    displayLogs(filtered);
-}
-
-async function loadLogSources() {
-    try {
-        const response = await fetch('/api/logs.php?action=sources');
-        const data = await response.json();
-
-        if (data.success && data.data) {
-            displayLogSources(data.data);
+        function toast(msg, type) {
+            if (window.PiSignage && PiSignage.ui && PiSignage.ui.toast) {
+                PiSignage.ui.toast(msg, type || 'info');
+            }
         }
-    } catch (error) {
-        console.error('Error loading log sources:', error);
-    }
-}
 
-function displayLogSources(sources) {
-    const container = document.getElementById('available-sources');
-
-    if (!sources || Object.keys(sources).length === 0) {
-        container.innerHTML = '<div style="padding: 20px; text-align: center; color: #888;">Aucune source disponible</div>';
-        return;
-    }
-
-    let html = '';
-    for (const [key, source] of Object.entries(sources)) {
-        const size = formatBytes(source.size);
-        const date = new Date(source.modified * 1000).toLocaleString('fr-FR');
-
-        html += `<div class="source-item">`;
-        html += `<div>`;
-        html += `<strong>${source.name}</strong><br>`;
-        html += `<small style="color: #888;">${source.file}</small>`;
-        html += `</div>`;
-        html += `<div style="text-align: right;">`;
-        html += `<div>${size}</div>`;
-        html += `<small style="color: #888;">${date}</small>`;
-        html += `</div>`;
-        html += `</div>`;
-    }
-
-    container.innerHTML = html;
-    document.getElementById('sources-count').textContent = Object.keys(sources).length;
-}
-
-async function loadLogStats() {
-    try {
-        const response = await fetch('/api/logs.php?action=stats');
-        const data = await response.json();
-
-        if (data.success && data.data) {
-            document.getElementById('error-count').textContent = data.data.error_count || 0;
-            document.getElementById('total-size').textContent = data.data.total_size_formatted || '-';
+        function escapeHtml(text) {
+            var div = document.createElement('div');
+            div.textContent = text == null ? '' : text;
+            return div.innerHTML;
         }
-    } catch (error) {
-        console.error('Error loading log stats:', error);
-    }
-}
 
-function toggleAutoRefresh() {
-    const icon = document.getElementById('auto-refresh-icon');
+        function formatBytes(bytes) {
+            if (bytes === null || bytes === undefined) return '--';
+            if (!bytes) return '0 o';
+            var k = 1024, sizes = ['o', 'Ko', 'Mo', 'Go', 'To'];
+            var i = Math.floor(Math.log(bytes) / Math.log(k));
+            return (Math.round(bytes / Math.pow(k, i) * 100) / 100) + ' ' + sizes[i];
+        }
 
-    if (autoRefreshInterval) {
-        clearInterval(autoRefreshInterval);
-        autoRefreshInterval = null;
-        icon.textContent = '⏸️';
-    } else {
-        autoRefreshInterval = setInterval(refreshLogs, 5000);
-        icon.textContent = '⏵️';
+        function levelClass(level) {
+            var l = String(level || 'INFO').toUpperCase();
+            if (l === 'ERROR') return 'error';
+            if (l === 'WARNING' || l === 'WARN') return 'warning';
+            return 'info';
+        }
+
+        function displayLogs(logs) {
+            if (!logs || !logs.length) {
+                els.content.innerHTML = '<div class="log-line log-info">Aucun log disponible</div>';
+                return;
+            }
+            var html = '';
+            for (var i = 0; i < logs.length; i++) {
+                var log = logs[i];
+                var level = (log.level || 'INFO');
+                var cls = levelClass(level);
+                html += '<div class="log-line log-' + cls + '">'
+                     +  '<span class="ll-time">' + escapeHtml(log.timestamp || '') + '</span>'
+                     +  '<span class="ll-level lvl-' + cls + '">' + escapeHtml(String(level).toUpperCase()) + '</span>'
+                     +  '<span class="ll-msg">' + escapeHtml(log.message || log.raw || '') + '</span>'
+                     +  '</div>';
+            }
+            els.content.innerHTML = html;
+        }
+
+        function applyFilter() {
+            var f = (els.filter.value || '').toLowerCase();
+            if (!f) { displayLogs(allLogs); return; }
+            var filtered = allLogs.filter(function (log) {
+                var msg = (log.message || log.raw || '').toLowerCase();
+                var lvl = (log.level || '').toLowerCase();
+                return msg.indexOf(f) !== -1 || lvl.indexOf(f) !== -1;
+            });
+            displayLogs(filtered);
+        }
+
+        async function refreshLogs() {
+            var source = els.source.value;
+            var lines = els.lines.value;
+            els.title.textContent = 'Logs : ' + source + ' (' + lines + ' lignes)';
+            els.content.innerHTML = '<div class="log-line log-info">Chargement…</div>';
+            try {
+                var resp = await fetch('/api/logs.php?action=recent&source='
+                    + encodeURIComponent(source) + '&lines=' + encodeURIComponent(lines));
+                var data = await resp.json();
+                if (data && data.success && data.data && data.data.logs) {
+                    allLogs = data.data.logs;
+                    applyFilter();
+                } else {
+                    els.content.innerHTML = '<div class="log-line log-error">Aucun log disponible</div>';
+                }
+            } catch (e) {
+                console.error('Error loading logs:', e);
+                els.content.innerHTML = '<div class="log-line log-error">Erreur de chargement des logs</div>';
+            }
+        }
+
+        async function loadSources() {
+            try {
+                var resp = await fetch('/api/logs.php?action=sources');
+                var data = await resp.json();
+                if (data && data.success && data.data) displaySources(data.data);
+            } catch (e) {
+                console.error('Error loading log sources:', e);
+            }
+        }
+
+        function displaySources(sources) {
+            var keys = sources ? Object.keys(sources) : [];
+            if (!keys.length) {
+                els.sources.innerHTML = '<div class="empty-state">'
+                    + '<h3>Aucune source</h3><p>Aucun fichier de log accessible.</p></div>';
+                els.sourcesCount.textContent = '0';
+                return;
+            }
+            var html = '';
+            for (var i = 0; i < keys.length; i++) {
+                var s = sources[keys[i]];
+                var size = formatBytes(s.size);
+                var date = s.modified ? new Date(s.modified * 1000).toLocaleString('fr-FR') : '';
+                html += '<div class="logs-source-row">'
+                     +  '<div><div class="lsr-name">' + escapeHtml(s.name || keys[i]) + '</div>'
+                     +  '<div class="lsr-meta">' + escapeHtml(s.file || '') + '</div></div>'
+                     +  '<div class="lsr-right"><div>' + escapeHtml(size) + '</div>'
+                     +  '<div>' + escapeHtml(date) + '</div></div>'
+                     +  '</div>';
+            }
+            els.sources.innerHTML = html;
+            els.sourcesCount.textContent = String(keys.length);
+        }
+
+        async function loadStats() {
+            try {
+                var resp = await fetch('/api/logs.php?action=stats');
+                var data = await resp.json();
+                if (data && data.success && data.data) {
+                    els.errorCount.textContent = (data.data.error_count != null) ? data.data.error_count : 0;
+                    els.totalSize.textContent = data.data.total_size_formatted || '--';
+                }
+            } catch (e) {
+                console.error('Error loading log stats:', e);
+            }
+        }
+
+        function setAutoRefresh(on) {
+            if (autoTimer) { clearInterval(autoTimer); autoTimer = null; }
+            if (on) {
+                autoTimer = setInterval(refreshLogs, 5000);
+                refreshLogs();
+            }
+        }
+
+        async function rotateLogs() {
+            var ok = (window.PiSignage && PiSignage.ui && PiSignage.ui.confirm)
+                ? PiSignage.ui.confirm('Lancer la rotation et le nettoyage des logs ?\n\n'
+                    + 'Compresse les gros logs, supprime les anciens logs YouTube (>7j) '
+                    + 'et libère de l\'espace disque.')
+                : window.confirm('Lancer la rotation et le nettoyage des logs ?');
+            if (!ok) return;
+
+            var btn = els.btnRotate;
+            var original = btn.innerHTML;
+            btn.innerHTML = '<span class="spinner"></span>Rotation…';
+            btn.disabled = true;
+            try {
+                var resp = await fetch('/api/logs.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'rotate' })
+                });
+                var data = await resp.json();
+                if (data && data.success) {
+                    toast('Rotation des logs terminée', 'success');
+                    loadStats();
+                    loadSources();
+                    refreshLogs();
+                } else {
+                    toast('Erreur lors de la rotation : ' + ((data && data.message) || 'inconnue'), 'error');
+                }
+            } catch (e) {
+                console.error('Rotation error:', e);
+                toast('Erreur de communication avec le serveur', 'error');
+            } finally {
+                btn.innerHTML = original;
+                btn.disabled = false;
+            }
+        }
+
+        /* ---- wiring ---- */
+        els.source.addEventListener('change', refreshLogs);
+        els.lines.addEventListener('change', refreshLogs);
+        els.filter.addEventListener('input', applyFilter);
+        els.auto.addEventListener('change', function () { setAutoRefresh(els.auto.checked); });
+        els.btnRefresh.addEventListener('click', refreshLogs);
+        els.btnRotate.addEventListener('click', rotateLogs);
+        els.btnTop.addEventListener('click', function () { els.content.scrollTop = 0; });
+        els.btnBottom.addEventListener('click', function () { els.content.scrollTop = els.content.scrollHeight; });
+
+        /* ---- initial load ---- */
         refreshLogs();
-    }
-}
-
-function scrollToBottom() {
-    const logsContent = document.getElementById('logs-content');
-    logsContent.scrollTop = logsContent.scrollHeight;
-}
-
-function scrollToTop() {
-    const logsContent = document.getElementById('logs-content');
-    logsContent.scrollTop = 0;
-}
-
-function formatBytes(bytes) {
-    if (bytes === 0) return '0 B';
-    if (bytes === null) return '-';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
-}
-
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-async function rotateLogs() {
-    if (!confirm('Lancer la rotation et le nettoyage des logs ?\n\n' +
-                 'Cela va:\n' +
-                 '- Compresser les gros logs (>10MB)\n' +
-                 '- Supprimer les vieux logs YouTube (>7j)\n' +
-                 '- Nettoyer les logs Nginx (>50MB)\n' +
-                 '- Libérer de l\'espace disque')) {
-        return;
-    }
-
-    const originalText = event.target.textContent;
-    event.target.textContent = '⏳ Rotation en cours...';
-    event.target.disabled = true;
-
-    try {
-        const response = await fetch('/api/logs.php', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({action: 'rotate'})
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-            alert('✅ Rotation des logs terminée avec succès!\n\nActualisez la page pour voir les nouvelles tailles.');
-            setTimeout(() => {
-                location.reload();
-            }, 1000);
-        } else {
-            alert('❌ Erreur lors de la rotation: ' + (data.message || 'Erreur inconnue'));
-        }
-    } catch (error) {
-        console.error('Rotation error:', error);
-        alert('❌ Erreur de communication avec le serveur');
-    } finally {
-        event.target.textContent = originalText;
-        event.target.disabled = false;
-    }
-}
+        loadSources();
+        loadStats();
+    });
+})();
 </script>
 
 <?php include 'includes/footer.php'; ?>

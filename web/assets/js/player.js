@@ -1,680 +1,339 @@
 /**
- * PiSignage Player Control Module
- * Handles all player operations, status updates, and controls
+ * PiSignage Player module — pilote la page « Lecteur » sur le MOTEUR RÉEL.
+ *
+ * Phase 2 de l'unification : VLC retiré. Le moteur affiché à l'écran est Chromium HTML5
+ * (player.php sur /player). On le contrôle via /api/display.php :
+ *   - transport (prev/play/pause/next/reload) -> POST ?action=command
+ *   - état courant                            -> GET  ?action=state
+ *   - lecture directe d'un média              -> POST ?action=playmedia
+ * La diffusion d'une playlist nommée passe par /api/playlists.php?action=activate.
+ * Le volume est UNIQUEMENT le volume système (ALSA) via system.php.
+ *
+ * NOTE: core.js définit une base PiSignage.player (state, getCurrentPlayer,
+ * setCurrentPlayer, updateState). On l'étend sans casser ces membres.
  */
 
-// Ensure PiSignage namespace exists
 window.PiSignage = window.PiSignage || {};
 
-// Player control functionality
-PiSignage.player = {
-    // Player state (extended from core.js)
-    state: {
-        isPlaying: false,
-        isPaused: false,
-        currentFile: null,
-        position: 0,
-        duration: 0,
-        volume: 50,
-        isMuted: false,
-        isLooping: false,
-        isShuffling: false
-    },
+(function () {
+    // SVG icons mirroring includes/icons.php (line style, stroke=currentColor).
+    const SVG = {
+        open: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">',
+        close: '</svg>'
+    };
+    const ICON = {
+        play: SVG.open + '<polygon points="6 4 20 12 6 20 6 4" fill="currentColor" stroke="none"/>' + SVG.close,
+        pause: SVG.open + '<rect x="6" y="4" width="4" height="16" rx="1" fill="currentColor" stroke="none"/><rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor" stroke="none"/>' + SVG.close,
+        volume: SVG.open + '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a9 9 0 0 1 0 14"/>' + SVG.close,
+        volumeX: SVG.open + '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M23 9l-6 6M17 9l6 6"/>' + SVG.close
+    };
 
-    intervals: {
-        status: null
-    },
+    const base = PiSignage.player || {};
+    const baseState = base.state || {};
 
-    init: function() {
-        console.log('🎮 Initializing player controls...');
-        this.getCurrentPlayer();
-        this.initializePlayer();
-        this.startStatusUpdates();
-        this.setupGlobalFunctions();
-    },
+    const player = {
+        // Preserve core.js base state + setters (do not break consumers).
+        state: Object.assign({
+            isPlaying: false,
+            isPaused: false,
+            online: false,
+            currentFile: null,
+            index: 0,
+            count: 0
+        }, baseState),
 
-    getCurrentPlayer: async function() {
-        try {
-            const data = await PiSignage.api.system.getCurrentPlayer();
-            if (data.success) {
-                const player = data.player || 'vlc';
-                this.setCurrentPlayer(player);
-                this.updatePlayerInterface();
+        getCurrentPlayer: base.getCurrentPlayer || function () { return 'chromium'; },
+        setCurrentPlayer: base.setCurrentPlayer || function () {},
+        updateState: base.updateState || function (s) { Object.assign(this.state, s); },
 
-                // Update radio buttons
-                const radioBtn = document.getElementById('player-' + player);
-                if (radioBtn) {
-                    radioBtn.checked = true;
-                }
-            }
-        } catch (error) {
-            console.error('Get player error:', error);
-            // Use VLC as default fallback
-            this.setCurrentPlayer('vlc');
-            this.updatePlayerInterface();
-        }
-    },
+        intervals: { status: null },
+        _systemMuted: false,
+        _draggingSys: false,
 
-    setCurrentPlayer: function(player) {
-        currentPlayer = player;
-        selectedPlayer = player;
-        PiSignage.config.currentPlayer = player;
-        PiSignage.config.selectedPlayer = player;
-    },
-
-    getPlayerName: function() {
-        return currentPlayer || 'vlc';
-    },
-
-    initializePlayer: async function() {
-        // Load playlists for player
-        try {
-            const playlistData = await PiSignage.api.playlists.list();
-            if (playlistData.success && playlistData.data) {
-                const playlistSelect = document.getElementById('playlist-select');
-                if (playlistSelect) {
-                    playlistSelect.innerHTML = '<option value="">-- Sélectionner une playlist --</option>';
-                    playlistData.data.forEach(playlist => {
-                        playlistSelect.innerHTML += `<option value="${playlist.name}">${playlist.name}</option>`;
-                    });
-                }
-            }
-        } catch (error) {
-            console.error('Error loading playlists for player:', error);
-        }
-
-        // Load media files for player
-        try {
-            const mediaData = await PiSignage.api.media.list();
-            if (mediaData.success && mediaData.data) {
-                const mediaSelect = document.getElementById('media-select');
-                if (mediaSelect) {
-                    mediaSelect.innerHTML = '<option value="">-- Sélectionner un fichier --</option>';
-                    mediaData.data.forEach(file => {
-                        mediaSelect.innerHTML += `<option value="${file.name}">${file.name}</option>`;
-                    });
-                }
-            }
-        } catch (error) {
-            console.error('Error loading media for player:', error);
-        }
-
-        // Start status polling
-        this.refreshPlayerStatus();
-    },
-
-    startStatusUpdates: function() {
-        // Clear existing interval
-        if (this.intervals.status) {
-            clearInterval(this.intervals.status);
-        }
-
-        // Start new interval
-        this.intervals.status = setInterval(() => {
+        /* ---------- lifecycle ---------- */
+        init() {
+            this.bindControls();
+            this.loadSources();
             this.refreshPlayerStatus();
-        }, 3000);
+            this.refreshSystemVolume();
+            if (this.intervals.status) clearInterval(this.intervals.status);
+            this.intervals.status = setInterval(() => this.refreshPlayerStatus(), 3000);
+        },
 
-        console.log('🎮 Player status updates started (3s interval)');
-    },
+        _el(id) { return document.getElementById(id); },
 
-    stopStatusUpdates: function() {
-        if (this.intervals.status) {
-            clearInterval(this.intervals.status);
-            this.intervals.status = null;
-            console.log('🎮 Player status updates stopped');
-        }
-    },
-
-    refreshPlayerStatus: async function() {
-        try {
-            const data = await PiSignage.api.player.getStatus();
-            if (data.success && data.data) {
-                this.updatePlayerUI(data.data);
+        bindControls() {
+            const sys = this._el('system-volume-slider');
+            if (sys) {
+                sys.addEventListener('pointerdown', () => { this._draggingSys = true; });
+                sys.addEventListener('pointerup', () => { this._draggingSys = false; });
+                sys.addEventListener('input', () => this.setSystemVolume(parseInt(sys.value, 10)));
             }
-        } catch (error) {
-            console.error('Error fetching player status:', error);
-        }
-    },
+        },
 
-    updatePlayerUI: function(status) {
-        if (!status) return;
-
-        // Update player state
-        this.state.isPlaying = status.state === 'playing';
-        this.state.isPaused = status.state === 'paused';
-        this.state.currentFile = status.current_file;
-        this.state.position = status.position || 0;
-        this.state.duration = status.duration || 0;
-        this.state.volume = status.volume || 50;
-
-        // Update Now Playing
-        const titleEl = document.getElementById('now-playing-title');
-        const metaEl = document.getElementById('player-state');
-        const statusEl = document.getElementById('status-indicator');
-        const statusTextEl = document.getElementById('status-text');
-
-        if (titleEl) {
-            if (status.current_file) {
-                titleEl.textContent = status.current_file;
-            } else {
-                titleEl.textContent = 'Aucun média en lecture';
-            }
-        }
-
-        // Update status indicator and player state display
-        if (metaEl) {
-            switch (status.state) {
-                case 'playing':
-                    metaEl.textContent = 'En lecture';
-                    metaEl.style.color = '#51cf66';
-                    if (statusEl) statusEl.className = 'status-indicator playing';
-                    if (statusTextEl) statusTextEl.textContent = 'En ligne';
-                    this.updatePlayPauseButton('⏸️');
-                    break;
-                case 'paused':
-                    metaEl.textContent = 'En pause';
-                    metaEl.style.color = '#ffd43b';
-                    if (statusEl) statusEl.className = 'status-indicator paused';
-                    if (statusTextEl) statusTextEl.textContent = 'En pause';
-                    this.updatePlayPauseButton('▶️');
-                    break;
-                default:
-                    metaEl.textContent = 'Arrêté';
-                    metaEl.style.color = '#ffd43b';
-                    if (statusEl) statusEl.className = 'status-indicator';
-                    if (statusTextEl) statusTextEl.textContent = 'Hors ligne';
-                    this.updatePlayPauseButton('▶️');
-            }
-        }
-
-        // Synchronize #player-status for Puppeteer tests (BUG-007 fix)
-        const playerStatusEl = document.getElementById('player-status');
-        if (playerStatusEl) {
-            playerStatusEl.textContent = status.state || 'stopped';
-        }
-
-        // Update data-action attribute for Puppeteer tests (BUG-006 fix)
-        const playPauseBtn = document.getElementById('play-pause-btn');
-        if (playPauseBtn) {
-            if (status.state === 'playing') {
-                playPauseBtn.setAttribute('data-action', 'pause');
-            } else {
-                playPauseBtn.setAttribute('data-action', 'play');
-            }
-        }
-
-        // Update file and position display
-        const fileElement = document.getElementById('player-file');
-        if (fileElement) {
-            fileElement.textContent = status.current_file || 'Aucun';
-        }
-
-        const positionElement = document.getElementById('player-position');
-        if (positionElement) {
-            positionElement.textContent = status.position || '00:00';
-        }
-
-        // Update progress bar if available
-        if (this.state.duration > 0) {
-            const progress = (this.state.position / this.state.duration) * 100;
-
-            const progressFill = document.getElementById('progress-fill');
-            if (progressFill) progressFill.style.width = progress + '%';
-
-            const seekBar = document.getElementById('seek-bar');
-            if (seekBar) seekBar.value = progress;
-
-            const timeCurrent = document.getElementById('time-current');
-            if (timeCurrent) timeCurrent.textContent = PiSignage.utils.formatTime(this.state.position);
-
-            const timeTotal = document.getElementById('time-total');
-            if (timeTotal) timeTotal.textContent = PiSignage.utils.formatTime(this.state.duration);
-        }
-
-        // Update volume controls
-        this.updateVolumeControls();
-
-        // Update system stats if available
-        if (status.system) {
-            const updateStat = (id, value) => {
-                const el = document.getElementById(id);
-                if (el) el.textContent = value;
-            };
-
-            // Safe access with optional chaining and fallbacks
-            updateStat('player-cpu', (status.system?.cpu || 0) + '%');
-            updateStat('player-memory', (status.system?.memory?.percent || 0) + '%');
-            updateStat('player-temp', (status.system?.temperature || 'N/A') + '°C');
-            updateStat('player-uptime', status.system?.uptime || '--');
-        }
-    },
-
-    updatePlayPauseButton: function(text) {
-        const playPauseBtn = document.getElementById('play-pause-btn');
-        if (playPauseBtn) {
-            playPauseBtn.textContent = text;
-        }
-    },
-
-    updateVolumeControls: function() {
-        const volumeSlider = document.getElementById('volume-slider');
-        if (volumeSlider) volumeSlider.value = this.state.volume;
-
-        const volumeFill = document.getElementById('volume-fill');
-        if (volumeFill) volumeFill.style.width = this.state.volume + '%';
-
-        const volumeValue = document.getElementById('volume-value');
-        if (volumeValue) volumeValue.textContent = Math.round(this.state.volume) + '%';
-    },
-
-    updatePlayerInterface: function() {
-        const player = this.getPlayerName();
-        const playerName = player.toUpperCase();
-
-        // Update main status display
-        const currentPlayerEl = document.getElementById('current-player');
-        if (currentPlayerEl) {
-            currentPlayerEl.textContent = playerName;
-            currentPlayerEl.style.color = player === 'vlc' ? '#4a9eff' : '#51cf66';
-        }
-
-        // Update controls section if present
-        const controlsNameEl = document.getElementById('player-controls-name');
-        if (controlsNameEl) {
-            controlsNameEl.textContent = `Contrôles ${playerName}`;
-        }
-
-        // Update restart button text
-        const restartTextEl = document.getElementById('restart-player-text');
-        if (restartTextEl) {
-            restartTextEl.textContent = `Redémarrer ${playerName}`;
-        }
-
-        // Update radio buttons
-        document.querySelectorAll('input[name="player"]').forEach(radio => {
-            radio.checked = (radio.value === player);
-        });
-
-        // Adapt button colors based on player
-        const playerButtons = document.querySelectorAll('.player-btn');
-        playerButtons.forEach(btn => {
-            if (player === 'vlc') {
-                btn.style.background = 'linear-gradient(135deg, #4a9eff, #3d7edb)';
-            } else {
-                btn.style.background = 'linear-gradient(135deg, #51cf66, #3eb854)';
-            }
-        });
-    },
-
-    // Player control functions
-    control: async function(action) {
-        try {
-            const data = await PiSignage.api.player.control(action);
-            if (data.success) {
-                if (data.status) {
-                    this.updatePlayerUI(data.status);
-                }
-                showAlert(`${action} exécuté`, 'success');
-            } else {
-                showAlert(data.message || `Erreur: ${action}`, 'error');
-            }
-        } catch (error) {
-            console.error('Player control error:', error);
-            showAlert('Erreur de communication', 'error');
-        }
-    },
-
-    togglePlayPause: function() {
-        const action = this.state.isPlaying ? 'pause' : 'play';
-        this.control(action);
-    },
-
-    seekTo: async function(percentage) {
-        const position = (this.state.duration * percentage) / 100;
-        try {
-            const data = await PiSignage.api.player.control('seek', { position: position });
-            if (data.status) {
-                this.updatePlayerUI(data.status);
-            }
-        } catch (error) {
-            console.error('Seek error:', error);
-        }
-    },
-
-    setVolume: async function(volume) {
-        this.state.volume = volume;
-        this.updateVolumeControls();
-
-        try {
-            await PiSignage.api.player.control('volume', { volume: volume });
-        } catch (error) {
-            console.error('Volume error:', error);
-        }
-    },
-
-    toggleMute: function() {
-        this.state.isMuted = !this.state.isMuted;
-        const muteBtn = document.getElementById('mute-btn');
-
-        if (this.state.isMuted) {
-            if (muteBtn) muteBtn.textContent = '🔇';
-            this.setVolume(0);
-        } else {
-            if (muteBtn) muteBtn.textContent = '🔊';
-            this.setVolume(this.state.volume || 50);
-        }
-    },
-
-    toggleLoop: async function() {
-        this.state.isLooping = !this.state.isLooping;
-        const loopBtn = document.getElementById('loop-btn');
-        if (loopBtn) loopBtn.classList.toggle('active');
-
-        try {
-            await PiSignage.api.player.control('set_loop', { enabled: this.state.isLooping });
-        } catch (error) {
-            console.error('Loop error:', error);
-        }
-    },
-
-    toggleShuffle: async function() {
-        this.state.isShuffling = !this.state.isShuffling;
-        const shuffleBtn = document.getElementById('shuffle-btn');
-        if (shuffleBtn) shuffleBtn.classList.toggle('active');
-
-        try {
-            await PiSignage.api.player.control('set_random', { enabled: this.state.isShuffling });
-        } catch (error) {
-            console.error('Shuffle error:', error);
-        }
-    },
-
-    // Media and playlist playback
-    loadPlaylist: async function() {
-        const playlistSelect = document.getElementById('playlist-select');
-        const playlistName = playlistSelect ? playlistSelect.value : '';
-
-        if (!playlistName) {
-            showAlert('Veuillez sélectionner une playlist', 'warning');
-            return;
-        }
-
-        try {
-            const data = await PiSignage.api.player.control('load_playlist', { name: playlistName });
-            if (data.success) {
-                showAlert(`Playlist "${playlistName}" chargée`, 'success');
-                this.refreshPlayerStatus();
-            } else {
-                showAlert(data.message || 'Erreur lors du chargement', 'error');
-            }
-        } catch (error) {
-            console.error('Load playlist error:', error);
-            showAlert('Erreur de chargement', 'error');
-        }
-    },
-
-    playMediaFile: async function() {
-        const mediaSelect = document.getElementById('media-select');
-        const file = mediaSelect ? mediaSelect.value : '';
-
-        if (!file) {
-            showAlert('Veuillez sélectionner un fichier', 'warning');
-            return;
-        }
-
-        try {
-            const data = await PiSignage.api.player.control('play_file', { file: file });
-            if (data.success) {
-                showAlert(`Lecture de ${file}`, 'success');
-                this.refreshPlayerStatus();
-            } else {
-                showAlert(data.message || 'Erreur de lecture', 'error');
-            }
-        } catch (error) {
-            console.error('Play file error:', error);
-            showAlert('Erreur de lecture', 'error');
-        }
-    },
-
-    addMediaToQueue: async function() {
-        const mediaSelect = document.getElementById('media-select');
-        const file = mediaSelect ? mediaSelect.value : '';
-
-        if (!file) {
-            showAlert('Veuillez sélectionner un fichier', 'warning');
-            return;
-        }
-
-        try {
-            const data = await PiSignage.api.player.control('add_to_playlist', { file: file });
-            if (data.success) {
-                showAlert(`${file} ajouté à la file d'attente`, 'success');
-                this.refreshPlayerStatus();
-            } else {
-                showAlert(data.message || 'Erreur', 'error');
-            }
-        } catch (error) {
-            console.error('Add to queue error:', error);
-            showAlert('Erreur d\'ajout', 'error');
-        }
-    },
-
-    // Legacy player functions for single file and playlist
-    playSingleFile: async function() {
-        const fileSelect = document.getElementById('single-file-select');
-        const file = fileSelect ? fileSelect.value : '';
-
-        if (!file) {
-            showAlert('Sélectionnez un fichier', 'error');
-            return;
-        }
-
-        const playerName = this.getPlayerName().toUpperCase();
-
-        try {
-            const data = await PiSignage.api.player.playFile(file, this.getPlayerName());
-            if (data.success) {
-                showAlert(data.message || `${playerName}: Lecture de ${file} démarrée!`, 'success');
-                setTimeout(() => this.refreshPlayerStatus(), 500);
-            } else {
-                showAlert(data.message || `Erreur ${playerName}: Lecture impossible`, 'error');
-            }
-        } catch (error) {
-            console.error('Play single file error:', error);
-            showAlert(`Erreur de communication avec ${playerName}`, 'error');
-        }
-    },
-
-    playPlaylist: async function() {
-        const playlistSelect = document.getElementById('playlist-select');
-        const playlist = playlistSelect ? playlistSelect.value : '';
-
-        if (!playlist) {
-            showAlert('Sélectionnez une playlist', 'error');
-            return;
-        }
-
-        const playerName = this.getPlayerName().toUpperCase();
-
-        try {
-            const data = await PiSignage.api.player.playPlaylist(playlist, this.getPlayerName());
-            if (data.success) {
-                showAlert(data.message || `${playerName}: Playlist ${playlist} lancée!`, 'success');
-                setTimeout(() => this.refreshPlayerStatus(), 500);
-            } else {
-                showAlert(`Erreur ${playerName}: ` + data.message, 'error');
-            }
-        } catch (error) {
-            console.error('Play playlist error:', error);
-            showAlert(`Erreur de communication avec ${playerName}`, 'error');
-        }
-    },
-
-    // Player management
-    restartCurrentPlayer: async function() {
-        const player = this.getPlayerName();
-        const playerName = player.toUpperCase();
-
-        showAlert(`Redémarrage de ${playerName}...`, 'info');
-
-        try {
-            const data = await PiSignage.api.player.restart();
-            if (data.success) {
-                showAlert(`${playerName} redémarré avec succès`, 'success');
-                setTimeout(() => {
-                    this.refreshPlayerStatus();
-                    this.updatePlayerInterface();
-                }, 2000);
-            } else {
-                showAlert(data.message || 'Erreur lors du redémarrage', 'error');
-            }
-        } catch (error) {
-            console.error('Restart player error:', error);
-            showAlert('Erreur de communication', 'error');
-        }
-    },
-
-    // Queue management
-    showPlaylistQueue: async function() {
-        const queueSection = document.getElementById('queue-section');
-        if (!queueSection) return;
-
-        const isVisible = queueSection.style.display !== 'none';
-        queueSection.style.display = isVisible ? 'none' : 'block';
-
-        if (!isVisible) {
-            // Load queue items
+        /* ---------- sources (media + playlists) ---------- */
+        async loadSources() {
             try {
-                const data = await PiSignage.api.player.getStatus();
-                if (data.success && data.data && data.data.playlist) {
-                    this.renderQueueItems(data.data.playlist);
+                const r = await PiSignage.api.media.list();
+                const sel = this._el('media-select');
+                if (sel && r && r.success && Array.isArray(r.data)) {
+                    sel.innerHTML = '<option value="">-- Sélectionner un fichier --</option>';
+                    r.data.forEach((f) => {
+                        const opt = document.createElement('option');
+                        opt.value = f.name;
+                        opt.textContent = f.name;
+                        sel.appendChild(opt);
+                    });
                 }
-            } catch (error) {
-                console.error('Load queue error:', error);
+            } catch (e) { /* silent */ }
+
+            try {
+                const r = await PiSignage.api.playlists.list();
+                const sel = this._el('playlist-select');
+                if (sel && r && r.success) {
+                    const list = Array.isArray(r.data) ? r.data : (r.data && Array.isArray(r.data.playlists) ? r.data.playlists : []);
+                    sel.innerHTML = '<option value="">-- Sélectionner une playlist --</option>';
+                    list.forEach((p) => {
+                        const name = (typeof p === 'string') ? p : p.name;
+                        if (!name) return;
+                        const opt = document.createElement('option');
+                        opt.value = name;
+                        opt.textContent = name;
+                        sel.appendChild(opt);
+                    });
+                }
+            } catch (e) { /* silent */ }
+        },
+
+        /* ---------- status (état réel du moteur) ---------- */
+        async refreshPlayerStatus() {
+            try {
+                const r = await PiSignage.api.request('/api/display.php?action=state');
+                if (r && r.success && r.data) this.updatePlayerUI(r.data);
+                else this.updatePlayerUI(null);
+            } catch (e) { /* transient */ }
+        },
+
+        // d = { state:{status,name,version,index,count,current{...}}, online, active{slug,name} }
+        updatePlayerUI(d) {
+            const pill = this._el('topbar-status');
+            const modeBadge = this._el('player-mode-badge');
+            const stateBadge = this._el('player-state');
+            const fileTitle = this._el('current-file');
+            const sub = this._el('np-sub');
+            const npBadge = this._el('np-badge');
+            const playBtn = this._el('play-pause-btn');
+            const playIco = this._el('play-pause-ico');
+            const sFile = this._el('status-file');
+            const sPos = this._el('status-position');
+            const sActive = this._el('status-active');
+            const sOnline = this._el('status-online');
+
+            const st = d && d.state ? d.state : null;
+            const online = !!(d && d.online);
+            const active = d && d.active ? d.active : null;
+            this.state.online = online;
+
+            const activeName = (active && active.name) ? active.name : (st && st.name ? st.name : '');
+            if (sActive) sActive.textContent = activeName || '—';
+            if (sOnline) {
+                sOnline.textContent = online ? 'En ligne' : 'Hors ligne';
+                sOnline.className = 'badge ' + (online ? 'badge-success' : 'badge-danger');
             }
+            if (modeBadge) modeBadge.textContent = online ? 'Écran · en ligne' : 'Écran · hors ligne';
+
+            const status = st ? st.status : null;
+            const playing = status === 'playing';
+            const paused = status === 'paused';
+            this.state.isPlaying = playing;
+            this.state.isPaused = paused;
+
+            if (!st || !online || status === 'idle' || !st.current) {
+                if (fileTitle) fileTitle.textContent = online ? 'Aucune lecture' : 'Lecteur hors ligne';
+                if (sub) sub.textContent = '—';
+                if (npBadge) npBadge.style.display = 'none';
+                if (playBtn) playBtn.setAttribute('data-action', 'play');
+                if (playIco) playIco.innerHTML = ICON.play;
+                if (stateBadge) {
+                    stateBadge.textContent = online ? 'Arrêté' : 'Hors ligne';
+                    stateBadge.className = 'badge badge-danger';
+                }
+                if (sFile) sFile.textContent = '—';
+                if (sPos) sPos.textContent = '—';
+                if (pill) { pill.className = 'status-pill is-stopped'; const t = pill.querySelector('.pill-text'); if (t) t.textContent = online ? 'Lecteur · arrêté' : 'Lecteur · hors ligne'; }
+                return;
+            }
+
+            const cur = st.current || {};
+            const file = cur.name || cur.url || 'Média';
+            const idx = (st.index | 0) + 1;
+            const count = st.count | 0;
+            this.state.currentFile = file;
+            this.state.index = st.index | 0;
+            this.state.count = count;
+
+            if (fileTitle) fileTitle.textContent = file;
+            if (sub) sub.textContent = (count ? ('Élément ' + idx + ' / ' + count) : 'Lecture directe') + (activeName ? ' · ' + activeName : '');
+            if (npBadge) npBadge.style.display = playing ? 'block' : 'none';
+
+            if (playBtn) playBtn.setAttribute('data-action', playing ? 'pause' : 'play');
+            if (playIco) playIco.innerHTML = playing ? ICON.pause : ICON.play;
+
+            if (stateBadge) {
+                stateBadge.textContent = playing ? 'En lecture' : (paused ? 'En pause' : 'Inconnu');
+                stateBadge.className = 'badge ' + (playing ? 'badge-success' : (paused ? 'badge-warn' : ''));
+            }
+            if (sFile) sFile.textContent = file;
+            if (sPos) sPos.textContent = count ? (idx + ' / ' + count) : '—';
+
+            if (pill) {
+                pill.className = 'status-pill ' + (playing ? 'is-playing' : 'is-paused');
+                const t = pill.querySelector('.pill-text');
+                if (t) t.textContent = 'Lecteur · ' + (playing ? 'en lecture' : 'pause');
+            }
+        },
+
+        /* ---------- transport (commandes vers le moteur réel) ---------- */
+        async _sendCommand(cmd) {
+            return PiSignage.api.request('/api/display.php?action=command', {
+                method: 'POST',
+                body: JSON.stringify({ cmd: cmd })
+            });
+        },
+
+        async control(action) {
+            const map = { previous: 'prev', next: 'next', play: 'play', pause: 'pause', reload: 'reload' };
+            const cmd = map[action] || action;
+            try {
+                const r = await this._sendCommand(cmd);
+                if (r && r.success) {
+                    this.log(this._actionLabel(action));
+                    setTimeout(() => this.refreshPlayerStatus(), 600);
+                } else {
+                    PiSignage.ui.toast((r && r.message) || 'Action impossible', 'error');
+                    this.log(this._actionLabel(action) + ' — échec', 'error');
+                }
+            } catch (e) {
+                PiSignage.ui.toast('Erreur de communication', 'error');
+                this.log('Erreur : ' + action, 'error');
+            }
+        },
+
+        togglePlayPause() {
+            this.control(this.state.isPlaying ? 'pause' : 'play');
+        },
+
+        _actionLabel(action) {
+            const map = {
+                play: 'Lecture', pause: 'Pause', reload: 'Rechargement du contenu',
+                next: 'Élément suivant', previous: 'Élément précédent'
+            };
+            return map[action] || action;
+        },
+
+        /* ---------- volume système (ALSA, 0-100) ---------- */
+        async refreshSystemVolume() {
+            try {
+                const r = await PiSignage.api.request('/api/system.php?action=get_volume');
+                const vol = r && r.data && r.data.volume;
+                if (r && r.success && vol != null) {
+                    const slider = this._el('system-volume-slider');
+                    const disp = this._el('system-volume-display');
+                    if (slider && !this._draggingSys) slider.value = vol;
+                    if (disp) disp.textContent = vol + '%';
+                }
+            } catch (e) { /* silent */ }
+        },
+
+        async setSystemVolume(volume) {
+            volume = Math.max(0, Math.min(100, volume || 0));
+            const disp = this._el('system-volume-display');
+            if (disp) disp.textContent = volume + '%';
+            try {
+                // system.php reads $input['volume'] — send 'volume' (contract), keep 'value' too.
+                await PiSignage.api.request('/api/system.php', {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'set_volume', volume: volume, value: volume })
+                });
+            } catch (e) { /* silent */ }
+        },
+
+        async toggleSystemMute() {
+            const ico = this._el('system-mute-ico');
+            const txt = this._el('system-mute-text');
+            try {
+                const r = await PiSignage.api.request('/api/system.php', {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'toggle_mute' })
+                });
+                if (r && r.success) {
+                    this._systemMuted = !!(r.data && r.data.muted);
+                    if (ico) ico.innerHTML = this._systemMuted ? ICON.volumeX : ICON.volume;
+                    if (txt) txt.textContent = this._systemMuted ? 'Rétablir' : 'Couper';
+                    this.log(this._systemMuted ? 'Système coupé' : 'Système rétabli');
+                } else {
+                    PiSignage.ui.toast((r && r.message) || 'Échec du mute', 'error');
+                }
+            } catch (e) { PiSignage.ui.toast('Erreur de communication', 'error'); }
+        },
+
+        /* ---------- lecture directe d'un média ---------- */
+        async playMediaFile() {
+            const sel = this._el('media-select');
+            const file = sel ? sel.value : '';
+            if (!file) { PiSignage.ui.toast('Sélectionnez un fichier', 'warning'); return; }
+            try {
+                const r = await PiSignage.api.request('/api/display.php?action=playmedia', {
+                    method: 'POST',
+                    body: JSON.stringify({ file: file })
+                });
+                if (r && r.success) {
+                    PiSignage.ui.toast('Lecture de ' + file, 'success');
+                    this.log('Lecture directe : ' + file);
+                    setTimeout(() => this.refreshPlayerStatus(), 800);
+                } else {
+                    PiSignage.ui.toast((r && r.message) || 'Lecture impossible', 'error');
+                }
+            } catch (e) { PiSignage.ui.toast('Erreur de communication', 'error'); }
+        },
+
+        /* ---------- diffuser une playlist nommée (= activer) ---------- */
+        async playPlaylist() {
+            const sel = this._el('playlist-select');
+            const name = sel ? sel.value : '';
+            if (!name) { PiSignage.ui.toast('Sélectionnez une playlist', 'warning'); return; }
+            try {
+                const r = await PiSignage.api.request('/api/playlists.php?action=activate&name=' + encodeURIComponent(name), {
+                    method: 'POST',
+                    body: '{}'
+                });
+                if (r && r.success) {
+                    PiSignage.ui.toast('Playlist « ' + name + ' » diffusée', 'success');
+                    this.log('Playlist diffusée : ' + name);
+                    setTimeout(() => this.refreshPlayerStatus(), 800);
+                } else {
+                    PiSignage.ui.toast((r && r.message) || 'Diffusion impossible', 'error');
+                }
+            } catch (e) { PiSignage.ui.toast('Erreur de communication', 'error'); }
+        },
+
+        /* ---------- activity log ---------- */
+        log(message, type) {
+            const box = this._el('status-log');
+            if (!box) return;
+            // Drop placeholder on first real entry.
+            if (box.dataset.empty !== '0') { box.innerHTML = ''; box.dataset.empty = '0'; }
+            const ts = new Date().toLocaleTimeString('fr-FR');
+            const row = document.createElement('div');
+            row.style.color = (type === 'error') ? 'var(--danger-text)' : 'var(--text-dim)';
+            row.style.fontVariantNumeric = 'tabular-nums';
+            row.textContent = '[' + ts + '] ' + message;
+            box.insertBefore(row, box.firstChild);
+            while (box.children.length > 12) box.removeChild(box.lastChild);
         }
-    },
+    };
 
-    renderQueueItems: function(playlist) {
-        const queueList = document.getElementById('queue-list');
-        if (!queueList) return;
+    PiSignage.player = player;
+})();
 
-        if (!playlist || playlist.length === 0) {
-            queueList.innerHTML = '<div class="empty-state">File d\'attente vide</div>';
-            return;
-        }
-
-        queueList.innerHTML = playlist.map((item, index) => `
-            <div class="queue-item ${item.current ? 'current' : ''}" data-index="${index}">
-                <span class="queue-number">${index + 1}</span>
-                <span class="queue-name">${item.name}</span>
-                ${item.current ? '<span class="queue-current">▶️</span>' : ''}
-            </div>
-        `).join('');
-    },
-
-    // Global function setup for backward compatibility
-    setupGlobalFunctions: function() {
-        // Player control functions
-        window.playerControl = this.control.bind(this);
-        window.updatePlayerStatus = this.refreshPlayerStatus.bind(this);
-        window.updatePlayerInterface = this.updatePlayerInterface.bind(this);
-        window.getCurrentPlayer = this.getCurrentPlayer.bind(this);
-        window.initializePlayer = this.initializePlayer.bind(this);
-
-        // Media playback functions
-        window.playSingleFile = this.playSingleFile.bind(this);
-        window.playPlaylist = this.playPlaylist.bind(this);
-        window.playMediaFile = this.playMediaFile.bind(this);
-        window.loadPlaylist = this.loadPlaylist.bind(this);
-        window.addMediaToQueue = this.addMediaToQueue.bind(this);
-        window.showPlaylistQueue = this.showPlaylistQueue.bind(this);
-
-        // Player management functions
-        window.restartCurrentPlayer = this.restartCurrentPlayer.bind(this);
-        window.setVolume = this.setVolume.bind(this);
-
-        // Player state functions
-        window.togglePlayPause = this.togglePlayPause.bind(this);
-        window.seekTo = this.seekTo.bind(this);
-        window.toggleMute = this.toggleMute.bind(this);
-        window.toggleLoop = this.toggleLoop.bind(this);
-        window.toggleShuffle = this.toggleShuffle.bind(this);
-
-        // Update player UI function
-        window.updatePlayerUI = this.updatePlayerUI.bind(this);
-    }
-};
-
-// CSS for player controls
-const playerStyles = document.createElement('style');
-playerStyles.textContent = `
-    .player-btn {
-        transition: all 0.2s;
-    }
-
-    .player-btn:hover {
-        transform: scale(1.05);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-    }
-
-    .queue-item {
-        display: flex;
-        align-items: center;
-        padding: 8px;
-        border-radius: 5px;
-        margin-bottom: 5px;
-        transition: background-color 0.2s;
-    }
-
-    .queue-item:hover {
-        background-color: rgba(74, 158, 255, 0.1);
-    }
-
-    .queue-item.current {
-        background-color: rgba(74, 158, 255, 0.2);
-        border: 1px solid #4a9eff;
-    }
-
-    .queue-number {
-        margin-right: 10px;
-        color: #666;
-        min-width: 20px;
-    }
-
-    .queue-name {
-        flex: 1;
-    }
-
-    .queue-current {
-        margin-left: 10px;
-        color: #51cf66;
-    }
-
-    .status-indicator {
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-        background-color: #666;
-        display: inline-block;
-        margin-right: 8px;
-    }
-
-    .status-indicator.playing {
-        background-color: #51cf66;
-        animation: pulse 2s infinite;
-    }
-
-    .status-indicator.paused {
-        background-color: #ffd43b;
-    }
-
-    @keyframes pulse {
-        0% { opacity: 1; }
-        50% { opacity: 0.5; }
-        100% { opacity: 1; }
-    }
-`;
-document.head.appendChild(playerStyles);
-
-console.log('✅ PiSignage Player module loaded - All player controls ready');
+console.log('PiSignage Player module loaded');
