@@ -112,12 +112,13 @@ PiSignage.api = {
             return PiSignage.api.request('/api/media.php');
         },
 
-        delete: function(filename) {
+        delete: function(filename, force = false) {
             return PiSignage.api.request('/api/media.php', {
                 method: 'DELETE',
                 body: JSON.stringify({
                     filename: filename,
-                    action: 'delete'
+                    action: 'delete',
+                    force: !!force
                 })
             });
         },

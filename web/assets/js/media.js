@@ -199,9 +199,16 @@ PiSignage.media = {
     async deleteFile(name) {
         if (!PiSignage.ui.confirm('Supprimer le fichier "' + name + '" ?')) return;
         try {
-            const r = await PiSignage.api.media.delete(name);
+            let r = await PiSignage.api.media.delete(name);
+            // Fichier utilisé dans des playlists : proposer une suppression forcée (qui
+            // retire aussi les références orphelines des playlists + de l'écran).
+            if (r && !r.success && r.data && r.data.used) {
+                const where = (r.data.playlists || []).join(', ') + (r.data.live ? (r.data.playlists && r.data.playlists.length ? ' + écran' : 'écran') : '');
+                if (!PiSignage.ui.confirm('« ' + name + ' » est utilisé dans : ' + where + '.\nSupprimer quand même et le retirer de ces playlists ?')) return;
+                r = await PiSignage.api.media.delete(name, true);
+            }
             if (r && r.success) {
-                PiSignage.ui.toast('Fichier supprimé', 'success');
+                PiSignage.ui.toast((r.message) || 'Fichier supprimé', 'success');
                 this.loadMediaFiles();
             } else {
                 PiSignage.ui.toast((r && r.message) || 'Suppression impossible', 'error');

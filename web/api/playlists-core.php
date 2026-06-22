@@ -235,3 +235,129 @@ function playlistActivateByName($name) {
     playlistWriteActivePointer($pl);
     return $pl;
 }
+
+/* ====================== Intégrité média (rename / suppression) ======================
+ * Les items de playlist sont des OBJETS {url,...} (et tolèrent l'ancien {file,...}).
+ * Ces helpers fiabilisent le renommage/suppression d'un média en propageant le
+ * changement dans TOUTES les playlists nommées ET dans la playlist LIVE (avec reload). */
+
+/** L'item référence-t-il ce fichier média ? (comparaison sur le basename décodé de l'url/file) */
+function playlistItemIsFile($item, $filename) {
+    if (!is_array($item)) return false;
+    if (!empty($item['url'])) {
+        $path = parse_url((string)$item['url'], PHP_URL_PATH);
+        $base = rawurldecode(basename(($path !== null && $path !== false) ? $path : (string)$item['url']));
+        if ($base === $filename) return true;
+    }
+    if (!empty($item['file']) && basename((string)$item['file']) === $filename) return true;
+    return false;
+}
+
+/** Réécrit le fichier d'un item (url et/ou file) si il correspond. Retourne true si modifié. */
+function playlistRewriteItemFile(&$item, $oldFilename, $newFilename) {
+    if (!playlistItemIsFile($item, $oldFilename)) return false;
+    if (!empty($item['url']))  $item['url']  = '/media/' . $newFilename;
+    if (!empty($item['file'])) $item['file'] = $newFilename;
+    if (isset($item['name']) && (string)$item['name'] === $oldFilename) $item['name'] = $newFilename;
+    return true;
+}
+
+/** Quelles playlists (nommées) référencent ce fichier ? + drapeau "présent dans la playlist LIVE". */
+function playlistFindMediaUsage($filename) {
+    $used = [];
+    foreach (glob(rtrim(PLAYLISTS_PATH, '/') . '/*.json') as $file) {
+        $raw = json_decode((string)file_get_contents($file), true);
+        if (!is_array($raw) || empty($raw['items']) || !is_array($raw['items'])) continue;
+        foreach ($raw['items'] as $it) {
+            if (playlistItemIsFile($it, $filename)) {
+                $used[] = ['slug' => basename($file, '.json'), 'name' => ($raw['name'] ?? basename($file, '.json'))];
+                break;
+            }
+        }
+    }
+    $live = false;
+    if (is_file(LIVE_PLAYLIST_FILE)) {
+        $l = json_decode((string)file_get_contents(LIVE_PLAYLIST_FILE), true);
+        if (is_array($l) && !empty($l['items']) && is_array($l['items'])) {
+            foreach ($l['items'] as $it) { if (playlistItemIsFile($it, $filename)) { $live = true; break; } }
+        }
+    }
+    return ['playlists' => $used, 'live' => $live];
+}
+
+/** Écriture brute (atomique) d'un fichier playlist nommé. */
+function playlistSaveRaw($file, $raw) {
+    $tmp = @tempnam(dirname($file), '.pl.');
+    $json = json_encode($raw, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($tmp !== false && @file_put_contents($tmp, $json) !== false && @rename($tmp, $file)) {
+        @chmod($file, 0664);
+        return true;
+    }
+    if ($tmp !== false) @unlink($tmp);
+    return @file_put_contents($file, $json) !== false;
+}
+
+/** Mute la playlist LIVE via un callback(&$items)->bool. Si modifiée : bump version + reload. */
+function playlistMutateLive($mutator) {
+    if (!is_file(LIVE_PLAYLIST_FILE)) return false;
+    $live = json_decode((string)file_get_contents(LIVE_PLAYLIST_FILE), true);
+    if (!is_array($live) || empty($live['items']) || !is_array($live['items'])) return false;
+    $items = $live['items'];
+    if (!$mutator($items)) return false;
+    $live['items']   = array_values($items);
+    $live['version'] = (int)($live['version'] ?? 0) + 1;
+    $tmp = @tempnam(dirname(LIVE_PLAYLIST_FILE), '.playlist.');
+    $json = json_encode($live, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($tmp !== false && @file_put_contents($tmp, $json) !== false && @rename($tmp, LIVE_PLAYLIST_FILE)) {
+        @chmod(LIVE_PLAYLIST_FILE, 0664);
+        playlistSignalReload();
+        return true;
+    }
+    if ($tmp !== false) @unlink($tmp);
+    return false;
+}
+
+/** Propage un renommage de fichier média dans toutes les playlists + la LIVE. */
+function playlistRenameMediaRefs($oldFilename, $newFilename) {
+    $count = 0;
+    foreach (glob(rtrim(PLAYLISTS_PATH, '/') . '/*.json') as $file) {
+        $raw = json_decode((string)file_get_contents($file), true);
+        if (!is_array($raw) || empty($raw['items']) || !is_array($raw['items'])) continue;
+        $changed = false;
+        foreach ($raw['items'] as $i => $it) {
+            if (playlistRewriteItemFile($it, $oldFilename, $newFilename)) { $raw['items'][$i] = $it; $changed = true; }
+        }
+        if ($changed) { playlistSaveRaw($file, $raw); $count++; }
+    }
+    $live = playlistMutateLive(function (&$items) use ($oldFilename, $newFilename) {
+        $c = false;
+        foreach ($items as $i => $it) {
+            if (playlistRewriteItemFile($it, $oldFilename, $newFilename)) { $items[$i] = $it; $c = true; }
+        }
+        return $c;
+    });
+    return ['playlists' => $count, 'live' => $live];
+}
+
+/** Retire les références à un fichier média de toutes les playlists + la LIVE. */
+function playlistRemoveMediaRefs($filename) {
+    $affected = [];
+    $filter = function ($items) use ($filename) {
+        $out = [];
+        foreach ($items as $it) { if (!playlistItemIsFile($it, $filename)) $out[] = $it; }
+        return $out;
+    };
+    foreach (glob(rtrim(PLAYLISTS_PATH, '/') . '/*.json') as $file) {
+        $raw = json_decode((string)file_get_contents($file), true);
+        if (!is_array($raw) || empty($raw['items']) || !is_array($raw['items'])) continue;
+        $before = count($raw['items']);
+        $raw['items'] = array_values($filter($raw['items']));
+        if (count($raw['items']) !== $before) { playlistSaveRaw($file, $raw); $affected[] = basename($file, '.json'); }
+    }
+    $live = playlistMutateLive(function (&$items) use ($filter) {
+        $before = count($items);
+        $items = $filter($items);
+        return count($items) !== $before;
+    });
+    return ['affected' => $affected, 'live' => $live];
+}
