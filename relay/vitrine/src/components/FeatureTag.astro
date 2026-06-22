@@ -1,0 +1,7 @@
+---
+import { STATUS_LABEL, type Status } from '../consts';
+interface Props { status: Status; }
+const { status } = Astro.props as Props;
+const cls = { live: 'pill pill-live', beta: 'pill pill-beta', roadmap: 'pill pill-roadmap' }[status];
+---
+<span class={cls} title={`Status: ${STATUS_LABEL[status]}`}>{STATUS_LABEL[status]}</span>

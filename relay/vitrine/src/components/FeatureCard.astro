@@ -1,0 +1,27 @@
+---
+import Icon from './Icon.astro';
+import FeatureTag from './FeatureTag.astro';
+import type { Feature } from '../consts';
+interface Props { feature: Feature; }
+const { feature } = Astro.props as Props;
+---
+<article class="card card-hover feature-card">
+  <div class="fc-top">
+    <span class="fc-icon"><Icon name={feature.icon} /></span>
+    <FeatureTag status={feature.status} />
+  </div>
+  <h3>{feature.title}</h3>
+  <p>{feature.blurb}</p>
+</article>
+
+<style>
+  .feature-card { display: flex; flex-direction: column; }
+  .fc-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.9rem; }
+  .fc-icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 42px; height: 42px; border-radius: 11px;
+    background: var(--amber-soft); color: var(--amber-bright); border: 1px solid var(--amber-line);
+  }
+  .feature-card h3 { margin: 0 0 0.45rem; font-size: 1.08rem; }
+  .feature-card p { margin: 0; font-size: 0.93rem; color: var(--text-mut); }
+</style>

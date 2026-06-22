@@ -1,0 +1,93 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Hero from '../components/Hero.astro';
+import FeatureCard from '../components/FeatureCard.astro';
+import Diagram from '../components/Diagram.astro';
+import CTASection from '../components/CTASection.astro';
+import { FEATURES, SITE } from '../consts';
+const liveHighlights = FEATURES.filter((f) => ['kiosk-player','remote-commands','relay-enroll','offline'].includes(f.id));
+---
+<BaseLayout>
+  <Hero />
+
+  <!-- Positioning: the gap Zaforge occupies -->
+  <section class="section">
+    <div class="container">
+      <div class="center" style="max-width:60ch;margin:0 auto 2.5rem;">
+        <span class="eyebrow">The gap in the market</span>
+        <h2>Between rented cloud and DIY open source</h2>
+        <p class="lead mx-auto">
+          Cloud signage is convenient but rents you your own screens and parks your data offsite —
+          and the bill grows with every display. Free self-hosted projects give you control but leave
+          fleet management, remote access and reliability entirely on your shoulders. Zaforge takes the
+          best of both.
+        </p>
+      </div>
+      <div class="grid grid-3">
+        <div class="card">
+          <h3>Cloud SaaS</h3>
+          <p>Easy to start, but data lives in someone else's cloud, you can't self-host, and per-screen pricing compounds at scale.</p>
+        </div>
+        <div class="card" style="border-color:var(--amber-line);">
+          <h3 style="color:var(--amber-bright);">Zaforge</h3>
+          <p>Self-hosted managed relay. Open-source, auditable, EU/on-prem data, no lock-in — plus a real fleet console and remote access.</p>
+        </div>
+        <div class="card">
+          <h3>DIY open source</h3>
+          <p>Sovereign and free, but no native fleet management, no remote reach through NAT, and every bit of infra is your problem.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Live highlights -->
+  <section class="section" style="padding-top:0;">
+    <div class="container">
+      <div class="center" style="margin-bottom:2rem;">
+        <span class="eyebrow">Working today</span>
+        <h2>What's live right now</h2>
+        <p class="lead mx-auto">Everything below is shipped and running — we tag every claim honestly across the site.</p>
+      </div>
+      <div class="grid grid-4">
+        {liveHighlights.map((f) => <FeatureCard feature={f} />)}
+      </div>
+      <p class="center" style="margin-top:1.6rem;"><a href="/features" class="btn btn-ghost">See all features &amp; their status →</a></p>
+    </div>
+  </section>
+
+  <!-- How it works teaser -->
+  <section class="section" style="padding-top:0;">
+    <div class="container">
+      <div class="center" style="margin-bottom:2rem;">
+        <span class="eyebrow">Open core</span>
+        <h2>Free LAN player. Optional managed relay.</h2>
+        <p class="lead mx-auto">Start free on the LAN. When you need to manage screens from anywhere, add the self-hosted relay — which you run.</p>
+      </div>
+      <div class="card"><Diagram /></div>
+      <p class="center" style="margin-top:1.6rem;"><a href="/how-it-works" class="btn btn-ghost">How it works in detail →</a></p>
+    </div>
+  </section>
+
+  <!-- Dashboard proof -->
+  <section class="section" style="padding-top:0;">
+    <div class="container hiw-split">
+      <div>
+        <span class="eyebrow">The product, not a mockup</span>
+        <h2>Manage real screens from one place</h2>
+        <p>The Zaforge admin already runs the player day to day — media, playlists, scheduling, live system stats. The fleet console UI that brings this to your whole fleet is in beta; the control plane behind it is live.</p>
+        <a href="/features" class="btn btn-ghost">Explore the feature set →</a>
+      </div>
+      <figure class="frame" style="margin:0;">
+        <img src="/img/zaforge-dashboard.png" width="1280" height="720" loading="lazy"
+          alt="The Zaforge admin dashboard: media and playlist counts, current playback, and live CPU, RAM, temperature and disk gauges." />
+      </figure>
+    </div>
+  </section>
+
+  <CTASection />
+</BaseLayout>
+
+<style>
+  .hiw-split { display: grid; grid-template-columns: 1fr 1.15fr; gap: clamp(1.5rem,4vw,3rem); align-items: center; }
+  @media (max-width: 900px) { .hiw-split { grid-template-columns: 1fr; } }
+</style>

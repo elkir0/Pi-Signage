@@ -1,0 +1,52 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import FeatureCard from '../components/FeatureCard.astro';
+import CTASection from '../components/CTASection.astro';
+import { FEATURES } from '../consts';
+const live = FEATURES.filter((f) => f.status === 'live');
+const beta = FEATURES.filter((f) => f.status === 'beta');
+const roadmap = FEATURES.filter((f) => f.status === 'roadmap');
+---
+<BaseLayout title="Features" description="Every Zaforge feature, tagged honestly as Live, Beta or Roadmap. The autonomous player and the relay command channel are live today.">
+  <section class="section">
+    <div class="container center" style="max-width:62ch;margin-inline:auto;">
+      <span class="eyebrow">Features</span>
+      <h1>What's shipped — and what's coming</h1>
+      <p class="lead mx-auto">We tag every feature so you always know what you're buying. No vaporware dressed up as a product.</p>
+      <div class="legend">
+        <span class="pill pill-live">Live</span><span class="legend-t">shipped &amp; running</span>
+        <span class="pill pill-beta">Beta</span><span class="legend-t">usable, still maturing</span>
+        <span class="pill pill-roadmap">Roadmap</span><span class="legend-t">planned, not yet shipped</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:0;">
+    <div class="container">
+      <h2 class="group-h"><span class="pill pill-live">Live</span> Working today</h2>
+      <div class="grid grid-3">{live.map((f) => <FeatureCard feature={f} />)}</div>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:0;">
+    <div class="container">
+      <h2 class="group-h"><span class="pill pill-beta">Beta</span> Usable, maturing</h2>
+      <div class="grid grid-3">{beta.map((f) => <FeatureCard feature={f} />)}</div>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:0;">
+    <div class="container">
+      <h2 class="group-h"><span class="pill pill-roadmap">Roadmap</span> Planned next</h2>
+      <div class="grid grid-3">{roadmap.map((f) => <FeatureCard feature={f} />)}</div>
+    </div>
+  </section>
+
+  <CTASection />
+</BaseLayout>
+
+<style>
+  .legend { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; justify-content: center; margin-top: 1.4rem; }
+  .legend-t { font-size: 0.85rem; color: var(--text-mut); margin-right: 0.8rem; }
+  .group-h { display: flex; align-items: center; gap: 0.7rem; margin-bottom: 1.4rem; }
+</style>

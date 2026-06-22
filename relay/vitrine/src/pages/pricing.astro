@@ -1,0 +1,60 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PricingCard from '../components/PricingCard.astro';
+import CTASection from '../components/CTASection.astro';
+import { TIERS } from '../consts';
+
+const faqs = [
+  { q: 'Is the player really free?', a: 'Yes. The autonomous Raspberry Pi player is open source and free forever for LAN use. You only pay when you add the managed relay for remote fleet management.' },
+  { q: 'What does "self-hosted relay" mean for pricing?', a: 'The relay runs on infrastructure you (or we, on your behalf) control — in the EU or on-prem. The per-screen price covers the managed fleet plane, not a seat in someone else\'s cloud. You keep the data.' },
+  { q: 'How does Zaforge compare to cloud signage on price?', a: 'Pro is designed to come in at a fraction of typical cloud per-screen pricing, with the added benefit that your data stays yours. We position on sovereignty and total cost, not on chasing a competitor\'s number.' },
+  { q: 'Can I pay annually?', a: 'Yes — annual billing saves roughly two months versus monthly. Per-screen, no minimums.' },
+  { q: 'Why a waitlist instead of a signup button?', a: 'Self-serve billing is on our roadmap. Until it ships we onboard operators by hand so we can be precise about what is Live, Beta and Roadmap for your use case.' },
+];
+---
+<BaseLayout title="Pricing" description="Zaforge pricing: free open-source player, Pro managed relay around 4€/screen/mo, Business with HA, SLA, RBAC and white-label. Self-hosted, EU data, annual discount.">
+  <section class="section">
+    <div class="container center" style="max-width:64ch;margin-inline:auto;">
+      <span class="eyebrow">Pricing</span>
+      <h1>Pay for the fleet plane, not for your own screens</h1>
+      <p class="lead mx-auto">Free where you don't need management. Fair, per-screen pricing where you do — a fraction of typical cloud per-screen cost, with your data kept in the EU and no lock-in.</p>
+      <p class="muted mx-auto" style="font-size:0.85rem;margin-top:0.5rem;">Prices shown are indicative and not final ahead of launch.</p>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:0;">
+    <div class="container">
+      <div class="grid grid-3 pricing-grid">{TIERS.map((t) => <PricingCard tier={t} />)}</div>
+      <p class="selfhost-note card">
+        <strong>Self-hosted note.</strong> The relay is software you control. Run it on your own server
+        and keep every byte on-prem, or have us host it for you within the EU. Either way it is open
+        source and auditable — there is no proprietary cloud you are locked into. Prices shown exclude VAT.
+      </p>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:0;">
+    <div class="container" style="max-width:760px;margin-inline:auto;">
+      <h2 class="center" style="margin-bottom:1.6rem;">Pricing FAQ</h2>
+      {faqs.map((f) => (
+        <details class="faq card">
+          <summary>{f.q}</summary>
+          <p>{f.a}</p>
+        </details>
+      ))}
+    </div>
+  </section>
+
+  <CTASection />
+</BaseLayout>
+
+<style>
+  .pricing-grid { align-items: stretch; }
+  .selfhost-note { margin-top: 1.6rem; font-size: 0.9rem; color: var(--text-soft); }
+  .faq { margin-bottom: 0.8rem; padding: 0; }
+  .faq summary { cursor: pointer; list-style: none; padding: 1rem 1.2rem; font-weight: 600; color: var(--text); display: flex; justify-content: space-between; align-items: center; }
+  .faq summary::-webkit-details-marker { display: none; }
+  .faq summary::after { content: '+'; color: var(--amber-bright); font-size: 1.3rem; line-height: 1; }
+  .faq[open] summary::after { content: '–'; }
+  .faq p { margin: 0; padding: 0 1.2rem 1.1rem; color: var(--text-mut); font-size: 0.92rem; }
+</style>

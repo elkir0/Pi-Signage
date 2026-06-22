@@ -1,0 +1,32 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import CTASection from '../components/CTASection.astro';
+import { SITE } from '../consts';
+---
+<BaseLayout title="Docs" description="Zaforge documentation. Player quick-start on GitHub today; full hosted docs are on the way.">
+  <section class="section">
+    <div class="container center" style="max-width:62ch;margin-inline:auto;">
+      <span class="eyebrow">Docs</span>
+      <h1>Documentation</h1>
+      <p class="lead mx-auto">Full hosted docs are being written. For now, the player's README and quick-start live on GitHub, and relay onboarding is hands-on while we finish the self-serve flow.</p>
+      <p><span class="pill pill-roadmap">Roadmap</span> <span class="muted" style="font-size:0.9rem;">Hosted docs portal</span></p>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:0;">
+    <div class="container grid grid-2">
+      <div class="card">
+        <h3>Player quick-start</h3>
+        <p>Flash, boot into kiosk, point it at your content. The README walks through install and configuration on Raspberry Pi OS.</p>
+        <a href={SITE.github} class="btn btn-ghost" rel="noopener">Read on GitHub →</a>
+      </div>
+      <div class="card">
+        <h3>Relay enrollment</h3>
+        <p>Devices enroll to the relay with a one-time code over WireGuard. The enrollment endpoint already runs at the address below.</p>
+        <p class="codeblock"><span class="c"># enrollment + console API (live)</span><br />https://{SITE.relayHost}</p>
+      </div>
+    </div>
+  </section>
+
+  <CTASection title="Want early docs and onboarding?" sub="Join the waitlist — we'll send setup guidance and bring you into the relay onboarding directly." />
+</BaseLayout>

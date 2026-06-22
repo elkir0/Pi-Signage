@@ -1,0 +1,31 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { SITE } from '../consts';
+---
+<BaseLayout title="Privacy" description="Zaforge privacy note. Cookieless analytics, EU data, GDPR-aligned. Placeholder pending legal review.">
+  <section class="section">
+    <div class="container prose">
+      <span class="eyebrow">Legal</span>
+      <h1>Privacy</h1>
+      <p class="placeholder-note">Placeholder — to be replaced with reviewed legal copy before launch.</p>
+
+      <h2>What we collect on this site</h2>
+      <p>This marketing site uses <strong>cookieless analytics (Plausible)</strong>: no cookies, no cross-site tracking, no personal profiles. Aggregate page-view counts only. Analytics are EU-hosted.</p>
+
+      <h2>Waitlist data</h2>
+      <p>If you submit the waitlist form we store the name, email and details you provide solely to contact you about Zaforge. We do not sell or share this data. You can ask us to delete it at any time at <a href={`mailto:${SITE.contactEmail}`}>{SITE.contactEmail}</a>.</p>
+
+      <h2>Your product data</h2>
+      <p>Content and fleet data handled by the Zaforge player and relay stay on infrastructure you control or that we host for you in the EU. This is covered by your service agreement, not this website note.</p>
+
+      <h2>Your rights (GDPR)</h2>
+      <p>You have the right to access, correct and erase your data, and to object to processing. Contact us to exercise these rights.</p>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .prose { max-width: 720px; }
+  .prose h2 { margin-top: 2rem; }
+  .placeholder-note { background: var(--amber-soft); border: 1px solid var(--amber-line); border-radius: 9px; padding: 0.7rem 1rem; color: var(--amber-bright); font-size: 0.88rem; }
+</style>

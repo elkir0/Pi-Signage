@@ -1,0 +1,24 @@
+---
+interface Props { title?: string; sub?: string; }
+const { title = 'Ready to run signage you actually own?', sub = 'Self-serve billing is on the way. For now we onboard operators by hand — join the waitlist and we will reach out.' } = Astro.props as Props;
+---
+<section class="cta-band">
+  <div class="container cta-inner">
+    <h2>{title}</h2>
+    <p class="lead mx-auto" style="text-align:center;">{sub}</p>
+    <div class="cta-actions">
+      <a href="/contact" class="btn btn-primary">Join the waitlist</a>
+      <a href="/how-it-works" class="btn btn-ghost">See how it works</a>
+    </div>
+  </div>
+</section>
+
+<style>
+  .cta-band { margin: 2rem 0; }
+  .cta-inner {
+    text-align: center; padding: clamp(2.2rem, 5vw, 3.4rem) 1.5rem;
+    border: 1px solid var(--amber-line); border-radius: var(--radius);
+    background: radial-gradient(120% 140% at 50% 0%, rgba(245,166,35,0.10), transparent 60%), var(--bg-card);
+  }
+  .cta-actions { display: flex; gap: 0.8rem; justify-content: center; flex-wrap: wrap; margin-top: 1.4rem; }
+</style>

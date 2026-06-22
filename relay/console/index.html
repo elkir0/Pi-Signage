@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Zaforge Fleet Console</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2310b981'/%3E%3Cpath d='M9 9h14l-9 7h9l-14 7 5-7H9z' fill='%23042f26'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css?v=1">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+
+  <!-- Global, polite status region for screen readers + transient toasts -->
+  <div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
+
+  <!-- ============ LOGIN VIEW ============ -->
+  <section id="view-login" class="login-wrap" hidden>
+    <form id="login-form" class="login-card" novalidate autocomplete="on">
+      <div class="brand brand--lg">
+        <span class="brand-mark" aria-hidden="true">Z</span>
+        <span class="brand-text">Zaforge <strong>Fleet</strong></span>
+      </div>
+      <h1 class="login-title">Operator sign in</h1>
+      <p class="login-sub">Manage your fleet of signage screens.</p>
+
+      <label class="field">
+        <span class="field-label">Email</span>
+        <input id="login-email" name="email" type="email" autocomplete="username"
+               required inputmode="email" placeholder="you@company.com" />
+      </label>
+
+      <label class="field">
+        <span class="field-label">Password</span>
+        <input id="login-password" name="password" type="password"
+               autocomplete="current-password" required placeholder="••••••••••" />
+      </label>
+
+      <p id="login-error" class="form-error" role="alert" hidden></p>
+
+      <button id="login-submit" class="btn btn-primary btn-block" type="submit">
+        <span class="btn-label">Sign in</span>
+        <span class="spinner" aria-hidden="true" hidden></span>
+      </button>
+
+      <p class="login-foot">Secured by httpOnly session • app.zaforge.com</p>
+    </form>
+  </section>
+
+  <!-- ============ APP SHELL ============ -->
+  <div id="view-app" class="app" hidden>
+    <aside class="sidebar" aria-label="Primary">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">Z</span>
+        <span class="brand-text">Zaforge <strong>Fleet</strong></span>
+      </div>
+      <nav class="nav" aria-label="Sections">
+        <button class="nav-item is-active" data-nav="devices" aria-current="page">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
+          <span>Devices</span>
+        </button>
+        <button class="nav-item" data-nav="enroll">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          <span>Enroll</span>
+        </button>
+        <button class="nav-item" data-nav="billing">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18"/></svg>
+          <span>Billing</span>
+        </button>
+      </nav>
+      <div class="sidebar-foot">
+        <div class="who">
+          <div class="who-email" id="who-email">—</div>
+          <div class="who-tenant" id="who-tenant">—</div>
+        </div>
+        <button id="logout-btn" class="btn btn-ghost btn-sm" type="button">Sign out</button>
+      </div>
+    </aside>
+
+    <div class="main-col">
+      <header class="topbar">
+        <button id="sidebar-toggle" class="icon-btn only-mobile" type="button" aria-label="Toggle menu" aria-expanded="false">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+        <h2 id="page-title" class="page-title">Devices</h2>
+        <div class="topbar-right">
+          <span id="managed-pill" class="pill pill-managed" hidden></span>
+          <button id="refresh-btn" class="icon-btn" type="button" aria-label="Refresh" title="Refresh">
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11A8 8 0 1 0 12 20a8 8 0 0 0 6.3-3M20 5v6h-6"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <main id="main" class="content" tabindex="-1">
+        <!-- Banner shown when tenant.managed_state === 'managed-off' -->
+        <div id="managed-off-banner" class="banner banner-warn" role="status" hidden>
+          <div>
+            <strong>Cloud control paused.</strong>
+            Your subscription is inactive, so remote commands and new enrollments are suspended.
+            <em>Your screens keep playing their cached content — nothing has stopped.</em>
+          </div>
+          <button class="btn btn-primary btn-sm" type="button" data-nav="billing">Manage billing</button>
+        </div>
+
+        <!-- DEVICES -->
+        <section id="page-devices" class="page" aria-labelledby="page-title">
+          <div class="toolbar">
+            <div class="seg" role="group" aria-label="Filter by status">
+              <button class="seg-btn is-active" data-filter="all">All</button>
+              <button class="seg-btn" data-filter="online">Online</button>
+              <button class="seg-btn" data-filter="stale">Stale</button>
+              <button class="seg-btn" data-filter="offline">Offline</button>
+              <button class="seg-btn" data-filter="pending">Pending</button>
+            </div>
+            <input id="device-search" class="search" type="search" placeholder="Search hostname or model…" aria-label="Search devices" />
+          </div>
+          <div id="device-grid" class="grid" role="list" aria-busy="true"></div>
+          <div id="device-empty" class="empty" hidden>
+            <p>No devices match this filter.</p>
+          </div>
+        </section>
+
+        <!-- ENROLL -->
+        <section id="page-enroll" class="page" hidden>
+          <div class="card narrow">
+            <div class="card-header"><h3>Generate an enrollment code</h3></div>
+            <div class="card-body">
+              <p class="muted">A Raspberry Pi running the Zaforge agent claims this one-time code to join your fleet. Codes expire and can be used once.</p>
+              <label class="field">
+                <span class="field-label">Code lifetime</span>
+                <select id="code-ttl" class="select">
+                  <option value="900">15 minutes</option>
+                  <option value="3600" selected>1 hour</option>
+                  <option value="86400">24 hours</option>
+                </select>
+              </label>
+              <button id="gen-code-btn" class="btn btn-primary" type="button">Generate code</button>
+
+              <div id="code-result" class="code-result" hidden>
+                <div class="code-box">
+                  <code id="code-value" class="code-value">—</code>
+                  <button id="copy-code-btn" class="btn btn-ghost btn-sm" type="button">
+                    <span class="copy-label">Copy</span>
+                  </button>
+                </div>
+                <p id="code-expiry" class="muted small"></p>
+                <p class="muted small">Run on the Pi: <code>zaforge-agent enroll &lt;code&gt;</code></p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- BILLING -->
+        <section id="page-billing" class="page" hidden>
+          <div class="billing-grid">
+            <div class="card">
+              <div class="card-header"><h3>Subscription</h3></div>
+              <div class="card-body" id="billing-summary">
+                <div class="skeleton-line"></div><div class="skeleton-line"></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header"><h3>Choose a plan</h3></div>
+              <div class="card-body">
+                <div class="plan-controls">
+                  <div class="seg" role="group" aria-label="Billing interval">
+                    <button class="seg-btn is-active" data-interval="month">Monthly</button>
+                    <button class="seg-btn" data-interval="year">Yearly <span class="save">2 months free</span></button>
+                  </div>
+                  <div class="seg" role="group" aria-label="Currency">
+                    <button class="seg-btn is-active" data-currency="eur">EUR €</button>
+                    <button class="seg-btn" data-currency="usd">USD $</button>
+                  </div>
+                </div>
+                <div id="plan-cards" class="plan-cards"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <!-- ============ DEVICE DETAIL DRAWER ============ -->
+  <div id="drawer-scrim" class="scrim" hidden></div>
+  <aside id="device-drawer" class="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" hidden>
+    <header class="drawer-head">
+      <h3 id="drawer-title">Device</h3>
+      <button id="drawer-close" class="icon-btn" type="button" aria-label="Close">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </header>
+    <div id="drawer-body" class="drawer-body"></div>
+  </aside>
+
+  <script src="app.js?v=1"></script>
+</body>
+</html>

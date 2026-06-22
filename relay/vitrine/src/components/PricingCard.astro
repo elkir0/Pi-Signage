@@ -1,0 +1,48 @@
+---
+import FeatureTag from './FeatureTag.astro';
+import type { Tier } from '../consts';
+interface Props { tier: Tier; }
+const { tier } = Astro.props as Props;
+---
+<article class:list={['card pricing-card', { highlight: tier.highlight }]}>
+  {tier.highlight && <span class="badge">Most popular</span>}
+  <h3>{tier.name}</h3>
+  <p class="tagline">{tier.tagline}</p>
+  <div class="price">
+    <span class="amount">{tier.price === '0' ? '0€' : `${tier.price}€`}</span>
+    <span class="unit">{tier.unit}</span>
+  </div>
+  <a href={tier.cta.href} class:list={['btn', 'btn-block', tier.highlight ? 'btn-primary' : 'btn-ghost']} rel={tier.cta.href.startsWith('http') ? 'noopener' : undefined}>
+    {tier.cta.label}
+  </a>
+  <ul class="feat-list">
+    {tier.features.map((f) => (
+      <li>
+        <svg class="chk" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12l4 4 10-10" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="feat-text">{f.text}</span>
+        <FeatureTag status={f.status} />
+      </li>
+    ))}
+  </ul>
+  {tier.note && <p class="note">{tier.note}</p>}
+</article>
+
+<style>
+  .pricing-card { display: flex; flex-direction: column; position: relative; height: 100%; }
+  .pricing-card.highlight { border-color: var(--amber-line); box-shadow: 0 0 0 1px var(--amber-line), var(--shadow); }
+  .badge {
+    position: absolute; top: -0.7rem; right: 1.2rem;
+    background: linear-gradient(135deg, var(--amber-bright), var(--amber-deep));
+    color: #1a1205; font-size: 0.72rem; font-weight: 700; padding: 0.25rem 0.7rem; border-radius: 999px;
+  }
+  .pricing-card h3 { margin: 0 0 0.3rem; font-size: 1.35rem; }
+  .tagline { font-size: 0.92rem; color: var(--text-mut); min-height: 2.8em; margin-bottom: 1rem; }
+  .price { display: flex; align-items: baseline; gap: 0.5rem; margin-bottom: 1.2rem; }
+  .amount { font-size: 2.2rem; font-weight: 700; color: var(--text); letter-spacing: -0.03em; }
+  .unit { font-size: 0.85rem; color: var(--text-mut); }
+  .feat-list { list-style: none; margin: 1.3rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.65rem; flex: 1; }
+  .feat-list li { display: flex; align-items: center; gap: 0.55rem; font-size: 0.9rem; color: var(--text-soft); }
+  .chk { color: var(--live); flex: none; }
+  .feat-text { flex: 1; }
+  .note { margin: 1.2rem 0 0; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.82rem; color: var(--text-mut); }
+</style>
