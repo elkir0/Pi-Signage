@@ -1118,6 +1118,11 @@ pi ALL=(root) NOPASSWD: /sbin/shutdown, /sbin/reboot, /bin/systemctl reboot, /bi
 # aucun hook PostUp/PreUp. Invariant : ces scripts DOIVENT rester root:root 0755 (sinon la
 # grant deviendrait une escalade vers root, comme audio-output.sh).
 pi ALL=(root) NOPASSWD: /opt/pisignage/scripts/zaforge-wg-up.sh, /opt/pisignage/scripts/zaforge-wg-down.sh
+# Cycle de vie du lecteur : autostart.sh (User=pi) démarre/redémarre l'unité VLC
+# au boot et via son watchdog. Invocations FIXES, limitées à CETTE unité (pas de
+# bare systemctl). Sans ça, retirer la grant blanket casserait l'autostart VLC.
+pi ALL=(root) NOPASSWD: /bin/systemctl start pisignage-vlc.service, /bin/systemctl stop pisignage-vlc.service, /bin/systemctl restart pisignage-vlc.service
+pi ALL=(root) NOPASSWD: /usr/bin/systemctl start pisignage-vlc.service, /usr/bin/systemctl stop pisignage-vlc.service, /usr/bin/systemctl restart pisignage-vlc.service
 www-data ALL=(root) NOPASSWD: /usr/bin/amixer
 www-data ALL=(root) NOPASSWD: /opt/pisignage/scripts/audio-output.sh hdmi, /opt/pisignage/scripts/audio-output.sh jack
 # Capture d'écran Wayland: www-data (php-fpm) lance grim dans la session labwc de 'pi'
