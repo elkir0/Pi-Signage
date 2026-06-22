@@ -1,8 +1,8 @@
-# PiSignage Architecture Guide
+# Zaforge Architecture Guide
 
 ## Overview
 
-PiSignage uses a modular Multi-Page Application (MPA) web admin (the transformation from
+Zaforge uses a modular Multi-Page Application (MPA) web admin (the transformation from
 a monolithic SPA started in v0.8.9), optimized for Raspberry Pi performance.
 
 As of **v0.12**, the playback engine is a **single Chromium HTML5 kiosk** (VLC removed),
@@ -72,7 +72,7 @@ Modular MPA Architecture
 
 ### Single Engine Stack (Raspberry Pi OS Trixie - Debian 13)
 
-PiSignage uses a single playback engine: a Chromium kiosk browser, on a Wayland/labwc
+Zaforge uses a single playback engine: a Chromium kiosk browser, on a Wayland/labwc
 display stack. The browser loads the local player page (`/player`), which reads the
 on-screen playlist and renders HTML5 images/videos plus overlays:
 

@@ -1,8 +1,8 @@
-# Migration Guide: PiSignage v0.8.x to v0.8.9
+# Migration Guide: Zaforge v0.8.x to v0.8.9
 
 ## Overview
 
-This guide helps you migrate from PiSignage v0.8.0-v0.8.8 to v0.8.9 (VLC-exclusive, modular MPA) while maintaining compatibility with your existing setup.
+This guide helps you migrate from Zaforge v0.8.0-v0.8.8 to v0.8.9 (VLC-exclusive, modular MPA) while maintaining compatibility with your existing setup.
 
 ## Table of Contents
 - [Pre-Migration Checklist](#pre-migration-checklist)
@@ -271,7 +271,7 @@ Create a verification script to test all functionality:
 PI_IP="localhost"  # Change to your Pi's IP if testing remotely
 ERRORS=0
 
-echo "PiSignage v0.8.9 Migration Verification"
+echo "Zaforge v0.8.9 Migration Verification"
 echo "========================================"
 
 # Test web interface
@@ -687,7 +687,7 @@ free -h
 
 ## Migration Success
 
-Congratulations! You've successfully migrated to PiSignage v0.8.9. You now have:
+Congratulations! You've successfully migrated to Zaforge v0.8.9. You now have:
 
 - **VLC-exclusive player** for maximum stability and reliability
 - **Authentication system** securing all pages

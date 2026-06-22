@@ -29,7 +29,7 @@ $nav = [
     <div class="brand">
         <div class="brand-logo"><?= icon('kiosk') ?></div>
         <div>
-            <span class="brand-name">PiSignage</span>
+            <span class="brand-name">Zaforge</span>
             <span class="brand-ver">v<?= htmlspecialchars($config['version'] ?? '0.12.0') ?></span>
         </div>
     </div>

@@ -1,4 +1,6 @@
-# PiSignage v0.12.0
+# Zaforge v0.12.0
+
+> Zaforge is the commercial product built on the PiSignage engine. System identifiers, install paths (`/opt/pisignage`), service names, and the GitHub repo slug remain `pisignage`/`Pi-Signage` for install compatibility.
 
 Professional digital signage solution for Raspberry Pi with a single Chromium HTML5 playback engine, unified playlist publishing, and a modern modular web interface.
 
@@ -76,7 +78,7 @@ Professional digital signage solution for Raspberry Pi with a single Chromium HT
 
 ### 🆕 Trixie / Wayland Kiosk Mode
 
-Pi-Signage targets **Raspberry Pi OS Trixie (Debian 13)** with a modern Wayland-based kiosk mode as its single playback engine:
+Zaforge targets **Raspberry Pi OS Trixie (Debian 13)** with a modern Wayland-based kiosk mode as its single playback engine:
 
 - ✅ **Chromium HTML5 Engine** - Full-screen kiosk renders the player page (`http://127.0.0.1/player`)
 - ✅ **Wayland Compositor (labwc)** - Modern, lightweight display server
@@ -328,6 +330,6 @@ For detailed migration guide, see [docs/MIGRATION.md](docs/MIGRATION.md).
 
 ---
 
-**PiSignage v0.12.0** - Modular, Fast, Reliable Digital Signage
+**Zaforge v0.12.0** - Modular, Fast, Reliable Digital Signage
 
 *Built with modern web architecture for Raspberry Pi performance*

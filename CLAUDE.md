@@ -1,4 +1,4 @@
-# Claude Development Protocol - PiSignage v0.12.0
+# Claude Development Protocol - Zaforge v0.12.0
 
 > **v0.12 — Diffusion unifiée (juin 2026)** : VLC a été **retiré**. Le moteur de lecture
 > est désormais **unique** : Chromium HTML5 (`web/player.php` servi sur `/player`). Un seul
@@ -8,7 +8,7 @@
 
 ## Project Overview
 
-PiSignage is a professional digital signage solution optimized for Raspberry Pi hardware. Version 0.12.0 includes:
+Zaforge is a professional digital signage solution optimized for Raspberry Pi hardware. Version 0.12.0 includes:
 - **Chromium Kiosk Mode (lecteur unique)**: Wayland-based full-screen browser for HTML5 content (`/player`). C'est le SEUL moteur de lecture (VLC retiré).
 - **Diffusion unifiée**: une API playlists unique + « playlist active » + bouton « Diffuser à l'écran ».
 - **Programmation réelle (dayparting)**: exécuteur cron qui pose la playlist active selon l'heure/jour.

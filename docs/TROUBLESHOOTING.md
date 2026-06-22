@@ -1,8 +1,8 @@
-# Guide de dépannage - PiSignage v0.12
+# Guide de dépannage - Zaforge v0.12
 
 ## Vue d'ensemble
 
-Ce guide présente les solutions aux problèmes les plus fréquents rencontrés lors de l'utilisation de PiSignage v0.12. Depuis cette version, le moteur de lecture est **unique : Chromium HTML5 en mode kiosk Wayland** (la page `web/player.php` servie sur `/player`). VLC a été entièrement retiré (plus de service `pisignage-vlc`, plus d'interface HTTP VLC sur le port 8080, plus de « volume VLC »). Ce guide se concentre donc sur le dépannage du kiosk Chromium, de l'API de contrôle du lecteur et de la programmation (dayparting).
+Ce guide présente les solutions aux problèmes les plus fréquents rencontrés lors de l'utilisation de Zaforge v0.12. Depuis cette version, le moteur de lecture est **unique : Chromium HTML5 en mode kiosk Wayland** (la page `web/player.php` servie sur `/player`). VLC a été entièrement retiré (plus de service `pisignage-vlc`, plus d'interface HTTP VLC sur le port 8080, plus de « volume VLC »). Ce guide se concentre donc sur le dépannage du kiosk Chromium, de l'API de contrôle du lecteur et de la programmation (dayparting).
 
 ### Architecture de lecture v0.12
 - **Moteur unique Chromium HTML5**: `chromium --kiosk http://127.0.0.1/player`, lit `/opt/pisignage/media/playlist.json`
@@ -212,7 +212,7 @@ pkill -f "/usr/bin/chromium"
 
 **Symptômes observés :**
 - L'écran reste noir ou affiche une page d'erreur du navigateur
-- Le splash PiSignage ne disparaît jamais
+- Le splash Zaforge ne disparaît jamais
 - Aucun média ne tourne
 
 **Phase de diagnostic :**
@@ -541,7 +541,7 @@ amixer cset numid=3 2  # Force l'audio HDMI
 sudo alsactl store
 ```
 
-**Vérifier le volume système (ALSA) via l'API PiSignage :**
+**Vérifier le volume système (ALSA) via l'API Zaforge :**
 ```bash
 # Le son du player HTML5 suit le volume SYSTÈME ALSA (plus de « volume VLC »)
 curl 'http://localhost/api/system.php?action=get_volume'
@@ -901,7 +901,7 @@ Ce script génère un rapport complet de l'état du système :
 # Création du script de diagnostic
 cat > /opt/pisignage/scripts/diagnostic.sh << 'EOF'
 #!/bin/bash
-echo "=== Rapport de diagnostic PiSignage v0.12 ==="
+echo "=== Rapport de diagnostic Zaforge v0.12 ==="
 echo "Date du diagnostic: $(date)"
 echo "Temps de fonctionnement: $(uptime)"
 echo ""
@@ -1002,7 +1002,7 @@ Voici l'emplacement des principaux fichiers de logs pour le diagnostic :
 - **Session graphique (kiosk)** : `journalctl -u lightdm -f` et `journalctl --user -xe`
 - **Serveur web Nginx** : `/var/log/nginx/error.log`
 - **Processeur PHP-FPM** : `/var/log/php8.4-fpm.log`
-- **Système PiSignage** : `/opt/pisignage/logs/pisignage.log`
+- **Système Zaforge** : `/opt/pisignage/logs/pisignage.log`
 - **État du lecteur** : `curl 'http://localhost/api/display.php?action=state'`
 - **État du scheduler** : `/opt/pisignage/config/scheduler-state.json`
 

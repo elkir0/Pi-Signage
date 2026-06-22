@@ -5,6 +5,8 @@
  */
 
 // Create global PiSignage namespace
+// NOTE: window.PiSignage is the CANONICAL system namespace (200+ internal refs) — do NOT rename it.
+// window.Zaforge is a brand-facing alias added below once PiSignage is defined.
 window.PiSignage = window.PiSignage || {
     navigation: {},
     dashboard: {},
@@ -48,6 +50,8 @@ if (typeof selectedPlayer === 'undefined') {
         return m ? m.getAttribute('content') : '';
     }
     window.PiSignage.csrfToken = csrfToken;
+    // Brand alias: window.Zaforge === window.PiSignage (additive; canonical object unchanged).
+    window.Zaforge = window.PiSignage;
     var _fetch = window.fetch;
     if (typeof _fetch === 'function') {
         window.fetch = function (input, init) {

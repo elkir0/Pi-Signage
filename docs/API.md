@@ -1,4 +1,4 @@
-# Documentation API - PiSignage v0.12.0
+# Documentation API - Zaforge v0.12.0
 
 ## Nouveautés v0.12.0
 
@@ -10,7 +10,7 @@
 
 ## Vue d'ensemble
 
-PiSignage v0.12.0 expose une API REST complète permettant de contrôler l'ensemble des fonctionnalités via des requêtes HTTP. L'API supporte les formats JSON et les uploads multipart/form-data.
+Zaforge v0.12.0 expose une API REST complète permettant de contrôler l'ensemble des fonctionnalités via des requêtes HTTP. L'API supporte les formats JSON et les uploads multipart/form-data.
 
 Le moteur de lecture unique est **Chromium HTML5** en mode kiosk (Wayland/labwc). Le player web poll `/api/display.php` pour les commandes (toutes les 2s) et la version de playlist (toutes les 10s), puis se recharge automatiquement. VLC, MPV, l'interface HTTP VLC (port 8080) et le mot de passe VLC n'existent plus.
 
@@ -787,7 +787,7 @@ Les webhooks peuvent être configurés dans `/opt/pisignage/config/webhooks.json
 - Les logs peuvent contenir des informations sensibles
 - Configurez HTTPS en production
 
-Cette documentation couvre l'API complète de PiSignage v0.12.0. Pour des questions spécifiques, consultez les logs ou ouvrez une issue sur GitHub.
+Cette documentation couvre l'API complète de Zaforge v0.12.0. Pour des questions spécifiques, consultez les logs ou ouvrez une issue sur GitHub.
 
 ## Migration depuis versions précédentes
 

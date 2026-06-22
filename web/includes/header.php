@@ -13,7 +13,9 @@ $pageTitle = $pageTitle ?? ucfirst(getCurrentPage());
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= htmlspecialchars($_SESSION['csrf'] ?? '', ENT_QUOTES) ?>">
     <meta name="color-scheme" content="dark light">
-    <title>PiSignage · <?= htmlspecialchars($pageTitle) ?></title>
+    <title>Zaforge · <?= htmlspecialchars($pageTitle) ?></title>
+    <link rel="icon" type="image/svg+xml" href="assets/img/zaforge-favicon.svg?v=<?= ASSET_VERSION ?>">
+    <meta name="description" content="Zaforge — pilotage d'affichage dynamique">
     <!-- Anti-flash: apply saved theme before first paint -->
     <script>
       (function(){

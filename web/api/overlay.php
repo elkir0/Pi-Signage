@@ -99,7 +99,7 @@ function overlayDefaults(): array {
         'lang'       => 'fr',
         'banner'     => [
             'enabled'  => true,
-            'name'     => 'PiSignage',
+            'name'     => 'Zaforge',
             'subtitle' => 'Affichage dynamique',
             'logo'     => null,
             'size'     => 'md',

@@ -1,4 +1,4 @@
-# Guide d'installation détaillé - PiSignage v0.12.0
+# Guide d'installation détaillé - Zaforge v0.12.0
 
 ## Nouveautés v0.12.0
 
@@ -14,7 +14,7 @@
 
 ## Introduction
 
-Ce document vous accompagne dans l'installation de PiSignage v0.12.0 sur votre Raspberry Pi. L'installation automatique prend environ 10-15 minutes sur un système à jour, ou jusqu'à 60 minutes sur un système fraîchement installé nécessitant des mises à jour complètes.
+Ce document vous accompagne dans l'installation de Zaforge v0.12.0 sur votre Raspberry Pi. L'installation automatique prend environ 10-15 minutes sur un système à jour, ou jusqu'à 60 minutes sur un système fraîchement installé nécessitant des mises à jour complètes.
 
 **Avantages de v0.12.0**:
 - Moteur de lecture unique (Chromium HTML5) pour une maintenance simplifiée

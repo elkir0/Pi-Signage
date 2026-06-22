@@ -1,4 +1,4 @@
-# PiSignage - Système d'Authentification
+# Zaforge - Système d'Authentification
 
 ## Identifiants par Défaut
 
@@ -158,4 +158,4 @@ Le fichier credentials.json peut être corrompu. Supprimez-le et reconnectez-vou
 ---
 
 **Dernière mise à jour**: 2025-11-09
-**Version PiSignage**: 0.8.9
+**Version Zaforge**: 0.8.9

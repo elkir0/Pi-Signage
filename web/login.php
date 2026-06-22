@@ -29,7 +29,7 @@ require_once 'includes/icons.php';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="color-scheme" content="dark light">
-    <title>PiSignage · Connexion</title>
+    <title>Zaforge · Connexion</title>
     <script>
       (function(){try{var t=localStorage.getItem('pisignage-theme');if(!t){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
     </script>
@@ -59,7 +59,7 @@ require_once 'includes/icons.php';
     <div class="auth-wrap">
         <div class="auth-card">
             <div class="auth-logo"><?= icon('kiosk') ?></div>
-            <h1>PiSignage</h1>
+            <h1>Zaforge</h1>
             <p class="auth-sub">Gestion d'affichage dynamique</p>
 
             <?php if ($error): ?>
@@ -78,7 +78,7 @@ require_once 'includes/icons.php';
                 <button type="submit" class="btn btn-primary btn-block btn-lg">Se connecter</button>
             </form>
         </div>
-        <p class="auth-foot">PiSignage v<?= htmlspecialchars($config['version']) ?></p>
+        <p class="auth-foot">Zaforge v<?= htmlspecialchars($config['version']) ?></p>
     </div>
 
     <script>

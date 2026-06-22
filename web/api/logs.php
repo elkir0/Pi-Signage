@@ -154,7 +154,7 @@ function getLogSources() {
     // PiSignage log
     if (file_exists(LOGS_PATH . '/pisignage.log')) {
         $sources['pisignage'] = [
-            'name' => 'PiSignage Application',
+            'name' => 'Zaforge Application',
             'file' => 'pisignage.log',
             'size' => filesize(LOGS_PATH . '/pisignage.log'),
             'modified' => filemtime(LOGS_PATH . '/pisignage.log')

@@ -26,7 +26,7 @@ header('Expires: 0');
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <!-- Désactive la barre de traduction Chrome sur le kiosk -->
     <meta name="google" content="notranslate">
-    <title>PiSignage Player</title>
+    <title>Zaforge Player</title>
     <style>
         * {
             margin: 0;
@@ -409,7 +409,7 @@ header('Expires: 0');
 
     <div id="loading">
         <div class="splash-logo"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div>
-        <div class="splash-title">PiSignage</div>
+        <div class="splash-title">Zaforge</div>
         <div class="splash-msg" id="loading-msg">Démarrage…</div>
     </div>
     <div id="error"></div>
@@ -1408,7 +1408,7 @@ var qrcode = (function () {
         version: 1,
         enabled: true,
         lang: 'fr',
-        banner: { enabled: true, name: 'PiSignage', subtitle: '', logo: null, size: 'md' },
+        banner: { enabled: true, name: 'Zaforge', subtitle: '', logo: null, size: 'md' },
         clock: { enabled: true, size: 'md' },
         cards_size: 'md',
         cards: [],

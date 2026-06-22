@@ -42,7 +42,7 @@ $actions =
                 <div class="form-group">
                     <label for="log-source">Source</label>
                     <select id="log-source" class="form-control">
-                        <option value="pisignage">PiSignage (application)</option>
+                        <option value="pisignage">Zaforge (application)</option>
                         <option value="syslog">Système</option>
                         <option value="nginx_error">Nginx · erreurs</option>
                         <option value="nginx_access">Nginx · accès</option>
