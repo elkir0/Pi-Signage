@@ -61,12 +61,12 @@ if ($agentHeader !== '') {
         // (0640 pi:www-data) ne pilote alors que ce périmètre — jamais settings/system/
         // media/upload/youtube/etc. Le token n'est PAS une clé d'API générale.
         // Surface de pilotage du player (lecture + contrôle distant via la console) :
-        // stats, état/commande player, playlists, médias, téléchargement YouTube,
-        // volume (system.php). EXCLUT settings.php (mot de passe/réseau) et tout le
-        // reste. system.php expose aussi reboot/shutdown mais ces sous-actions
-        // échouent côté www-data (pas de sudo reboot) — défense en profondeur.
+        // stats, état/commande player, playlists, médias, téléchargement YouTube.
+        // EXCLUT settings.php (mot de passe/réseau) ET system.php (reboot/shutdown,
+        // de toute façon deny-all au niveau nginx). Le volume passe par amixer DIRECT
+        // dans l'agent (user pi), pas par le pont PHP — donc system.php inutile ici.
         $agentScript = basename($_SERVER['SCRIPT_NAME'] ?? '');
-        if (in_array($agentScript, ['stats.php', 'display.php', 'playlists.php', 'media.php', 'youtube.php', 'system.php'], true)) {
+        if (in_array($agentScript, ['stats.php', 'display.php', 'playlists.php', 'media.php', 'youtube.php'], true)) {
             $GLOBALS['__guard_agent'] = true;
             return;
         }

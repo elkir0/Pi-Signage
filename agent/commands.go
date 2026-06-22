@@ -113,7 +113,7 @@ func (e *executor) handle(env commandEnvelope) resultEnvelope {
 	case "list-downloads":
 		return e.simpleRead(env, func() (*piResponse, error) { return e.api.listDownloads() })
 	case "get-volume":
-		return e.simpleRead(env, func() (*piResponse, error) { return e.api.getVolume() })
+		return e.getVolumeCmd(env)
 	// ---- remote-control: act on the player ----
 	case "delete-playlist":
 		return e.deletePlaylistCmd(env)
@@ -126,7 +126,7 @@ func (e *executor) handle(env commandEnvelope) resultEnvelope {
 	case "set-volume":
 		return e.setVolumeCmd(env)
 	case "toggle-mute":
-		return e.simpleRead(env, func() (*piResponse, error) { return e.api.toggleMute() })
+		return e.toggleMuteCmd(env)
 	case "reboot":
 		return e.reboot(env)
 	case "ota":
@@ -444,6 +444,68 @@ func (e *executor) downloadMediaCmd(env commandEnvelope) resultEnvelope {
 	return okResult(env.CmdID, env.Type, "applied", json.RawMessage(pr.Data))
 }
 
+// ---- volume via DIRECT amixer (agent runs as pi, in the audio group) ----
+// system.php is deny-all'd at nginx (it carries reboot/shutdown), and HDMI cards
+// expose no mixer. We talk to ALSA directly: auto-detect the first card with a
+// usable simple control (preferring PCM/Master/Headphone), then sget/sset it.
+
+var (
+	reAmixerPct  = regexp.MustCompile(`\[(\d+)%\]`)
+	reAmixerOn   = regexp.MustCompile(`\[(on|off)\]`)
+	reAmixerCtrl = regexp.MustCompile(`Simple mixer control '([^']+)'`)
+)
+
+func amixerBin() string { return getenvDefault("ZF_AMIXER", "/usr/bin/amixer") }
+
+// alsaMixer returns (card, control) for the first ALSA card exposing a usable
+// simple mixer control. HDMI cards have none, so this naturally lands on the
+// analog/headphone card.
+func alsaMixer() (string, string, bool) {
+	prefer := []string{"PCM", "Master", "Headphone", "Speaker", "Digital", "Analogue", "Playback"}
+	for c := 0; c <= 4; c++ {
+		card := fmt.Sprintf("%d", c)
+		out, err := exec.Command(amixerBin(), "-c", card, "scontrols").Output()
+		if err != nil || len(out) == 0 {
+			continue
+		}
+		s := string(out)
+		for _, name := range prefer {
+			if strings.Contains(s, "'"+name+"'") {
+				return card, name, true
+			}
+		}
+		if m := reAmixerCtrl.FindStringSubmatch(s); m != nil {
+			return card, m[1], true
+		}
+	}
+	return "", "", false
+}
+
+func parseAmixer(out string) (int, bool) {
+	vol := -1
+	if m := reAmixerPct.FindStringSubmatch(out); m != nil {
+		fmt.Sscanf(m[1], "%d", &vol)
+	}
+	muted := false
+	if m := reAmixerOn.FindStringSubmatch(out); m != nil {
+		muted = m[1] == "off"
+	}
+	return vol, muted
+}
+
+func (e *executor) getVolumeCmd(env commandEnvelope) resultEnvelope {
+	card, ctrl, ok := alsaMixer()
+	if !ok {
+		return errResult(env.CmdID, env.Type, "error", "no_mixer")
+	}
+	out, err := exec.Command(amixerBin(), "-c", card, "sget", ctrl).Output()
+	if err != nil {
+		return errResult(env.CmdID, env.Type, "error", "amixer_failed")
+	}
+	vol, muted := parseAmixer(string(out))
+	return okResult(env.CmdID, env.Type, "applied", map[string]any{"volume": vol, "muted": muted, "card": card, "control": ctrl})
+}
+
 func (e *executor) setVolumeCmd(env commandEnvelope) resultEnvelope {
 	var args struct {
 		Level *int `json:"level"`
@@ -458,11 +520,32 @@ func (e *executor) setVolumeCmd(env commandEnvelope) resultEnvelope {
 	if lvl > 100 {
 		lvl = 100
 	}
-	pr, err := e.api.setVolume(lvl)
-	if err != nil {
-		return errResult(env.CmdID, env.Type, "error", mapLoopErr(err))
+	card, ctrl, ok := alsaMixer()
+	if !ok {
+		return errResult(env.CmdID, env.Type, "error", "no_mixer")
 	}
-	return okResult(env.CmdID, env.Type, "applied", json.RawMessage(pr.Data))
+	out, err := exec.Command(amixerBin(), "-c", card, "sset", ctrl, fmt.Sprintf("%d%%", lvl), "unmute").Output()
+	if err != nil {
+		return errResult(env.CmdID, env.Type, "error", "amixer_failed")
+	}
+	vol, muted := parseAmixer(string(out))
+	if vol < 0 {
+		vol = lvl
+	}
+	return okResult(env.CmdID, env.Type, "applied", map[string]any{"volume": vol, "muted": muted, "card": card, "control": ctrl})
+}
+
+func (e *executor) toggleMuteCmd(env commandEnvelope) resultEnvelope {
+	card, ctrl, ok := alsaMixer()
+	if !ok {
+		return errResult(env.CmdID, env.Type, "error", "no_mixer")
+	}
+	out, err := exec.Command(amixerBin(), "-c", card, "sset", ctrl, "toggle").Output()
+	if err != nil {
+		return errResult(env.CmdID, env.Type, "error", "amixer_failed")
+	}
+	vol, muted := parseAmixer(string(out))
+	return okResult(env.CmdID, env.Type, "applied", map[string]any{"volume": vol, "muted": muted, "card": card, "control": ctrl})
 }
 
 //  6. reboot -> agent itself runs `sudo /sbin/reboot` (grant pre-exists in sudoers).

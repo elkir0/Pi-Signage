@@ -165,20 +165,9 @@ func (a *LocalAPI) playMedia(file string) (*piResponse, error) {
 	return a.do(http.MethodPost, "/api/display.php?action=playmedia", map[string]any{"file": file})
 }
 
-// GET /api/system.php?action=get_volume
-func (a *LocalAPI) getVolume() (*piResponse, error) {
-	return a.do(http.MethodGet, "/api/system.php?action=get_volume", nil)
-}
-
-// POST /api/system.php  {action:set_volume, volume:N}  (PHP clamps 0-100)
-func (a *LocalAPI) setVolume(level int) (*piResponse, error) {
-	return a.do(http.MethodPost, "/api/system.php", map[string]any{"action": "set_volume", "volume": level})
-}
-
-// POST /api/system.php  {action:toggle_mute}
-func (a *LocalAPI) toggleMute() (*piResponse, error) {
-	return a.do(http.MethodPost, "/api/system.php", map[string]any{"action": "toggle_mute"})
-}
+// NOTE: volume is NOT bridged through PHP. system.php is deny-all'd at nginx (it
+// carries reboot/shutdown), and HDMI cards expose no mixer. The agent talks to
+// ALSA directly (amixer, user pi) — see commands.go get/set/toggle-mute handlers.
 
 // ---- response shapes (only the fields the heartbeat/command need) ----
 
