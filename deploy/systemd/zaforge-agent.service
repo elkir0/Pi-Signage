@@ -1,0 +1,31 @@
+[Unit]
+Description=Zaforge fleet control-plane agent (enroll + WireGuard tunnel + MQTT)
+Documentation=https://github.com/zaforge/zaforge-agent
+# Start after the network and the local PiSignage stack are up.
+After=network-online.target nginx.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+# The agent reads relay.json (endpoint + enrollment code) + agent.json (loopback
+# token) from here; nothing is passed on the command line.
+Environment=ZF_CONFIG_DIR=/opt/pisignage/config
+# Needed so the screenshot command (grim-capture.sh) reaches pi's Wayland session.
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+Environment=WAYLAND_DISPLAY=wayland-0
+ExecStart=/opt/pisignage/bin/zaforge-agent
+# Robustness: always restart, but with a delay so a hard failure does not spin.
+Restart=always
+RestartSec=10
+# Give the agent room to publish a graceful offline before being killed.
+TimeoutStopSec=15
+KillSignal=SIGTERM
+# Mild hardening (the agent legitimately needs sudo reboot + wg-quick + /tmp).
+NoNewPrivileges=false
+ProtectHome=false
+PrivateTmp=false
+
+[Install]
+WantedBy=multi-user.target

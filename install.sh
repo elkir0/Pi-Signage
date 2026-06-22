@@ -1107,14 +1107,24 @@ configure_sudo() {
 # raspi-config N'EST PLUS accordé à www-data (c'était une escalade local->root) : il n'est
 # atteignable que via le wrapper à arguments fixes audio-output.sh hdmi|jack. wlr-randr retiré
 # (aucun appelant www-data ; screen-schedule-tick.sh tourne en root via cron). (ALL) -> (root).
-pi ALL=(root) NOPASSWD: /sbin/shutdown, /sbin/reboot, /bin/systemctl
+#
+# DURCISSEMENT systemctl : le bare '/bin/systemctl' (toute sous-commande/unité) était une
+# escalade pi->root (ex. 'systemctl edit', exécution de scripts). On le remplace par des
+# invocations FIXES uniquement. Le redémarrage du lecteur ne passe PAS par un systemctl 'pi' :
+# il transite par la grant www-data 'systemctl restart display-manager' via l'API locale.
+pi ALL=(root) NOPASSWD: /sbin/shutdown, /sbin/reboot, /bin/systemctl reboot, /bin/systemctl poweroff
+# Agent Zaforge — tunnel WireGuard relais : DEUX helpers root à chemins FIXES, SANS argument
+# (aucun wildcard, aucun wg/wg-quick direct). Le helper revalide chaque champ et n'utilise
+# aucun hook PostUp/PreUp. Invariant : ces scripts DOIVENT rester root:root 0755 (sinon la
+# grant deviendrait une escalade vers root, comme audio-output.sh).
+pi ALL=(root) NOPASSWD: /opt/pisignage/scripts/zaforge-wg-up.sh, /opt/pisignage/scripts/zaforge-wg-down.sh
 www-data ALL=(root) NOPASSWD: /usr/bin/amixer
 www-data ALL=(root) NOPASSWD: /opt/pisignage/scripts/audio-output.sh hdmi, /opt/pisignage/scripts/audio-output.sh jack
 # Capture d'écran Wayland: www-data (php-fpm) lance grim dans la session labwc de 'pi'
 www-data ALL=(pi) NOPASSWD: /opt/pisignage/scripts/grim-capture.sh
 # Extinction d'écran programmée (kiosk): on/off dans la session de 'pi'
 www-data ALL=(pi) NOPASSWD: /opt/pisignage/scripts/screen-power.sh
-# Redémarrer la session kiosk complète (alias générique lightdm/greetd)
+# Redémarrer la session kiosk complète (alias générique lightdm/greetd) — invocation FIXE.
 www-data ALL=(root) NOPASSWD: /usr/bin/systemctl restart display-manager
 SUDOERS
     if sudo visudo -cf "$SUDO_TMP" >/dev/null 2>&1; then
@@ -1166,7 +1176,117 @@ AUDIOOUT
     sudo chown root:root "$INSTALL_DIR/scripts/audio-output.sh"
     sudo chmod 0755 "$INSTALL_DIR/scripts/audio-output.sh"
 
-    log_info "Permissions configurées (least-privilege: raspi-config retiré, audio via wrapper, sudoers 0440)"
+    # Helpers WireGuard de l'agent Zaforge — générés root:root 0755 (comme audio-output.sh).
+    # INVARIANT DE SÉCURITÉ : ces scripts sont la SEULE étape privilégiée du tunnel. Ils sont
+    # accordés en sudoers à 'pi' à chemins FIXES, SANS argument. Ils DOIVENT rester root:root 0755 :
+    # si 'pi' pouvait les réécrire, la grant deviendrait une escalade vers root. Ils consomment un
+    # fichier DATA pi-staged (/opt/pisignage/config/relay/wg.json) qu'ils revalident champ par champ,
+    # et n'utilisent AUCUN hook PostUp/PreUp (pas de wg-quick). On les (re)génère ici pour que
+    # l'installeur reste la source de vérité même si la copie du dépôt était altérée.
+    sudo tee "$INSTALL_DIR/scripts/zaforge-wg-up.sh" > /dev/null << 'ZFWGUP'
+#!/bin/sh
+# Zaforge — brings up the WireGuard relay tunnel (zf0) as root. NO arguments.
+# Consumes the pi-staged DATA file /opt/pisignage/config/relay/wg.json, validates
+# every field, then builds the iface with ip(8) + `wg setconf` from a root-only
+# file. NO wg-quick, NO PostUp/PreUp hooks. INVARIANT: must stay root:root 0755.
+set -eu
+IFACE_FIXED="zf0"
+WG_JSON="/opt/pisignage/config/relay/wg.json"
+RUN_DIR="/run/zaforge"
+WG_SETCONF="$RUN_DIR/zf0.setconf"
+log()  { printf 'zaforge-wg-up: %s\n' "$*" >&2; }
+die()  { log "ERROR: $*"; exit 1; }
+json_get() {
+    key="$1"; file="$2"
+    sed -n 's/.*"'"$key"'"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p;
+            s/.*"'"$key"'"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' \
+        "$file" 2>/dev/null | head -n1
+}
+[ "$(id -u)" -eq 0 ] || die "must run as root"
+[ -L "$WG_JSON" ] && die "$WG_JSON must not be a symlink"
+[ -f "$WG_JSON" ] || die "missing data file $WG_JSON"
+IFACE="$(json_get iface "$WG_JSON")"
+ADDRESS="$(json_get address "$WG_JSON")"
+PRIV_PATH="$(json_get private_key_path "$WG_JSON")"
+SERVER_PUBKEY="$(json_get server_pubkey "$WG_JSON")"
+ENDPOINT="$(json_get endpoint "$WG_JSON")"
+ALLOWED_IPS="$(json_get allowed_ips "$WG_JSON")"
+KEEPALIVE="$(json_get keepalive "$WG_JSON")"
+[ "$IFACE" = "$IFACE_FIXED" ] || die "iface must be '$IFACE_FIXED' (got '$IFACE')"
+matches() { printf '%s' "$1" | grep -Eq "$2"; }
+WG_KEY_RE='^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=$'
+matches "$SERVER_PUBKEY" "$WG_KEY_RE" || die "server_pubkey not a valid 32-byte base64 wg key"
+OCTET='(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])'
+IPV4="$OCTET\\.$OCTET\\.$OCTET\\.$OCTET"
+matches "$ADDRESS" "^$IPV4/(3[0-2]|[12]?[0-9])$" || die "address not a valid IPv4/CIDR"
+HOST='([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*'
+PORT='([1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])'
+matches "$ENDPOINT" "^($IPV4|$HOST):$PORT$" || die "endpoint not a valid host:port"
+matches "$ALLOWED_IPS" "^10\\.70\\.0\\.1/32$" || die "allowed_ips must be exactly 10.70.0.1/32"
+if [ -n "$KEEPALIVE" ]; then
+    matches "$KEEPALIVE" '^[0-9]{1,5}$' || die "keepalive not an integer"
+    [ "$KEEPALIVE" -le 65535 ] || die "keepalive out of range"
+else
+    KEEPALIVE=0
+fi
+[ "$PRIV_PATH" = "/opt/pisignage/config/relay/wg_private.key" ] || die "bad private_key_path"
+[ -L "$PRIV_PATH" ] && die "private key path must not be a symlink"
+[ -f "$PRIV_PATH" ] || die "private key file missing"
+PRIV_B64="$(cat "$PRIV_PATH")"
+matches "$PRIV_B64" "$WG_KEY_RE" || die "private key not a valid 32-byte base64 wg key"
+umask 077
+mkdir -p "$RUN_DIR"; chmod 0700 "$RUN_DIR"
+{
+    printf '[Interface]\n'
+    printf 'PrivateKey = %s\n' "$PRIV_B64"
+    printf '\n[Peer]\n'
+    printf 'PublicKey = %s\n' "$SERVER_PUBKEY"
+    printf 'Endpoint = %s\n' "$ENDPOINT"
+    printf 'AllowedIPs = %s\n' "$ALLOWED_IPS"
+    [ "$KEEPALIVE" -gt 0 ] && printf 'PersistentKeepalive = %s\n' "$KEEPALIVE"
+} > "$WG_SETCONF"
+chmod 0600 "$WG_SETCONF"
+if ! ip link show "$IFACE_FIXED" >/dev/null 2>&1; then
+    ip link add dev "$IFACE_FIXED" type wireguard
+fi
+if wg show "$IFACE_FIXED" >/dev/null 2>&1 && [ -n "$(wg show "$IFACE_FIXED" peers 2>/dev/null)" ]; then
+    wg syncconf "$IFACE_FIXED" "$WG_SETCONF"
+else
+    wg setconf "$IFACE_FIXED" "$WG_SETCONF"
+fi
+ip address replace "$ADDRESS" dev "$IFACE_FIXED"
+ip link set up dev "$IFACE_FIXED"
+ip route replace "$ALLOWED_IPS" dev "$IFACE_FIXED"
+rm -f "$WG_SETCONF"
+log "tunnel up on $IFACE_FIXED ($ADDRESS -> $ENDPOINT, allowed=$ALLOWED_IPS)"
+exit 0
+ZFWGUP
+    sudo chown root:root "$INSTALL_DIR/scripts/zaforge-wg-up.sh"
+    sudo chmod 0755 "$INSTALL_DIR/scripts/zaforge-wg-up.sh"
+
+    sudo tee "$INSTALL_DIR/scripts/zaforge-wg-down.sh" > /dev/null << 'ZFWGDOWN'
+#!/bin/sh
+# Zaforge — tears down the WireGuard relay tunnel (zf0) as root. NO arguments.
+# Operates on the FIXED interface only. INVARIANT: must stay root:root 0755.
+set -eu
+IFACE_FIXED="zf0"
+RUN_DIR="/run/zaforge"
+log() { printf 'zaforge-wg-down: %s\n' "$*" >&2; }
+[ "$(id -u)" -eq 0 ] || { log "ERROR: must run as root"; exit 1; }
+if ip link show "$IFACE_FIXED" >/dev/null 2>&1; then
+    ip link set down dev "$IFACE_FIXED" 2>/dev/null || true
+    ip link delete dev "$IFACE_FIXED" 2>/dev/null || true
+    log "tunnel $IFACE_FIXED torn down"
+else
+    log "interface $IFACE_FIXED not present (already down)"
+fi
+rm -f "$RUN_DIR/zf0.setconf" 2>/dev/null || true
+exit 0
+ZFWGDOWN
+    sudo chown root:root "$INSTALL_DIR/scripts/zaforge-wg-down.sh"
+    sudo chmod 0755 "$INSTALL_DIR/scripts/zaforge-wg-down.sh"
+
+    log_info "Permissions configurées (least-privilege: raspi-config retiré, audio via wrapper, wg via helpers root fixes, sudoers 0440)"
 }
 
 # Test de l'installation
