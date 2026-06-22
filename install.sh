@@ -285,22 +285,42 @@ install_dependencies() {
         # Accélération matérielle Pi (best-effort, ne bloque pas l'install).
         sudo apt-get install -y rpi-chromium-mods 2>/dev/null || true
 
-        # Anti-saturation /tmp : le fragment Debian /etc/chromium.d/dev-shm ajoute
-        # --disable-dev-shm-usage quand /dev/shm < 3,8 Go, ce qui force Chromium à
-        # déverser sa mémoire partagée dans /tmp (tmpfs) et le remplit jusqu'à 100 %
-        # (observé : ~1,9 Go de cache /tmp supprimé-mais-ouvert -> screenshots et
-        # téléchargements cassés). Le kiosk n'affiche qu'UNE page : /dev/shm (~1,9 Go)
-        # suffit largement. On dépose un fragment qui retire le flag (chargé en dernier).
-        if [ -d /etc/chromium.d ]; then
-            sudo tee /etc/chromium.d/zzz-pisignage-shm >/dev/null <<'SHMFRAG'
-# PiSignage/Zaforge : le kiosk rend UNE page -> /dev/shm est amplement suffisant.
-# On retire --disable-dev-shm-usage (ajouté par le fragment Debian dev-shm) pour
-# que Chromium utilise /dev/shm au lieu de remplir /tmp.
-CHROMIUM_FLAGS="$(printf '%s' "$CHROMIUM_FLAGS" | sed 's/--disable-dev-shm-usage//g')"
-export CHROMIUM_FLAGS
-SHMFRAG
-            sudo chmod 644 /etc/chromium.d/zzz-pisignage-shm
+        # MÉMOIRE PARTAGÉE CHROMIUM — on garde le défaut Debian (--disable-dev-shm-usage,
+        # ajouté par /etc/chromium.d/dev-shm quand /dev/shm < 3,8 Go). NE PAS le retirer :
+        # sur un Pi 4 (3,7 Go RAM, /dev/shm = 1,9 Go), un Chromium kiosk qui boucle de la
+        # vidéo accumule ~1,9 Go de mémoire partagée et SATURE le tmpfs visé. Le retirer
+        # déplace cette pression vers /dev/shm -> 100 % plein -> grim SIGBUS, trace noyau
+        # labwc, lecture vidéo stallée (incident vérifié 22/06). Sur /tmp (défaut) la
+        # saturation reste BÉNIGNE (l'écran continue de jouer). On nettoie l'accumulation
+        # par un redémarrage NOCTURNE du kiosk plutôt qu'en changeant l'emplacement.
+        if [ -f /etc/chromium.d/zzz-pisignage-shm ]; then
+            sudo rm -f /etc/chromium.d/zzz-pisignage-shm  # purge d'un ancien override néfaste
         fi
+
+        # Redémarrage nocturne du kiosk (anti-accumulation tmpfs/shm de Chromium).
+        sudo tee /etc/systemd/system/pisignage-kiosk-restart.service >/dev/null <<'KSVC'
+[Unit]
+Description=Zaforge: nightly kiosk restart (clears Chromium tmpfs/shm accumulation)
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/systemctl restart display-manager
+KSVC
+        sudo tee /etc/systemd/system/pisignage-kiosk-restart.timer >/dev/null <<'KTMR'
+[Unit]
+Description=Zaforge: run the nightly kiosk restart at 04:00
+
+[Timer]
+OnCalendar=*-*-* 04:00:00
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target
+KTMR
+        sudo systemctl daemon-reload 2>/dev/null || true
+        sudo systemctl enable --now pisignage-kiosk-restart.timer 2>/dev/null || true
     fi
 
     # Installation de raspi2png si disponible
