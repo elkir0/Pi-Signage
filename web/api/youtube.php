@@ -339,20 +339,31 @@ function getYtDlpVersion($path) {
  * @since 0.8.0
  */
 function isValidYouTubeUrl($url) {
-    $patterns = [
-        '/^https?:\/\/(www\.)?(youtube\.com|youtu\.be)/',
-        '/^https?:\/\/(www\.)?youtube\.com\/watch\?v=/',
-        '/^https?:\/\/youtu\.be\//',
-        '/^https?:\/\/(www\.)?youtube\.com\/playlist\?list=/'
-    ];
-
-    foreach ($patterns as $pattern) {
-        if (preg_match($pattern, $url)) {
-            return true;
-        }
+    // SÉCURITÉ (anti-SSRF) : valider par le HÔTE RÉEL (parse_url), jamais par un
+    // préfixe regex. Les regex de préfixe étaient contournables :
+    //   - userinfo : https://youtube.com@169.254.169.254/  (hôte réel = 169.254.169.254)
+    //   - sous-domaine : https://youtube.com.evil.com/      (hôte réel = evil.com)
+    // -> yt-dlp aurait fetché un hôte arbitraire (métadonnées cloud, relais WG, LAN).
+    $p = @parse_url((string)$url);
+    if ($p === false || empty($p['scheme']) || empty($p['host'])) {
+        return false;
     }
-
-    return false;
+    $scheme = strtolower($p['scheme']);
+    if ($scheme !== 'http' && $scheme !== 'https') {
+        return false;
+    }
+    // Refuser tout userinfo (le truc youtube.com@hôte) — un user/pass dans l'URL.
+    if (isset($p['user']) || isset($p['pass'])) {
+        return false;
+    }
+    $host = strtolower($p['host']);
+    $allowed = ['youtube.com', 'www.youtube.com', 'm.youtube.com', 'music.youtube.com',
+                'youtu.be', 'youtube-nocookie.com', 'www.youtube-nocookie.com'];
+    if (in_array($host, $allowed, true)) {
+        return true;
+    }
+    // Autoriser uniquement les vrais sous-domaines de youtube.com / youtube-nocookie.com.
+    return str_ends_with($host, '.youtube.com') || str_ends_with($host, '.youtube-nocookie.com');
 }
 
 /**

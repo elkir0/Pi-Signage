@@ -334,6 +334,21 @@ func safeMediaFilename(name string) bool {
 	return !reUnsafeFilename.MatchString(name)
 }
 
+// isYouTubeHost: the parsed URL host must be a real YouTube domain (exact match or
+// a subdomain of youtube.com / youtube-nocookie.com). Anti-SSRF for download-media.
+var ytHosts = map[string]struct{}{
+	"youtube.com": {}, "www.youtube.com": {}, "m.youtube.com": {}, "music.youtube.com": {},
+	"youtu.be": {}, "youtube-nocookie.com": {}, "www.youtube-nocookie.com": {},
+}
+
+func isYouTubeHost(host string) bool {
+	h := strings.ToLower(host)
+	if _, ok := ytHosts[h]; ok {
+		return true
+	}
+	return strings.HasSuffix(h, ".youtube.com") || strings.HasSuffix(h, ".youtube-nocookie.com")
+}
+
 func (e *executor) getPlaylistCmd(env commandEnvelope) resultEnvelope {
 	var args struct {
 		Name string `json:"name"`
@@ -400,10 +415,17 @@ func (e *executor) downloadMediaCmd(env commandEnvelope) resultEnvelope {
 	if err := json.Unmarshal(env.Args, &args); err != nil || args.URL == "" {
 		return errResult(env.CmdID, env.Type, "rejected", "bad_request")
 	}
-	// Only http(s) (the PHP side additionally enforces a valid YouTube URL).
+	// SECURITY (anti-SSRF): the agent does NOT delegate URL trust to the PHP layer.
+	// The Pi sits on the WireGuard tunnel, so an open fetch would reach the relay,
+	// other peers, LAN admin panels and cloud-metadata (169.254.169.254). Require
+	// http(s), reject userinfo (the youtube.com@evil-host trick), and require the
+	// REAL parsed host to be a YouTube domain (defeats the subdomain trick too).
 	u, perr := url.Parse(args.URL)
-	if perr != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+	if perr != nil || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil {
 		return errResult(env.CmdID, env.Type, "rejected", "invalid_url")
+	}
+	if !isYouTubeHost(u.Hostname()) {
+		return errResult(env.CmdID, env.Type, "rejected", "not_youtube")
 	}
 	body := map[string]any{"url": args.URL}
 	if args.Quality != "" {
