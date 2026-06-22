@@ -101,7 +101,7 @@
          */
         loadPlaylists: async function() {
             try {
-                const response = await fetch('/api/playlist-simple.php');
+                const response = await fetch('/api/playlists.php');
 
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -110,7 +110,9 @@
                 const data = await response.json();
 
                 if (data.success && data.data) {
-                    this.playlists = data.data;
+                    // API unifiée : { data: { playlists:[...], active } }. Tolère l'ancien tableau direct.
+                    const d = data.data;
+                    this.playlists = Array.isArray(d) ? d : (Array.isArray(d.playlists) ? d.playlists : []);
                     this.populatePlaylistDropdown();
                     console.log('[Schedule] Loaded', this.playlists.length, 'playlists');
                 } else {
@@ -136,8 +138,10 @@
 
             this.playlists.forEach(playlist => {
                 const option = document.createElement('option');
-                option.value = playlist.name;
-                option.textContent = playlist.name;
+                // Valeur = slug (ce que stocke le planning et que résout l'exécuteur) ;
+                // libellé = nom lisible. Repli sur name si pas de slug (ancien format).
+                option.value = playlist.slug || playlist.name;
+                option.textContent = playlist.name || playlist.slug;
                 select.appendChild(option);
             });
         },

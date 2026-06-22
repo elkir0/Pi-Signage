@@ -747,68 +747,10 @@ LIGHTDM
     log_info "Kiosk configuration completed"
 }
 
-# Création du script de démarrage VLC
-create_vlc_script() {
+# Création du script d'autostart (lancé par pisignage.service au boot).
+# En mode Chromium (défaut), il ne fait rien de plus : le kiosk est lancé par labwc/kiosk-apply.
+create_autostart_script() {
     log_step "Création des scripts de contrôle"
-
-    sudo tee $INSTALL_DIR/scripts/start-vlc.sh > /dev/null << 'ENDOFFILE'
-#!/bin/bash
-
-echo "=== PiSignage v0.11.0 - Démarrage VLC ==="
-
-# Arrêt gracieux des lecteurs existants
-systemctl --user stop pisignage-vlc.service 2>/dev/null || true
-pkill -TERM vlc 2>/dev/null || true
-sleep 2
-
-# Configuration de l'environnement
-export DISPLAY=${DISPLAY:-:0}
-export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
-
-# Détection Wayland/X11
-if [ -n "$WAYLAND_DISPLAY" ]; then
-    echo "Environnement: Wayland"
-    VLC_OPTIONS="--intf dummy --vout gles2 --fullscreen --loop --no-video-title-show --quiet"
-else
-    echo "Environnement: X11"
-    VLC_OPTIONS="--intf dummy --vout x11 --fullscreen --loop --no-video-title-show --quiet"
-fi
-
-# Fichier vidéo
-VIDEO="/opt/pisignage/media/BigBuckBunny_720p.mp4"
-
-# Si pas de BBB, chercher une autre vidéo
-if [ ! -f "$VIDEO" ]; then
-    VIDEO=$(find /opt/pisignage/media -name "*.mp4" -o -name "*.mkv" | head -1)
-fi
-
-# Démarrer VLC avec la commande stabilisée (compatible avec le service unifié)
-if [ -n "$VIDEO" ]; then
-    # Utilisation de la configuration unifiée avec HTTP interface
-    vlc --intf http \
-        --extraintf dummy \
-        --http-host 0.0.0.0 \
-        --http-port 8080 \
-        --http-password pisignage \
-        --fullscreen \
-        --loop \
-        --no-video-title-show \
-        --video-on-top \
-        --no-osd \
-        --quiet \
-        "$VIDEO" > /opt/pisignage/logs/vlc.log 2>&1 &
-
-    VLC_PID=$!
-    echo $VLC_PID > /opt/pisignage/vlc.pid
-    echo "✓ VLC démarré avec $(basename "$VIDEO") et HTTP interface (PID: $VLC_PID)"
-    echo "  Interface HTTP: http://localhost:8080 (mot de passe: pisignage)"
-else
-    echo "✗ Aucune vidéo trouvée"
-    exit 1
-fi
-ENDOFFILE
-
-    sudo chmod +x $INSTALL_DIR/scripts/start-vlc.sh
 
     # Script d'autostart
     sudo tee $INSTALL_DIR/scripts/autostart.sh > /dev/null << 'ENDOFFILE'
@@ -1244,7 +1186,7 @@ main() {
     create_config_php
     create_config
     configure_kiosk_trixie
-    create_vlc_script
+    create_autostart_script
     configure_webserver
     configure_sudo
     configure_autostart

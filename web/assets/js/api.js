@@ -177,112 +177,100 @@ PiSignage.api = {
         }
     },
 
-    // Player API calls
+    // Player API — recâblé sur le moteur RÉEL (Chromium) via display.php (VLC retiré).
+    // Couche de compatibilité : les anciens appelants (media.js, etc.) continuent de marcher.
     player: {
-        control: function(action, params = {}) {
-            return PiSignage.api.request('/api/player-control.php', {
+        control: function(action) {
+            const map = { previous: 'prev', next: 'next', play: 'play', pause: 'pause', stop: 'pause', reload: 'reload' };
+            const cmd = map[action] || action;
+            return PiSignage.api.request('/api/display.php?action=command', {
                 method: 'POST',
-                body: JSON.stringify({
-                    action: action,
-                    params: params
-                })
+                body: JSON.stringify({ cmd: cmd })
             });
         },
 
         getStatus: function() {
-            return PiSignage.api.request('/api/player-control.php?action=status');
+            return PiSignage.api.request('/api/display.php?action=state');
         },
 
-        playFile: function(file, player = null) {
-            return PiSignage.api.request('/api/player.php', {
+        // Lecture directe d'un média -> playlist live à 1 élément (display.php).
+        playFile: function(file) {
+            return PiSignage.api.request('/api/display.php?action=playmedia', {
                 method: 'POST',
-                body: JSON.stringify({
-                    action: 'play-file',
-                    file: file,
-                    player: player || currentPlayer
-                })
+                body: JSON.stringify({ file: file })
             });
         },
 
-        playPlaylist: function(playlist, player = null) {
-            return PiSignage.api.request('/api/player.php', {
+        // Diffuser une playlist nommée = l'activer (playlists.php).
+        playPlaylist: function(playlist) {
+            return PiSignage.api.request('/api/playlists.php?action=activate&name=' + encodeURIComponent(playlist), {
                 method: 'POST',
-                body: JSON.stringify({
-                    action: 'play-playlist',
-                    playlist: playlist,
-                    player: player || currentPlayer
-                })
+                body: '{}'
             });
         },
 
-        setVolume: function(value, player = null) {
-            return PiSignage.api.request('/api/player.php', {
+        // Volume = volume système (ALSA) uniquement.
+        setVolume: function(value) {
+            return PiSignage.api.request('/api/system.php', {
                 method: 'POST',
-                body: JSON.stringify({
-                    action: 'volume',
-                    value: value,
-                    player: player || currentPlayer
-                })
+                body: JSON.stringify({ action: 'set_volume', volume: value, value: value })
             });
         },
 
         restart: function() {
-            return PiSignage.api.request('/api/player.php?action=restart');
+            return PiSignage.api.request('/api/system.php', {
+                method: 'POST',
+                body: JSON.stringify({ action: 'restart-player' })
+            });
         },
 
-        // Legacy player control
         legacyControl: function(action) {
-            return PiSignage.api.request('/api/player.php', {
-                method: 'POST',
-                body: JSON.stringify({ action: action })
-            });
+            return this.control(action);
         }
     },
 
-    // Playlist API calls
+    // Playlist API — UNIFIÉ sur /api/playlists.php (playlist-simple.php / playlist.php dépréciés).
     playlists: {
         list: function() {
-            return PiSignage.api.request('/api/playlist-simple.php');
+            return PiSignage.api.request('/api/playlists.php');
         },
 
-        create: function(name, items = [], settings = {}) {
-            return PiSignage.api.request('/api/playlist.php', {
+        create: function(name, items = []) {
+            return PiSignage.api.request('/api/playlists.php', {
                 method: 'POST',
-                body: JSON.stringify({
-                    action: 'create',
-                    name: name,
-                    items: items
-                })
+                body: JSON.stringify({ name: name, items: items })
             });
         },
 
-        update: function(oldName, newName, items, settings = {}) {
-            return PiSignage.api.request('/api/playlist.php', {
-                method: 'PUT',
-                body: JSON.stringify({
-                    action: 'update',
-                    oldName: oldName,
-                    name: newName,
-                    items: items
-                })
+        update: function(oldName, newName, items) {
+            return PiSignage.api.request('/api/playlists.php', {
+                method: 'POST',
+                body: JSON.stringify({ name: newName, items: items })
             });
         },
 
         delete: function(name) {
-            return PiSignage.api.request(`/api/playlist.php?name=${encodeURIComponent(name)}`, {
+            return PiSignage.api.request('/api/playlists.php?name=' + encodeURIComponent(name), {
                 method: 'DELETE'
             });
         },
 
         getInfo: function(name) {
-            return PiSignage.api.request(`/api/playlist.php?action=info&name=${encodeURIComponent(name)}`);
+            return PiSignage.api.request('/api/playlists.php?name=' + encodeURIComponent(name));
         },
 
-        // Advanced playlist API
         save: function(playlistData) {
-            return PiSignage.api.request('/api/playlist-simple.php', {
+            return PiSignage.api.request('/api/playlists.php', {
                 method: 'POST',
                 body: JSON.stringify(playlistData)
+            });
+        },
+
+        // Diffuser à l'écran (activer la playlist nommée).
+        activate: function(name) {
+            return PiSignage.api.request('/api/playlists.php?action=activate&name=' + encodeURIComponent(name), {
+                method: 'POST',
+                body: '{}'
             });
         }
     },

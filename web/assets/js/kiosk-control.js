@@ -11,9 +11,11 @@ PiSignage.kiosk = {
     statusInterval: null,
 
     /* ---------- lifecycle ---------- */
+    // NB (Phase 4) : l'édition de playlist a migré vers la page Playlists. Cette page ne
+    // règle plus que l'affichage (mode, URL, flags, écran). Les anciennes méthodes de
+    // playlist restent définies plus bas mais ne sont plus câblées (DOM retiré).
     init() {
         this.loadStatus();
-        this.loadPlaylist();
         this.loadUrl();
         this.loadFlags();
         this.loadMode();
@@ -41,26 +43,6 @@ PiSignage.kiosk = {
     bindEvents() {
         const enable = this._el('enable-kiosk');
         if (enable) enable.addEventListener('change', (e) => this.updateMode('enable', e.target.checked));
-
-        const player = this._el('use-chromium-player');
-        if (player) player.addEventListener('change', (e) => this.updateMode('player', e.target.checked));
-
-        const uploadArea = this._el('upload-area');
-        if (uploadArea) {
-            uploadArea.addEventListener('click', () => { const fi = this._el('file-input'); if (fi) fi.click(); });
-            uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); uploadArea.classList.add('dragging'); });
-            uploadArea.addEventListener('dragleave', (e) => { e.preventDefault(); uploadArea.classList.remove('dragging'); });
-            uploadArea.addEventListener('drop', (e) => {
-                e.preventDefault();
-                uploadArea.classList.remove('dragging');
-                if (e.dataTransfer.files.length > 0) this.handleUpload(e.dataTransfer.files[0]);
-            });
-        }
-
-        const fileInput = this._el('file-input');
-        if (fileInput) fileInput.addEventListener('change', (e) => {
-            if (e.target.files.length > 0) this.handleUpload(e.target.files[0]);
-        });
 
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) this.stopAutoRefresh(); else this.startAutoRefresh();
