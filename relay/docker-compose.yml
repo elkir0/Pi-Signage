@@ -1,0 +1,144 @@
+# =============================================================================
+# /home/deploy/zaforge-relay/docker-compose.yml   (SINGLE authoritative compose)
+# ZAFORGE RELAY (VM600, 10.10.10.160) — fleet-api + mosquitto(dynsec) + wireguard
+#
+# Topology (the SECURE one — no bridge override, no host-published 1883):
+#   - wireguard owns the network namespace; mosquitto SHARES it
+#     (network_mode: service:wireguard) so the broker can bind 1883 to wg0
+#     (10.70.0.1), reachable ONLY inside the tunnel.
+#   - 8883/TLS is a SEPARATE private-IP listener (10.10.10.160) for the
+#     fleet-api service/control plane + future CT101.
+#   - ALL host-published ports bind to the PRIVATE IP 10.10.10.160 ONLY.
+#
+# SECRETS come from ./.env (mode 0600, NOT committed). See .env.example.
+# =============================================================================
+name: zaforge-relay
+
+services:
+  # ---- WireGuard server (wg0). Owns the netns that mosquitto shares. ---------
+  wireguard:
+    image: linuxserver/wireguard:1.0.20210914
+    container_name: zf-wireguard
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    # CRITICAL ISOLATION (1): ip_forward is INTENTIONALLY NOT enabled here.
+    # This is a pure control-plane tunnel: the relay must never route a device's
+    # traffic anywhere. We pin it OFF (net.ipv4.ip_forward=0) so even if the base
+    # image tried to flip it on, forwarding stays disabled. Combined with the
+    # wg0->wg0 FORWARD DROP in wireguard/templates/server.conf PostUp, devices can
+    # reach ONLY the relay services on 10.70.0.1 (INPUT to this shared netns),
+    # never each other and never the internet.
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+      - net.ipv4.ip_forward=0
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Paris
+      - SERVERPORT=51840          # wg0 ListenPort = host-published = public DNAT = Endpoint
+      - SERVERURL=relay.zaforge.com
+      - INTERNAL_SUBNET=10.70.0.0
+      - PEERS=0                   # peers are live-added by fleet-api, not generated
+      - ALLOWEDIPS=10.70.0.1/32
+    volumes:
+      - wireguard-config:/config
+      - ./wireguard/templates/server.conf:/config/templates/server.conf:ro
+      - /lib/modules:/lib/modules:ro
+    ports:
+      # WireGuard UDP — host 51840 -> container 51840 (matches SERVERPORT).
+      - "10.10.10.160:51840:51840/udp"
+      # Mosquitto shares THIS namespace, so the broker's host-facing TLS port
+      # 8883 is published HERE (private IP only). 1883 is intentionally NOT
+      # published — it lives on wg0 (10.70.0.1), reachable only in-tunnel.
+      - "10.10.10.160:8883:8883/tcp"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wg show wg0 >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # ---- Mosquitto broker (dynamic-security). Shares wireguard's netns so it can
+  #      bind listener 1883 to 10.70.0.1 (wg0). ------------------------------
+  mosquitto:
+    image: eclipse-mosquitto:2.0.20
+    container_name: zf-mosquitto
+    depends_on:
+      wireguard:
+        condition: service_healthy
+    network_mode: "service:wireguard"   # <-- gives mosquitto the wg0 address
+    volumes:
+      - ./mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto-data:/mosquitto/data            # persistence + dynamic-security.json
+      - ./mosquitto/certs:/mosquitto/certs:ro     # ca.crt / server.crt / server.key
+    restart: unless-stopped
+    environment:
+      - DYNSEC_ADMIN_PASSWORD=${DYNSEC_ADMIN_PASSWORD}
+    healthcheck:
+      # Verify the broker answers on the in-tunnel listener (best-effort).
+      test: ["CMD-SHELL", "mosquitto_sub -h 10.70.0.1 -p 1883 -u dynsec-admin -P \"$$DYNSEC_ADMIN_PASSWORD\" -t '$$SYS/broker/version' -C 1 -W 3 >/dev/null 2>&1 || exit 0"]
+      interval: 30s
+      timeout: 6s
+      retries: 3
+      start_period: 15s
+
+  # ---- fleet-api (Node + better-sqlite3) — the real control plane. ----------
+  fleet-api:
+    build:
+      context: ./fleet-api
+      dockerfile: Dockerfile
+    image: zaforge/fleet-api:1.0.0
+    container_name: zf-fleet-api
+    depends_on:
+      mosquitto:
+        condition: service_started
+      wireguard:
+        condition: service_healthy
+    # Env names below are EXACTLY what fleet-api/config.js reads. Secrets are
+    # interpolated from ./.env (never inlined here).
+    environment:
+      - NODE_ENV=production
+      - PORT=3200
+      - HTTP_HOST=0.0.0.0                          # bound to private IP via the port mapping
+      - DB_PATH=/data/zaforge.db
+      - ADMIN_SECRET=${ADMIN_SECRET}
+      # WireGuard facts handed to the Pi at enrollment.
+      - WG_CONTAINER=zf-wireguard                  # fleet-api execs `docker exec` into this
+      - WG_IFACE=wg0
+      - WG_SERVER_PUBLIC_KEY=${WG_SERVER_PUBLIC_KEY}
+      - WG_ENDPOINT=relay.zaforge.com:51840
+      - WG_RELAY_IP=10.70.0.1
+      - WG_POOL_CIDR=10.70.0.0/16
+      - WG_RESERVED_CIDR=10.70.0.0/28
+      # MQTT control plane: 8883 TLS on the private IP, CA-verified.
+      - MQTT_URL=mqtts://10.10.10.160:8883
+      - MQTT_CA_FILE=/certs/ca.crt
+      - MQTT_SVC_USER=svc_fleetapi
+      - MQTT_SVC_PASSWORD=${MQTT_SVC_PASSWORD}
+      - MQTT_SVC_CLIENT_ID=fleetapi
+      - DYNSEC_ADMIN_USER=dynsec-admin
+      - DYNSEC_ADMIN_PASSWORD=${DYNSEC_ADMIN_PASSWORD}
+    volumes:
+      - fleet-data:/data
+      - ./mosquitto/certs/ca.crt:/certs/ca.crt:ro
+      # The docker socket lets fleet-api `docker exec` into the wireguard container
+      # to run `wg set` / persist (live peer add, no tunnel flap). The socket grants
+      # host control — acceptable on this single-tenant host. GATED note in README;
+      # alternative is a tiny privileged sidecar.
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "10.10.10.160:3200:3200/tcp"               # private IP only; CT101 proxies this
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:3200/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  wireguard-config:
+  mosquitto-data:
+  fleet-data:

@@ -1,0 +1,45 @@
+{
+  "defaultACLAccess": {
+    "publishClientSend": false,
+    "publishClientReceive": false,
+    "subscribe": false,
+    "unsubscribe": false
+  },
+  "clients": [
+    {
+      "username": "dynsec-admin",
+      "textname": "Bootstrap admin used by fleet-api to drive dynsec",
+      "roles": [ { "rolename": "admin" } ],
+      "password": "REPLACE_ME_AT_BOOTSTRAP_WITH_mosquitto_ctrl_dynsec_init",
+      "salt": "REPLACE_ME",
+      "iterations": 101
+    },
+    {
+      "username": "svc_fleetapi",
+      "textname": "fleet-api privileged control-plane client",
+      "roles": [ { "rolename": "fleet_service" } ],
+      "password": "REPLACE_ME_AT_BOOTSTRAP",
+      "salt": "REPLACE_ME",
+      "iterations": 101
+    }
+  ],
+  "roles": [
+    {
+      "rolename": "admin",
+      "acls": [
+        { "acltype": "publishClientSend",    "topic": "$CONTROL/dynamic-security/#", "priority": 0, "allow": true },
+        { "acltype": "publishClientReceive", "topic": "$CONTROL/dynamic-security/#", "priority": 0, "allow": true },
+        { "acltype": "subscribe",            "topic": "$CONTROL/dynamic-security/#", "priority": 0, "allow": true }
+      ]
+    },
+    {
+      "rolename": "fleet_service",
+      "acls": [
+        { "acltype": "subscribe",            "topic": "zf/#", "priority": 0, "allow": true },
+        { "acltype": "publishClientSend",    "topic": "zf/#", "priority": 0, "allow": true },
+        { "acltype": "publishClientReceive", "topic": "zf/#", "priority": 0, "allow": true }
+      ]
+    }
+  ],
+  "groups": []
+}
