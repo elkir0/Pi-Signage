@@ -83,8 +83,15 @@ function onMessage(topic, payload) {
 }
 
 function onHeartbeat(dev, tenantId, msg, ts) {
-  // De-dupe redelivery on (device, seq).
-  const key = `${dev.device_id}:hb:${msg.seq != null ? msg.seq : ts}`;
+  // De-dupe QoS1 redelivery. Key by the heartbeat's own emission timestamp
+  // (msg.ts), NOT its seq: the agent resets seq to 0 on every boot ("seq
+  // increments per boot"), so a seq-keyed dedup collides with a PRIOR boot's
+  // already-processed keys and silently drops EVERY heartbeat after an agent
+  // restart until the counter climbs past the old max — the device looks offline
+  // while happily heartbeating. msg.ts is wall-clock monotonic across reboots, so
+  // a restarted agent's heartbeats are always fresh keys. (Re-processing a hb is
+  // harmless anyway: the devices UPDATE and the telemetry UPSERT are idempotent.)
+  const key = `${dev.device_id}:hb:${msg.ts != null ? msg.ts : ts}`;
   if (alreadyProcessed(key, tenantId)) return;
 
   const db = get();
