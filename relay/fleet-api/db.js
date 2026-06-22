@@ -125,6 +125,12 @@ const MIGRATIONS = [
     );
     CREATE INDEX IF NOT EXISTS ix_processed_tenant ON processed_events(tenant_id, processed_at);
     `
+  },
+  {
+    // Idempotency replay (MUST-FIX G): the issued mqtt password is persisted on the
+    // consumed code row so a lost-response retry returns the byte-identical 200 body.
+    name: '002_enroll_mqtt_pw',
+    sql: `ALTER TABLE enrollment_codes ADD COLUMN issued_mqtt_password TEXT;`
   }
 ];
 

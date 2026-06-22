@@ -155,8 +155,8 @@ func runSession(paths Paths) error {
 	if err := bringUpTunnel(paths.WGDataPath, wd); err != nil {
 		return fmt.Errorf("wg up: %w", err)
 	}
-	if err := waitHandshake(paths.WGInterface, 30*time.Second); err != nil {
-		return fmt.Errorf("wg handshake: %w", err)
+	if err := waitTunnel(fmt.Sprintf("%s:%d", er.MQTT.Host, er.MQTT.Port), 30*time.Second); err != nil {
+		return fmt.Errorf("wg tunnel probe: %w", err)
 	}
 	log.Printf("wireguard tunnel up (%s -> %s)", er.WG.Address, er.WG.Peer.Endpoint)
 

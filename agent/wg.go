@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"regexp"
@@ -200,21 +201,26 @@ func wgDownHelperPath() string {
 // handshake appears or the deadline passes. This is an UNPRIVILEGED read; if it
 // is denied we simply keep polling until timeout and let the caller back off —
 // we never escalate and never crash.
-func waitHandshake(iface string, timeout time.Duration) error {
+// waitTunnel confirms the WireGuard tunnel actually carries traffic by TCP-dialing
+// the relay's in-tunnel endpoint. We deliberately do NOT use `wg show ...
+// latest-handshakes`: reading handshake state needs root (CAP_NET_ADMIN) and the
+// agent runs as user 'pi', so an unprivileged `wg show` fails and would
+// false-negative a perfectly working tunnel (it did — causing a teardown loop).
+// A successful TCP dial to the relay /32 over zf0 proves the tunnel is live, needs
+// no privilege, and exercises exactly the path the MQTT client will use next.
+func waitTunnel(probeAddr string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
+	var lastErr error
 	for time.Now().Before(deadline) {
-		out, err := runOut("wg", "show", iface, "latest-handshakes")
+		conn, err := net.DialTimeout("tcp", probeAddr, 4*time.Second)
 		if err == nil {
-			for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
-				fields := strings.Fields(line)
-				if len(fields) == 2 && fields[1] != "0" {
-					return nil
-				}
-			}
+			_ = conn.Close()
+			return nil
 		}
+		lastErr = err
 		time.Sleep(2 * time.Second)
 	}
-	return fmt.Errorf("no wireguard handshake on %s within %s", iface, timeout)
+	return fmt.Errorf("tunnel probe to %s failed within %s: %v", probeAddr, timeout, lastErr)
 }
 
 // ---- small exec helpers ----

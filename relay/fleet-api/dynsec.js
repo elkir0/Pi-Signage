@@ -82,15 +82,23 @@ function connect() {
     });
     client.on('message', (topic, payload, packet) => {
       if (topic !== RESPONSE) return;
-      const corr = packet && packet.properties && packet.properties.correlationData
-        ? packet.properties.correlationData.toString('hex') : null;
-      if (!corr) return;
-      const p = pending.get(corr);
-      if (!p) return;
-      pending.delete(corr);
-      clearTimeout(p.timer);
       let body;
       try { body = JSON.parse(payload.toString()); } catch (_) { body = { responses: [] }; }
+      const corr = packet && packet.properties && packet.properties.correlationData
+        ? packet.properties.correlationData.toString('hex') : null;
+      let key = corr;
+      let p = corr ? pending.get(corr) : null;
+      // The mosquitto dynsec plugin does NOT reliably echo the MQTT5 correlationData
+      // property on its response (every response was being dropped -> dynsec_timeout).
+      // send() is awaited sequentially, so when exactly ONE request is in flight we
+      // match it unambiguously by FIFO.
+      if (!p && pending.size === 1) {
+        key = pending.keys().next().value;
+        p = pending.get(key);
+      }
+      if (!p) return;
+      pending.delete(key);
+      clearTimeout(p.timer);
       p.resolve(body);
     });
     client.on('error', (e) => { if (!ready) reject(e); else console.error('[dynsec]', e.message); });
