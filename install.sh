@@ -284,6 +284,23 @@ install_dependencies() {
 
         # Accélération matérielle Pi (best-effort, ne bloque pas l'install).
         sudo apt-get install -y rpi-chromium-mods 2>/dev/null || true
+
+        # Anti-saturation /tmp : le fragment Debian /etc/chromium.d/dev-shm ajoute
+        # --disable-dev-shm-usage quand /dev/shm < 3,8 Go, ce qui force Chromium à
+        # déverser sa mémoire partagée dans /tmp (tmpfs) et le remplit jusqu'à 100 %
+        # (observé : ~1,9 Go de cache /tmp supprimé-mais-ouvert -> screenshots et
+        # téléchargements cassés). Le kiosk n'affiche qu'UNE page : /dev/shm (~1,9 Go)
+        # suffit largement. On dépose un fragment qui retire le flag (chargé en dernier).
+        if [ -d /etc/chromium.d ]; then
+            sudo tee /etc/chromium.d/zzz-pisignage-shm >/dev/null <<'SHMFRAG'
+# PiSignage/Zaforge : le kiosk rend UNE page -> /dev/shm est amplement suffisant.
+# On retire --disable-dev-shm-usage (ajouté par le fragment Debian dev-shm) pour
+# que Chromium utilise /dev/shm au lieu de remplir /tmp.
+CHROMIUM_FLAGS="$(printf '%s' "$CHROMIUM_FLAGS" | sed 's/--disable-dev-shm-usage//g')"
+export CHROMIUM_FLAGS
+SHMFRAG
+            sudo chmod 644 /etc/chromium.d/zzz-pisignage-shm
+        fi
     fi
 
     # Installation de raspi2png si disponible
