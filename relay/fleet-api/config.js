@@ -87,5 +87,39 @@ module.exports = {
 
   // ---- Liveness thresholds (contract: stale 3x, offline 6x interval) ----
   staleAfterS: intOpt('STALE_AFTER_S', 90),
-  offlineAfterS: intOpt('OFFLINE_AFTER_S', 180)
+  offlineAfterS: intOpt('OFFLINE_AFTER_S', 180),
+
+  // ---- Console BFF (same-origin session auth; ALL OPTIONAL) ----------------
+  // The console is an additive surface; the relay BOOTS and console login +
+  // device management work even if Stripe env is entirely absent.
+  consolePublicUrl: opt('CONSOLE_PUBLIC_URL', 'https://app.zaforge.com'),
+  consoleSessionTtlS: intOpt('CONSOLE_SESSION_TTL', 43200), // 12h opaque httpOnly session
+  // Console login brute-force guard (per source IP).
+  consoleLoginRatePerMin: intOpt('CONSOLE_LOGIN_RATE_PER_MIN', 10),
+
+  // ---- Stripe billing (gates the CLOUD CONTROL PLANE ONLY; ALL OPTIONAL) ----
+  // MUST-FIX 8: every value is opt() (NOT req()) so a relay with billing
+  // UNCONFIGURED still boots and runs the control plane. Billing routes
+  // self-guard with 503 'billing_not_configured' when STRIPE_SECRET_KEY is unset.
+  // Secrets come ONLY from the 0600 .env (config never logs values, only names).
+  stripe: {
+    secretKey: opt('STRIPE_SECRET_KEY', ''),
+    webhookSecret: opt('STRIPE_WEBHOOK_SECRET', ''),
+    apiVersion: opt('STRIPE_API_VERSION', '2024-12-18.acacia'),
+    prices: {
+      pro_month_eur: opt('STRIPE_PRICE_PRO_MONTH', ''),
+      pro_year_eur: opt('STRIPE_PRICE_PRO_YEAR', ''),
+      business_month_eur: opt('STRIPE_PRICE_BIZ_MONTH', ''),
+      business_year_eur: opt('STRIPE_PRICE_BIZ_YEAR', ''),
+      pro_month_usd: opt('STRIPE_PRICE_PRO_MONTH_USD', ''),
+      pro_year_usd: opt('STRIPE_PRICE_PRO_YEAR_USD', ''),
+      business_month_usd: opt('STRIPE_PRICE_BIZ_MONTH_USD', ''),
+      business_year_usd: opt('STRIPE_PRICE_BIZ_YEAR_USD', '')
+    },
+    // The checkout/portal/webhook surface is only live when BOTH the secret key
+    // and the webhook secret are present.
+    configured() { return this.secretKey !== '' && this.webhookSecret !== ''; },
+    // A weaker check used by checkout/portal which need only the API key.
+    apiReady() { return this.secretKey !== ''; }
+  }
 };

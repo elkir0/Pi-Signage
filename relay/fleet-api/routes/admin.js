@@ -1,5 +1,6 @@
 'use strict';
 
+const crypto = require('crypto');
 const cfg = require('../config');
 const { get } = require('../db');
 const ids = require('../ids');
@@ -7,6 +8,7 @@ const wg = require('../wg');
 const dynsec = require('../dynsec');
 const mqttClient = require('../mqtt');
 const { authenticate, resolveTenantScope } = require('../auth');
+const { entitlement } = require('../entitlement');
 const { send } = require('../http');
 
 function now() { return Math.floor(Date.now() / 1000); }
@@ -19,6 +21,15 @@ function badge(dev, ts) {
   if (age <= cfg.staleAfterS) return 'online';
   if (age <= cfg.offlineAfterS) return 'stale';
   return 'offline';
+}
+
+// scrypt password hash: 'scrypt$N$<salt-b64url>$<hash-b64url>'. Matches the
+// verifier in routes/console.js (constant-time compare of the derived key).
+function scryptHash(password) {
+  const N = 16384;
+  const salt = crypto.randomBytes(16);
+  const dk = crypto.scryptSync(String(password), salt, 32, { N, r: 8, p: 1 });
+  return `scrypt$${N}$${salt.toString('base64url')}$${dk.toString('base64url')}`;
 }
 
 const KNOWN_CMD_TYPES = new Set([
@@ -46,7 +57,8 @@ async function handle(req, res, ctx) {
       fingerprint: d.fingerprint, wg_ip: d.wg_ip, agent_version: d.agent_version,
       player_version: d.player_version, badge: badge(d, ts),
       last_seen_at: d.last_seen_at, last_heartbeat_at: d.last_heartbeat_at,
-      online: d.online === 1, created_at: d.created_at, confirmed_at: d.confirmed_at
+      online: d.online === 1, created_at: d.created_at, confirmed_at: d.confirmed_at,
+      content_cached: d.content_cached === 1
     }));
     return send(res, 200, { v: 1, devices });
   }
@@ -70,10 +82,16 @@ async function handle(req, res, ctx) {
   if (req.method === 'POST' && seg[0] === 'devices' && seg[2] === 'confirm') {
     const tenantId = resolveTenantScope(principal, (ctx.body && ctx.body.tenant_id) || url.searchParams.get('tenant_id'));
     if (!tenantId) return send(res, 400, { v: 1, error: 'bad_tenant' });
+    // ENTITLEMENT GATE (MUST-FIX 6): managed-off suspends console mutations.
+    // NO-OP for managed-on tenants (preserves current behavior exactly).
+    if (!entitlement(tenantId).ok) return send(res, 402, { v: 1, error: 'payment_required' });
     const r = get().prepare(
       "UPDATE devices SET state='active', confirmed_at=? WHERE device_id=? AND tenant_id=? AND state='pending'"
     ).run(ts, seg[1], tenantId);
     if (r.changes !== 1) return send(res, 409, { v: 1, error: 'not_pending' });
+    // A newly-active device may become billable once its content caches; coalesce
+    // a per-screen quantity sync (no-op if billing unconfigured).
+    try { require('./billing').debounceSyncQuantity(tenantId); } catch (_) {}
     return send(res, 200, { v: 1, device_id: seg[1], state: 'active' });
   }
 
@@ -81,6 +99,10 @@ async function handle(req, res, ctx) {
   if (req.method === 'POST' && seg[0] === 'devices' && seg[2] === 'retire') {
     const tenantId = resolveTenantScope(principal, (ctx.body && ctx.body.tenant_id) || url.searchParams.get('tenant_id'));
     if (!tenantId) return send(res, 400, { v: 1, error: 'bad_tenant' });
+    // ENTITLEMENT GATE (MUST-FIX 6): the gate refuses the OPERATOR action when
+    // managed-off. It NEVER churns an existing peer BY billing — wg.removePeer /
+    // dynsec.retireDevice below run ONLY on an entitled, operator-initiated retire.
+    if (!entitlement(tenantId).ok) return send(res, 402, { v: 1, error: 'payment_required' });
     const d = get().prepare('SELECT * FROM devices WHERE device_id=? AND tenant_id=?').get(seg[1], tenantId);
     if (!d) return send(res, 404, { v: 1, error: 'not_found' });
     get().prepare("UPDATE devices SET state='retired', retired_at=?, online=0 WHERE device_id=? AND tenant_id=?")
@@ -91,6 +113,8 @@ async function handle(req, res, ctx) {
     try { await dynsec.retireDevice(d.device_id); } catch (e) { console.error('[retire] dynsec:', e.message); }
     get().prepare('INSERT INTO events(tenant_id, device_id, type, payload_json, ts) VALUES (?,?,?,?,?)')
       .run(tenantId, d.device_id, 'retired', '{}', ts);
+    // Retiring removes a billable screen; coalesce a quantity sync.
+    try { require('./billing').debounceSyncQuantity(tenantId); } catch (_) {}
     return send(res, 200, { v: 1, device_id: d.device_id, state: 'retired' });
   }
 
@@ -105,6 +129,10 @@ async function handle(req, res, ctx) {
     if (!d) return send(res, 404, { v: 1, error: 'not_found' });
     // SERVER-SIDE GATE: never publish to a non-active (pending/retired) device.
     if (d.state !== 'active') return send(res, 409, { v: 1, error: 'device_not_active' });
+    // ENTITLEMENT GATE (MUST-FIX 6): managed-off suspends COMMAND ISSUANCE.
+    // Refuse with 402 BEFORE any mqtt publish. This NEVER stops the player — the
+    // Pi keeps playing local content; it only blocks new cloud-issued commands.
+    if (!entitlement(tenantId).ok) return send(res, 402, { v: 1, error: 'payment_required' });
 
     const cmdId = ids.newCmdId();
     const cmd = { v: 1, ts, cmd_id: cmdId, type: body.type, args: body.args || {} };
@@ -120,6 +148,9 @@ async function handle(req, res, ctx) {
     const body = ctx.body || {};
     const tenantId = resolveTenantScope(principal, body.tenant_id || url.searchParams.get('tenant_id'));
     if (!tenantId) return send(res, 400, { v: 1, error: 'bad_tenant' });
+    // ENTITLEMENT GATE (MUST-FIX 6): managed-off freezes enrollment of NEW peers.
+    // Existing peers are untouched; only minting a new code is refused.
+    if (!entitlement(tenantId).ok) return send(res, 402, { v: 1, error: 'payment_required' });
     const code = ids.newEnrollmentCode();
     const ttl = Number.isInteger(body.ttl_seconds) ? body.ttl_seconds : cfg.enroll.codeTtlSeconds;
     const rebind = body.rebind === true ? 1 : 0;
@@ -145,6 +176,38 @@ async function handle(req, res, ctx) {
     });
     tx();
     return send(res, 201, { v: 1, tenant_id: tenantId, api_key: apiKey }); // key shown once
+  }
+
+  // ---- ADMIN-ONLY: POST /admin/console-users  (seed a console operator) ----
+  // Mirrors POST /admin/tenants: admin-only (kind==='admin'). Scrypt-hashes the
+  // password. This is the ONLY way a console_users row is created — it is NOT on
+  // the console surface (a console operator can never create another operator).
+  if (req.method === 'POST' && seg[0] === 'console-users' && seg.length === 1) {
+    if (principal.kind !== 'admin') return send(res, 403, { v: 1, error: 'forbidden' });
+    const body = ctx.body || {};
+    if (!body.tenant_id || !body.email || !body.password) {
+      return send(res, 400, { v: 1, error: 'bad_request' });
+    }
+    if (typeof body.password !== 'string' || body.password.length < 8) {
+      return send(res, 400, { v: 1, error: 'weak_password' });
+    }
+    const t = get().prepare('SELECT tenant_id FROM tenants WHERE tenant_id=?').get(body.tenant_id);
+    if (!t) return send(res, 400, { v: 1, error: 'bad_tenant' });
+    const role = (body.role === 'admin' || body.role === 'operator' || body.role === 'owner')
+      ? body.role : 'owner';
+    let info;
+    try {
+      info = get().prepare(
+        `INSERT INTO console_users(tenant_id, email, pw_hash, role, created_at)
+         VALUES (?,?,?,?,?)`
+      ).run(body.tenant_id, String(body.email).toLowerCase(), scryptHash(body.password), role, ts);
+    } catch (e) {
+      if (/UNIQUE/i.test(e.message)) return send(res, 409, { v: 1, error: 'email_exists' });
+      throw e;
+    }
+    return send(res, 201, {
+      v: 1, console_user_id: info.lastInsertRowid, tenant_id: body.tenant_id, role
+    });
   }
 
   return send(res, 404, { v: 1, error: 'not_found' });

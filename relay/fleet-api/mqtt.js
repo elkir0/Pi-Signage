@@ -136,6 +136,28 @@ function onEvent(dev, tenantId, msg, ts) {
   if (alreadyProcessed(key, tenantId)) return;
   get().prepare('INSERT INTO events(tenant_id, device_id, type, payload_json, ts) VALUES (?,?,?,?,?)')
     .run(tenantId, dev.device_id, msg.type || 'unknown', JSON.stringify(msg), ts);
+
+  // ---- Billing trigger (MUST-FIX 7) ----------------------------------------
+  // content-synced: the agent reports the assigned playlist is FULLY cached
+  // locally. content_cached=1 is the brick-proof gate that guarantees a screen is
+  // never billed before its content is locally cached. content-cleared /
+  // content-stale flips it back to 0. After either change we debounce a
+  // per-screen quantity sync so Stripe reflects the new active+cached count.
+  // NOTE: this NEVER mutates the player or the broker — it only updates the
+  // billable-count projection. The heartbeat/status/result handlers are untouched.
+  const t = msg && typeof msg.type === 'string' ? msg.type : '';
+  if (t === 'content-synced' || t === 'content-cleared' || t === 'content-stale') {
+    const cached = t === 'content-synced' ? 1 : 0;
+    try {
+      get().prepare(
+        'UPDATE devices SET content_cached=?, content_cached_at=? WHERE device_id=? AND tenant_id=?'
+      ).run(cached, ts, dev.device_id, tenantId);
+    } catch (e) { console.error('[mqtt] content_cached update:', e.message); }
+    // Lazy require avoids a load-time cycle (billing -> entitlement -> db). If
+    // billing is unconfigured, debounceSyncQuantity is a cheap no-op.
+    try { require('./routes/billing').debounceSyncQuantity(tenantId); }
+    catch (e) { console.error('[mqtt] debounce qty:', e.message); }
+  }
 }
 
 // Publish a targeted command to a device. Caller (routes) has already verified the

@@ -6,11 +6,32 @@ const db = require('./db');
 const mqttClient = require('./mqtt');
 const dynsec = require('./dynsec');
 const reconcile = require('./reconcile');
+const stripe = require('./stripe');
+const billing = require('./routes/billing');
 const enrollRoute = require('./routes/enroll');
 const adminRoute = require('./routes/admin');
+const consoleRoute = require('./routes/console');
 const { readJson, send, makeRateLimiter, clientIp } = require('./http');
 
 const enrollLimiter = makeRateLimiter(cfg.enroll.rateMaxPerMin);
+const consoleLoginLimiter = makeRateLimiter(cfg.consoleLoginRatePerMin);
+
+// Read the RAW request body (Buffer) up to maxBytes. The Stripe webhook signature
+// is computed over the EXACT bytes, so we must NOT route it through readJson (which
+// JSON.parses and discards the original bytes). (MUST-FIX 9.)
+function readRaw(req, maxBytes) {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    const chunks = [];
+    req.on('data', (c) => {
+      size += c.length;
+      if (size > maxBytes) { reject(new Error('body_too_large')); req.destroy(); return; }
+      chunks.push(c);
+    });
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
 
 async function main() {
   db.init();
@@ -20,6 +41,12 @@ async function main() {
   try { await dynsec.connect(); } catch (e) { console.error('[boot] dynsec connect:', e.message); }
   try { await mqttClient.connect(); } catch (e) { console.error('[boot] mqtt connect:', e.message); }
   try { await reconcile.run(); } catch (e) { console.error('[boot] reconcile:', e.message); }
+
+  // Billing self-heal on boot (MUST-FIX 4): move every subscribed tenant's
+  // managed_state TOWARD Stripe truth. No-op when Stripe is unconfigured.
+  if (cfg.stripe.apiReady()) {
+    try { await billing.reconcileBilling(); } catch (e) { console.error('[boot] billing reconcile:', e.message); }
+  }
 
   // Periodic liveness sweep: flip online=0 for devices whose heartbeat is older
   // than offlineAfterS even if no LWT arrived (two signals converge per contract).
@@ -32,6 +59,17 @@ async function main() {
     } catch (e) { console.error('[sweep]', e.message); }
   }, 30000).unref();
 
+  // Nightly billing reconcile (MUST-FIX 4): ~24h, jittered, only when configured.
+  // Heals a tenant stuck managed-off after a missed invoice.paid by moving TOWARD
+  // Stripe truth. Never removePeer/disableClient/stop.
+  if (cfg.stripe.apiReady()) {
+    const dayMs = 24 * 60 * 60 * 1000;
+    const jitter = Math.floor(Math.random() * 60 * 60 * 1000); // up to 1h
+    setInterval(() => {
+      billing.reconcileBilling().catch((e) => console.error('[nightly] billing reconcile:', e.message));
+    }, dayMs + jitter).unref();
+  }
+
   const server = http.createServer(async (req, res) => {
     try {
       const path = req.url.split('?')[0];
@@ -41,12 +79,65 @@ async function main() {
         return send(res, 200, { v: 1, status: 'ok' });
       }
 
+      // STRIPE WEBHOOK — RAW body, verified BEFORE any JSON.parse (MUST-FIX 9 + 3).
+      // Idempotency via processed_events (msg_key 'stripe:'+id): INSERT OR IGNORE;
+      // changes===0 => already processed => early 200 BEFORE any re-fetch/mutate.
+      if (req.method === 'POST' && path === '/webhook/stripe') {
+        if (!cfg.stripe.configured()) return send(res, 503, { v: 1, error: 'billing_not_configured' });
+        let raw;
+        try { raw = await readRaw(req, 1024 * 1024); } // ~1MB cap
+        catch (_) { return send(res, 400, { v: 1, error: 'bad_request' }); }
+
+        let evt;
+        try {
+          // Verify the signature over the EXACT raw bytes, BEFORE JSON.parse.
+          evt = stripe.verifyWebhook(raw, req.headers['stripe-signature'], cfg.stripe.webhookSecret);
+        } catch (_) {
+          return send(res, 400, { v: 1, error: 'invalid_signature' });
+        }
+
+        // Idempotency latch: reuse processed_events (no new table). The tenant is
+        // best-effort from metadata; 'system' otherwise (the row is just a latch).
+        const tenantId =
+          (evt.data && evt.data.object && evt.data.object.metadata && evt.data.object.metadata.tenant_id) ||
+          (evt.data && evt.data.object && evt.data.object.client_reference_id) ||
+          'system';
+        let first;
+        try {
+          first = db.get().prepare(
+            'INSERT OR IGNORE INTO processed_events(msg_key, tenant_id, processed_at) VALUES (?,?,?)'
+          ).run('stripe:' + evt.id, tenantId, Math.floor(Date.now() / 1000));
+        } catch (e) {
+          console.error('[webhook] latch:', e.message);
+          return send(res, 200, { v: 1, received: true }); // never make Stripe retry on our DB hiccup
+        }
+        if (first.changes === 0) {
+          // Already processed — early 200 BEFORE any re-fetch/mutate.
+          return send(res, 200, { v: 1, received: true, idempotent: true });
+        }
+
+        try { await billing.applyWebhookEvent(evt); }
+        catch (e) { console.error('[webhook] apply:', e.message); }
+        // ALWAYS 200 on accepted (incl. irrelevant) so Stripe stops retrying.
+        return send(res, 200, { v: 1, received: true });
+      }
+
       // PUBLIC enrollment surface.
       if (req.method === 'POST' && path === '/enroll') {
         let body;
         try { body = await readJson(req, cfg.enroll.maxBodyBytes); }
         catch (_) { return send(res, 400, { v: 1, error: 'bad_request' }); }
         return enrollRoute.handle(req, res, { body, ip: clientIp(req), enrollLimiter });
+      }
+
+      // CONSOLE BFF surface (same-origin; cookie session + CSRF inside the handler).
+      if (path === '/console' || path.startsWith('/console/')) {
+        let body = null;
+        if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+          try { body = await readJson(req, 64 * 1024); }
+          catch (_) { return send(res, 400, { v: 1, error: 'bad_request' }); }
+        }
+        return consoleRoute.handle(req, res, { body, ip: clientIp(req), loginLimiter: consoleLoginLimiter });
       }
 
       // Authenticated console/admin surface.

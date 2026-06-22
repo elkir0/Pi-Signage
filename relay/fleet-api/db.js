@@ -11,6 +11,10 @@ let db;
 // Each migration is idempotent at the statement level (CREATE TABLE IF NOT EXISTS,
 // CREATE INDEX IF NOT EXISTS). The _migrations ledger records applied names so we
 // can add future migrations append-only without re-running old ones.
+//
+// APPEND-ONLY CONTRACT: migrations 001/002 are FROZEN — never edit them. New work
+// is added as 003+ below. ALTER TABLE ADD COLUMN is run only when the migration is
+// first applied (guarded by the _migrations ledger), so re-runs never error.
 const MIGRATIONS = [
   {
     name: '001_init',
@@ -131,6 +135,90 @@ const MIGRATIONS = [
     // consumed code row so a lost-response retry returns the byte-identical 200 body.
     name: '002_enroll_mqtt_pw',
     sql: `ALTER TABLE enrollment_codes ADD COLUMN issued_mqtt_password TEXT;`
+  },
+
+  // ===========================================================================
+  // APPEND-ONLY (Zaforge console + Stripe billing). 003-006. Idempotent; applied
+  // once via the _migrations ledger. DEFAULTS keep every EXISTING tenant fully
+  // functional (community / managed-on / sub_status none) so the live enrolled
+  // tenant keeps full function with zero behavior change.
+  // ===========================================================================
+  {
+    // 003_billing: billing projection columns on tenants. Defaults are chosen so
+    // billing is ADDITIVE and FAIL-OPEN — managed-on until a VERIFIED webhook
+    // flips state. stripe_sub_item_id is stored because the per-screen quantity is
+    // PATCHed on the SubscriptionItem, not the Subscription.
+    name: '003_billing',
+    sql: `
+    ALTER TABLE tenants ADD COLUMN stripe_customer_id     TEXT;
+    ALTER TABLE tenants ADD COLUMN stripe_subscription_id TEXT;
+    ALTER TABLE tenants ADD COLUMN stripe_sub_item_id     TEXT;
+    ALTER TABLE tenants ADD COLUMN plan          TEXT NOT NULL DEFAULT 'community';
+    ALTER TABLE tenants ADD COLUMN sub_status    TEXT NOT NULL DEFAULT 'none';
+    ALTER TABLE tenants ADD COLUMN managed_state TEXT NOT NULL DEFAULT 'managed-on';
+    ALTER TABLE tenants ADD COLUMN billing_interval TEXT;
+    ALTER TABLE tenants ADD COLUMN billing_currency TEXT;
+    ALTER TABLE tenants ADD COLUMN qty_synced_at INTEGER;
+    CREATE INDEX IF NOT EXISTS ix_tenants_customer ON tenants(stripe_customer_id);
+    CREATE INDEX IF NOT EXISTS ix_tenants_subscription ON tenants(stripe_subscription_id);
+    `
+  },
+  {
+    // 004_device_cache: a screen is billable only when state='active' AND
+    // content_cached=1 (set by the agent's content-synced event). Brick-proof:
+    // never bill a screen before its content is locally cached.
+    name: '004_device_cache',
+    sql: `
+    ALTER TABLE devices ADD COLUMN content_cached    INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE devices ADD COLUMN content_cached_at INTEGER;
+    `
+  },
+  {
+    // 005_console_auth: BFF console identity + opaque httpOnly sessions. The raw
+    // cookie value NEVER lands in the DB — only sha256(raw) (session_id_hash).
+    name: '005_console_auth',
+    sql: `
+    CREATE TABLE IF NOT EXISTS console_users (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      tenant_id   TEXT NOT NULL REFERENCES tenants(tenant_id),
+      email       TEXT NOT NULL,
+      pw_hash     TEXT NOT NULL,
+      role        TEXT NOT NULL DEFAULT 'owner',
+      totp_secret TEXT,
+      created_at  INTEGER NOT NULL,
+      disabled_at INTEGER,
+      UNIQUE(email)
+    );
+    CREATE INDEX IF NOT EXISTS ix_console_users_tenant ON console_users(tenant_id);
+
+    CREATE TABLE IF NOT EXISTS console_sessions (
+      id               INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id_hash  TEXT NOT NULL UNIQUE,
+      console_user_id  INTEGER NOT NULL REFERENCES console_users(id),
+      tenant_id        TEXT NOT NULL REFERENCES tenants(tenant_id),
+      created_at       INTEGER NOT NULL,
+      expires_at       INTEGER NOT NULL,
+      last_seen_at     INTEGER,
+      revoked_at       INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS ix_console_sessions_user ON console_sessions(console_user_id);
+    `
+  },
+  {
+    // 006_billing_events: human-readable forensic ledger of webhook events.
+    // DISTINCT from processed_events (the idempotency latch keyed by msg_key PK).
+    name: '006_billing_events',
+    sql: `
+    CREATE TABLE IF NOT EXISTS billing_events (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      tenant_id       TEXT,
+      stripe_event_id TEXT UNIQUE,
+      type            TEXT NOT NULL,
+      payload_json    TEXT,
+      ts              INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS ix_billing_events_tenant ON billing_events(tenant_id, ts);
+    `
   }
 ];
 
