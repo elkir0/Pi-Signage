@@ -52,6 +52,9 @@ services:
       # 8883 is published HERE (private IP only). 1883 is intentionally NOT
       # published — it lives on wg0 (10.70.0.1), reachable only in-tunnel.
       - "10.10.10.160:8883:8883/tcp"
+      # zf-uiproxy ALSO shares this netns (full-UI "mode complet" proxy). Its port
+      # is published HERE (private IP only); CT101 fronts it for *.box.zaforge.com.
+      - "10.10.10.160:8090:8090/tcp"
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "wg show wg0 >/dev/null 2>&1 || exit 1"]
@@ -59,6 +62,26 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
+
+  # ---- zf-uiproxy ("mode complet"). Shares wireguard's netns so it can reach the
+  #      enrolled Pis at 10.70.0.x:80 over the tunnel. Serves each device's full
+  #      LAN UI to a console operator (CT101 fronts *.box.zaforge.com -> :8090).
+  uiproxy:
+    build:
+      context: ./uiproxy
+      dockerfile: Dockerfile
+    image: zaforge/uiproxy:1.0.0
+    container_name: zf-uiproxy
+    depends_on:
+      wireguard:
+        condition: service_healthy
+    network_mode: "service:wireguard"   # <-- gives it wg0 access to reach the Pis
+    environment:
+      - UIPROXY_PORT=8090
+      - UIPROXY_HOST=0.0.0.0
+      - PROXY_TOKEN_SECRET=${PROXY_TOKEN_SECRET}     # HMAC, shared with fleet-api
+      - RELAY_PROXY_SECRET=${RELAY_PROXY_SECRET}     # injected toward the Pi bridge
+    restart: unless-stopped
 
   # ---- Mosquitto broker (dynamic-security). Shares wireguard's netns so it can
   #      bind listener 1883 to 10.70.0.1 (wg0). ------------------------------
@@ -122,6 +145,10 @@ services:
       - DYNSEC_ADMIN_PASSWORD=${DYNSEC_ADMIN_PASSWORD}
       # Console SPA served same-origin from this dir (mounted read-only below).
       - CONSOLE_STATIC_DIR=/app/console-static
+      # Full-UI proxy ("mode complet"): HMAC secret to mint proxy-session tokens
+      # (shared with zf-uiproxy) + the wildcard box domain for the device URLs.
+      - PROXY_TOKEN_SECRET=${PROXY_TOKEN_SECRET}
+      - BOX_DOMAIN=box.zaforge.com
     volumes:
       - fleet-data:/data
       - ./mosquitto/certs/ca.crt:/certs/ca.crt:ro

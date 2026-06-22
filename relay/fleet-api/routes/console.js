@@ -271,6 +271,26 @@ async function handle(req, res, ctx) {
         (seg[2] === 'confirm' || seg[2] === 'retire' || seg[2] === 'command')) {
       return redispatchToAdmin(req, res, ctx, 'devices/' + encodeURIComponent(seg[1]) + '/' + seg[2]);
     }
+    // ---- FULL-UI proxy session ("mode complet") ----
+    // Mint a short-lived HMAC token binding {device, tenant, wg_ip, exp}. The
+    // operator opens https://<label>.<box-domain>/?__zf=<token>; zf-uiproxy (in the
+    // wg netns) validates it and serves the device's full LAN UI over the tunnel.
+    // Tenant-clamped: a principal can only mint for its OWN device.
+    if (method === 'POST' && seg.length === 3 && seg[2] === 'proxy-session') {
+      if (!cfg.proxy.enabled()) return send(res, 503, { v: 1, error: 'proxy_not_configured' });
+      const dev = get().prepare(
+        'SELECT device_id, wg_ip, state FROM devices WHERE device_id=? AND tenant_id=?'
+      ).get(seg[1], tenantId);
+      if (!dev) return send(res, 404, { v: 1, error: 'not_found' });
+      if (dev.state !== 'active') return send(res, 409, { v: 1, error: 'device_not_active' });
+      if (!/^10\.70\.\d{1,3}\.\d{1,3}$/.test(dev.wg_ip || '')) return send(res, 409, { v: 1, error: 'no_wg_ip' });
+      const exp = now() + cfg.proxy.sessionTtlS;
+      const payload = Buffer.from(JSON.stringify({ d: dev.device_id, t: tenantId, ip: dev.wg_ip, e: exp })).toString('base64url');
+      const sig = crypto.createHmac('sha256', cfg.proxy.tokenSecret).update(payload).digest('base64url');
+      const label = dev.device_id.replace(/_/g, '-'); // DNS-safe subdomain label
+      const url = 'https://' + label + '.' + cfg.proxy.boxDomain + '/?__zf=' + payload + '.' + sig;
+      return send(res, 200, { v: 1, url, expires_at: exp });
+    }
     return send(res, 404, { v: 1, error: 'not_found' });
   }
 

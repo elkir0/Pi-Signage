@@ -94,6 +94,17 @@ module.exports = {
   // device management work even if Stripe env is entirely absent.
   consolePublicUrl: opt('CONSOLE_PUBLIC_URL', 'https://app.zaforge.com'),
   consoleSessionTtlS: intOpt('CONSOLE_SESSION_TTL', 43200), // 12h opaque httpOnly session
+
+  // ---- Full-UI proxy ("mode complet") -------------------------------------
+  // The console mints a short-lived HMAC token that zf-uiproxy validates to serve
+  // the device's full LAN UI over the tunnel. ALL OPTIONAL: if PROXY_TOKEN_SECRET
+  // is unset, the proxy-session endpoint returns 503 and the relay still runs.
+  proxy: {
+    tokenSecret: opt('PROXY_TOKEN_SECRET', ''),
+    boxDomain: opt('BOX_DOMAIN', 'box.zaforge.com'),
+    sessionTtlS: intOpt('PROXY_SESSION_TTL', 3600),
+    enabled() { return this.tokenSecret !== ''; }
+  },
   // Directory holding the built console SPA (index.html/app.js/styles.css). The
   // relay serves it same-origin so app.zaforge.com is a dumb CT101 proxy. Empty
   // string disables static serving entirely (API-only relay).
