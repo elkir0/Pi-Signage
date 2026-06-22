@@ -120,9 +120,14 @@ services:
       - MQTT_SVC_CLIENT_ID=fleetapi
       - DYNSEC_ADMIN_USER=dynsec-admin
       - DYNSEC_ADMIN_PASSWORD=${DYNSEC_ADMIN_PASSWORD}
+      # Console SPA served same-origin from this dir (mounted read-only below).
+      - CONSOLE_STATIC_DIR=/app/console-static
     volumes:
       - fleet-data:/data
       - ./mosquitto/certs/ca.crt:/certs/ca.crt:ro
+      # Console SPA (index.html/app.js/styles.css), read-only. app.zaforge.com is
+      # then a dumb CT101 proxy to this single origin (static + /console API).
+      - ./console:/app/console-static:ro
       # The docker socket lets fleet-api `docker exec` into the wireguard container
       # to run `wg set` / persist (live peer add, no tunnel flap). The socket grants
       # host control — acceptable on this single-tenant host. GATED note in README;

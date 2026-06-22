@@ -12,6 +12,7 @@ const enrollRoute = require('./routes/enroll');
 const adminRoute = require('./routes/admin');
 const consoleRoute = require('./routes/console');
 const { readJson, send, makeRateLimiter, clientIp } = require('./http');
+const staticSrv = require('./static');
 
 const enrollLimiter = makeRateLimiter(cfg.enroll.rateMaxPerMin);
 const consoleLoginLimiter = makeRateLimiter(cfg.consoleLoginRatePerMin);
@@ -149,6 +150,11 @@ async function main() {
         }
         return await adminRoute.handle(req, res, { body });
       }
+
+      // CONSOLE SPA static assets (same-origin). Whitelist-only; serves the
+      // login/console UI for app.zaforge.com. Checked AFTER every API route so it
+      // can never shadow /console, /admin, /enroll, /webhook, /health.
+      if (staticSrv.tryServe(req, res, cfg.consoleStaticDir)) return;
 
       return send(res, 404, { v: 1, error: 'not_found' });
     } catch (e) {

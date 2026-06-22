@@ -94,6 +94,10 @@ module.exports = {
   // device management work even if Stripe env is entirely absent.
   consolePublicUrl: opt('CONSOLE_PUBLIC_URL', 'https://app.zaforge.com'),
   consoleSessionTtlS: intOpt('CONSOLE_SESSION_TTL', 43200), // 12h opaque httpOnly session
+  // Directory holding the built console SPA (index.html/app.js/styles.css). The
+  // relay serves it same-origin so app.zaforge.com is a dumb CT101 proxy. Empty
+  // string disables static serving entirely (API-only relay).
+  consoleStaticDir: opt('CONSOLE_STATIC_DIR', '/app/console-static'),
   // Console login brute-force guard (per source IP).
   consoleLoginRatePerMin: intOpt('CONSOLE_LOGIN_RATE_PER_MIN', 10),
 
