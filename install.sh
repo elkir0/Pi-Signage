@@ -1168,6 +1168,9 @@ www-data ALL=(pi) NOPASSWD: /opt/pisignage/scripts/grim-capture.sh
 www-data ALL=(pi) NOPASSWD: /opt/pisignage/scripts/screen-power.sh
 # Redémarrer la session kiosk complète (alias générique lightdm/greetd) — invocation FIXE.
 www-data ALL=(root) NOPASSWD: /usr/bin/systemctl restart display-manager
+# Multi-WiFi : helper root (écrit les keyfiles NM + nmcli). Arguments FIXES (apply lit stdin).
+# INVARIANT : wifi-apply.sh DOIT rester root:root 0755 (sinon escalade vers root).
+www-data ALL=(root) NOPASSWD: /opt/pisignage/scripts/wifi-apply.sh apply, /opt/pisignage/scripts/wifi-apply.sh sync
 SUDOERS
     if sudo visudo -cf "$SUDO_TMP" >/dev/null 2>&1; then
         sudo install -o root -g root -m 0440 "$SUDO_TMP" /etc/sudoers.d/pisignage
@@ -1180,6 +1183,14 @@ SUDOERS
 
     # Ajouter www-data au groupe video (accès framebuffer pour screenshots)
     sudo usermod -aG video www-data
+
+    # Multi-WiFi : (re)poser l'invariant root:root 0755 sur le helper déployé depuis le dépôt.
+    if [ -f "$INSTALL_DIR/scripts/wifi-apply.sh" ]; then
+        sudo chown root:root "$INSTALL_DIR/scripts/wifi-apply.sh"
+        sudo chmod 0755 "$INSTALL_DIR/scripts/wifi-apply.sh"
+        # Migration : publier l'état initial (réseau WiFi actif -> slot 1) pour l'UI Paramètres.
+        sudo "$INSTALL_DIR/scripts/wifi-apply.sh" sync 2>/dev/null || true
+    fi
 
     # Helper de capture d'écran Wayland (grim) exécuté dans la session labwc de 'pi'.
     # php-fpm (www-data) l'invoque via `sudo -u pi` (cf. règle sudoers ci-dessus).
