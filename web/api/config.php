@@ -6,6 +6,10 @@
 
 require_once __DIR__ . '/_guard.php';
 require_once '../config.php';
+require_once __DIR__ . '/wifi-lib.php';
+
+const WIFI_STATE_JSON = '/opt/pisignage/config/wifi-networks.json';
+const WIFI_APPLY = '/opt/pisignage/scripts/wifi-apply.sh';
 
 $method = $_SERVER['REQUEST_METHOD'];
 $input = json_decode(file_get_contents('php://input'), true);
@@ -35,6 +39,10 @@ function handleGetConfig() {
         case 'network':
             $config = getNetworkConfig();
             jsonResponse(true, $config, 'Network configuration retrieved');
+            break;
+
+        case 'wifi':
+            jsonResponse(true, getWifiConfig(), 'WiFi configuration retrieved');
             break;
 
         case 'audio':
@@ -69,6 +77,10 @@ function handleUpdateConfig($input) {
 
         case 'network':
             updateNetworkConfig($input);
+            break;
+
+        case 'wifi':
+            updateWifiConfig($input);
             break;
 
         case 'audio':
@@ -237,57 +249,9 @@ function updateNetworkConfig($input) {
     $commands = [];
     $changes = [];
 
-    if (isset($input['ssid']) && isset($input['password'])) {
-        $ssid = $input['ssid'];
-        $password = $input['password'];
-
-        // Validate SSID (1-32 chars) and PSK (8-63 chars per WPA spec).
-        // Disallow control chars and the double-quote that would break the config block.
-        if (!is_string($ssid) || strlen($ssid) < 1 || strlen($ssid) > 32
-            || preg_match('/[\x00-\x1f"\\\\]/', $ssid)) {
-            jsonResponse(false, null, 'SSID invalide');
-        }
-        if (!is_string($password) || strlen($password) < 8 || strlen($password) > 63
-            || preg_match('/[\x00-\x1f"\\\\]/', $password)) {
-            jsonResponse(false, null, 'Mot de passe WiFi invalide (8-63 caractères)');
-        }
-
-        $changes[] = "WiFi SSID: $ssid";
-
-        // Create wpa_supplicant configuration
-        $wpaConfig = "
-country=FR
-ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
-update_config=1
-
-network={
-    ssid=\"$ssid\"
-    psk=\"$password\"
-}
-";
-
-        // Write the PSK to a private temp file (umask 0077 -> 0600, never world-readable)
-        // and remove it immediately after the sudo copy instead of a deferred shell rm.
-        $oldUmask = umask(0077);
-        $tempFile = tempnam(sys_get_temp_dir(), 'wpa_');
-        if ($tempFile === false) {
-            umask($oldUmask);
-            jsonResponse(false, null, 'Échec de création du fichier temporaire WiFi');
-        }
-        @chmod($tempFile, 0600);
-        file_put_contents($tempFile, $wpaConfig);
-        umask($oldUmask);
-
-        $copyResult = executeCommand('sudo cp ' . escapeshellarg($tempFile) . ' /etc/wpa_supplicant/wpa_supplicant.conf');
-        // Remove the secret-bearing temp file right away.
-        @unlink($tempFile);
-
-        if (!$copyResult['success']) {
-            jsonResponse(false, null, 'Échec de la mise à jour de la configuration WiFi');
-        }
-
-        $commands[] = "sudo wpa_cli -i wlan0 reconfigure";
-    }
+    // NB : la configuration WiFi (multi-réseaux + fallback) passe désormais par
+    // updateWifiConfig() (type=wifi) via NetworkManager. L'ancien chemin ssid/password
+    // unique (écriture wpa_supplicant.conf) a été retiré : NM gère wlan0, ce fichier était mort.
 
     if (isset($input['hostname'])) {
         $hostname = (string)$input['hostname'];
@@ -407,6 +371,51 @@ function updateSystemConfig($input) {
     } else {
         jsonResponse(false, null, 'Failed to update system configuration');
     }
+}
+
+function readWifiState() {
+    if (!is_readable(WIFI_STATE_JSON)) return [];
+    $j = json_decode((string)@file_get_contents(WIFI_STATE_JSON), true);
+    return (is_array($j) && isset($j['networks']) && is_array($j['networks'])) ? $j['networks'] : [];
+}
+
+function getWifiConfig() {
+    $networks = readWifiState();
+    // SSID actuellement connecté (NetworkManager).
+    $connected = '';
+    $r = executeCommand(['/usr/bin/nmcli', '-t', '-f', 'active,ssid', 'dev', 'wifi']);
+    if ($r['success']) {
+        foreach ($r['output'] as $line) {
+            if (strpos($line, 'yes:') === 0) { $connected = substr($line, 4); break; }
+        }
+    }
+    return ['networks' => $networks, 'connected_ssid' => $connected];
+}
+
+function updateWifiConfig($input) {
+    $networks = $input['networks'] ?? null;
+    if (!is_array($networks)) jsonResponse(false, null, 'networks requis');
+
+    $built = wifiValidateAndBuild($networks, readWifiState());
+    if (!$built['ok']) jsonResponse(false, null, $built['error']);
+
+    $payload = implode("\n", $built['lines']) . "\n";
+
+    // Invoquer le helper root via sudo, payload sur STDIN (le PSK ne touche jamais argv/disque).
+    $descriptors = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
+    $proc = @proc_open(['sudo', WIFI_APPLY, 'apply'], $descriptors, $pipes, null, null);
+    if (!is_resource($proc)) jsonResponse(false, null, 'Échec lancement wifi-apply');
+    fwrite($pipes[0], $payload); fclose($pipes[0]);
+    $out = stream_get_contents($pipes[1]); fclose($pipes[1]);
+    $err = stream_get_contents($pipes[2]); fclose($pipes[2]);
+    $rc = proc_close($proc);
+
+    if ($rc !== 0) {
+        logMessage("WiFi apply échec rc=$rc: " . trim($err));
+        jsonResponse(false, null, 'Échec application WiFi : ' . trim($err));
+    }
+    logMessage("WiFi mis à jour (" . count($built['lines']) . " réseau(x))");
+    jsonResponse(true, getWifiConfig(), 'Configuration WiFi appliquée');
 }
 
 function getLocalIP() {
