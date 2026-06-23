@@ -14,7 +14,7 @@ set -e
 export PATH="/usr/sbin:/sbin:$PATH"
 
 # Configuration
-VERSION="0.12.0"
+VERSION="0.12.4"
 INSTALL_DIR="/opt/pisignage"
 GITHUB_REPO="https://github.com/elkir0/Pi-Signage.git"
 BBB_URL="http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
@@ -237,6 +237,10 @@ install_dependencies() {
         "curl"
         "jq"
         "socat"
+        "network-manager"
+        "dnsmasq-base"
+        "qrencode"
+        "golang-go"
     )
 
     # Trixie-specific packages for Wayland kiosk mode
@@ -452,6 +456,13 @@ clone_from_github() {
         sudo cp -r "$TEMP_DIR/scripts"/* "$INSTALL_DIR/scripts/" 2>/dev/null || true
         sudo chmod +x "$INSTALL_DIR/scripts/"*.sh "$INSTALL_DIR/scripts/kiosk-apply" 2>/dev/null || true
 
+        # Persister la source de l'agent (Go) pour install_zaforge_agent (build après le clone ;
+        # TEMP_DIR est supprimé en fin de fonction). go.mod vit dans agent/.
+        sudo rm -rf "$INSTALL_DIR/agent-src"
+        sudo mkdir -p "$INSTALL_DIR/agent-src/agent" "$INSTALL_DIR/agent-src/deploy"
+        sudo cp -r "$TEMP_DIR/agent"/*  "$INSTALL_DIR/agent-src/agent/"  2>/dev/null || true
+        sudo cp -r "$TEMP_DIR/deploy"/* "$INSTALL_DIR/agent-src/deploy/" 2>/dev/null || true
+
         # SOURCE OF TRUTH: install.sh GÉNÈRE nginx/php/systemd. On ne copie depuis
         # config/ que la DATA runtime (whitelist), JAMAIS la config serveur du repo
         # (nginx-pisignage.conf, php-upload.ini, systemd/*.service = obsolètes/morts).
@@ -474,6 +485,11 @@ clone_from_github() {
 
         # Corriger les permissions après copie
         sudo chown -R www-data:www-data "$INSTALL_DIR/web"
+
+        # Traçabilité flotte : version + SHA déployés.
+        local _sha; _sha="$( (cd "$TEMP_DIR" 2>/dev/null && git rev-parse --short HEAD 2>/dev/null) || echo unknown )"
+        printf 'version=%s\nsha=%s\ndate=%s\n' "$VERSION" "$_sha" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" | sudo tee "$INSTALL_DIR/IMAGE_VERSION" >/dev/null
+        sudo chmod 0644 "$INSTALL_DIR/IMAGE_VERSION"
 
         # Nettoyer
         rm -rf "$TEMP_DIR"
@@ -1401,6 +1417,84 @@ provision_agent_token() {
 }
 
 # Fonction principale
+# Construit + installe l'agent de flotte Zaforge (zaforge-agent). Idempotent.
+# Buildé depuis /opt/pisignage/agent-src/agent (persisté au clone). Reste dormant tant que
+# ENABLE_RELAY=0 ; l'enrollment_code est rempli à l'onboarding/console.
+install_zaforge_agent() {
+    log_step "Installation de l'agent Zaforge"
+    local SRC="$INSTALL_DIR/agent-src"
+    local BUILDDIR="$SRC/agent"
+    [ -f "$SRC/go.mod" ] && BUILDDIR="$SRC"
+
+    sudo mkdir -p "$INSTALL_DIR/bin"
+    if command -v go >/dev/null 2>&1 && [ -d "$BUILDDIR" ]; then
+        if ( cd "$BUILDDIR" && sudo env CGO_ENABLED=0 HOME=/root go build -trimpath -o /tmp/zaforge-agent . ); then
+            sudo install -o root -g root -m 0755 /tmp/zaforge-agent "$INSTALL_DIR/bin/zaforge-agent"
+            sudo rm -f /tmp/zaforge-agent
+            log_info "agent buildé -> $INSTALL_DIR/bin/zaforge-agent"
+        else
+            log_warning "build agent échoué — binaire non installé (l'agent restera inactif)"
+        fi
+    else
+        log_warning "'go' absent ou source manquante — agent non buildé (copier un binaire arm64 dans $INSTALL_DIR/bin/zaforge-agent)"
+    fi
+
+    # relay.json (gabarit ; enrollment_code rempli à l'onboarding/console). 0640 pi:pi.
+    if [ ! -f "$INSTALL_DIR/config/relay.json" ]; then
+        sudo tee "$INSTALL_DIR/config/relay.json" >/dev/null <<'RELAYJSON'
+{
+  "relay_url": "https://relay.zaforge.com",
+  "enrollment_code": "",
+  "rebind": false
+}
+RELAYJSON
+        sudo chown pi:pi "$INSTALL_DIR/config/relay.json"
+        sudo chmod 0640 "$INSTALL_DIR/config/relay.json"
+    fi
+
+    # Répertoire d'état WG possédé par l'agent (pi), 0700.
+    sudo mkdir -p "$INSTALL_DIR/config/relay"
+    sudo chown pi:pi "$INSTALL_DIR/config/relay"
+    sudo chmod 0700 "$INSTALL_DIR/config/relay"
+
+    # Invariant sécurité : helpers WG root:root 0755 (déployés via scripts/ + configure_sudo).
+    for h in zaforge-wg-up.sh zaforge-wg-down.sh; do
+        if [ -f "$INSTALL_DIR/scripts/$h" ]; then
+            sudo chown root:root "$INSTALL_DIR/scripts/$h"; sudo chmod 0755 "$INSTALL_DIR/scripts/$h"
+        fi
+    done
+
+    # feature flag par défaut OFF (l'agent s'auto-arrête tant que ENABLE_RELAY=0).
+    local FF="$INSTALL_DIR/config/feature_flags"
+    sudo touch "$FF"
+    if ! sudo grep -q '^ENABLE_RELAY=' "$FF" 2>/dev/null; then
+        echo 'ENABLE_RELAY=0' | sudo tee -a "$FF" >/dev/null
+    fi
+
+    # Unité systemd (activée ; self-exit tant que ENABLE_RELAY=0).
+    if [ -f "$SRC/deploy/systemd/zaforge-agent.service" ]; then
+        sudo install -o root -g root -m 0644 "$SRC/deploy/systemd/zaforge-agent.service" /etc/systemd/system/zaforge-agent.service
+        sudo systemctl daemon-reload
+        sudo systemctl enable zaforge-agent.service 2>/dev/null || true
+        sudo systemctl restart zaforge-agent.service 2>/dev/null || true
+        log_info "service zaforge-agent installé + activé (ENABLE_RELAY=0 -> dormant)"
+    else
+        log_warning "unité zaforge-agent.service introuvable dans $SRC/deploy/systemd"
+    fi
+}
+
+# Provisionne le secret du pont proxy "mode complet" (lu par web/includes/auth.php). Idempotent.
+# Per-device : pour l'image, firstboot.sh le régénère (Phase C2) ; ici pour une install normale.
+provision_relay_proxy_secret() {
+    local F="$INSTALL_DIR/config/relay-proxy-secret"
+    if [ ! -s "$F" ]; then
+        openssl rand -hex 32 | sudo tee "$F" >/dev/null
+        sudo chown root:www-data "$F"
+        sudo chmod 0640 "$F"
+        log_info "relay-proxy-secret généré"
+    fi
+}
+
 main() {
     # Parse flags (acceptés dans n'importe quel ordre): --auto, --force
     local banner_arg=""
@@ -1428,6 +1522,8 @@ main() {
     configure_webserver
     configure_sudo
     provision_agent_token
+    install_zaforge_agent
+    provision_relay_proxy_secret
     configure_autostart
     test_installation
 
