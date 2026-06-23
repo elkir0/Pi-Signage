@@ -1184,6 +1184,14 @@ SUDOERS
     # Ajouter www-data au groupe video (accès framebuffer pour screenshots)
     sudo usermod -aG video www-data
 
+    # SÉCURITÉ (privesc) : le répertoire des helpers root sudo-grantés NE DOIT PAS être writable par
+    # www-data. install.sh a chown -R www-data:www-data $INSTALL_DIR plus tôt -> sans ce correctif,
+    # www-data pourrait renommer/remplacer un helper root (wifi-apply.sh, audio-output.sh,
+    # zaforge-wg-*.sh, grim-capture.sh) et l'exécuter EN ROOT via sudo. On root-own le répertoire
+    # (les helpers à l'intérieur sont déjà root:root ; rien n'y écrit au runtime).
+    sudo chown root:root "$INSTALL_DIR/scripts"
+    sudo chmod 0755 "$INSTALL_DIR/scripts"
+
     # Multi-WiFi : (re)poser l'invariant root:root 0755 sur le helper déployé depuis le dépôt.
     if [ -f "$INSTALL_DIR/scripts/wifi-apply.sh" ]; then
         sudo chown root:root "$INSTALL_DIR/scripts/wifi-apply.sh"
