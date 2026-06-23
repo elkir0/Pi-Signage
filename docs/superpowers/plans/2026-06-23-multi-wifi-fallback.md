@@ -264,6 +264,20 @@ function updateWifiConfig($input) {
 
 ---
 
+> **Corrections apportées en exécution (2026-06-23)** — deux bugs détectés et corrigés vs le
+> brouillon de code ci-dessous :
+> 1. **Identité de profil par SSID (hash), pas par numéro de slot.** Nommer les profils
+>    `zf-wifi-1/2/3` rendait un **réordonnancement** = réécriture du SSID du profil *actif* →
+>    NetworkManager pouvait **couper la connexion** (fatal sur un Pi en WiFi). Le helper livré nomme
+>    chaque profil `zf-wifi-<sha1(ssid)[:12]>` (stable par réseau) → un réordonnancement ne change que
+>    `autoconnect-priority`. Le numéro de slot reste un concept d'affichage (dérivé de la priorité).
+> 2. **Répertoire temp unique `0700` (au lieu d'un accumulateur via `$(mktmp)`)** : le snapshot
+>    contient les PSK (base64) ; la substitution de commande perdait le suivi des temp → fuite
+>    possible dans `/tmp`. Le helper livré met tout dans `mktemp -d` (0700) nettoyé par trap.
+>
+> Le helper réellement livré (`scripts/wifi-apply.sh`) reflète ces corrections ; le bloc ci-dessous
+> est conservé pour l'historique de conception.
+
 ## Task 3 : Helper root `scripts/wifi-apply.sh`
 
 **Files:** Create `scripts/wifi-apply.sh`
