@@ -18,6 +18,12 @@
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
+
+// Gate d'onboarding 1er démarrage : si la box est en cours d'onboarding (marqueur root), le kiosk
+// montre l'écran de setup au lieu du player. FAIL-OPEN : @include + function_exists -> toute erreur
+// laisse passer au player (ne JAMAIS bloquer un écran qui marche).
+@include_once __DIR__ . '/includes/onboarding.php';
+if (function_exists('zfOnboardingActive') && zfOnboardingActive()) { header('Location: /setup'); exit; }
 ?>
 <!DOCTYPE html>
 <html lang="fr" translate="no">

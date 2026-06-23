@@ -936,6 +936,21 @@ server {
         rewrite ^ /api/playlist.php last;
     }
 
+    # Onboarding 1er démarrage : /setup -> setup.php (page publique kiosk + téléphone).
+    location = /setup {
+        rewrite ^ /setup.php last;
+    }
+
+    # Portail captif : les sondes OS de détection internet -> 302 vers l'assistant (sinon le
+    # téléphone croit avoir internet et n'ouvre pas la page). Inoffensif hors onboarding.
+    location = /generate_204             { return 302 http://10.42.0.1/setup; }
+    location = /gen_204                  { return 302 http://10.42.0.1/setup; }
+    location = /hotspot-detect.html      { return 302 http://10.42.0.1/setup; }
+    location = /library/test/success.html { return 302 http://10.42.0.1/setup; }
+    location = /connecttest.txt          { return 302 http://10.42.0.1/setup; }
+    location = /ncsi.txt                 { return 302 http://10.42.0.1/setup; }
+    location = /canonical.html           { return 302 http://10.42.0.1/setup; }
+
     location / {
         try_files \$uri \$uri/ /index.php?\$query_string;
     }
@@ -1187,6 +1202,9 @@ www-data ALL=(root) NOPASSWD: /usr/bin/systemctl restart display-manager
 # Multi-WiFi : helper root (écrit les keyfiles NM + nmcli). Arguments FIXES (apply lit stdin).
 # INVARIANT : wifi-apply.sh DOIT rester root:root 0755 (sinon escalade vers root).
 www-data ALL=(root) NOPASSWD: /opt/pisignage/scripts/wifi-apply.sh apply, /opt/pisignage/scripts/wifi-apply.sh sync
+# Onboarding : point d'accès (radio unique). Arguments FIXES, aucune entrée utilisateur.
+# INVARIANT : onboard-ap.sh DOIT rester root:root 0755.
+www-data ALL=(root) NOPASSWD: /opt/pisignage/scripts/onboard-ap.sh up, /opt/pisignage/scripts/onboard-ap.sh down, /opt/pisignage/scripts/onboard-ap.sh status
 SUDOERS
     if sudo visudo -cf "$SUDO_TMP" >/dev/null 2>&1; then
         sudo install -o root -g root -m 0440 "$SUDO_TMP" /etc/sudoers.d/pisignage
@@ -1214,6 +1232,11 @@ SUDOERS
         sudo chmod 0755 "$INSTALL_DIR/scripts/wifi-apply.sh"
         # Migration : publier l'état initial (réseau WiFi actif -> slot 1) pour l'UI Paramètres.
         sudo "$INSTALL_DIR/scripts/wifi-apply.sh" sync 2>/dev/null || true
+    fi
+    # Onboarding : invariant root:root 0755 sur le helper du point d'accès.
+    if [ -f "$INSTALL_DIR/scripts/onboard-ap.sh" ]; then
+        sudo chown root:root "$INSTALL_DIR/scripts/onboard-ap.sh"
+        sudo chmod 0755 "$INSTALL_DIR/scripts/onboard-ap.sh"
     fi
 
     # Helper de capture d'écran Wayland (grim) exécuté dans la session labwc de 'pi'.

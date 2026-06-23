@@ -44,6 +44,18 @@ if (basename($_SERVER['SCRIPT_NAME']) === 'display.php') {
     }
 }
 
+// Onboarding 1er démarrage : api/setup.php est PUBLIC (téléphone du client, sans session)
+// UNIQUEMENT pendant l'onboarding actif (marqueur root .onboarding, .onboarded absent). Dès que
+// l'onboarding est terminé, l'exception ne s'ouvre plus -> les endpoints redeviennent 401 (auto-
+// désactivation ; pas de trou permanent de config wifi/relais non authentifié). CSRF non exigé ici
+// (téléphone sans session) : la protection est l'état non-provisionné + la validation des helpers root.
+if (basename($_SERVER['SCRIPT_NAME']) === 'setup.php') {
+    require_once __DIR__ . '/../includes/onboarding.php';
+    if (function_exists('zfOnboardingActive') && zfOnboardingActive()) {
+        return;
+    }
+}
+
 // Pont d'authentification machine (agent local). UNIQUEMENT en loopback + token partagé.
 // Réussit (return, en sautant session + must_change + CSRF) SEULEMENT si REMOTE_ADDR est loopback
 // ET le token correspond (hash_equals, >= 32 chars). REMOTE_ADDR est le SEUL signal de loopback —
