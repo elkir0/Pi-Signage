@@ -375,7 +375,9 @@ function updateSystemConfig($input) {
 
 function readWifiState() {
     if (!is_readable(WIFI_STATE_JSON)) return [];
-    $j = json_decode((string)@file_get_contents(WIFI_STATE_JSON), true);
+    // JSON_INVALID_UTF8_SUBSTITUTE : un octet douteux ne doit pas annuler tout le décodage
+    // (sinon un seul SSID exotique viderait la liste — défense en profondeur).
+    $j = json_decode((string)@file_get_contents(WIFI_STATE_JSON), true, 512, JSON_INVALID_UTF8_SUBSTITUTE);
     return (is_array($j) && isset($j['networks']) && is_array($j['networks'])) ? $j['networks'] : [];
 }
 
@@ -386,7 +388,8 @@ function getWifiConfig() {
     $r = executeCommand(['/usr/bin/nmcli', '-t', '-f', 'active,ssid', 'dev', 'wifi']);
     if ($r['success']) {
         foreach ($r['output'] as $line) {
-            if (strpos($line, 'yes:') === 0) { $connected = substr($line, 4); break; }
+            // nmcli -t échappe ':' (et '\') dans le SSID -> déséchapper pour matcher le SSID stocké.
+            if (strpos($line, 'yes:') === 0) { $connected = str_replace(['\\:', '\\\\'], [':', '\\'], substr($line, 4)); break; }
         }
     }
     return ['networks' => $networks, 'connected_ssid' => $connected];
@@ -410,6 +413,12 @@ function updateWifiConfig($input) {
     $err = stream_get_contents($pipes[2]); fclose($pipes[2]);
     $rc = proc_close($proc);
 
+    if ($rc === 3) {
+        // Config écrite mais connexion au réseau ciblé non confirmée (mauvais mot de passe / hors
+        // portée). Le lien existant n'a pas été coupé -> avertissement, pas échec.
+        logMessage("WiFi appliqué mais non connecté (rc=3): " . trim($err));
+        jsonResponse(true, getWifiConfig(), "WiFi enregistré, mais la connexion au réseau configuré n'est pas confirmée (vérifiez le SSID, le mot de passe ou la portée).");
+    }
     if ($rc !== 0) {
         logMessage("WiFi apply échec rc=$rc: " . trim($err));
         jsonResponse(false, null, 'Échec application WiFi : ' . trim($err));

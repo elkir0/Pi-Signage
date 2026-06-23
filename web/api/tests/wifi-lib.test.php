@@ -58,5 +58,13 @@ check('max 3 -> erreur', $r['ok'] === false);
 $r = wifiValidateAndBuild([], []);
 check('aucun -> erreur', $r['ok'] === false);
 
+// 13) SSID non-UTF-8 (octet isolé 0xE9) → erreur (sinon corromprait wifi-networks.json)
+$r = wifiValidateAndBuild([['ssid'=>"home\xE9",'psk'=>'motdepasse1']], []);
+check('ssid non-utf8 -> erreur', $r['ok'] === false);
+
+// 14) SSID UTF-8 accentué valide (é = C3 A9) accepté
+$r = wifiValidateAndBuild([['ssid'=>"Caf\xC3\xA9",'psk'=>'motdepasse1']], []);
+check('ssid utf8 accentué ok', $r['ok'] === true);
+
 echo $fail === 0 ? "\nTOUS OK\n" : "\n$fail ECHEC(S)\n";
 exit($fail === 0 ? 0 : 1);

@@ -31,8 +31,13 @@ unb64() { printf '%s' "$1" | base64 -d 2>/dev/null || true; }
 prof_name() { printf 'zf-wifi-%s' "$(printf '%s' "$1" | sha1sum | cut -c1-12)"; }
 is_ours()   { printf '%s' "$1" | grep -Eq '^zf-wifi-[0-9a-f]{12}$'; }
 
-# SSID : 1-32 octets, ni " ni \, aucun caractère de contrôle.
-valid_ssid() { printf '%s' "$1" | LC_ALL=C grep -Eq '^[^"\\]{1,32}$' && ! printf '%s' "$1" | LC_ALL=C grep -q '[[:cntrl:]]'; }
+# SSID : 1-32 octets, ni " ni \, aucun caractère de contrôle, UTF-8 valide
+# (un octet non-UTF-8 casserait wifi-networks.json -> json_decode null -> liste vidée).
+valid_ssid() {
+    printf '%s' "$1" | LC_ALL=C grep -Eq '^[^"\\]{1,32}$' || return 1
+    printf '%s' "$1" | LC_ALL=C grep -q '[[:cntrl:]]' && return 1
+    printf '%s' "$1" | iconv -f UTF-8 -t UTF-8 >/dev/null 2>&1
+}
 # PSK : 8-63 caractères, ni " ni \, aucun contrôle (l'espace en tête/fin est rejeté côté PHP).
 valid_psk()  { printf '%s' "$1" | LC_ALL=C grep -Eq '^[^"\\]{8,63}$' && ! printf '%s' "$1" | LC_ALL=C grep -q '[[:cntrl:]]'; }
 valid_priority() { case "$1" in 10|20|30) return 0 ;; *) return 1 ;; esac; }
@@ -41,17 +46,43 @@ valid_priority() { case "$1" in 10|20|30) return 0 ;; *) return 1 ;; esac; }
 wifi_uuids() { "$NMCLI" -t -f UUID,TYPE con show 2>/dev/null | awk -F: '$2=="802-11-wireless"{print $1}'; }
 con_get()   { "$NMCLI" -s -g "$1" con show "$2" 2>/dev/null || true; }
 
+# Lit le PSK d'un profil. NM renvoie parfois vide juste après un con up/reload (occupé) ->
+# on réessaie brièvement, mais SEULEMENT si la sécurité est configurée (sinon réseau ouvert).
+read_psk() {
+    _p="$(con_get 802-11-wireless-security.psk "$1")"
+    [ -n "$_p" ] && { printf '%s' "$_p"; return; }
+    [ -n "$(con_get 802-11-wireless-security.key-mgmt "$1")" ] || { printf ''; return; }
+    _i=0
+    while [ "$_i" -lt 4 ]; do
+        sleep 0.25
+        _p="$(con_get 802-11-wireless-security.psk "$1")"
+        [ -n "$_p" ] && break
+        _i=$((_i+1))
+    done
+    printf '%s' "$_p"
+}
+
 # Snapshot ssid(b64)->psk(b64) de TOUS les profils wifi ; FOREIGN = UUIDs des profils non-nôtres.
+# NOS profils sont écrits EN PREMIER -> lookup_psk (1er match) préfère notre PSK sur un doublon
+# de SSID (ex. profil étranger résiduel avec un ancien mot de passe). $SNAP contient des PSK
+# (base64 = clair) -> 0600 en plus du WORKDIR 0700.
 build_snapshot() {
-    : > "$SNAP"; : > "$FOREIGN"
+    : > "$FOREIGN"
+    : > "$WORKDIR/snap.ours"; : > "$WORKDIR/snap.other"
     for u in $(wifi_uuids); do
         id="$(con_get connection.id "$u")"
         ssid="$(con_get 802-11-wireless.ssid "$u")"
         [ -n "$ssid" ] || continue
-        psk="$(con_get 802-11-wireless-security.psk "$u")"
-        printf '%s %s\n' "$(b64 "$ssid")" "$(b64 "$psk")" >> "$SNAP"
-        is_ours "$id" || printf '%s\n' "$u" >> "$FOREIGN"
+        psk="$(read_psk "$u")"
+        if is_ours "$id"; then
+            printf '%s %s\n' "$(b64 "$ssid")" "$(b64 "$psk")" >> "$WORKDIR/snap.ours"
+        else
+            printf '%s %s\n' "$(b64 "$ssid")" "$(b64 "$psk")" >> "$WORKDIR/snap.other"
+            printf '%s\n' "$u" >> "$FOREIGN"
+        fi
     done
+    cat "$WORKDIR/snap.ours" "$WORKDIR/snap.other" > "$SNAP"
+    chmod 0600 "$SNAP" "$WORKDIR/snap.ours" "$WORKDIR/snap.other" 2>/dev/null || true
 }
 lookup_psk() { line="$(awk -v w="$(b64 "$1")" '$1==w{print $2; exit}' "$SNAP")"; [ -n "$line" ] && unb64 "$line" || true; }
 
@@ -90,7 +121,9 @@ write_state_from_plan() { # PLAN(slot priority ssidb pskb)
 }
 
 cmd_apply() {
-    WORKDIR="$(mktemp -d /tmp/wifi-apply.XXXXXX)"; chmod 0700 "$WORKDIR"
+    # /run (tmpfs root) plutôt que /tmp : sur la box kiosk /tmp est souvent à 100% (Chromium) ->
+    # un ENOSPC casserait l'apply en plein milieu (set -e). Repli /tmp si /run indisponible.
+    WORKDIR="$(mktemp -d /run/wifi-apply.XXXXXX 2>/dev/null || mktemp -d /tmp/wifi-apply.XXXXXX)"; chmod 0700 "$WORKDIR"
     SNAP="$WORKDIR/snap"; FOREIGN="$WORKDIR/foreign"; PLAN="$WORKDIR/plan"
     build_snapshot
 
@@ -104,7 +137,10 @@ cmd_apply() {
         k="$(b64 "$ssid")"; case "$seen" in *" $k "*) die "ssid doublon" ;; esac; seen="$seen$k "
         case "$mode" in
             new)  valid_psk "$secret" || die "mot de passe invalide"; psk="$secret" ;;
-            keep) psk="$(lookup_psk "$ssid")"; [ -n "$psk" ] || die "pas de mot de passe memorise pour ce reseau" ;;
+            keep) psk="$(lookup_psk "$ssid")"; [ -n "$psk" ] || die "pas de mot de passe memorise pour ce reseau"
+                  # PSK mémorisé = origine NM (possiblement étrangère) -> garde anti-injection keyfile
+                  # (pas de longueur imposée : un PMK 64-hex est légitime ; on bloque les ctrl/newline).
+                  printf '%s' "$psk" | LC_ALL=C grep -q '[[:cntrl:]]' && die "mot de passe memorise invalide" ;;
             *)    die "mode invalide" ;;
         esac
         printf '%s\t%s\t%s\t%s\n' "$slot" "$priority" "$(b64 "$ssid")" "$(b64 "$psk")" >> "$PLAN"
@@ -119,36 +155,59 @@ cmd_apply() {
         printf '%s\n' "$name" >> "$TARGETS"
     done < "$PLAN"
 
+    # Connexion active AVANT toute opération destructive (anti-lock-out).
+    active_before="$("$NMCLI" -t -g GENERAL.CONNECTION dev show "$IFACE" 2>/dev/null || true)"
+
     "$NMCLI" con reload >/dev/null 2>&1 || true
 
-    # Supprimer NOS anciens profils dont le ssid n'est plus ciblé.
-    for u in $(wifi_uuids); do
-        id="$(con_get connection.id "$u")"
-        if is_ours "$id" && ! grep -Fxq "$id" "$TARGETS"; then
-            "$NMCLI" con delete "$u" >/dev/null 2>&1 || true
-        fi
-    done
-
-    # Désactiver l'autoconnect des profils WiFi ÉTRANGERS (jamais zf0/eth0/lo/non-wifi).
-    while read -r u; do [ -n "$u" ] && "$NMCLI" con modify "$u" connection.autoconnect no >/dev/null 2>&1 || true; done < "$FOREIGN"
-
-    # Connecter le meilleur réseau VISIBLE si on n'est pas déjà dessus (handoff / prise de possession).
+    # --- HANDOFF D'ABORD : connecter le meilleur réseau ciblé VISIBLE, sans couper un lien déjà bon. ---
+    # nmcli -t échappe ':' en '\:' dans les SSID -> on les déséchappe (nos SSID n'ont jamais de '\').
     "$NMCLI" dev wifi list --rescan yes >/dev/null 2>&1 || true
-    visible="$("$NMCLI" -t -f SSID dev wifi list 2>/dev/null || true)"
-    active_id="$("$NMCLI" -t -g GENERAL.CONNECTION dev show "$IFACE" 2>/dev/null || true)"
+    "$NMCLI" -t -f SSID dev wifi list 2>/dev/null | sed 's/\\:/:/g' > "$WORKDIR/visible" || true
     best=""
     while IFS="$(printf '\t')" read -r slot priority ssidb pskb; do
         s="$(unb64 "$ssidb")"
-        if printf '%s\n' "$visible" | grep -Fxq "$s"; then best="$(prof_name "$s")"; break; fi
+        if grep -Fxq "$s" "$WORKDIR/visible"; then best="$(prof_name "$s")"; break; fi
     done < "$PLAN"
-    if [ -n "$best" ] && [ "$best" != "$active_id" ]; then "$NMCLI" con up "$best" >/dev/null 2>&1 || true; fi
+    if [ -n "$best" ] && [ "$best" != "$active_before" ]; then "$NMCLI" con up "$best" >/dev/null 2>&1 || true; fi
+
+    # État RÉEL après handoff : sommes-nous sur un réseau CIBLÉ ?
+    active_now="$("$NMCLI" -t -g GENERAL.CONNECTION dev show "$IFACE" 2>/dev/null || true)"
+    on_planned=0
+    [ -n "$active_now" ] && grep -Fxq "$active_now" "$TARGETS" && on_planned=1
+
+    # --- Élagage SÛR : supprimer NOS profils hors-cible, mais JAMAIS le profil actif tant qu'on
+    #     n'a pas basculé sur un réseau ciblé (sinon on couperait le seul lien fonctionnel). ---
+    for u in $(wifi_uuids); do
+        id="$(con_get connection.id "$u")"
+        is_ours "$id" || continue
+        grep -Fxq "$id" "$TARGETS" && continue
+        if [ "$id" = "$active_now" ] && [ "$on_planned" = 0 ]; then continue; fi
+        "$NMCLI" con delete "$u" >/dev/null 2>&1 || true
+    done
+
+    # Désactiver l'autoconnect des profils ÉTRANGERS UNIQUEMENT si on est bien sur un réseau ciblé
+    # (sinon on laisserait la box sans repli au prochain reboot). Jamais zf0/eth0/lo/non-wifi.
+    if [ "$on_planned" = 1 ]; then
+        while read -r u; do [ -n "$u" ] && "$NMCLI" con modify "$u" connection.autoconnect no >/dev/null 2>&1 || true; done < "$FOREIGN"
+    fi
 
     write_state_from_plan "$PLAN"
-    log "applique ($(wc -l < "$PLAN" | tr -d ' ') reseau(x))"
+    n="$(wc -l < "$PLAN" | tr -d ' ')"
+    if [ "$on_planned" = 1 ]; then
+        log "applique ($n reseau(x), connecté)"
+    else
+        # Config écrite, mais pas (encore) connecté à un réseau ciblé -> signaler (exit 3) sans
+        # avoir cassé le lien existant. config.php transforme ça en avertissement, pas en échec.
+        log "applique ($n reseau(x)) mais NON connecté à un réseau configuré"
+        exit 3
+    fi
 }
 
 cmd_sync() {
-    WORKDIR="$(mktemp -d /tmp/wifi-apply.XXXXXX)"; chmod 0700 "$WORKDIR"
+    # /run (tmpfs root) plutôt que /tmp : sur la box kiosk /tmp est souvent à 100% (Chromium) ->
+    # un ENOSPC casserait l'apply en plein milieu (set -e). Repli /tmp si /run indisponible.
+    WORKDIR="$(mktemp -d /run/wifi-apply.XXXXXX 2>/dev/null || mktemp -d /tmp/wifi-apply.XXXXXX)"; chmod 0700 "$WORKDIR"
     PLAN="$WORKDIR/plan"; list="$WORKDIR/list"; : > "$PLAN"; : > "$list"
     for u in $(wifi_uuids); do
         id="$(con_get connection.id "$u")"

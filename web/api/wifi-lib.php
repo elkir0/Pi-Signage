@@ -5,10 +5,12 @@
  * Inclus par api/config.php ; testé par api/tests/wifi-lib.test.php.
  */
 
-/** SSID : 1-32 octets, aucun caractère de contrôle, ni " ni \ */
+/** SSID : 1-32 octets, aucun caractère de contrôle, ni " ni \, et UTF-8 valide
+ *  (un octet non-UTF-8 corromprait wifi-networks.json -> json_decode null -> liste vidée). */
 function wifiValidSsid($s) {
     return is_string($s) && strlen($s) >= 1 && strlen($s) <= 32
-        && !preg_match('/[\x00-\x1f\x7f"\\\\]/', $s);
+        && !preg_match('/[\x00-\x1f\x7f"\\\\]/', $s)
+        && mb_check_encoding($s, 'UTF-8');
 }
 
 /** PSK : 8-63 caractères, aucun contrôle, ni " ni \, ni espace en tête/fin (casse le keyfile NM). */
