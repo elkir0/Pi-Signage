@@ -25,6 +25,8 @@ document.addEventListener('DOMContentLoaded', function () {
     setupSettingsHandlers();
     setupLogsHandlers();
 
+    if (page === 'settings') run('wifi', () => window.loadWifiConfig && window.loadWifiConfig());
+
     console.log('PiSignage initialized (page: ' + (page || 'n/a') + ')');
 });
 
@@ -101,13 +103,68 @@ function setupSettingsHandlers() {
             showAlert(data.success ? 'Configuration sauvegardée' : ('Erreur : ' + data.message), data.success ? 'success' : 'error');
         } catch (e) { console.error(e); showAlert('Erreur de sauvegarde', 'error'); }
     };
-    window.saveNetworkConfig = async function () {
-        const s = document.getElementById('wifi-ssid'), p = document.getElementById('wifi-password');
-        if (!s) return;
-        if (!s.value) { showAlert('Entrez un SSID', 'error'); return; }
+    // --- Multi-WiFi (3 emplacements numérotés, ordre = préférence) ---
+    function renderWifiSlots(networks, connected) {
+        const host = document.getElementById('wifi-slots');
+        if (!host) return;
+        const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        const bySlot = {};
+        (networks || []).forEach(n => { bySlot[n.slot] = n; });
+        let html = '';
+        for (let i = 1; i <= 3; i++) {
+            const n = bySlot[i] || {};
+            const ssid = n.ssid || '';
+            const has = !!n.has_password;
+            const isConn = ssid && connected && ssid === connected;
+            html += '<div class="wifi-slot" data-slot="' + i + '" style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">'
+                + '<span class="wifi-badge" style="flex:none;width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:600;color:#fff;background:' + (i === 1 ? 'var(--accent,#10b981)' : 'var(--surface-3,#334155)') + '">' + i + '</span>'
+                + '<input type="text" class="form-control wifi-ssid" style="flex:2;min-width:140px" placeholder="SSID ' + (i === 1 ? '(prioritaire)' : '(secours)') + '" value="' + esc(ssid) + '">'
+                + '<input type="password" class="form-control wifi-psk" autocomplete="new-password" style="flex:1;min-width:120px" placeholder="' + (has ? '••• inchangé' : 'Mot de passe') + '">'
+                + '<span class="wifi-conn" style="flex:none;color:var(--accent,#10b981);font-size:12px;font-weight:600;' + (isConn ? '' : 'display:none') + '">● connecté</span>'
+                + '<span style="flex:none;display:inline-flex;gap:4px">'
+                + '<button type="button" class="btn btn-secondary" style="padding:6px 9px" onclick="moveWifiSlot(' + i + ',-1)" title="Monter">▲</button>'
+                + '<button type="button" class="btn btn-secondary" style="padding:6px 9px" onclick="moveWifiSlot(' + i + ',1)" title="Descendre">▼</button>'
+                + '</span></div>';
+        }
+        host.innerHTML = html;
+    }
+
+    window.loadWifiConfig = async function () {
         try {
-            const data = await PiSignage.api.config.saveNetwork(s.value, p ? p.value : '');
-            showAlert(data.success ? 'Configuration WiFi sauvegardée' : ('Erreur : ' + data.message), data.success ? 'success' : 'error');
+            const data = await PiSignage.api.config.getWifi();
+            if (data.success && data.data) renderWifiSlots(data.data.networks, data.data.connected_ssid);
+        } catch (e) { console.error(e); }
+    };
+
+    // Réordonne en échangeant les valeurs (SSID + clé saisie + état) entre deux lignes.
+    window.moveWifiSlot = function (slot, dir) {
+        const host = document.getElementById('wifi-slots');
+        if (!host) return;
+        const rows = Array.from(host.querySelectorAll('.wifi-slot'));
+        const i = slot - 1, j = i + dir;
+        if (j < 0 || j >= rows.length) return;
+        const a = rows[i], b = rows[j];
+        const swapVal = sel => { const x = a.querySelector(sel), y = b.querySelector(sel); const t = x.value; x.value = y.value; y.value = t; };
+        swapVal('.wifi-ssid'); swapVal('.wifi-psk');
+        const pa = a.querySelector('.wifi-psk'), pb = b.querySelector('.wifi-psk');
+        const tp = pa.getAttribute('placeholder'); pa.setAttribute('placeholder', pb.getAttribute('placeholder')); pb.setAttribute('placeholder', tp);
+        const ca = a.querySelector('.wifi-conn'), cb = b.querySelector('.wifi-conn');
+        const td = ca.style.display; ca.style.display = cb.style.display; cb.style.display = td;
+    };
+
+    window.saveWifiConfig = async function () {
+        const host = document.getElementById('wifi-slots');
+        if (!host) return;
+        const rows = Array.from(host.querySelectorAll('.wifi-slot'));
+        const networks = rows.map(r => ({
+            ssid: r.querySelector('.wifi-ssid').value.trim(),
+            psk: r.querySelector('.wifi-psk').value
+        })).filter(n => n.ssid !== '');
+        if (networks.length === 0) { showAlert('Renseignez au moins un réseau', 'error'); return; }
+        try {
+            const data = await PiSignage.api.config.saveWifi(networks);
+            showAlert(data.success ? 'WiFi appliqué' : ('Erreur : ' + data.message), data.success ? 'success' : 'error');
+            if (data.success && data.data) renderWifiSlots(data.data.networks, data.data.connected_ssid);
         } catch (e) { console.error(e); showAlert('Erreur de sauvegarde', 'error'); }
     };
 }

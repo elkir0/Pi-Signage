@@ -107,18 +107,14 @@ $mustChange = !empty($_SESSION['must_change_password']);
                 <div class="card-head">
                     <h2 class="card-title"><?= icon('wifi') ?>Réseau Wi-Fi</h2>
                 </div>
-                <form id="network-form" autocomplete="off" onsubmit="return false;">
-                    <div class="form-group">
-                        <label for="wifi-ssid">SSID</label>
-                        <input type="text" class="form-control" id="wifi-ssid" placeholder="Nom du réseau">
-                    </div>
-                    <div class="form-group">
-                        <label for="wifi-password">Mot de passe</label>
-                        <input type="password" class="form-control" id="wifi-password"
-                               placeholder="Mot de passe du réseau" autocomplete="new-password">
-                    </div>
-                    <button type="button" class="btn btn-primary" onclick="saveNetworkConfig()">
-                        <?= icon('check') ?>Appliquer
+                <p style="color:var(--text-faint);font-size:13px;margin:0 0 14px">
+                    Jusqu'à 3 réseaux par ordre de préférence. La box se connecte au plus prioritaire
+                    disponible et rebascule dès qu'un meilleur réapparaît.
+                </p>
+                <form id="wifi-form" autocomplete="off" onsubmit="return false;">
+                    <div id="wifi-slots"><!-- rempli par loadWifiConfig() --></div>
+                    <button type="button" class="btn btn-primary" onclick="saveWifiConfig()">
+                        <?= icon('check') ?>Enregistrer &amp; appliquer
                     </button>
                 </form>
             </div>

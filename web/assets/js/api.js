@@ -323,14 +323,14 @@ PiSignage.api = {
             });
         },
 
-        saveNetwork: function(ssid, password) {
+        getWifi: function() {
+            return PiSignage.api.request('/api/config.php?action=wifi');
+        },
+
+        saveWifi: function(networks) {
             return PiSignage.api.request('/api/config.php', {
                 method: 'POST',
-                body: JSON.stringify({
-                    type: 'network',
-                    ssid: ssid,
-                    password: password
-                })
+                body: JSON.stringify({ type: 'wifi', networks: networks })
             });
         }
     },
