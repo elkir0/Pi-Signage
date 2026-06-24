@@ -314,4 +314,4 @@ function billingErrStatus(e) {
   }
 }
 
-module.exports = { handle };
+module.exports = { handle, verifyPassword, emailAllow, emailClear };

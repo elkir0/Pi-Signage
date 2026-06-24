@@ -7,6 +7,8 @@ const alloc = require('../alloc');
 const wg = require('../wg');
 const dynsec = require('../dynsec');
 const { send } = require('../http');
+const { entitlement } = require('../entitlement');
+const { verifyPassword, emailAllow, emailClear } = require('./console');
 
 function now() { return Math.floor(Date.now() / 1000); }
 
@@ -193,4 +195,35 @@ async function handle(req, res, ctx) {
   return send(res, 200, buildResponse(result.dev, mqttPassword));
 }
 
-module.exports = { handle };
+// POST /enroll/provision — la box, AU NOM du proprio, se connecte avec ses identifiants console
+// et reçoit un code d'enrôlement frais lié à SON tenant (le device ne nomme jamais le tenant ;
+// tenant_id vient du compte). Public (sans cookie), rate-limité comme le login console. ZÉRO
+// changement agent : le code part ensuite dans relay.json et l'agent l'échange via /enroll inchangé.
+async function provision(req, res, ctx) {
+  if (ctx.loginLimiter && !ctx.loginLimiter(ctx.ip)) return send(res, 429, { v: 1, error: 'rate_limited' });
+  const b = ctx.body || {};
+  if (typeof b.email !== 'string' || typeof b.password !== 'string') {
+    return send(res, 400, { v: 1, error: 'bad_request' });
+  }
+  if (!emailAllow(b.email)) return send(res, 429, { v: 1, error: 'rate_limited' });
+  const user = get().prepare(
+    'SELECT * FROM console_users WHERE email=? AND disabled_at IS NULL'
+  ).get(String(b.email).toLowerCase());
+  // Verify uniforme (hash factice si l'utilisateur n'existe pas) -> timing constant.
+  const ok = user ? await verifyPassword(b.password, user.pw_hash)
+    : await verifyPassword(b.password, 'scrypt$16384$AAAA$AAAA');
+  if (!user || !ok) return send(res, 401, { v: 1, error: 'invalid_credentials' });
+  emailClear(b.email);
+
+  const tenantId = user.tenant_id;                       // AUTORITATIF
+  if (!entitlement(tenantId).ok) return send(res, 402, { v: 1, error: 'payment_required' });
+
+  const code = ids.newEnrollmentCode();
+  const ts = now();
+  const ttl = Math.min(Math.max(cfg.enroll.codeTtlSeconds, 60), 24 * 3600);
+  get().prepare(`INSERT INTO enrollment_codes(code_hash, tenant_id, rebind, created_at, expires_at)
+    VALUES (?,?,?,?,?)`).run(ids.sha256hex(code), tenantId, 0, ts, ts + ttl);
+  return send(res, 201, { v: 1, code, expires_at: ts + ttl });
+}
+
+module.exports = { handle, provision };

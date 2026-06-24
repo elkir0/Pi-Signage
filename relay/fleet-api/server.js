@@ -146,6 +146,14 @@ async function main() {
         return await enrollRoute.handle(req, res, { body, ip: clientIp(req), enrollLimiter });
       }
 
+      // Onboarding : la box provisionne un code sous le tenant du proprio (login console, sans cookie).
+      if (req.method === 'POST' && path === '/enroll/provision') {
+        let body;
+        try { body = await readJson(req, cfg.enroll.maxBodyBytes); }
+        catch (_) { return send(res, 400, { v: 1, error: 'bad_request' }); }
+        return await enrollRoute.provision(req, res, { body, ip: clientIp(req), loginLimiter: consoleLoginLimiter });
+      }
+
       // CONSOLE BFF surface (same-origin; cookie session + CSRF inside the handler).
       if (path === '/console' || path.startsWith('/console/')) {
         let body = null;
