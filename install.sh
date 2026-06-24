@@ -1205,6 +1205,9 @@ www-data ALL=(root) NOPASSWD: /opt/pisignage/scripts/wifi-apply.sh apply, /opt/p
 # Onboarding : point d'accès (radio unique). Arguments FIXES, aucune entrée utilisateur.
 # INVARIANT : onboard-ap.sh DOIT rester root:root 0755.
 www-data ALL=(root) NOPASSWD: /opt/pisignage/scripts/onboard-ap.sh up, /opt/pisignage/scripts/onboard-ap.sh down, /opt/pisignage/scripts/onboard-ap.sh status, /opt/pisignage/scripts/onboard-ap.sh finalize
+# Onboarding : liaison compte. Le CODE est lu sur stdin (jamais argv) + validé dans le helper.
+# INVARIANT : relay-link.sh DOIT rester root:root 0755.
+www-data ALL=(root) NOPASSWD: /opt/pisignage/scripts/relay-link.sh
 SUDOERS
     if sudo visudo -cf "$SUDO_TMP" >/dev/null 2>&1; then
         sudo install -o root -g root -m 0440 "$SUDO_TMP" /etc/sudoers.d/pisignage
@@ -1233,11 +1236,13 @@ SUDOERS
         # Migration : publier l'état initial (réseau WiFi actif -> slot 1) pour l'UI Paramètres.
         sudo "$INSTALL_DIR/scripts/wifi-apply.sh" sync 2>/dev/null || true
     fi
-    # Onboarding : invariant root:root 0755 sur le helper du point d'accès.
-    if [ -f "$INSTALL_DIR/scripts/onboard-ap.sh" ]; then
-        sudo chown root:root "$INSTALL_DIR/scripts/onboard-ap.sh"
-        sudo chmod 0755 "$INSTALL_DIR/scripts/onboard-ap.sh"
-    fi
+    # Onboarding : invariant root:root 0755 sur les helpers AP + liaison compte.
+    for h in onboard-ap.sh relay-link.sh; do
+        if [ -f "$INSTALL_DIR/scripts/$h" ]; then
+            sudo chown root:root "$INSTALL_DIR/scripts/$h"
+            sudo chmod 0755 "$INSTALL_DIR/scripts/$h"
+        fi
+    done
 
     # Helper de capture d'écran Wayland (grim) exécuté dans la session labwc de 'pi'.
     # php-fpm (www-data) l'invoque via `sudo -u pi` (cf. règle sudoers ci-dessus).

@@ -97,6 +97,7 @@ $e = fn($s) => htmlspecialchars((string)$s, ENT_QUOTES);
     async function poll(){
       try{
         const r = await fetch('/api/setup.php?action=status',{cache:'no-store'});
+        if(!r.ok){ location.href='/player'; return; } // onboarding terminé -> retour au player
         const d = await r.json();
         if(!d.success) return;
         const s=d.data, dots=document.querySelectorAll('#kiosk-steps .dot'), msg=document.getElementById('kiosk-msg');
@@ -113,30 +114,68 @@ $e = fn($s) => htmlspecialchars((string)$s, ENT_QUOTES);
 <?php else: ?>
   <p class="sub">Assistant de configuration</p>
   <div class="card">
-    <form id="wifi-form" onsubmit="return false">
+    <!-- Étape 1 : WiFi du lieu -->
+    <div id="step1">
       <p class="hint" style="text-align:left;margin:0 0 4px">Étape 1 — Connectez l'écran au WiFi du lieu.</p>
       <label for="ssid">Nom du réseau (SSID)</label>
       <input type="text" id="ssid" autocapitalize="none" autocomplete="off" placeholder="Mon-WiFi">
       <label for="psk">Mot de passe</label>
       <input type="password" id="psk" autocomplete="off" placeholder="Clé du réseau">
-      <button id="go" onclick="submitWifi()">Connecter</button>
+      <button onclick="toStep2()">Suivant</button>
       <div class="steps"><span class="dot on"></span><span class="dot"></span></div>
-      <p class="msg" id="msg"></p>
-    </form>
+    </div>
+    <!-- Étape 2 : compte Zaforge -->
+    <div id="step2" style="display:none">
+      <p class="hint" style="text-align:left;margin:0 0 8px">Étape 2 — Liez l'écran à votre compte Zaforge.</p>
+      <div id="login-pane">
+        <label for="email">E-mail Zaforge</label>
+        <input type="email" id="email" autocapitalize="none" autocomplete="off" placeholder="vous@exemple.com">
+        <label for="zpw">Mot de passe Zaforge</label>
+        <input type="password" id="zpw" autocomplete="off" placeholder="Mot de passe du compte">
+        <p class="hint" style="margin:8px 0 0"><a href="#" style="color:var(--ac)" onclick="toggleCode(true);return false">Utiliser un code d'enrôlement à la place</a></p>
+      </div>
+      <div id="code-pane" style="display:none">
+        <label for="ecode">Code d'enrôlement</label>
+        <input type="text" id="ecode" autocapitalize="characters" autocomplete="off" placeholder="ZF-XXXX-XXXX-XXXX">
+        <p class="hint" style="margin:8px 0 0"><a href="#" style="color:var(--ac)" onclick="toggleCode(false);return false">Utiliser mon compte Zaforge</a></p>
+      </div>
+      <button id="go" onclick="finish()">Terminer</button>
+      <div class="steps"><span class="dot on"></span><span class="dot on"></span></div>
+    </div>
+    <p class="msg" id="msg"></p>
   </div>
   <p class="foot">Zaforge · configuration sécurisée</p>
   <script>
-    async function submitWifi(){
+    let useCode=false;
+    function toStep2(){
+      if(!document.getElementById('ssid').value.trim()){ msgErr('Entrez le nom du réseau.'); return; }
+      document.getElementById('step1').style.display='none';
+      document.getElementById('step2').style.display='';
+    }
+    function toggleCode(on){ useCode=on;
+      document.getElementById('login-pane').style.display=on?'none':'';
+      document.getElementById('code-pane').style.display=on?'':'none'; }
+    function msgErr(t){ const m=document.getElementById('msg'); m.className='msg err'; m.textContent=t; }
+    async function finish(){
       const ssid=document.getElementById('ssid').value.trim(), psk=document.getElementById('psk').value;
       const msg=document.getElementById('msg'), btn=document.getElementById('go');
-      if(!ssid){msg.className='msg err';msg.textContent='Entrez le nom du réseau.';return;}
-      btn.disabled=true; msg.className='msg'; msg.textContent='Connexion en cours… (l\'écran peut clignoter)';
+      let account;
+      if(useCode){
+        const code=document.getElementById('ecode').value.trim().toUpperCase();
+        if(!/^ZF-[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}$/.test(code)){ msgErr('Code invalide (ZF-XXXX-XXXX-XXXX).'); return; }
+        account={mode:'code',code};
+      }else{
+        const email=document.getElementById('email').value.trim(), zpw=document.getElementById('zpw').value;
+        if(!email||!zpw){ msgErr('Entrez vos identifiants Zaforge.'); return; }
+        account={mode:'login',email,password:zpw};
+      }
+      btn.disabled=true; msg.className='msg'; msg.textContent='Configuration… connexion au WiFi puis liaison du compte (l\'écran peut clignoter, ~30s).';
       try{
-        const r=await fetch('/api/setup.php?action=apply',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ssid,psk})});
+        const r=await fetch('/api/setup.php?action=apply',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ssid,psk,account})});
         const d=await r.json();
-        if(d.success){msg.className='msg ok';msg.textContent='WiFi connecté ✓ — finalisation sur l\'écran.';}
-        else{msg.className='msg err';msg.textContent=d.message||'Échec — réessayez.';btn.disabled=false;}
-      }catch(e){msg.className='msg err';msg.textContent='Réseau interrompu — rejoignez à nouveau l\'AP et réessayez.';btn.disabled=false;}
+        if(d.success){ msg.className='msg ok'; msg.textContent='Terminé ✓ — l\'écran va démarrer.'; }
+        else{ msgErr(d.message||'Échec — réessayez.'); btn.disabled=false; }
+      }catch(e){ msgErr('Réseau interrompu — rejoignez à nouveau l\'AP « Zaforge-Setup » et réessayez.'); btn.disabled=false; }
     }
   </script>
 <?php endif; ?>
