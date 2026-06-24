@@ -68,6 +68,8 @@ cmd_finalize() {
     mkdir -p "$CONF"
     : > "$CONF/.onboarded"; chmod 0644 "$CONF/.onboarded" 2>/dev/null || true
     rm -f "$CONF/.onboarding" 2>/dev/null || true
+    # Le mot de passe admin a été affiché à l'écran pendant l'onboarding ; on retire le clair.
+    rm -f "$CONF/.setup-admin-password" 2>/dev/null || true
     "$NMCLI" con down "$AP_CON" >/dev/null 2>&1 || true
     "$NMCLI" con delete "$AP_CON" >/dev/null 2>&1 || true
     rm -f "$DROPIN" 2>/dev/null || true

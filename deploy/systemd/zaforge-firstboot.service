@@ -1,0 +1,18 @@
+[Unit]
+Description=Zaforge first-boot per-device provisioning (identity, onboarding gate)
+# Après la régénération RPi OS de machine-id ; après NM (pour lever l'AP). Avant le kiosk + nginx
+# pour que l'écran montre /setup dès le 1er boot. BEST-EFFORT : un échec ne bloque pas le boot.
+After=systemd-machine-id-commit.service NetworkManager.service
+Wants=NetworkManager.service
+Before=lightdm.service nginx.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/opt/pisignage/scripts/firstboot.sh
+TimeoutStartSec=90
+# Ne JAMAIS faire échouer la cible graphique si firstboot échoue/expire.
+SuccessExitStatus=0 1 2
+
+[Install]
+WantedBy=multi-user.target

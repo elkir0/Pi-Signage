@@ -1236,8 +1236,8 @@ SUDOERS
         # Migration : publier l'état initial (réseau WiFi actif -> slot 1) pour l'UI Paramètres.
         sudo "$INSTALL_DIR/scripts/wifi-apply.sh" sync 2>/dev/null || true
     fi
-    # Onboarding : invariant root:root 0755 sur les helpers AP + liaison compte.
-    for h in onboard-ap.sh relay-link.sh; do
+    # Onboarding : invariant root:root 0755 sur les helpers AP + liaison compte + 1er-boot.
+    for h in onboard-ap.sh relay-link.sh firstboot.sh bake-strip.sh; do
         if [ -f "$INSTALL_DIR/scripts/$h" ]; then
             sudo chown root:root "$INSTALL_DIR/scripts/$h"
             sudo chmod 0755 "$INSTALL_DIR/scripts/$h"
@@ -1509,6 +1509,19 @@ RELAYJSON
     else
         log_warning "unité zaforge-agent.service introuvable dans $SRC/deploy/systemd"
     fi
+
+    # Service d'init 1er-boot (identité par-device). Activé ; sur une install NORMALE il FAST-PATH
+    # grâce au sentinel .provisioned écrit juste après.
+    if [ -f "$SRC/deploy/systemd/zaforge-firstboot.service" ]; then
+        sudo install -o root -g root -m 0644 "$SRC/deploy/systemd/zaforge-firstboot.service" /etc/systemd/system/zaforge-firstboot.service
+        sudo systemctl daemon-reload
+        sudo systemctl enable zaforge-firstboot.service 2>/dev/null || true
+        log_info "service zaforge-firstboot installé + activé"
+    fi
+    # Install NORMALE = déjà provisionnée -> écrire le sentinel pour que firstboot fast-path et NE
+    # régénère PAS l'identité. L'image golden retire ce sentinel via bake-strip -> firstboot tourne au flash.
+    printf 'provisioned-by-install %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" | sudo tee "$INSTALL_DIR/config/.provisioned" >/dev/null
+    sudo chmod 0644 "$INSTALL_DIR/config/.provisioned"
 }
 
 # Provisionne le secret du pont proxy "mode complet" (lu par web/includes/auth.php). Idempotent.
