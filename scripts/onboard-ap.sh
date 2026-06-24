@@ -56,7 +56,22 @@ cmd_up() {
 cmd_down() {
     "$NMCLI" con down "$AP_CON" >/dev/null 2>&1 || true
     rm -f "$DROPIN" 2>/dev/null || true
+    # Sortie propre d'onboarding : retirer le marqueur (le gate se referme, les endpoints publics
+    # s'auto-désactivent). En cas d'échec STA, l'appelant relance 'up' qui le repose.
+    rm -f "$CONF/.onboarding" 2>/dev/null || true
     printf 'ap_down\n'
+}
+
+# Finalise l'onboarding (appelé en fin de flux complet, Phase B2) : marqueur collant .onboarded +
+# nettoyage. Une fois posé, la box ne repasse JAMAIS par l'onboarding.
+cmd_finalize() {
+    mkdir -p "$CONF"
+    : > "$CONF/.onboarded"; chmod 0644 "$CONF/.onboarded" 2>/dev/null || true
+    rm -f "$CONF/.onboarding" 2>/dev/null || true
+    "$NMCLI" con down "$AP_CON" >/dev/null 2>&1 || true
+    "$NMCLI" con delete "$AP_CON" >/dev/null 2>&1 || true
+    rm -f "$DROPIN" 2>/dev/null || true
+    printf 'finalized\n'
 }
 
 cmd_status() {
@@ -69,8 +84,9 @@ cmd_status() {
 }
 
 case "${1:-}" in
-    up)     cmd_up ;;
-    down)   cmd_down ;;
-    status) cmd_status ;;
-    *)      echo "usage: $0 up|down|status" >&2; exit 2 ;;
+    up)       cmd_up ;;
+    down)     cmd_down ;;
+    status)   cmd_status ;;
+    finalize) cmd_finalize ;;
+    *)        echo "usage: $0 up|down|status|finalize" >&2; exit 2 ;;
 esac

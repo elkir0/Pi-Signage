@@ -9,6 +9,10 @@
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 require_once __DIR__ . '/includes/onboarding.php';
 
+// La page de setup ne s'affiche QUE pour le kiosk (loopback) ou un appareil sur l'AP d'onboarding.
+// Un accès depuis le LAN du lieu (ou ailleurs) repart au player — pas d'exposition de l'assistant.
+if (!zfOnboardingClientAllowed()) { header('Location: /player'); exit; }
+
 $remote = $_SERVER['REMOTE_ADDR'] ?? '';
 $isKiosk = in_array($remote, ['127.0.0.1', '::1', '::ffff:127.0.0.1'], true);
 

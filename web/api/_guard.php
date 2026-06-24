@@ -51,7 +51,9 @@ if (basename($_SERVER['SCRIPT_NAME']) === 'display.php') {
 // (téléphone sans session) : la protection est l'état non-provisionné + la validation des helpers root.
 if (basename($_SERVER['SCRIPT_NAME']) === 'setup.php') {
     require_once __DIR__ . '/../includes/onboarding.php';
-    if (function_exists('zfOnboardingActive') && zfOnboardingActive()) {
+    // PUBLIC seulement si onboarding actif ET client sur l'AP/loopback (jamais le LAN du lieu).
+    if (function_exists('zfOnboardingActive') && zfOnboardingActive()
+        && zfOnboardingClientAllowed()) {
         return;
     }
 }

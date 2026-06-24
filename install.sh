@@ -1204,7 +1204,7 @@ www-data ALL=(root) NOPASSWD: /usr/bin/systemctl restart display-manager
 www-data ALL=(root) NOPASSWD: /opt/pisignage/scripts/wifi-apply.sh apply, /opt/pisignage/scripts/wifi-apply.sh sync
 # Onboarding : point d'accès (radio unique). Arguments FIXES, aucune entrée utilisateur.
 # INVARIANT : onboard-ap.sh DOIT rester root:root 0755.
-www-data ALL=(root) NOPASSWD: /opt/pisignage/scripts/onboard-ap.sh up, /opt/pisignage/scripts/onboard-ap.sh down, /opt/pisignage/scripts/onboard-ap.sh status
+www-data ALL=(root) NOPASSWD: /opt/pisignage/scripts/onboard-ap.sh up, /opt/pisignage/scripts/onboard-ap.sh down, /opt/pisignage/scripts/onboard-ap.sh status, /opt/pisignage/scripts/onboard-ap.sh finalize
 SUDOERS
     if sudo visudo -cf "$SUDO_TMP" >/dev/null 2>&1; then
         sudo install -o root -g root -m 0440 "$SUDO_TMP" /etc/sudoers.d/pisignage

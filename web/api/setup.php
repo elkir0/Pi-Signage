@@ -15,8 +15,9 @@ require_once __DIR__ . '/../includes/onboarding.php';
 const ONBOARD_AP   = '/opt/pisignage/scripts/onboard-ap.sh';
 const WIFI_APPLY_B = '/opt/pisignage/scripts/wifi-apply.sh';
 
-// Défense en profondeur : ces endpoints n'existent que pendant l'onboarding actif.
-if (!zfOnboardingActive()) {
+// Défense en profondeur : ces endpoints n'existent que pendant l'onboarding actif ET pour un client
+// AP/loopback (jamais le LAN du lieu, même si un marqueur restait posé).
+if (!zfOnboardingActive() || !zfOnboardingClientAllowed()) {
     http_response_code(403);
     header('Content-Type: application/json');
     echo json_encode(['success' => false, 'data' => null, 'message' => 'Onboarding non actif', 'timestamp' => date('Y-m-d H:i:s')]);

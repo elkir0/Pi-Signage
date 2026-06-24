@@ -19,3 +19,15 @@ function zfOnboarded() { return @file_exists(zfConfigDir() . '/.onboarded'); }
 function zfOnboardingActive() {
     return @file_exists(zfConfigDir() . '/.onboarding') && !zfOnboarded();
 }
+
+/**
+ * Le client est-il autorisé à voir/piloter l'onboarding ? UNIQUEMENT le kiosk (loopback) ou un
+ * appareil sur le sous-réseau de l'AP d'onboarding (10.42.0.0/24). Défense en profondeur : même si
+ * le marqueur .onboarding restait posé par erreur, les endpoints NE répondent JAMAIS sur le LAN du
+ * lieu (REMOTE_ADDR = vrai pair TCP, nginx ne fait pas confiance aux en-têtes XFF).
+ */
+function zfOnboardingClientAllowed() {
+    $r = $_SERVER['REMOTE_ADDR'] ?? '';
+    if (in_array($r, ['127.0.0.1', '::1', '::ffff:127.0.0.1'], true)) return true;
+    return strncmp($r, '10.42.0.', 8) === 0;
+}
