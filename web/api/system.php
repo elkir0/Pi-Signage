@@ -572,7 +572,7 @@ function wpctlAvailable(): bool {
 /** Retourne le volume courant du sink par défaut, en % entier (0..100). */
 function volumeGet(): int {
     if (wpctlAvailable()) {
-        $r = executeCommand(['sudo', '-u', 'pi', WPCTL_WRAPPER, 'get-volume', '@DEFAULT_AUDIO_SINK@']);
+        $r = executeCommand(['sudo', '-n', '-u', 'pi', WPCTL_WRAPPER, 'get-volume', '@DEFAULT_AUDIO_SINK@']);
         $line = implode("\n", $r['output']);
         // Sortie typique : "Volume: 0.40" ou "Volume: 0.40 [MUTED]"
         if (preg_match('/Volume:\s*([0-9]*\.?[0-9]+)/', $line, $m)) {
@@ -594,7 +594,7 @@ function volumeSet(int $percent): void {
     $percent = max(0, min(100, $percent));
     $linear = round($percent / 100, 3); // 0..1
     if (wpctlAvailable()) {
-        executeCommand(['sudo', '-u', 'pi', WPCTL_WRAPPER, 'set-volume', '@DEFAULT_AUDIO_SINK@', (string)$linear]);
+        executeCommand(['sudo', '-n', '-u', 'pi', WPCTL_WRAPPER, 'set-volume', '@DEFAULT_AUDIO_SINK@', (string)$linear]);
         return;
     }
     foreach (['Master', 'PCM', 'Speaker', 'Headphone'] as $ctrl) {
@@ -606,7 +606,7 @@ function volumeSet(int $percent): void {
 /** true si le sink par défaut est muté. */
 function muteIs(): bool {
     if (wpctlAvailable()) {
-        $r = executeCommand(['sudo', '-u', 'pi', WPCTL_WRAPPER, 'get-volume', '@DEFAULT_AUDIO_SINK@']);
+        $r = executeCommand(['sudo', '-n', '-u', 'pi', WPCTL_WRAPPER, 'get-volume', '@DEFAULT_AUDIO_SINK@']);
         $line = implode("\n", $r['output']);
         return (stripos($line, 'MUTED') !== false);
     }
@@ -622,7 +622,7 @@ function muteIs(): bool {
 /** Bascule mute. Retourne le nouvel état (true = muté). */
 function muteToggle(): bool {
     if (wpctlAvailable()) {
-        executeCommand(['sudo', '-u', 'pi', WPCTL_WRAPPER, 'set-mute', '@DEFAULT_AUDIO_SINK@', 'toggle']);
+        executeCommand(['sudo', '-n', '-u', 'pi', WPCTL_WRAPPER, 'set-mute', '@DEFAULT_AUDIO_SINK@', 'toggle']);
         return muteIs();
     }
     foreach (['Master', 'PCM', 'Speaker', 'Headphone'] as $ctrl) {
