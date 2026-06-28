@@ -22,6 +22,9 @@ export PATH="/usr/sbin:/sbin:$PATH"
 VERSION="0.12.4"
 INSTALL_DIR="/opt/pisignage"
 GITHUB_REPO="https://github.com/elkir0/Pi-Signage.git"
+# Branche source du dépôt : 'main' ne contient pas (encore) le code agent/ ;
+# 'feature/zaforge' est la branche active (v0.12). Surchageable via env.
+GITHUB_BRANCH="${GITHUB_BRANCH:-feature/zaforge}"
 BBB_URL="http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
 
 # Couleurs
@@ -448,12 +451,12 @@ clone_from_github() {
     if [ -d "$INSTALL_DIR/.git" ]; then
         log_info "Dépôt Git déjà présent, mise à jour..."
         cd $INSTALL_DIR
-        sudo git pull origin main 2>/dev/null || true
+        sudo git pull origin "$GITHUB_BRANCH" 2>/dev/null || true
     else
         # Cloner le repo complet dans un répertoire temporaire
-        log_info "Clonage du dépôt PiSignage depuis GitHub..."
+        log_info "Clonage du dépôt PiSignage depuis GitHub (branche $GITHUB_BRANCH)..."
         TEMP_DIR="/tmp/pisignage-clone-$$"
-        git clone https://github.com/elkir0/Pi-Signage.git "$TEMP_DIR"
+        git clone --branch "$GITHUB_BRANCH" "$GITHUB_REPO" "$TEMP_DIR"
 
         # Copier tous les fichiers web dans /opt/pisignage
         log_info "Déploiement des fichiers de l'application..."
@@ -1470,10 +1473,10 @@ install_zaforge_agent() {
             sudo rm -f /tmp/zaforge-agent
             log_info "agent buildé -> $INSTALL_DIR/bin/zaforge-agent"
         else
-            log_warning "build agent échoué — binaire non installé (l'agent restera inactif)"
+            log_warn "build agent échoué — binaire non installé (l'agent restera inactif)"
         fi
     else
-        log_warning "'go' absent ou source manquante — agent non buildé (copier un binaire arm64 dans $INSTALL_DIR/bin/zaforge-agent)"
+        log_warn "'go' absent ou source manquante — agent non buildé (copier un binaire arm64 dans $INSTALL_DIR/bin/zaforge-agent)"
     fi
 
     # relay.json (gabarit ; enrollment_code rempli à l'onboarding/console). 0640 pi:pi.
@@ -1516,7 +1519,7 @@ RELAYJSON
         sudo systemctl restart zaforge-agent.service 2>/dev/null || true
         log_info "service zaforge-agent installé + activé (ENABLE_RELAY=0 -> dormant)"
     else
-        log_warning "unité zaforge-agent.service introuvable dans $SRC/deploy/systemd"
+        log_warn "unité zaforge-agent.service introuvable dans $SRC/deploy/systemd"
     fi
 
     # Service d'init 1er-boot (identité par-device). Activé ; sur une install NORMALE il FAST-PATH
