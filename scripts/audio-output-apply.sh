@@ -2,14 +2,16 @@
 # Zaforge — worker systemd au boot : applique la sortie audio persistée.
 #
 # Lit /opt/pisignage/config/audio-output (créé par audio-output.sh ou settings.php)
-# et applique la préférence via audio-output.sh. Si le sink demandé n'existe pas
-# (ex: TV éteinte au boot, EDID pas encore lu), retry toutes les 5s jusqu'à 12 fois
-# (= 1 minute totale) avant d'abandonner.
+# et applique la préférence via audio-output.sh.
+#
+# RÉSILIENCE face au timing EDID TV au boot :
+#   - 30 retries × 5s = 2.5 minutes
+#   - Tous les 5 retries : re-trigger DRM detect (force le kernel à relire l'EDID
+#     via I2C — utile si la TV était en veille au boot) + restart wireplumber
+#     (force la création du sink HDMI si l'EDID est enfin lisible)
+#   - Si ÉCHEC final : pas d'erreur fatale (default WirePlumber automatique = jack)
 #
 # Appelé par pisignage-audio-apply.service en tant que 'pi' (User=pi).
-# Au prochain branchement TV, le user peut re-basculer via l'admin OU juste
-# attendre : WirePlumber va automatiquement utiliser le default sink persisté
-# dès qu'il sera créé.
 set -eu
 
 PREF_FILE="/opt/pisignage/config/audio-output"
@@ -26,17 +28,25 @@ esac
 
 echo "audio-output-apply : préférence = $pref"
 
-# Jusqu'à 12 retries de 5s (= 1 min) : WirePlumber peut mettre du temps à créer
-# les sinks (notamment HDMI après lecture EDID de la TV).
 attempt=0
-max=12
+max=30
 while [ "$attempt" -lt "$max" ]; do
     attempt=$((attempt + 1))
     if "$AUDIO_OUTPUT_SCRIPT" "$pref" 2>&1; then
         echo "audio-output-apply : OK après $attempt tentative(s)"
         exit 0
     fi
-    if [ "$attempt" -lt "$max" ]; then
+    # Tous les 5 retries : re-trigger DRM detect + restart wireplumber
+    # (force le kernel à relire l'EDID TV + WirePlumber à créer le sink).
+    if [ "$pref" = "hdmi" ] && [ $((attempt % 5)) -eq 0 ]; then
+        echo "audio-output-apply : retry $attempt/$max — re-trigger DRM + restart wireplumber"
+        for c in /sys/class/drm/card*-HDMI-A-*; do
+            [ -w "$c/status" ] && echo detect > "$c/status" 2>/dev/null || true
+        done
+        sleep 3
+        systemctl --user restart wireplumber 2>/dev/null || true
+        sleep 5
+    elif [ "$attempt" -lt "$max" ]; then
         echo "audio-output-apply : retry $attempt/$max dans 5s..."
         sleep 5
     fi

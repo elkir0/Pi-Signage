@@ -359,6 +359,7 @@ Type=oneshot
 User=pi
 Environment=XDG_RUNTIME_DIR=/run/user/%U
 Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/%U/bus
+ExecStartPre=/bin/sh -c 'for c in /sys/class/drm/card*-HDMI-A-*; do [ -w "$c/status" ] && echo detect > "$c/status" 2>/dev/null || true; done; sleep 5'
 ExecStart=/opt/pisignage/scripts/audio-output-apply.sh
 RemainAfterExit=yes
 Restart=on-failure

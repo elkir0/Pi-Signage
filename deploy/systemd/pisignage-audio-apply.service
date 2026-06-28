@@ -2,8 +2,7 @@
 Description=Zaforge: applique la sortie audio persistée (HDMI/jack) au boot
 # WirePlumber tourne en service USER (pas system) sur Trixie. On peut pas
 # référencer wireplumber.service ici. À la place : attendre graphical.target
-# (lightdm + session pi complète, qui lance wireplumber user). Le script apply
-# retry 12x5s=1min si le sink n'est pas encore créé (TV branchée tard).
+# (lightdm + session pi complète, qui lance wireplumber user).
 After=graphical.target
 
 [Service]
@@ -11,6 +10,12 @@ Type=oneshot
 User=pi
 Environment=XDG_RUNTIME_DIR=/run/user/%U
 Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/%U/bus
+# ExecStartPre tourne en ROOT (default pour un service system) :
+# force une re-détection DRM des ports HDMI. L'EDID TV peut ne pas être lu au
+# boot si la TV était en veille — ce re-trigger (5s d'attente pour laisser le
+# kernel relire l'EDID via I2C) maximise les chances que le sink HDMI soit
+# créé par WirePlumber avant l'apply.
+ExecStartPre=/bin/sh -c 'for c in /sys/class/drm/card*-HDMI-A-*; do [ -w "$c/status" ] && echo detect > "$c/status" 2>/dev/null || true; done; sleep 5'
 ExecStart=/opt/pisignage/scripts/audio-output-apply.sh
 # Reste "active" après success (juste pour le status systemd clair).
 RemainAfterExit=yes
