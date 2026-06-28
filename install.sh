@@ -13,6 +13,11 @@ set -e
 # en dépend -> sans ça, configure_webserver sautait silencieusement la config nginx.
 export PATH="/usr/sbin:/sbin:$PATH"
 
+# Robustesse déploiement non-interactif (systemd, chroot image-build, CI, SSH sans TTY) :
+# `clear` (show_banner) et `tput` plantent sans TERM et font avorter set -e pour rien.
+# On pose un fallback inerte si TERM est absent/VIDE. Jamais écrasé si déjà défini.
+[ -n "$TERM" ] || export TERM=dumb
+
 # Configuration
 VERSION="0.12.4"
 INSTALL_DIR="/opt/pisignage"
