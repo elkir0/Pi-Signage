@@ -147,7 +147,7 @@ check_hardware() {
 
 # Bannière
 show_banner() {
-    clear
+    clear 2>/dev/null || true    # cosmétique : ne doit jamais avorter set -e (SSH sans TTY, chroot, TERM=dumb)
     echo -e "${BLUE}"
     echo "╔══════════════════════════════════════════════════════════════════════╗"
     echo "║                                                                      ║"
