@@ -352,9 +352,7 @@ KTMR
             sudo tee /etc/systemd/system/pisignage-audio-apply.service >/dev/null <<'AUDIOSVC'
 [Unit]
 Description=Zaforge: applique la sortie audio persistée (HDMI/jack) au boot
-After=wireplumber.service
-Requisite=wireplumber.service
-ConditionUser=pi
+After=graphical.target
 
 [Service]
 Type=oneshot

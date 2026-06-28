@@ -1,10 +1,10 @@
 [Unit]
 Description=Zaforge: applique la sortie audio persistée (HDMI/jack) au boot
-# WirePlumber crée les sinks ALSA. On attend qu'il soit actif avant de tenter
-# d'appliquer la préférence (sinon les sinks HDMI n'existent pas encore).
-After=wireplumber.service
-Requisite=wireplumber.service
-ConditionUser=pi
+# WirePlumber tourne en service USER (pas system) sur Trixie. On peut pas
+# référencer wireplumber.service ici. À la place : attendre graphical.target
+# (lightdm + session pi complète, qui lance wireplumber user). Le script apply
+# retry 12x5s=1min si le sink n'est pas encore créé (TV branchée tard).
+After=graphical.target
 
 [Service]
 Type=oneshot
@@ -14,7 +14,7 @@ Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/%U/bus
 ExecStart=/opt/pisignage/scripts/audio-output-apply.sh
 # Reste "active" après success (juste pour le status systemd clair).
 RemainAfterExit=yes
-# Retry au boot si WirePlumber n'était pas tout à fait prêt (rare avec Requisite).
+# Retry au boot si la session pi n'était pas tout à fait prête.
 Restart=on-failure
 RestartSec=10
 
