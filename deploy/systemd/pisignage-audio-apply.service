@@ -1,0 +1,22 @@
+[Unit]
+Description=Zaforge: applique la sortie audio persistée (HDMI/jack) au boot
+# WirePlumber crée les sinks ALSA. On attend qu'il soit actif avant de tenter
+# d'appliquer la préférence (sinon les sinks HDMI n'existent pas encore).
+After=wireplumber.service
+Requisite=wireplumber.service
+ConditionUser=pi
+
+[Service]
+Type=oneshot
+User=pi
+Environment=XDG_RUNTIME_DIR=/run/user/%U
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/%U/bus
+ExecStart=/opt/pisignage/scripts/audio-output-apply.sh
+# Reste "active" après success (juste pour le status systemd clair).
+RemainAfterExit=yes
+# Retry au boot si WirePlumber n'était pas tout à fait prêt (rare avec Requisite).
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=graphical.target

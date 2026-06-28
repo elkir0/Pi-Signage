@@ -105,19 +105,11 @@ function updateAudioOutput($input) {
     exec($command, $output, $returnCode);
 
     if ($returnCode === 0) {
-        // Persister le choix pour get_output côté system.php (audio-output.sh ne le fait pas).
-        @file_put_contents('/run/audio-output', $audioOutput);
-        // Forcer WirePlumber à relire la config ALSA (sinon il garde l'ancien routage
-        // même après raspi-config a changé la sortie par défaut bcm2835).
-        // Helper root dédié (sudoers grant fixe) : restart-wireplumber.sh fait
-        // `runuser -u pi -- systemctl --user restart wireplumber`.
-        exec('sudo -n /opt/pisignage/scripts/restart-wireplumber.sh 2>&1', $wl, $wlRc);
-        if ($wlRc !== 0) {
-            error_log('[pisignage] wireplumber restart a échoué (rc=' . $wlRc . '): ' . implode(' ', (array)$wl));
-        }
+        // audio-output.sh PipeWire-native persiste le choix ET applique (default sink
+        // + move streams + volume audible si 0). Plus besoin de restart wireplumber.
         jsonResponse(true, ['audio_output' => $audioOutput], 'Sortie audio changée: ' . strtoupper($audioOutput));
     } else {
-        // Pas de repli pactl fiable (www-data sans bus de session sur Trixie/PipeWire) : on log honnêtement.
+        // audio-output.sh a échoué : log honnêtement (sink demandé absent ?).
         error_log('[pisignage] audio-output.sh a échoué (rc=' . $returnCode . '): ' . implode(' ', (array)$output));
         jsonResponse(false, null, 'Erreur lors du changement de sortie audio. Sortie sauvegardée mais non appliquée.');
     }

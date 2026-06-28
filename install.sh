@@ -254,6 +254,7 @@ install_dependencies() {
         "qrencode"
         "golang-go"
         "wireguard-tools"
+        "pulseaudio-utils"
     )
 
     # Trixie-specific packages for Wayland kiosk mode
@@ -338,6 +339,41 @@ WantedBy=timers.target
 KTMR
         sudo systemctl daemon-reload 2>/dev/null || true
         sudo systemctl enable --now pisignage-kiosk-restart.timer 2>/dev/null || true
+
+        # v0.12.5 : service systemd user (pi) qui applique la sortie audio persistée
+        # (HDMI/jack) au boot, APRÈS wireplumber (sinon les sinks ALSA n'existent pas).
+        # Lit /opt/pisignage/config/audio-output posé par audio-output.sh ou settings.php.
+        # Retry 12x5s = 1 min si le sink n'est pas prêt (TV branchée tardivement).
+        local UNIT_SRC="$INSTALL_DIR/agent-src/deploy/systemd/pisignage-audio-apply.service"
+        # Au cas où SRC est différent (clone direct), fallback :
+        [ -f "$UNIT_SRC" ] || UNIT_SRC="$INSTALL_DIR/deploy/systemd/pisignage-audio-apply.service"
+        # En dernier recours, on l'inline (pour les installs sans déploiement complet).
+        if [ ! -f "$UNIT_SRC" ]; then
+            sudo tee /etc/systemd/system/pisignage-audio-apply.service >/dev/null <<'AUDIOSVC'
+[Unit]
+Description=Zaforge: applique la sortie audio persistée (HDMI/jack) au boot
+After=wireplumber.service
+Requisite=wireplumber.service
+ConditionUser=pi
+
+[Service]
+Type=oneshot
+User=pi
+Environment=XDG_RUNTIME_DIR=/run/user/%U
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/%U/bus
+ExecStart=/opt/pisignage/scripts/audio-output-apply.sh
+RemainAfterExit=yes
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=graphical.target
+AUDIOSVC
+        else
+            sudo install -o root -g root -m 0644 "$UNIT_SRC" /etc/systemd/system/pisignage-audio-apply.service
+        fi
+        sudo systemctl daemon-reload 2>/dev/null || true
+        sudo systemctl enable pisignage-audio-apply.service 2>/dev/null || true
     fi
 
     # Installation de raspi2png si disponible
@@ -1204,19 +1240,20 @@ GRIMCAP
     # Helper de bascule audio à ARGUMENTS FIXES (verrouillé en sudoers à hdmi|jack).
     # INVARIANT DE SÉCURITÉ : root:root 0755 (généré APRÈS le déploiement web pour ne JAMAIS
     # hériter de www-data — sinon la grant deviendrait une escalade vers root).
-    sudo tee "$INSTALL_DIR/scripts/audio-output.sh" > /dev/null << 'AUDIOOUT'
-#!/bin/sh
-set -eu
-case "${1:-}" in
-    hdmi) DEV=2 ;;
-    jack) DEV=1 ;;
-    *) echo "usage: audio-output.sh hdmi|jack" >&2; exit 2 ;;
-esac
-if [ "$#" -ne 1 ]; then echo "usage: audio-output.sh hdmi|jack" >&2; exit 2; fi
-exec /usr/bin/raspi-config nonint do_audio "$DEV"
-AUDIOOUT
-    sudo chown root:root "$INSTALL_DIR/scripts/audio-output.sh"
-    sudo chmod 0755 "$INSTALL_DIR/scripts/audio-output.sh"
+    #
+    # v0.12.5 : PipeWire-native (Trixie). Le script est dans scripts/audio-output.sh
+    # (déploiement via clone_from_github) — on fixe juste les perms ici. Il identifie
+    # les sinks ALSA par nom (hdmi/analog) et bascule via pactl (set-default-sink +
+    # move-sink-input). Persistance auto dans /opt/pisignage/config/audio-output,
+    # appliquée au boot par pisignage-audio-apply.service.
+    if [ -f "$INSTALL_DIR/scripts/audio-output.sh" ]; then
+        sudo chown root:root "$INSTALL_DIR/scripts/audio-output.sh"
+        sudo chmod 0755 "$INSTALL_DIR/scripts/audio-output.sh"
+    fi
+    if [ -f "$INSTALL_DIR/scripts/audio-output-apply.sh" ]; then
+        sudo chown pi:pi "$INSTALL_DIR/scripts/audio-output-apply.sh"
+        sudo chmod 0755 "$INSTALL_DIR/scripts/audio-output-apply.sh"
+    fi
 
     # Helpers WireGuard de l'agent Zaforge — générés root:root 0755 (comme audio-output.sh).
     # INVARIANT DE SÉCURITÉ : ces scripts sont la SEULE étape privilégiée du tunnel. Ils sont
