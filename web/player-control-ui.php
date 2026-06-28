@@ -59,7 +59,7 @@ $actions = statusPill()
 
           <div class="card">
             <div class="card-head">
-              <h2 class="card-title"><?= icon('volume') ?>Volume système (ALSA)</h2>
+              <h2 class="card-title"><?= icon('volume') ?>Volume système</h2>
               <span class="badge" id="system-volume-display">--%</span>
             </div>
             <div class="form-group" style="margin-bottom:10px">

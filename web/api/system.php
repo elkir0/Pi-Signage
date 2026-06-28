@@ -71,29 +71,52 @@ if ($method === 'GET' && isset($_GET['action']) && $_GET['action'] === 'get_play
     exit;
 }
 
-// ALSA Volume Control (v0.11.0)
+// Volume Control (v0.12.5) — PipeWire (wpctl) prioritaire, fallback ALSA (amixer).
+// Sur Pi 4 HDMI, la carte IEC958 n'expose PAS de simple control "Master" ALSA
+// (mixer hardware absent en digital). PipeWire/WirePlumber gère le volume côté
+// userland via wpctl — c'est la seule méthode fiable sur Trixie Desktop.
 if ($method === 'GET' && isset($_GET['action']) && $_GET['action'] === 'get_volume') {
-    $r = executeCommand(['/usr/bin/amixer', 'sget', 'Master']);
-    $vol = 0;
-    if (preg_match('/(\d+)%/', implode("\n", $r['output']), $mm)) { $vol = (int)$mm[1]; }
-    jsonResponse(true, ['volume' => $vol]);
+    jsonResponse(true, ['volume' => volumeGet(), 'muted' => muteIs()]);
     exit;
 }
 
 if ($method === 'POST' && isset($input['action']) && $input['action'] === 'set_volume') {
     $volume = intval($input['volume'] ?? 100);
     $volume = max(0, min(100, $volume)); // Clamp 0-100
-    executeCommand(['/usr/bin/amixer', 'sset', 'Master', $volume . '%']);
-    jsonResponse(true, ['volume' => $volume, 'message' => "Volume set to {$volume}%"]);
+    volumeSet($volume);
+    jsonResponse(true, ['volume' => $volume, 'muted' => muteIs(), 'message' => "Volume réglé à {$volume}%"]);
     exit;
 }
 
 if ($method === 'POST' && isset($input['action']) && $input['action'] === 'toggle_mute') {
-    executeCommand(['/usr/bin/amixer', 'sset', 'Master', 'toggle']);
-    // Relire l'état réel après bascule (ne pas présumer du résultat).
-    $s = executeCommand(['/usr/bin/amixer', 'sget', 'Master']);
-    $muted = (bool)preg_match('/\[off\]/', implode("\n", $s['output']));
-    jsonResponse(true, ['muted' => $muted, 'message' => 'Mute toggled']);
+    $muted = muteToggle();
+    jsonResponse(true, ['muted' => $muted, 'message' => $muted ? 'Son coupé' : 'Son rétabli']);
+    exit;
+}
+
+// Choix de la sortie audio (HDMI vs jack 3.5mm) via audio-output.sh (sudo-granté).
+// Lit la sortie effective depuis l'état sauvegardé dans /run/audio-output
+// (audio-output.sh ne fournit pas de getter direct côté raspi-config).
+if ($method === 'GET' && isset($_GET['action']) && $_GET['action'] === 'get_output') {
+    $cur = @file_get_contents('/run/audio-output');
+    $cur = ($cur === false) ? '' : trim($cur);
+    if (!in_array($cur, ['hdmi', 'jack'], true)) { $cur = 'jack'; } // défaut bcm2835
+    jsonResponse(true, ['output' => $cur]);
+    exit;
+}
+
+if ($method === 'POST' && isset($input['action']) && $input['action'] === 'set_output') {
+    $out = ($input['output'] ?? '') === 'hdmi' ? 'hdmi' : 'jack';
+    $r = executeCommand(['sudo', '/opt/pisignage/scripts/audio-output.sh', $out]);
+    if (!$r['success']) {
+        jsonResponse(false, null, 'Échec bascule sortie audio: ' . implode(' ', $r['output']), 500);
+        exit;
+    }
+    // Persister le choix pour get_output (audio-output.sh ne le fait pas).
+    @file_put_contents('/run/audio-output', $out);
+    // Forcer WirePlumber à relire la config ALSA (sinon il garde l'ancien routage).
+    executeCommand(['sudo', '--user', '#'.getmyuid(), 'systemctl', '--user', 'restart', 'wireplumber']);
+    jsonResponse(true, ['output' => $out, 'message' => "Sortie audio : {$out}"]);
     exit;
 }
 
@@ -520,6 +543,96 @@ function getNetworkInfo() {
     // Alternative si hostname -I échoue
     $ip = $_SERVER['SERVER_ADDR'] ?? '127.0.0.1';
     return $ip;
+}
+
+/* ------------------------------------------------------------------ */
+/* Volume / Mute helpers (PipeWire wpctl prioritaire, ALSA fallback)   */
+/* ------------------------------------------------------------------ */
+//
+// Sur Pi 4 HDMI, la carte IEC958 n'a pas de contrôle "Master" ALSA. WirePlumber
+// (PipeWire) gère le volume du sink par défaut via wpctl — méthode fiable sur
+// Trixie Desktop. Fallback amixer si wpctl absent (Lite sans PipeWire).
+//
+// Exécute en tant que 'pi' via sudo --user (php-fpm tourne en www-data qui n'a
+// PAS accès à la session user pipewire). sudoers grant :
+//   www-data ALL=(pi) NOPASSWD: /usr/bin/wpctl *   <- À POSER (cf. configure_sudo)
+
+define('WPCTL_BIN', '/usr/bin/wpctl');
+define('AMIXER_BIN', '/usr/bin/amixer');
+
+/** true si wpctl est dispo ET qu'on a une session user pipewire active. */
+function wpctlAvailable(): bool {
+    if (!file_exists(WPCTL_BIN)) return false;
+    // La session user pipewire de 'pi' doit exister (XDG_RUNTIME_DIR /run/user/<uid>).
+    $uid = posix_getpwnam('pi')['uid'] ?? 1000;
+    return is_dir("/run/user/{$uid}");
+}
+
+/** Retourne le volume courant du sink par défaut, en % entier (0..100). */
+function volumeGet(): int {
+    if (wpctlAvailable()) {
+        $cmd = ['sudo', '-u', 'pi', WPCTL_BIN, 'get-volume', '@DEFAULT_AUDIO_SINK@'];
+        $r = executeCommand($cmd);
+        $line = implode("\n", $r['output']);
+        // Sortie typique : "Volume: 0.40" ou "Volume: 0.40 [MUTED]"
+        if (preg_match('/Volume:\s*([0-9]*\.?[0-9]+)/', $line, $m)) {
+            $v = (float)$m[1];
+            return (int)round($v * 100);
+        }
+    }
+    // Fallback ALSA : Master ou PCM (selon la carte).
+    foreach (['Master', 'PCM', 'Speaker', 'Headphone'] as $ctrl) {
+        $r = executeCommand([AMIXER_BIN, 'sget', $ctrl]);
+        $line = implode("\n", $r['output']);
+        if (preg_match('/(\d+)%/', $line, $m)) { return (int)$m[1]; }
+    }
+    return 0;
+}
+
+/** Positionne le volume du sink par défaut. $percent ∈ [0..100]. */
+function volumeSet(int $percent): void {
+    $percent = max(0, min(100, $percent));
+    $linear = round($percent / 100, 3); // 0..1
+    if (wpctlAvailable()) {
+        executeCommand(['sudo', '-u', 'pi', WPCTL_BIN, 'set-volume', '@DEFAULT_AUDIO_SINK@', (string)$linear]);
+        return;
+    }
+    foreach (['Master', 'PCM', 'Speaker', 'Headphone'] as $ctrl) {
+        $r = executeCommand([AMIXER_BIN, 'sset', $ctrl, $percent . '%']);
+        if ($r['success']) return;
+    }
+}
+
+/** true si le sink par défaut est muté. */
+function muteIs(): bool {
+    if (wpctlAvailable()) {
+        $r = executeCommand(['sudo', '-u', 'pi', WPCTL_BIN, 'get-volume', '@DEFAULT_AUDIO_SINK@']);
+        $line = implode("\n", $r['output']);
+        return (stripos($line, 'MUTED') !== false);
+    }
+    foreach (['Master', 'PCM', 'Speaker', 'Headphone'] as $ctrl) {
+        $r = executeCommand([AMIXER_BIN, 'sget', $ctrl]);
+        $line = implode("\n", $r['output']);
+        if (preg_match('/\[off\]/', $line)) return true;
+        if (preg_match('/\[on\]/', $line)) return false;
+    }
+    return false;
+}
+
+/** Bascule mute. Retourne le nouvel état (true = muté). */
+function muteToggle(): bool {
+    if (wpctlAvailable()) {
+        executeCommand(['sudo', '-u', 'pi', WPCTL_BIN, 'set-mute', '@DEFAULT_AUDIO_SINK@', 'toggle']);
+        return muteIs();
+    }
+    foreach (['Master', 'PCM', 'Speaker', 'Headphone'] as $ctrl) {
+        $r = executeCommand([AMIXER_BIN, 'sset', $ctrl, 'toggle']);
+        if ($r['success']) {
+            $s = executeCommand([AMIXER_BIN, 'sget', $ctrl]);
+            return (bool)preg_match('/\[off\]/', implode("\n", $s['output']));
+        }
+    }
+    return false;
 }
 
 // Function getMediaFiles() is already defined in config.php
