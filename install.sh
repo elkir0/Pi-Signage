@@ -253,6 +253,7 @@ install_dependencies() {
         "dnsmasq-base"
         "qrencode"
         "golang-go"
+        "wireguard-tools"
     )
 
     # Trixie-specific packages for Wayland kiosk mode
