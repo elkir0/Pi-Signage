@@ -7,6 +7,14 @@
 require_once __DIR__ . '/_guard.php';
 require_once "/opt/pisignage/web/config.php";
 
+// Defines pour les helpers volume (PipeWire wpctl + fallback ALSA amixer).
+// Placés ICI (avant les handlers get_volume/set_volume) car PHP évalue les
+// define() au runtime en séquence : un handler appelé avant le define =>
+// fatal "Undefined constant".
+define('WPCTL_BIN', '/usr/bin/wpctl');
+define('WPCTL_WRAPPER', '/opt/pisignage/scripts/wpctl-default-sink.sh');
+define('AMIXER_BIN', '/usr/bin/amixer');
+
 $method = $_SERVER['REQUEST_METHOD'];
 $input = json_decode(file_get_contents('php://input'), true);
 
@@ -556,10 +564,10 @@ function getNetworkInfo() {
 // Exécute via wrapper sudo-granté /opt/pisignage/scripts/wpctl-default-sink.sh
 // qui SETENV XDG_RUNTIME_DIR + DBUS_SESSION_BUS_ADDRESS (sinon wpctl démarre un
 // PipeWire vide et rend des erreurs RKit sans données volume).
-
-define('WPCTL_BIN', '/usr/bin/wpctl');
-define('WPCTL_WRAPPER', '/opt/pisignage/scripts/wpctl-default-sink.sh');
-define('AMIXER_BIN', '/usr/bin/amixer');
+//
+// ⚠️ Les defines WPCTL_BIN/WPCTL_WRAPPER/AMIXER_BIN sont en tête de fichier
+// (avant les handlers `get_volume` qui les utilisent). Les defines PHP sont
+// évalués au runtime en séquence — placés APRÈS l'appel => fatal "Undefined constant".
 
 /** true si wpctl + wrapper dispo ET qu'on a une session user pipewire active. */
 function wpctlAvailable(): bool {
