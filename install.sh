@@ -780,12 +780,21 @@ KANSHI
     # pour un boot kiosk fiable OTB, sans dépendre des défauts de l'image.
     if command -v lightdm >/dev/null 2>&1; then
         sudo mkdir -p /etc/lightdm/lightdm.conf.d
+        # Forcer la session 'labwc' (standard, lit ~/.config/labwc/autostart où kiosk-apply
+        # pose la loop Chromium). Sinon RPi OS TrixieDesktop choisit 'rpd-labwc' qui lance
+        # /usr/bin/labwc-pi (wrapper custom RPi) et IGNORE notre autostart -> pas de kiosk.
+        # Drop-in dédié (priorité 11, après 10-autologin) pour rester audit-friendly.
+        sudo tee /etc/lightdm/lightdm.conf.d/11-pisignage-labwc.conf >/dev/null <<'LIGHTDM'
+[Seat:*]
+user-session=labwc
+autologin-session=labwc
+LIGHTDM
         sudo tee /etc/lightdm/lightdm.conf.d/10-pisignage-autologin.conf >/dev/null <<'LIGHTDM'
 [Seat:*]
 autologin-user=pi
 autologin-user-timeout=0
 LIGHTDM
-        log_info "Autologin lightdm configuré (utilisateur pi)"
+        log_info "Session lightdm forcée sur labwc + autologin pi configuré"
     fi
 
     # Cron d'extinction d'écran programmée (D1) : applique screen_schedule.json chaque minute
