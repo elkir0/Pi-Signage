@@ -55,6 +55,15 @@ if ($target === 'media') {
     return;
 }
 
+// Upload du logo : multipart/form-data, stocké dans /data/logos/.
+// Bypass le _guard CSRF (géré par session via _guard, mais ?action=upload-logo
+// est un POST multipart sans header X-CSRF-Token => on intercepte AVANT le switch JSON).
+$action = isset($_GET['action']) ? (string)$_GET['action'] : '';
+if ($method === 'POST' && $action === 'upload-logo') {
+    handleUploadLogo();
+    return;
+}
+
 switch ($method) {
     case 'GET':
         handleGetOverlay();
@@ -94,20 +103,42 @@ function overlayLoad(): array {
 
 function overlayDefaults(): array {
     return [
-        'version'    => 1,
+        'version'    => 2,
         'enabled'    => true,
-        'lang'       => 'fr',
         'banner'     => [
             'enabled'  => true,
             'name'     => 'Zaforge',
             'subtitle' => 'Affichage dynamique',
             'logo'     => null,
             'size'     => 'md',
+            'opacity'  => 0.92,
+            'cycle'    => ['enabled' => false, 'on_seconds' => 8, 'off_seconds' => 20],
         ],
-        'clock'      => ['enabled' => true, 'size' => 'md'],
-        'cards_size' => 'md',
-        'cards'      => [],
-        'qr'         => ['enabled' => false, 'label' => '', 'data' => '', 'size' => 'md'],
+        'clock'      => [
+            'enabled' => true,
+            'size'    => 'md',
+            'opacity' => 0.55,
+            'cycle'   => ['enabled' => false, 'on_seconds' => 8, 'off_seconds' => 20],
+        ],
+        'cards_size'     => 'md',
+        'cards_geometry' => [
+            'preset'     => 'bottom-center',
+            'x'          => 50,   // % de la largeur écran (centre horizontal)
+            'y'          => 84,   // % de la hauteur écran (centre vertical de la carte)
+            'width'      => 62,   // % de la largeur écran
+            'height'     => 11,   // vh (viewport height)
+        ],
+        'cards_opacity' => 0.94,
+        'cards_cycle'   => ['enabled' => false, 'on_seconds' => 8, 'off_seconds' => 20],
+        'cards'         => [],
+        'qr'            => [
+            'enabled' => false,
+            'label'   => '',
+            'data'    => '',
+            'size'    => 'md',
+            'opacity' => 0.92,
+            'cycle'   => ['enabled' => false, 'on_seconds' => 8, 'off_seconds' => 20],
+        ],
     ];
 }
 
@@ -322,8 +353,17 @@ function mediaOverlaysWriteAtomic(array $map): bool {
  * Validate + coerce an incoming overlay document into a safe, well-typed
  * structure. Returns null when the input cannot be made valid.
  *
- * All string fields are length-bounded and stored as plain UTF-8 text
- * (no HTML/markup interpretation here — escaping is the renderer's job).
+ * Schéma v2 (juin 2026) :
+ *   - Plus de champ `lang` global (multi-langue retiré : 1 seul texte par carte).
+ *   - Chaque zone (banner, clock, cards, qr) a son propre `opacity` (0..1) et
+ *     son propre `cycle` ({enabled, on_seconds, off_seconds}) pour les périodes
+ *     de grâce on/off par zone.
+ *   - Cartes : `cards_geometry` (preset + x/y/width/height), `cards_opacity`,
+ *     `cards_cycle` (le cycle pilote le conteneur entier, pas chaque carte).
+ *   - Carte : `text` unique (migration : `text_fr` ou `text_nl`Legacy → `text`).
+ *
+ * Toutes les chaînes sont length-bounded et stockées en UTF-8 plain text
+ * (pas de HTML/markup — l'échappement est du ressort du renderer).
  */
 function overlayValidate($in): ?array {
     if (!is_array($in)) {
@@ -331,12 +371,8 @@ function overlayValidate($in): ?array {
     }
 
     $out = [];
-    $out['version'] = 1;
+    $out['version'] = 2;
     $out['enabled'] = overlayBool($in['enabled'] ?? true);
-
-    // Language: only "fr" or "nl".
-    $lang = is_string($in['lang'] ?? null) ? strtolower(trim($in['lang'])) : 'fr';
-    $out['lang'] = in_array($lang, ['fr', 'nl'], true) ? $lang : 'fr';
 
     // Banner.
     $banner = is_array($in['banner'] ?? null) ? $in['banner'] : [];
@@ -348,6 +384,8 @@ function overlayValidate($in): ?array {
         'subtitle' => overlayStr($banner['subtitle'] ?? '', 160),
         'logo'     => $logo,
         'size'     => overlaySize($banner['size'] ?? 'md'),
+        'opacity'  => overlayOpacity($banner['opacity'] ?? 0.92),
+        'cycle'    => overlayCycle($banner['cycle'] ?? null),
     ];
 
     // Clock.
@@ -355,31 +393,42 @@ function overlayValidate($in): ?array {
     $out['clock'] = [
         'enabled' => overlayBool($clock['enabled'] ?? true),
         'size'    => overlaySize($clock['size'] ?? 'md'),
+        'opacity' => overlayOpacity($clock['opacity'] ?? 0.55),
+        'cycle'   => overlayCycle($clock['cycle'] ?? null),
     ];
 
-    // Common size for info cards.
+    // Cartes — taille commune + géométrie (preset + ajustements fins) + opacité + cycle.
     $out['cards_size'] = overlaySize($in['cards_size'] ?? 'md');
+    $out['cards_geometry'] = overlayGeometry($in['cards_geometry'] ?? null);
+    $out['cards_opacity'] = overlayOpacity($in['cards_opacity'] ?? 0.94);
+    $out['cards_cycle']   = overlayCycle($in['cards_cycle'] ?? null);
 
-    // Cards (rotating info). Hard cap to keep the player light.
+    // Cartes (rotatives). Hard cap à 20 pour garder le player léger.
+    // Migration : `text_fr` (ou `text_nl`) → `text`. Champ `text` prioritaire.
     $out['cards'] = [];
     if (is_array($in['cards'] ?? null)) {
         foreach ($in['cards'] as $card) {
             if (!is_array($card)) {
                 continue;
             }
-            $textFr = overlayStr($card['text_fr'] ?? '', 120);
-            $textNl = overlayStr($card['text_nl'] ?? '', 120);
-            // Drop fully-empty cards.
-            if ($textFr === '' && $textNl === '') {
-                continue;
+            $text = overlayStr($card['text'] ?? '', 200);
+            if ($text === '') {
+                // Migration legacy : text_fr (prioritaire) ou text_nl.
+                $legacy = overlayStr($card['text_fr'] ?? '', 120);
+                if ($legacy === '') {
+                    $legacy = overlayStr($card['text_nl'] ?? '', 120);
+                }
+                $text = $legacy;
+            }
+            if ($text === '') {
+                continue;   // drop carte vide
             }
             $duration = (int)($card['duration'] ?? 8);
             if ($duration < 3)  { $duration = 3; }
             if ($duration > 60) { $duration = 60; }
             $out['cards'][] = [
                 'icon'     => overlayIcon($card['icon'] ?? 'info'),
-                'text_fr'  => $textFr,
-                'text_nl'  => $textNl,
+                'text'     => $text,
                 'duration' => $duration,
             ];
             if (count($out['cards']) >= 20) {
@@ -395,6 +444,8 @@ function overlayValidate($in): ?array {
         'label'   => overlayStr($qr['label'] ?? '', 60),
         'data'    => overlayStr($qr['data'] ?? '', 512),
         'size'    => overlaySize($qr['size'] ?? 'md'),
+        'opacity' => overlayOpacity($qr['opacity'] ?? 0.92),
+        'cycle'   => overlayCycle($qr['cycle'] ?? null),
     ];
 
     return $out;
@@ -443,6 +494,80 @@ function overlaySize($v): string {
     return in_array($v, ['sm', 'md', 'lg', 'xl'], true) ? $v : 'md';
 }
 
+/**
+ * Coerce une valeur d'opacité (transparence) en float ∈ [0.10, 1.0].
+ * Accepte int (0..100), float (0..1), ou string "0.85"/"85%".
+ * 0.10 minimum pour éviter une zone invisible (préférez `enabled:false`).
+ */
+function overlayOpacity($v): float {
+    if (is_string($v)) {
+        $s = trim($v);
+        if (substr($s, -1) === '%') { $s = substr($s, 0, -1); }
+        $v = is_numeric($s) ? (float)$s : 0.92;
+    }
+    if (is_int($v)) { $v = ($v > 1) ? $v / 100.0 : (float)$v; }
+    if (!is_float($v) && !is_int($v)) { $v = 0.92; }
+    $v = (float)$v;
+    if ($v < 0.10) $v = 0.10;
+    if ($v > 1.0)  $v = 1.0;
+    return $v;
+}
+
+/**
+ * Valide un bloc `cycle` {enabled, on_seconds, off_seconds} pour les périodes
+ * de grâce on/off par zone. Defaults sains si absent/malformé.
+ * - on_seconds  ∈ [1, 3600] (default 8)
+ * - off_seconds ∈ [0, 3600] (default 20 ; 0 = pas de pause)
+ */
+function overlayCycle($v): array {
+    $def = ['enabled' => false, 'on_seconds' => 8, 'off_seconds' => 20];
+    if (!is_array($v)) { return $def; }
+    $on  = (int)($v['on_seconds']  ?? $def['on_seconds']);
+    $off = (int)($v['off_seconds'] ?? $def['off_seconds']);
+    if ($on  < 1)    { $on  = 1; }
+    if ($on  > 3600) { $on  = 3600; }
+    if ($off < 0)    { $off = 0; }
+    if ($off > 3600) { $off = 3600; }
+    return [
+        'enabled'     => overlayBool($v['enabled'] ?? false),
+        'on_seconds'  => $on,
+        'off_seconds' => $off,
+    ];
+}
+
+/**
+ * Valide la géométrie des cartes d'infos : preset + ajustements X/Y/W/H fins.
+ * Le preset est purement cosmétique côté UI (le player utilise x/y/w/h).
+ * - x      ∈ [0, 100]   % de la largeur écran (centre horizontal de la carte)
+ * - y      ∈ [0, 100]   % de la hauteur écran (centre vertical de la carte)
+ * - width  ∈ [10, 100]  % de la largeur écran
+ * - height ∈ [3, 50]    vh (viewport height units)
+ */
+function overlayGeometry($v): array {
+    $def = ['preset' => 'bottom-center', 'x' => 50, 'y' => 84, 'width' => 62, 'height' => 11];
+    if (!is_array($v)) { return $def; }
+    $clamp = function($val, $min, $max, $def) {
+        $val = is_numeric($val) ? (float)$val : $def;
+        if ($val < $min) { $val = $min; }
+        if ($val > $max) { $val = $max; }
+        return $val;
+    };
+    $preset = is_string($v['preset'] ?? null) ? strtolower(trim($v['preset'])) : 'bottom-center';
+    $allowed = [
+        'top-left','top-center','top-right',
+        'middle-left','middle-center','middle-right',
+        'bottom-left','bottom-center','bottom-right',
+    ];
+    if (!in_array($preset, $allowed, true)) { $preset = 'bottom-center'; }
+    return [
+        'preset' => $preset,
+        'x'      => $clamp($v['x']      ?? $def['x'],      0, 100, $def['x']),
+        'y'      => $clamp($v['y']      ?? $def['y'],      0, 100, $def['y']),
+        'width'  => $clamp($v['width']  ?? $def['width'], 10, 100, $def['width']),
+        'height' => $clamp($v['height'] ?? $def['height'], 3,  50, $def['height']),
+    ];
+}
+
 /** Re-validate an already-stored document so GET never serves garbage. */
 function overlayNormalize(array $data): array {
     $clean = overlayValidate($data);
@@ -487,4 +612,121 @@ function overlayWriteAtomic(array $data): bool {
         return false;
     }
     return true;
+}
+
+/* ------------------------------------------------------------------ */
+/* Upload logo                                                         */
+/* ------------------------------------------------------------------ */
+
+/**
+ * POST ?action=upload-logo (multipart/form-data, champ "logo")
+ *
+ * Stocke un logo (PNG/JPG/SVG/WebP) dans /data/logos/<sha1>.<ext> et retourne
+ * l'URL publique. Le PNG préserve la transparence (le user demande explicitement
+ * le support de la transparence).
+ *
+ * Validations :
+ *   - Code erreur UPLOAD_ERR_OK sinon message explicite
+ *   - MIME parmi image/png, image/jpeg, image/svg+xml, image/webp
+ *   - Extension cohérente avec le MIME
+ *   - Poids ≤ 2 MB (config OVERLAY_LOGO_MAX_BYTES, défault 2 MB)
+ *   - Dimensions ≤ 2000x2000 (anti flood pixels)
+ *
+ * Réponse 201 {url:"/data/logos/abc.png"} ou 422/413/500 sur erreur.
+ *
+ * Sécurité :
+ *   - Extension déterminée par le MIME (pas par le nom de fichier envoyé)
+ *   - Nom dispo = sha1(filesize + random_bytes) — pas de collision, pas de chemin
+ *     contrôlable par l'utilisateur
+ *   - Le fichier ne part JAMAIS en /data/logos/../ etc (basename strict)
+ */
+function handleUploadLogo(): void {
+    $maxBytes = defined('OVERLAY_LOGO_MAX_BYTES') ? OVERLAY_LOGO_MAX_BYTES : 2 * 1024 * 1024;
+
+    if (empty($_FILES['logo']) || !is_array($_FILES['logo'])) {
+        jsonResponse(false, null, 'Aucun fichier reçu (champ "logo" manquant)', 422);
+        return;
+    }
+    $up = $_FILES['logo'];
+
+    if (($up['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+        jsonResponse(false, null, 'Erreur upload code ' . (int)($up['error'] ?? -1), 422);
+        return;
+    }
+    if (!is_uploaded_file($up['tmp_name'] ?? '')) {
+        jsonResponse(false, null, 'Fichier non valide (is_uploaded_file)', 422);
+        return;
+    }
+    if (($up['size'] ?? 0) > $maxBytes) {
+        jsonResponse(false, null, 'Logo trop volumineux (max ' . round($maxBytes / 1024 / 1024, 1) . ' MB)', 413);
+        return;
+    }
+
+    // MIME réel via finfo (pas confiance au type envoyé par le client).
+    $finfo = function_exists('finfo_open') ? finfo_open(FILEINFO_MIME_TYPE) : false;
+    $mime = $finfo ? finfo_file($finfo, $up['tmp_name']) : ($up['type'] ?? '');
+    if ($finfo) { finfo_close($finfo); }
+
+    $allowed = [
+        'image/png'  => 'png',
+        'image/jpeg' => 'jpg',
+        'image/webp' => 'webp',
+        'image/svg+xml' => 'svg',
+    ];
+    if (!is_string($mime) || !isset($allowed[$mime])) {
+        jsonResponse(false, null, 'Type de fichier non supporté (PNG, JPG, WebP, SVG autorisés). MIME détecté: ' . $mime, 422);
+        return;
+    }
+    $ext = $allowed[$mime];
+
+    // Dimensions (sauf SVG qui n'a pas de dimensions naturelles décodables).
+    if ($mime !== 'image/svg+xml' && function_exists('getimagesize')) {
+        $dim = @getimagesize($up['tmp_name']);
+        if ($dim === false) {
+            jsonResponse(false, null, 'Image illisible (fichier corrompu ?)', 422);
+            return;
+        }
+        $w = (int)$dim[0]; $h = (int)$dim[1];
+        if ($w <= 0 || $h <= 0 || $w > 2000 || $h > 2000) {
+            jsonResponse(false, null, 'Dimensions invalides (1..2000 px autorisés, reçu ' . $w . 'x' . $h . ')', 422);
+            return;
+        }
+    }
+
+    // Vérifier le contenu SVG (ne pas autoriser du JS ou des entités externes).
+    if ($mime === 'image/svg+xml') {
+        $raw = @file_get_contents($up['tmp_name']);
+        if ($raw === false || stripos($raw, '<script') !== false || stripos($raw, 'javascript:') !== false) {
+            jsonResponse(false, null, 'SVG refusé (contient du code actif)', 422);
+            return;
+        }
+    }
+
+    // Stockage atomique dans /data/logos/.
+    $dir = dirname(__DIR__) . '/data/logos';
+    if (!is_dir($dir) && !@mkdir($dir, 0755, true)) {
+        jsonResponse(false, null, 'Impossible de créer /data/logos/', 500);
+        return;
+    }
+    if (!is_writable($dir)) {
+        jsonResponse(false, null, '/data/logos/ non inscriptible', 500);
+        return;
+    }
+
+    // Nom unique déterministe : sha1(filesize + random). Le user ne contrôle
+    // QUE le contenu du fichier (pas le nom, pas le chemin) -> pas d'injection.
+    $hash = hash('sha1', (string)($up['size'] ?? 0) . '|' . random_bytes(16));
+    $basename = $hash . '.' . $ext;
+    $dest = $dir . '/' . $basename;
+
+    if (!@move_uploaded_file($up['tmp_name'], $dest)) {
+        jsonResponse(false, null, 'Échec du déplacement du fichier uploadé', 500);
+        return;
+    }
+    @chmod($dest, 0644);
+
+    // URL publique (nginx sert /data/* directement).
+    $url = '/data/logos/' . $basename;
+
+    jsonResponse(true, ['url' => $url, 'mime' => $mime], 'Logo uploadé', 201);
 }

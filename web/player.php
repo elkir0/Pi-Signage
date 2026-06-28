@@ -182,18 +182,24 @@ if (function_exists('zfOnboardingActive') && zfOnboardingActive()) { header('Loc
         }
 
         /* ----- Horloge + date (haut-droite) ----- */
+        /* Opacity pilotée par --ov-opacity-clock (injectée depuis applyConfig). */
         #ov-clock {
             top: 3.2vh;
             right: 3vw;
             text-align: right;
             padding: 10px 16px;
-            background: rgba(4, 19, 12, 0.55);
+            background: rgba(4, 19, 12, var(--ov-opacity-clock, 0.55));
             border: 1px solid rgba(52, 211, 153, 0.28);
             border-radius: 12px;
             opacity: 0;
             transition: opacity .6s ease;
         }
         #ov-clock.ov-on { opacity: 1; }
+        /* Cycle on/off par zone : .ov-cycle-off force opacity 0 (prioritaire sur .ov-on). */
+        #ov-clock.ov-cycle-off,
+        #ov-banner.ov-cycle-off,
+        #ov-qr.ov-cycle-off,
+        #ov-cards.ov-cycle-off { opacity: 0 !important; }
         #ov-clock-time {
             font-size: 3.4vh;
             font-weight: 700;
@@ -213,15 +219,20 @@ if (function_exists('zfOnboardingActive') && zfOnboardingActive()) { header('Loc
             text-shadow: 0 1px 4px rgba(0,0,0,0.7);
         }
 
-        /* ----- Carte rotative (centre-bas) ----- */
+        /* ----- Carte rotative (position libre pilotée par --ov-cards-*) ----- */
+        /* Géométrie : x/y = centre de la carte en %, width en %, height en vh.
+           Par défaut : x=50% y=84% w=62% h=11vh (ancien "bottom-center"). */
         #ov-cards {
-            left: 50%;
-            bottom: 16vh;
-            transform: translateX(-50%);
-            width: min(62vw, 880px);
-            height: 11vh;
-            min-height: 78px;
+            left: var(--ov-cards-x, 50%);
+            top: var(--ov-cards-y, 84%);
+            transform: translate(-50%, -50%);
+            width: var(--ov-cards-w, min(62vw, 880px));
+            height: var(--ov-cards-h, 11vh);
+            min-height: 60px;
+            opacity: 0;
+            transition: opacity .8s ease;
         }
+        #ov-cards.ov-on { opacity: 1; }
         #overlay-root .ov-card {
             position: absolute;
             inset: 0;
@@ -229,7 +240,7 @@ if (function_exists('zfOnboardingActive') && zfOnboardingActive()) { header('Loc
             align-items: center;
             gap: 16px;
             padding: 14px 26px;
-            background: rgba(10, 15, 26, 0.94); /* #0a0f1a ~94% */
+            background: rgba(10, 15, 26, var(--ov-opacity-cards, 0.94));
             border: 1px solid rgba(16, 185, 129, 0.45);
             border-left: 4px solid #10b981;
             border-radius: 14px;
@@ -279,7 +290,7 @@ if (function_exists('zfOnboardingActive') && zfOnboardingActive()) { header('Loc
             align-items: center;
             gap: 8px;
             padding: 12px;
-            background: rgba(10, 15, 26, 0.94);
+            background: rgba(10, 15, 26, var(--ov-opacity-qr, 0.94));
             border: 1px solid rgba(16, 185, 129, 0.45);
             border-radius: 14px;
             opacity: 0;
@@ -315,7 +326,9 @@ if (function_exists('zfOnboardingActive') && zfOnboardingActive()) { header('Loc
             line-height: 1.15;
         }
 
-        /* ----- Bandeau bas ----- */
+        /* ----- Bandeau bas (gradient dyn via --ov-bg-banner) ----- */
+        /* --ov-bg-banner est injecté par applyConfig depuis banner.opacity ; le gradient
+           préserve la "shape" (fondu vers le haut) tout en scalant l'alpha global. */
         #ov-banner {
             left: 0;
             right: 0;
@@ -334,7 +347,7 @@ if (function_exists('zfOnboardingActive') && zfOnboardingActive()) { header('Loc
             align-items: center;
             gap: 18px;
             padding: 1.6vh 3vw;
-            background: linear-gradient(0deg, rgba(4,19,12,0.92) 0%, rgba(4,19,12,0.70) 70%, rgba(4,19,12,0) 100%);
+            background: var(--ov-bg-banner, linear-gradient(0deg, rgba(4,19,12,0.92) 0%, rgba(4,19,12,0.70) 70%, rgba(4,19,12,0) 100%));
         }
         #ov-banner-logo {
             flex: 0 0 auto;
@@ -1409,27 +1422,42 @@ var qrcode = (function () {
         return (typeof s === 'number') ? s : 1.0; // defaut "md" = 1.0
     }
 
-    // Valeurs par defaut neutres (mode degrade)
+    // Valeurs par defaut neutres (mode degrade) — schéma v2 (juin 2026) :
+    // plus de `lang` (texte unique par carte), opacity + cycle par zone.
     var DEFAULTS = {
-        version: 1,
+        version: 2,
         enabled: true,
-        lang: 'fr',
-        banner: { enabled: true, name: 'Zaforge', subtitle: '', logo: null, size: 'md' },
-        clock: { enabled: true, size: 'md' },
+        banner: {
+            enabled: true, name: 'Zaforge', subtitle: '', logo: null, size: 'md',
+            opacity: 0.92, cycle: { enabled: false, on_seconds: 8, off_seconds: 20 }
+        },
+        clock: {
+            enabled: true, size: 'md',
+            opacity: 0.55, cycle: { enabled: false, on_seconds: 8, off_seconds: 20 }
+        },
         cards_size: 'md',
+        cards_geometry: { preset: 'bottom-center', x: 50, y: 84, width: 62, height: 11 },
+        cards_opacity: 0.94,
+        cards_cycle: { enabled: false, on_seconds: 8, off_seconds: 20 },
         cards: [],
-        qr: { enabled: false, label: '', data: '', size: 'md' }
+        qr: {
+            enabled: false, label: '', data: '', size: 'md',
+            opacity: 0.92, cycle: { enabled: false, on_seconds: 8, off_seconds: 20 }
+        }
     };
 
-    // Icones SVG inline (stroke currentColor). Jeu volontairement restreint.
+    // Icones SVG inline (stroke currentColor). Jeu aligné sur la whitelist API
+    // (9 noms) — complète les 6 SVG manquants pour éviter le fallback silencieux.
     var ICONS = {
         info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>',
+        alert: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
         clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
-        bell: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>',
         check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
-        warning: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
-        heart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21l8.84-8.61a5.5 5.5 0 0 0 0-7.78z"/></svg>',
-        phone: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.81.36 1.6.7 2.34a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.74-1.27a2 2 0 0 1 2.11-.45c.74.34 1.53.57 2.34.7A2 2 0 0 1 22 16.92z"/></svg>'
+        'check-circle': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
+        calendar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+        wifi: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>',
+        volume: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 21 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>',
+        user: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'
     };
 
     function iconSvg(name) {
@@ -1455,7 +1483,9 @@ var qrcode = (function () {
         shiftTimer: null,
         lastSig: null,
         // Echelles courantes par zone (mises a jour a chaque render, lues par le pixel-shift).
-        scale: { clock: 1.0, qr: 1.0, cards: 1.0 }
+        scale: { clock: 1.0, qr: 1.0, cards: 1.0 },
+        // Cycle on/off par zone (v2) : un setTimeout récurrent par zone, cleared sur reapply.
+        cycleTimers: { banner: null, clock: null, cards: null, qr: null }
     };
 
     // ============ HORLOGE (100% local) ============
@@ -1468,7 +1498,9 @@ var qrcode = (function () {
     }
     function tickClock() {
         try {
-            var lang = (state.cfg && state.cfg.lang === 'nl') ? 'nl-BE' : 'fr-BE';
+            // v2 : plus de multi-langue. Locale fixe fr-BE (le player tourne en Belgique fr
+            // par défaut ; si besoin d'autre langue, étendre le schéma plus tard).
+            var lang = 'fr-BE';
             var now = new Date();
             var hh = ('0' + now.getHours()).slice(-2);
             var mm = ('0' + now.getMinutes()).slice(-2);
@@ -1536,15 +1568,17 @@ var qrcode = (function () {
 
     // ============ CARROUSEL CARTES (crossfade, state-machine) ============
     function normalizeCards(cfg) {
+        // v2 : 1 seul texte par carte (champ `text`). Migration legacy :
+        // si text absent, fallback sur text_fr ou text_nl (ancien schéma).
         var out = [];
         try {
-            var lang = (cfg && cfg.lang === 'nl') ? 'nl' : 'fr';
             var raw = (cfg && Array.isArray(cfg.cards)) ? cfg.cards : [];
             for (var i = 0; i < raw.length; i++) {
                 var c = raw[i] || {};
                 var txt = '';
-                if (lang === 'nl') txt = c.text_nl || c.text_fr || '';
-                else txt = c.text_fr || c.text_nl || '';
+                if (typeof c.text === 'string') txt = c.text;
+                else if (typeof c.text_fr === 'string') txt = c.text_fr;
+                else if (typeof c.text_nl === 'string') txt = c.text_nl;
                 txt = String(txt).trim();
                 if (!txt) continue;
                 var dur = parseInt(c.duration, 10);
@@ -1746,14 +1780,13 @@ var qrcode = (function () {
         el.style.transform = t;
     }
     function applyCardsTransform(dx, dy, scale) {
-        // #ov-cards a un centrage de base translateX(-50%) qui DOIT etre conserve.
-        // Composition : translateX(-50%) (centrage) + translate3d(shift) + scale.
-        // Le translateX(-50%) reste en tete pour ne pas casser le centrage ; le scale
-        // est en queue avec transform-origin bas-centre -> grossit autour du centre-bas.
+        // v2 : #ov-cards est centré sur (x%, y%) via translate(-50%, -50%).
+        // Composition : translate(-50%, -50%) (centrage sur le point x/y) +
+        // translate3d(shift) + scale. transform-origin: center center (default).
         var el = $('ov-cards');
         if (!el) return;
         var s = (typeof scale === 'number') ? scale : 1.0;
-        var t = 'translateX(-50%) translate3d(' + dx + 'px,' + dy + 'px,0)';
+        var t = 'translate(-50%, -50%) translate3d(' + dx + 'px,' + dy + 'px,0)';
         if (s !== 1.0) t += ' scale(' + s + ')';
         el.style.transform = t;
     }
@@ -1764,47 +1797,204 @@ var qrcode = (function () {
         return (v === 'sm' || v === 'md' || v === 'lg' || v === 'xl') ? v : 'md';
     }
 
+    // Coerce une valeur d'opacité en float ∈ [0.10, 1.0] (défaut selon contexte).
+    function validOpacity(v, def) {
+        if (typeof v === 'string') {
+            var s = v.trim();
+            if (s.charAt(s.length - 1) === '%') s = s.slice(0, -1);
+            v = isFinite(s) ? parseFloat(s) : def;
+        }
+        if (typeof v === 'number' && v > 1) v = v / 100; // 85 -> 0.85
+        if (typeof v !== 'number' || !isFinite(v)) v = def;
+        if (v < 0.10) v = 0.10;
+        if (v > 1.0)  v = 1.0;
+        return v;
+    }
+
+    // Coerce un bloc cycle {enabled, on_seconds, off_seconds} avec bornes saines.
+    function validCycle(v) {
+        var def = { enabled: false, on_seconds: 8, off_seconds: 20 };
+        var c = (v && typeof v === 'object') ? v : {};
+        var on = parseInt(c.on_seconds, 10);
+        var off = parseInt(c.off_seconds, 10);
+        if (!isFinite(on) || on < 1) on = def.on_seconds;
+        if (on > 3600) on = 3600;
+        if (!isFinite(off) || off < 0) off = def.off_seconds;
+        if (off > 3600) off = 3600;
+        return { enabled: c.enabled === true, on_seconds: on, off_seconds: off };
+    }
+
+    // Coerce la géométrie cartes {preset, x, y, width, height} avec bornes.
+    function validGeometry(v) {
+        var def = { preset: 'bottom-center', x: 50, y: 84, width: 62, height: 11 };
+        var g = (v && typeof v === 'object') ? v : {};
+        var presets = ['top-left','top-center','top-right','middle-left','middle-center','middle-right','bottom-left','bottom-center','bottom-right'];
+        var preset = (typeof g.preset === 'string' && presets.indexOf(g.preset) !== -1) ? g.preset : def.preset;
+        var clamp = function (val, lo, hi, d) {
+            val = parseFloat(val);
+            if (!isFinite(val)) val = d;
+            if (val < lo) val = lo;
+            if (val > hi) val = hi;
+            return val;
+        };
+        return {
+            preset: preset,
+            x:      clamp(g.x,      0, 100, def.x),
+            y:      clamp(g.y,      0, 100, def.y),
+            width:  clamp(g.width, 10, 100, def.width),
+            height: clamp(g.height, 3,  50, def.height)
+        };
+    }
+
     function validateConfig(raw) {
-        // Retourne une config sure : merge avec DEFAULTS, tolere les manques.
-        // MEME validation pour l'overlay GLOBAL et chaque overlay PAR-VIDEO.
+        // Schéma v2 (juin 2026) : plus de `lang`, opacity + cycle par zone,
+        // geometry libre pour les cartes. Migration legacy :
+        //   - Si text/text_fr/text_nl présents dans les cartes, on garde (normalizeCards gère).
+        //   - Si lang présente, on l'ignore (dépréciée).
         var cfg = {
-            version: 1,
+            version: 2,
             enabled: true,
-            lang: 'fr',
-            banner: { enabled: true, name: DEFAULTS.banner.name, subtitle: '', logo: null, size: 'md' },
-            clock: { enabled: true, size: 'md' },
+            banner: {
+                enabled: true, name: DEFAULTS.banner.name, subtitle: '', logo: null, size: 'md',
+                opacity: 0.92, cycle: { enabled: false, on_seconds: 8, off_seconds: 20 }
+            },
+            clock: {
+                enabled: true, size: 'md',
+                opacity: 0.55, cycle: { enabled: false, on_seconds: 8, off_seconds: 20 }
+            },
             cards_size: 'md',
+            cards_geometry: { preset: 'bottom-center', x: 50, y: 84, width: 62, height: 11 },
+            cards_opacity: 0.94,
+            cards_cycle: { enabled: false, on_seconds: 8, off_seconds: 20 },
             cards: [],
-            qr: { enabled: false, label: '', data: '', size: 'md' }
+            qr: {
+                enabled: false, label: '', data: '', size: 'md',
+                opacity: 0.92, cycle: { enabled: false, on_seconds: 8, off_seconds: 20 }
+            }
         };
         try {
             if (raw && typeof raw === 'object') {
                 if (raw.enabled === false) cfg.enabled = false;
-                if (raw.lang === 'nl' || raw.lang === 'fr') cfg.lang = raw.lang;
                 cfg.cards_size = validSize(raw.cards_size);
+                if (raw.cards_geometry) cfg.cards_geometry = validGeometry(raw.cards_geometry);
+                if (raw.cards_opacity !== undefined) cfg.cards_opacity = validOpacity(raw.cards_opacity, 0.94);
+                if (raw.cards_cycle) cfg.cards_cycle = validCycle(raw.cards_cycle);
                 if (raw.banner && typeof raw.banner === 'object') {
-                    cfg.banner.enabled = raw.banner.enabled !== false;
-                    if (typeof raw.banner.name === 'string') cfg.banner.name = raw.banner.name;
-                    if (typeof raw.banner.subtitle === 'string') cfg.banner.subtitle = raw.banner.subtitle;
-                    cfg.banner.logo = (typeof raw.banner.logo === 'string' && raw.banner.logo) ? raw.banner.logo : null;
-                    cfg.banner.size = validSize(raw.banner.size);
+                    var b = raw.banner;
+                    cfg.banner.enabled = b.enabled !== false;
+                    if (typeof b.name === 'string') cfg.banner.name = b.name;
+                    if (typeof b.subtitle === 'string') cfg.banner.subtitle = b.subtitle;
+                    cfg.banner.logo = (typeof b.logo === 'string' && b.logo) ? b.logo : null;
+                    cfg.banner.size = validSize(b.size);
+                    if (b.opacity !== undefined) cfg.banner.opacity = validOpacity(b.opacity, 0.92);
+                    if (b.cycle) cfg.banner.cycle = validCycle(b.cycle);
                 }
                 if (raw.clock && typeof raw.clock === 'object') {
-                    cfg.clock.enabled = raw.clock.enabled !== false;
-                    cfg.clock.size = validSize(raw.clock.size);
+                    var c = raw.clock;
+                    cfg.clock.enabled = c.enabled !== false;
+                    cfg.clock.size = validSize(c.size);
+                    if (c.opacity !== undefined) cfg.clock.opacity = validOpacity(c.opacity, 0.55);
+                    if (c.cycle) cfg.clock.cycle = validCycle(c.cycle);
                 }
                 if (Array.isArray(raw.cards)) cfg.cards = raw.cards;
                 if (raw.qr && typeof raw.qr === 'object') {
-                    cfg.qr.enabled = raw.qr.enabled === true;
-                    if (typeof raw.qr.label === 'string') cfg.qr.label = raw.qr.label;
-                    if (typeof raw.qr.data === 'string') cfg.qr.data = raw.qr.data;
-                    cfg.qr.size = validSize(raw.qr.size);
+                    var q = raw.qr;
+                    cfg.qr.enabled = q.enabled === true;
+                    if (typeof q.label === 'string') cfg.qr.label = q.label;
+                    if (typeof q.data === 'string') cfg.qr.data = q.data;
+                    cfg.qr.size = validSize(q.size);
+                    if (q.opacity !== undefined) cfg.qr.opacity = validOpacity(q.opacity, 0.92);
+                    if (q.cycle) cfg.qr.cycle = validCycle(q.cycle);
                 }
             }
         } catch (e) {
             // En cas de souci, on garde les defauts neutres.
         }
         return cfg;
+    }
+
+    // ============ INJECTION DES VARS CSS (opacities + geometry cartes) ============
+    function applyOverlayVars(cfg) {
+        var root = $('overlay-root');
+        if (!root) return;
+        // Opacities par zone (rgba backgrounds injectés via var(--ov-opacity-*)).
+        root.style.setProperty('--ov-opacity-clock',  cfg.clock.opacity);
+        root.style.setProperty('--ov-opacity-cards',  cfg.cards_opacity);
+        root.style.setProperty('--ov-opacity-qr',     cfg.qr.opacity);
+        // Banner : gradient composé à partir de l'opacity (3 stops progressifs).
+        var bop = cfg.banner.opacity;
+        root.style.setProperty('--ov-bg-banner',
+            'linear-gradient(0deg, ' +
+            'rgba(4,19,12,' + (bop * 0.92).toFixed(3) + ') 0%, ' +
+            'rgba(4,19,12,' + (bop * 0.70).toFixed(3) + ') 70%, ' +
+            'rgba(4,19,12,0) 100%)'
+        );
+        // Géométrie cartes : position (x/y en %) + dimensions (w% + h vh).
+        var g = cfg.cards_geometry;
+        root.style.setProperty('--ov-cards-x', g.x + '%');
+        root.style.setProperty('--ov-cards-y', g.y + '%');
+        root.style.setProperty('--ov-cards-w', g.width + 'vw');
+        root.style.setProperty('--ov-cards-h', g.height + 'vh');
+    }
+
+    // ============ CYCLES ON/OFF PAR ZONE (périodes de grâce) ============
+    function stopZoneCycles() {
+        for (var zone in state.cycleTimers) {
+            if (state.cycleTimers[zone]) {
+                clearTimeout(state.cycleTimers[zone]);
+                state.cycleTimers[zone] = null;
+            }
+        }
+        // Retirer toutes les classes .ov-cycle-off résiduelles
+        var zones = ['ov-banner', 'ov-clock', 'ov-cards', 'ov-qr'];
+        for (var i = 0; i < zones.length; i++) {
+            var el = $(zones[i]);
+            if (el) el.classList.remove('ov-cycle-off');
+        }
+    }
+
+    // Démarre un cycle on/off pour UNE zone. Altérnance visible/caché selon on/off seconds.
+    function startZoneCycle(zoneId, cycle) {
+        var el = $(zoneId);
+        if (!el) return;
+        if (!cycle || !cycle.enabled) {
+            el.classList.remove('ov-cycle-off');
+            return;
+        }
+        var onMs  = Math.max(1, cycle.on_seconds)  * 1000;
+        var offMs = Math.max(0, cycle.off_seconds) * 1000;
+        // État initial : visible. Puis schedule la bascule vers off.
+        el.classList.remove('ov-cycle-off');
+        var visible = true;
+        var scheduleNext = function () {
+            var ms = visible ? onMs : offMs;
+            // Si offMs = 0, on reste visible (cycle désactivé de facto).
+            if (ms <= 0) return;
+            state.cycleTimers[zoneKeyFromId(zoneId)] = setTimeout(function () {
+                visible = !visible;
+                el.classList.toggle('ov-cycle-off', !visible);
+                scheduleNext();
+            }, ms);
+        };
+        scheduleNext();
+    }
+
+    // Map zone DOM id -> clé dans state.cycleTimers.
+    function zoneKeyFromId(zoneId) {
+        if (zoneId === 'ov-banner') return 'banner';
+        if (zoneId === 'ov-clock')  return 'clock';
+        if (zoneId === 'ov-cards')  return 'cards';
+        if (zoneId === 'ov-qr')     return 'qr';
+        return zoneId;
+    }
+
+    // Démarre les 4 cycles (banner, clock, cards, qr) selon la config.
+    function startZoneCycles(cfg) {
+        stopZoneCycles();
+        startZoneCycle('ov-banner', cfg.banner.cycle);
+        startZoneCycle('ov-clock',  cfg.clock.cycle);
+        startZoneCycle('ov-cards',  cfg.cards_cycle);
+        startZoneCycle('ov-qr',     cfg.qr.cycle);
     }
 
     // Rendu PARAMETRE par une config (globale OU par-video). Centralise tout le rendu
@@ -1816,14 +2006,23 @@ var qrcode = (function () {
         if (root) root.style.display = (cfg.enabled === false) ? 'none' : '';
         if (cfg.enabled === false) {
             stopCarousel();
+            stopZoneCycles();
             return;
         }
+
+        // v2 : injecter les vars CSS (opacities + geometry cartes) AVANT le rendu des
+        // zones (sinon le premier paint utilise les valeurs par défaut du CSS).
+        applyOverlayVars(cfg);
 
         renderBanner(cfg);
         renderClockZone(cfg);
         startClock();          // l'horloge tourne en continu (startClock est idempotent)
         startCarousel(cfg);    // le carrousel redemarre proprement sur la nouvelle config
         renderQR(cfg);
+
+        // v2 : cycles on/off par zone (périodes de grâce) — démarrés APRÈS le rendu
+        // pour que .ov-cycle-off s'applique sur des zones déjà affichées correctement.
+        startZoneCycles(cfg);
     }
 
     // Render du GLOBAL : memorise la config globale, puis l'affiche SI aucun overlay
@@ -1848,11 +2047,13 @@ var qrcode = (function () {
             if (!state.globalCfg) state.globalCfg = cfg; // repli global tant que rien n'est charge
             var root = $('overlay-root');
             if (root) root.style.display = '';
+            applyOverlayVars(cfg);   // v2 : vars CSS cohérentes même en mode dégradé
             renderBanner(cfg);
             renderClockZone(cfg);
             startClock();
             stopCarousel();
             hideCards();
+            stopZoneCycles();        // v2 : pas de cycle en mode dégradé
             var zone = $('ov-qr');
             if (zone) zone.classList.remove('ov-show', 'ov-on');
         } catch (e) { /* ultime garde-fou */ }

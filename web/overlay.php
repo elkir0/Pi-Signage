@@ -8,6 +8,47 @@ require_once 'includes/components.php';
 
 $actions = '<button class="btn btn-primary" type="button" id="overlay-save-btn" onclick="PiSignage.overlay.save()">'
          . icon('check') . 'Enregistrer</button>';
+
+// Helpers HTML réutilisables pour les sections "opacity" et "cycle" par zone.
+// Déclarés ici (avant leur utilisation dans le HTML ci-dessous).
+
+/** Slider de transparence (10..100 %). $zone = clock|banner|qr|cards. */
+function overlay_opacity_html($zone, $label, $default_percent) {
+    $default_percent = (int)$default_percent;
+    return <<<HTML
+<div class="form-group">
+    <label for="ov-{$zone}-opacity">{$label} : <span id="ov-{$zone}-opacity-val">{$default_percent}</span>%</label>
+    <input type="range" class="form-control" id="ov-{$zone}-opacity"
+           min="10" max="100" step="1" value="{$default_percent}"
+           oninput="document.getElementById('ov-{$zone}-opacity-val').textContent = this.value">
+</div>
+HTML;
+}
+
+/** Bloc cycle on/off par zone (toggle + 2 inputs num). $zone = clock|banner|qr|cards. */
+function overlay_cycle_html($zone) {
+    return <<<HTML
+<div class="form-group">
+    <div class="row" style="justify-content:space-between;align-items:center">
+        <label for="ov-{$zone}-cycle-enabled" style="margin:0">Cycle on/off (période de grâce)</label>
+        <label class="toggle-switch">
+            <input type="checkbox" id="ov-{$zone}-cycle-enabled">
+            <span class="toggle-slider"></span>
+        </label>
+    </div>
+    <div class="form-row" style="margin-top:8px">
+        <div class="form-group" style="max-width:140px;margin:0">
+            <label for="ov-{$zone}-cycle-on">Affiché (s)</label>
+            <input type="number" class="form-control" id="ov-{$zone}-cycle-on" min="1" max="3600" value="8">
+        </div>
+        <div class="form-group" style="max-width:140px;margin:0">
+            <label for="ov-{$zone}-cycle-off">Masqué (s)</label>
+            <input type="number" class="form-control" id="ov-{$zone}-cycle-off" min="0" max="3600" value="20">
+        </div>
+    </div>
+</div>
+HTML;
+}
 ?>
 <div class="main">
     <?php pageHeader('Overlay', 'Informations affichées sur les vidéos', $actions); ?>
@@ -72,22 +113,6 @@ $actions = '<button class="btn btn-primary" type="button" id="overlay-save-btn" 
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
-                <div class="form-group">
-                    <label for="ov-lang">Langue par défaut</label>
-                    <select class="form-control" id="ov-lang">
-                        <option value="fr">Français</option>
-                        <option value="nl">Nederlands</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="ov-cards-size">Taille des cartes</label>
-                    <select class="form-control" id="ov-cards-size">
-                        <option value="sm">Petit</option>
-                        <option value="md">Moyen</option>
-                        <option value="lg">Grand</option>
-                        <option value="xl">Très grand</option>
-                    </select>
-                </div>
                 <p style="color:var(--text-faint);font-size:13px;margin:6px 0 0">
                     L'overlay s'affiche par-dessus les vidéos sans jamais bloquer le lecteur.
                 </p>
@@ -114,6 +139,8 @@ $actions = '<button class="btn btn-primary" type="button" id="overlay-save-btn" 
                         <option value="xl">Très grand</option>
                     </select>
                 </div>
+                <?= overlay_opacity_html('clock', 'Transparence fond', 55) ?>
+                <?= overlay_cycle_html('clock') ?>
             </div>
 
             <!-- BANDEAU -->
@@ -138,11 +165,28 @@ $actions = '<button class="btn btn-primary" type="button" id="overlay-save-btn" 
                     <input type="text" class="form-control" id="ov-banner-subtitle"
                            maxlength="160" placeholder="Spécialité · Lun–Ven 8h–18h">
                 </div>
+
+                <!-- Logo : upload direct + preview (PNG/JPG/WebP/SVG, transparence préservée) -->
                 <div class="form-group">
-                    <label for="ov-banner-logo">Logo (URL, optionnel)</label>
-                    <input type="text" class="form-control" id="ov-banner-logo"
-                           maxlength="512" placeholder="/data/logo.png">
+                    <label>Logo</label>
+                    <div class="form-row" style="align-items:center;gap:12px">
+                        <img id="ov-banner-logo-preview" alt=""
+                             style="max-height:60px;max-width:120px;border-radius:6px;background:var(--surface-2);padding:4px;display:none">
+                        <input type="file" id="ov-banner-logo-file"
+                               accept="image/png,image/jpeg,image/webp,image/svg+xml" style="display:none">
+                        <button type="button" class="btn btn-secondary btn-sm" id="ov-banner-logo-pick">
+                            <?= icon('upload') ?>Choisir un fichier
+                        </button>
+                        <button type="button" class="btn btn-danger btn-sm" id="ov-banner-logo-clear" style="display:none">
+                            <?= icon('trash') ?>Retirer
+                        </button>
+                        <input type="hidden" id="ov-banner-logo">
+                    </div>
+                    <p style="color:var(--text-faint);font-size:12px;margin:4px 0 0">
+                        PNG/JPG/WebP/SVG · max 2 MB · transparence PNG préservée.
+                    </p>
                 </div>
+
                 <div class="form-group">
                     <label for="ov-banner-size">Taille</label>
                     <select class="form-control" id="ov-banner-size">
@@ -152,6 +196,8 @@ $actions = '<button class="btn btn-primary" type="button" id="overlay-save-btn" 
                         <option value="xl">Très grand</option>
                     </select>
                 </div>
+                <?= overlay_opacity_html('banner', 'Transparence fond', 92) ?>
+                <?= overlay_cycle_html('banner') ?>
             </div>
 
             <!-- QR -->
@@ -185,14 +231,16 @@ $actions = '<button class="btn btn-primary" type="button" id="overlay-save-btn" 
                         <option value="xl">Très grand</option>
                     </select>
                 </div>
+                <?= overlay_opacity_html('qr', 'Transparence fond', 92) ?>
+                <?= overlay_cycle_html('qr') ?>
             </div>
 
         </div>
 
-        <!-- CARTES ROTATIVES -->
+        <!-- CARTES ROTATIVES + géométrie + cycle conteneur -->
         <div class="card" style="margin-top:18px">
             <div class="card-head">
-                <h2 class="card-title"><?= icon('list') ?>Cartes d'information (centre-bas)</h2>
+                <h2 class="card-title"><?= icon('list') ?>Cartes d'information</h2>
                 <button class="btn btn-secondary btn-sm" type="button" onclick="PiSignage.overlay.addCard()">
                     <?= icon('plus') ?>Ajouter une carte
                 </button>
@@ -200,6 +248,64 @@ $actions = '<button class="btn btn-primary" type="button" id="overlay-save-btn" 
             <p style="color:var(--text-faint);font-size:13px;margin:0 0 12px">
                 Une carte à la fois, en boucle. Restez court (≤ 12 mots) pour une lecture rapide à distance.
             </p>
+
+            <!-- Géométrie + style du conteneur de cartes -->
+            <div class="grid grid-2" style="margin-bottom:14px">
+                <div>
+                    <div class="form-group">
+                        <label for="ov-cards-size">Taille</label>
+                        <select class="form-control" id="ov-cards-size">
+                            <option value="sm">Petit</option>
+                            <option value="md">Moyen</option>
+                            <option value="lg">Grand</option>
+                            <option value="xl">Très grand</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="ov-cards-preset">Position (présélection)</label>
+                        <select class="form-control" id="ov-cards-preset">
+                            <option value="top-left">Haut gauche</option>
+                            <option value="top-center">Haut centre</option>
+                            <option value="top-right">Haut droite</option>
+                            <option value="middle-left">Milieu gauche</option>
+                            <option value="middle-center">Milieu centre</option>
+                            <option value="middle-right">Milieu droite</option>
+                            <option value="bottom-left">Bas gauche</option>
+                            <option value="bottom-center" selected>Bas centre</option>
+                            <option value="bottom-right">Bas droite</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <div class="form-row">
+                        <div class="form-group" style="max-width:120px">
+                            <label for="ov-cards-x">X (%)</label>
+                            <input type="number" class="form-control" id="ov-cards-x" min="0" max="100" step="1" value="50">
+                        </div>
+                        <div class="form-group" style="max-width:120px">
+                            <label for="ov-cards-y">Y (%)</label>
+                            <input type="number" class="form-control" id="ov-cards-y" min="0" max="100" step="1" value="84">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group" style="max-width:120px">
+                            <label for="ov-cards-w">Largeur (%)</label>
+                            <input type="number" class="form-control" id="ov-cards-w" min="10" max="100" step="1" value="62">
+                        </div>
+                        <div class="form-group" style="max-width:120px">
+                            <label for="ov-cards-h">Hauteur (vh)</label>
+                            <input type="number" class="form-control" id="ov-cards-h" min="3" max="50" step="1" value="11">
+                        </div>
+                    </div>
+                    <p style="color:var(--text-faint);font-size:11px;margin:4px 0 0">
+                        Présélection = reflet visuel ; X/Y/W/H = ajustements fins (override).
+                    </p>
+                </div>
+            </div>
+
+            <?= overlay_opacity_html('cards', 'Transparence fond cartes', 94) ?>
+            <?= overlay_cycle_html('cards') ?>
+
             <div id="ov-cards"></div>
             <div id="ov-cards-empty" class="empty-state" style="display:none">
                 <?= icon('list') ?>
@@ -212,7 +318,7 @@ $actions = '<button class="btn btn-primary" type="button" id="overlay-save-btn" 
     </div>
 </div>
 
-<!-- Template d'une carte (cloné côté JS) -->
+<!-- Template d'une carte (cloné côté JS). Schéma v2 : 1 seul texte (plus de FR/NL). -->
 <template id="ov-card-template">
     <div class="card ov-card-item" style="margin-bottom:12px;background:var(--surface-2)">
         <div class="form-row">
@@ -235,17 +341,10 @@ $actions = '<button class="btn btn-primary" type="button" id="overlay-save-btn" 
                 <input type="number" class="form-control ov-card-duration" min="3" max="60" value="8">
             </div>
         </div>
-        <div class="form-row">
-            <div class="form-group">
-                <label>Texte (FR)</label>
-                <input type="text" class="form-control ov-card-fr" maxlength="120"
-                       placeholder="Texte affiché en français">
-            </div>
-            <div class="form-group">
-                <label>Texte (NL)</label>
-                <input type="text" class="form-control ov-card-nl" maxlength="120"
-                       placeholder="Tekst in het Nederlands">
-            </div>
+        <div class="form-group">
+            <label>Texte affiché</label>
+            <input type="text" class="form-control ov-card-text" maxlength="200"
+                   placeholder="Texte affiché à l'écran (max 200 caractères)">
         </div>
         <div class="row" style="justify-content:flex-end">
             <button class="btn btn-danger btn-sm" type="button" onclick="PiSignage.overlay.removeCard(this)">
@@ -256,6 +355,7 @@ $actions = '<button class="btn btn-primary" type="button" id="overlay-save-btn" 
 </template>
 
 <?php include 'includes/footer.php'; ?>
+
 
 <script>
 /*
@@ -294,6 +394,36 @@ $actions = '<button class="btn btn-primary" type="button" id="overlay-save-btn" 
     function setSize(id, v) { setVal(id, normSize(v)); }
     function getSize(id) { return normSize(val(id)); }
 
+    // Range slider (transparence) : valeur 10..100 (%).
+    function setRange(id, percent) {
+        var el = $(id);
+        if (!el) return;
+        var p = Math.round(parseFloat(percent));
+        if (!isFinite(p)) p = 90;
+        if (p < 10) p = 10;
+        if (p > 100) p = 100;
+        el.value = p;
+        // Mettre à jour le label live "<value>%" à côté du slider.
+        var lab = $(id + '-val');
+        if (lab) lab.textContent = p;
+    }
+    // Convertit une opacity (0..1) en pourcentage entier 10..100.
+    function percentOf(opacity, def) {
+        if (typeof opacity !== 'number' || !isFinite(opacity)) {
+            opacity = (typeof def === 'number') ? def : 0.90;
+        }
+        return Math.round(opacity * 100);
+    }
+    // Lit un slider opacity (%) et renvoie un float 0..1.
+    function opacityOf(id, def) {
+        var el = $(id);
+        var p = el ? parseFloat(el.value) : NaN;
+        if (!isFinite(p)) return (typeof def === 'number') ? def : 0.90;
+        if (p < 10) p = 10;
+        if (p > 100) p = 100;
+        return p / 100;
+    }
+
     function toast(msg, type) {
         if (window.PiSignage && PiSignage.ui && PiSignage.ui.toast) {
             PiSignage.ui.toast(msg, type || 'info');
@@ -309,6 +439,80 @@ $actions = '<button class="btn btn-primary" type="button" id="overlay-save-btn" 
             this.load();
             this.loadMediaList();
             this.refreshOverlayedFiles();
+            this.initLogoUpload();
+            this.initPresetSync();
+        },
+
+        // Logo upload : lie les boutons "Choisir"/"Retirer" + POST ?action=upload-logo.
+        initLogoUpload: function () {
+            var self = this;
+            var fileInput = $('ov-banner-logo-file');
+            var pickBtn = $('ov-banner-logo-pick');
+            var clearBtn = $('ov-banner-logo-clear');
+            if (pickBtn && fileInput) {
+                pickBtn.addEventListener('click', function () { fileInput.click(); });
+            }
+            if (fileInput) {
+                fileInput.addEventListener('change', function () {
+                    var f = fileInput.files && fileInput.files[0];
+                    if (!f) return;
+                    self.uploadLogo(f);
+                });
+            }
+            if (clearBtn) {
+                clearBtn.addEventListener('click', function () {
+                    setVal('ov-banner-logo', '');
+                    self.updateLogoPreview(null);
+                    if (fileInput) fileInput.value = '';
+                });
+            }
+        },
+
+        // POST le fichier vers /api/overlay.php?action=upload-logo (multipart/form-data).
+        // Retourne l'URL publique /data/logos/<sha>.<ext> et met à jour le hidden input + preview.
+        uploadLogo: function (file) {
+            var self = this;
+            toast('Upload du logo…', 'info');
+            var fd = new FormData();
+            fd.append('logo', file);
+            fetch(API + '?action=upload-logo', { method: 'POST', body: fd })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (res && res.success && res.data && res.data.url) {
+                        setVal('ov-banner-logo', res.data.url);
+                        self.updateLogoPreview(res.data.url);
+                        toast('Logo importé', 'success');
+                    } else {
+                        toast((res && res.message) || 'Échec de l\'upload du logo', 'error');
+                    }
+                })
+                .catch(function () {
+                    toast('Erreur réseau pendant l\'upload du logo', 'error');
+                });
+        },
+
+        // Présélection → ajuste X/Y/W/H aux valeurs canoniques du preset.
+        // Le user peut ensuite affiner manuellement (les X/Y/W/H sont en override).
+        initPresetSync: function () {
+            var presets = {
+                'top-left':       { x: 25, y: 18 },
+                'top-center':     { x: 50, y: 18 },
+                'top-right':      { x: 75, y: 18 },
+                'middle-left':    { x: 25, y: 50 },
+                'middle-center':  { x: 50, y: 50 },
+                'middle-right':   { x: 75, y: 50 },
+                'bottom-left':    { x: 25, y: 84 },
+                'bottom-center':  { x: 50, y: 84 },
+                'bottom-right':   { x: 75, y: 84 }
+            };
+            var sel = $('ov-cards-preset');
+            if (!sel) return;
+            sel.addEventListener('change', function () {
+                var p = presets[sel.value];
+                if (!p) return;
+                setVal('ov-cards-x', p.x);
+                setVal('ov-cards-y', p.y);
+            });
         },
 
         /* ================= mode switching ================= */
@@ -336,29 +540,47 @@ $actions = '<button class="btn btn-primary" type="button" id="overlay-save-btn" 
         },
 
         /* ================= form helpers (shared) ================= */
-        // Fill the shared form from an overlay document.
+        // Fill the shared form from an overlay document (schéma v2).
         populate: function (d) {
             d = d || {};
             setChk('ov-enabled', d.enabled !== false);
-            setVal('ov-lang', (d.lang === 'nl') ? 'nl' : 'fr');
-            setSize('ov-cards-size', d.cards_size);
 
             var clock = d.clock || {};
-            setChk('ov-clock-enabled', clock.enabled);
+            setChk('ov-clock-enabled', clock.enabled !== false);
             setSize('ov-clock-size', clock.size);
+            this.setZone('clock', clock);
+            // Compat: clock.opacity peut être absent sur anciens documents.
+            setRange('ov-clock-opacity',  percentOf(clock.opacity, 55));
 
             var b = d.banner || {};
-            setChk('ov-banner-enabled', b.enabled);
+            setChk('ov-banner-enabled', b.enabled !== false);
             setVal('ov-banner-name', b.name);
             setVal('ov-banner-subtitle', b.subtitle);
-            setVal('ov-banner-logo', b.logo);
+            setVal('ov-banner-logo', b.logo);  // URL hidden input
+            this.updateLogoPreview(b.logo);
             setSize('ov-banner-size', b.size);
+            setRange('ov-banner-opacity', percentOf(b.opacity, 92));
+            this.setZone('banner', b);
 
             var qr = d.qr || {};
             setChk('ov-qr-enabled', qr.enabled);
             setVal('ov-qr-label', qr.label);
             setVal('ov-qr-data', qr.data);
             setSize('ov-qr-size', qr.size);
+            setRange('ov-qr-opacity', percentOf(qr.opacity, 92));
+            this.setZone('qr', qr);
+
+            setSize('ov-cards-size', d.cards_size);
+            var g = d.cards_geometry || {};
+            setVal('ov-cards-preset', g.preset || 'bottom-center');
+            setVal('ov-cards-x', g.x !== undefined ? g.x : 50);
+            setVal('ov-cards-y', g.y !== undefined ? g.y : 84);
+            setVal('ov-cards-w', g.width  !== undefined ? g.width  : 62);
+            setVal('ov-cards-h', g.height !== undefined ? g.height : 11);
+            setRange('ov-cards-opacity', percentOf(d.cards_opacity, 94));
+            this.setZone('cards', {
+                cycle: d.cards_cycle || { enabled: false, on_seconds: 8, off_seconds: 20 }
+            });
 
             var host = $('ov-cards');
             if (host) host.innerHTML = '';
@@ -369,42 +591,93 @@ $actions = '<button class="btn btn-primary" type="button" id="overlay-save-btn" 
             this.refreshCardsEmpty();
         },
 
+        // Remplit les champs cycle d'une zone (4 zones : clock, banner, qr, cards).
+        setZone: function (zone, src) {
+            src = src || {};
+            var c = src.cycle || { enabled: false, on_seconds: 8, off_seconds: 20 };
+            setChk('ov-' + zone + '-cycle-enabled', c.enabled === true);
+            setVal('ov-' + zone + '-cycle-on',  c.on_seconds  || 8);
+            setVal('ov-' + zone + '-cycle-off', c.off_seconds || 20);
+        },
+
+        // Lit les champs cycle d'une zone -> {enabled, on_seconds, off_seconds}.
+        readZone: function (zone) {
+            return {
+                enabled:     checked('ov-' + zone + '-cycle-enabled'),
+                on_seconds:  parseInt(val('ov-' + zone + '-cycle-on'),  10) || 8,
+                off_seconds: parseInt(val('ov-' + zone + '-cycle-off'), 10) || 20
+            };
+        },
+
+        // Met à jour la preview du logo (img + bouton "Retirer").
+        updateLogoPreview: function (url) {
+            var img = $('ov-banner-logo-preview');
+            var clearBtn = $('ov-banner-logo-clear');
+            if (url) {
+                if (img) { img.src = url; img.style.display = ''; }
+                if (clearBtn) clearBtn.style.display = '';
+            } else {
+                if (img) { img.removeAttribute('src'); img.style.display = 'none'; }
+                if (clearBtn) clearBtn.style.display = 'none';
+            }
+        },
+
         // Reset the shared form to schema defaults (used for files without overlay).
         resetForm: function () {
             this.populate({
-                version: 1, enabled: true, lang: 'fr',
-                banner: { enabled: true, name: '', subtitle: '', logo: null, size: 'md' },
-                clock:  { enabled: true, size: 'md' },
+                version: 2, enabled: true,
+                banner: { enabled: true, name: '', subtitle: '', logo: null, size: 'md',
+                          opacity: 0.92, cycle: { enabled: false, on_seconds: 8, off_seconds: 20 } },
+                clock:  { enabled: true, size: 'md',
+                          opacity: 0.55, cycle: { enabled: false, on_seconds: 8, off_seconds: 20 } },
                 cards_size: 'md',
+                cards_geometry: { preset: 'bottom-center', x: 50, y: 84, width: 62, height: 11 },
+                cards_opacity: 0.94,
+                cards_cycle: { enabled: false, on_seconds: 8, off_seconds: 20 },
                 cards: [],
-                qr: { enabled: false, label: '', data: '', size: 'md' }
+                qr: { enabled: false, label: '', data: '', size: 'md',
+                      opacity: 0.92, cycle: { enabled: false, on_seconds: 8, off_seconds: 20 } }
             });
         },
 
-        // Read the shared form into a complete overlay document.
+        // Read the shared form into a complete overlay document (schéma v2).
         readForm: function () {
             return {
-                version: 1,
+                version: 2,
                 enabled: checked('ov-enabled'),
-                lang: (val('ov-lang') === 'nl') ? 'nl' : 'fr',
                 banner: {
-                    enabled: checked('ov-banner-enabled'),
-                    name: val('ov-banner-name').trim(),
+                    enabled:  checked('ov-banner-enabled'),
+                    name:     val('ov-banner-name').trim(),
                     subtitle: val('ov-banner-subtitle').trim(),
-                    logo: val('ov-banner-logo').trim() || null,
-                    size: getSize('ov-banner-size')
+                    logo:     val('ov-banner-logo').trim() || null,
+                    size:     getSize('ov-banner-size'),
+                    opacity:  opacityOf('ov-banner-opacity', 0.92),
+                    cycle:    this.readZone('banner')
                 },
                 clock: {
                     enabled: checked('ov-clock-enabled'),
-                    size: getSize('ov-clock-size')
+                    size:    getSize('ov-clock-size'),
+                    opacity: opacityOf('ov-clock-opacity', 0.55),
+                    cycle:   this.readZone('clock')
                 },
                 cards_size: getSize('ov-cards-size'),
+                cards_geometry: {
+                    preset: val('ov-cards-preset'),
+                    x:      parseFloat(val('ov-cards-x')) || 50,
+                    y:      parseFloat(val('ov-cards-y')) || 84,
+                    width:  parseFloat(val('ov-cards-w')) || 62,
+                    height: parseFloat(val('ov-cards-h')) || 11
+                },
+                cards_opacity: opacityOf('ov-cards-opacity', 0.94),
+                cards_cycle:   this.readZone('cards'),
                 cards: this.collectCards(),
                 qr: {
                     enabled: checked('ov-qr-enabled'),
-                    label: val('ov-qr-label').trim(),
-                    data: val('ov-qr-data').trim(),
-                    size: getSize('ov-qr-size')
+                    label:   val('ov-qr-label').trim(),
+                    data:    val('ov-qr-data').trim(),
+                    size:    getSize('ov-qr-size'),
+                    opacity: opacityOf('ov-qr-opacity', 0.92),
+                    cycle:   this.readZone('qr')
                 }
             };
         },
@@ -419,12 +692,12 @@ $actions = '<button class="btn btn-primary" type="button" id="overlay-save-btn" 
             if (data && typeof data === 'object') {
                 var iconSel = node.querySelector('.ov-card-icon');
                 var durEl   = node.querySelector('.ov-card-duration');
-                var frEl    = node.querySelector('.ov-card-fr');
-                var nlEl    = node.querySelector('.ov-card-nl');
+                var textEl  = node.querySelector('.ov-card-text');
                 if (iconSel && data.icon) iconSel.value = data.icon;
                 if (durEl && data.duration) durEl.value = data.duration;
-                if (frEl) frEl.value = data.text_fr || '';
-                if (nlEl) nlEl.value = data.text_nl || '';
+                // v2 : `text` unique. Migration legacy : text_fr prioritaire sinon text_nl.
+                var legacy = data.text_fr || data.text_nl || '';
+                if (textEl) textEl.value = data.text || legacy;
             }
             host.appendChild(node);
             this.refreshCardsEmpty();
@@ -449,14 +722,13 @@ $actions = '<button class="btn btn-primary" type="button" id="overlay-save-btn" 
             for (var i = 0; i < items.length; i++) {
                 var it = items[i];
                 var icon = (it.querySelector('.ov-card-icon') || {}).value || 'info';
-                var fr   = ((it.querySelector('.ov-card-fr') || {}).value || '').trim();
-                var nl   = ((it.querySelector('.ov-card-nl') || {}).value || '').trim();
+                var text = ((it.querySelector('.ov-card-text') || {}).value || '').trim();
                 var dur  = parseInt((it.querySelector('.ov-card-duration') || {}).value, 10);
                 if (isNaN(dur)) dur = 8;
                 if (dur < 3) dur = 3;
                 if (dur > 60) dur = 60;
-                if (!fr && !nl) continue;
-                out.push({ icon: icon, text_fr: fr, text_nl: nl, duration: dur });
+                if (!text) continue;
+                out.push({ icon: icon, text: text, duration: dur });
             }
             return out;
         },
