@@ -47,8 +47,9 @@ install_dropin() {
 cmd_up() {
     ensure_profile
     install_dropin
-    # 2 tentatives : NM peut être occupé à libérer le STA juste avant.
-    "$NMCLI" con up "$AP_CON" >/dev/null 2>&1 || "$NMCLI" con up "$AP_CON" >/dev/null 2>&1 || true
+    # 2 tentatives bornées (-w 20) : NM peut être occupé à libérer le STA juste avant. Sans -w,
+    # 'con up' bloque jusqu'à ~90s (défaut NM) -> retarderait le kiosk au 1er boot (Before=lightdm).
+    "$NMCLI" -w 20 con up "$AP_CON" >/dev/null 2>&1 || "$NMCLI" -w 20 con up "$AP_CON" >/dev/null 2>&1 || true
     mkdir -p "$CONF"; touch "$CONF/.onboarding"
     printf 'ap_up=yes ap_ssid=%s\n' "$(ap_ssid)"
 }

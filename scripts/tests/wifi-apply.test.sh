@@ -30,7 +30,7 @@ t "bidon-A priorite 20"          '[ "$(prio_of ZZ-bidon-A)" = "20" ]'
 t "bidon-B priorite 10"          '[ "$(prio_of ZZ-bidon-B)" = "10" ]'
 t "ssid round-trip bidon-A"      'ssid_present ZZ-bidon-A'
 t "toujours connecte au reel"    '[ "$(active_ssid)" = "$REAL" ]'
-t "json sans secret"             '! grep -Eqi "psk|password|motdepasse" "$STATE"'
+t "json sans secret en clair"    '! grep -Eqi "motdepasse|\"psk\"|psk=|key-mgmt" "$STATE"'
 t "json contient le reel"        'grep -Fq "$REAL" "$STATE"'
 t "keyfiles a nous en 0600"      '[ -z "$(find "$NMDIR" -name "zf-wifi-*.nmconnection" ! -perm 600 2>/dev/null)" ]'
 

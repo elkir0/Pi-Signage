@@ -40,7 +40,9 @@ SHORT="$(printf '%s' "$MID" | tr -cd 'a-f0-9' | cut -c1-8)"
 [ -n "$SHORT" ] || SHORT="$(date +%s 2>/dev/null | tail -c 9)"
 HN="zaforge-$SHORT"
 if [ "$DRY" != 1 ]; then
-    hostnamectl set-hostname "$HN" 2>/dev/null || true
+    # timeout : hostnamectl est un appel D-Bus synchrone ; un hostnamed bloqué ne doit pas retarder
+    # firstboot (donc lightdm). || true ne borne pas le temps -> on borne avec timeout.
+    timeout 10 hostnamectl set-hostname "$HN" 2>/dev/null || true
     grep -q "[[:space:]]$HN\$" /etc/hosts 2>/dev/null || echo "127.0.1.1 $HN" >> /etc/hosts 2>/dev/null || true
 fi
 log "hostname=$HN"
