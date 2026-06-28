@@ -1254,6 +1254,15 @@ GRIMCAP
         sudo chown pi:pi "$INSTALL_DIR/scripts/audio-output-apply.sh"
         sudo chmod 0755 "$INSTALL_DIR/scripts/audio-output-apply.sh"
     fi
+    # Pré-créer le fichier de préférence audio (pi:pi 0644). audio-output.sh tourne
+    # en 'pi' (runuser) et écrit CE fichier — pas le dir parent (www-data:www-data).
+    # Sans pré-création, le 1er switch échouerait à créer le fichier (perm denied
+    # sur le dir). pi peut modifier un fichier existant sans write sur le dir.
+    if [ ! -f "$INSTALL_DIR/config/audio-output" ]; then
+        echo 'jack' | sudo tee "$INSTALL_DIR/config/audio-output" >/dev/null
+        sudo chown pi:pi "$INSTALL_DIR/config/audio-output"
+        sudo chmod 0644 "$INSTALL_DIR/config/audio-output"
+    fi
 
     # Helpers WireGuard de l'agent Zaforge — générés root:root 0755 (comme audio-output.sh).
     # INVARIANT DE SÉCURITÉ : ces scripts sont la SEULE étape privilégiée du tunnel. Ils sont
