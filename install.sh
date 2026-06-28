@@ -53,8 +53,12 @@ detect_os_version() {
             USE_CHROMIUM_PLAYER=1
             log_info "Trixie (Debian 13) detected - Wayland kiosk mode available"
 
-            # Check if Desktop edition (required for Wayland)
-            if ! dpkg -l 2>/dev/null | grep -qE "task-desktop|task-gnome|task-lxde|task-xfce"; then
+            # Check if Desktop edition (required for Wayland kiosk).
+            # Trixie RPi OS Desktop n'utilise PLUS les metas task-desktop (legacy Bookworm),
+            # mais labwc + lightdm + raspi-config + xsessions/wayland-sessions/. Le signal
+            # définitif et portable = au moins 1 fichier .desktop de session graphique.
+            if ! ls /usr/share/xsessions/*.desktop /usr/share/wayland-sessions/*.desktop >/dev/null 2>&1 \
+               && ! dpkg -l 2>/dev/null | grep -qE "task-desktop|task-gnome|task-lxde|task-xfce"; then
                 log_warn "⚠️  WARNING: Raspberry Pi OS Lite detected!"
                 log_warn "    Wayland kiosk mode REQUIRES Desktop edition"
                 log_warn "    Lite edition lacks critical graphics infrastructure"
