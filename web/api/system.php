@@ -553,17 +553,18 @@ function getNetworkInfo() {
 // (PipeWire) gère le volume du sink par défaut via wpctl — méthode fiable sur
 // Trixie Desktop. Fallback amixer si wpctl absent (Lite sans PipeWire).
 //
-// Exécute en tant que 'pi' via sudo --user (php-fpm tourne en www-data qui n'a
-// PAS accès à la session user pipewire). sudoers grant :
-//   www-data ALL=(pi) NOPASSWD: /usr/bin/wpctl *   <- À POSER (cf. configure_sudo)
+// Exécute via wrapper sudo-granté /opt/pisignage/scripts/wpctl-default-sink.sh
+// qui SETENV XDG_RUNTIME_DIR + DBUS_SESSION_BUS_ADDRESS (sinon wpctl démarre un
+// PipeWire vide et rend des erreurs RKit sans données volume).
 
 define('WPCTL_BIN', '/usr/bin/wpctl');
+define('WPCTL_WRAPPER', '/opt/pisignage/scripts/wpctl-default-sink.sh');
 define('AMIXER_BIN', '/usr/bin/amixer');
 
-/** true si wpctl est dispo ET qu'on a une session user pipewire active. */
+/** true si wpctl + wrapper dispo ET qu'on a une session user pipewire active. */
 function wpctlAvailable(): bool {
     if (!file_exists(WPCTL_BIN)) return false;
-    // La session user pipewire de 'pi' doit exister (XDG_RUNTIME_DIR /run/user/<uid>).
+    if (!file_exists(WPCTL_WRAPPER)) return false;
     $uid = posix_getpwnam('pi')['uid'] ?? 1000;
     return is_dir("/run/user/{$uid}");
 }
@@ -571,8 +572,7 @@ function wpctlAvailable(): bool {
 /** Retourne le volume courant du sink par défaut, en % entier (0..100). */
 function volumeGet(): int {
     if (wpctlAvailable()) {
-        $cmd = ['sudo', '-u', 'pi', WPCTL_BIN, 'get-volume', '@DEFAULT_AUDIO_SINK@'];
-        $r = executeCommand($cmd);
+        $r = executeCommand(['sudo', '-u', 'pi', WPCTL_WRAPPER, 'get-volume', '@DEFAULT_AUDIO_SINK@']);
         $line = implode("\n", $r['output']);
         // Sortie typique : "Volume: 0.40" ou "Volume: 0.40 [MUTED]"
         if (preg_match('/Volume:\s*([0-9]*\.?[0-9]+)/', $line, $m)) {
@@ -594,7 +594,7 @@ function volumeSet(int $percent): void {
     $percent = max(0, min(100, $percent));
     $linear = round($percent / 100, 3); // 0..1
     if (wpctlAvailable()) {
-        executeCommand(['sudo', '-u', 'pi', WPCTL_BIN, 'set-volume', '@DEFAULT_AUDIO_SINK@', (string)$linear]);
+        executeCommand(['sudo', '-u', 'pi', WPCTL_WRAPPER, 'set-volume', '@DEFAULT_AUDIO_SINK@', (string)$linear]);
         return;
     }
     foreach (['Master', 'PCM', 'Speaker', 'Headphone'] as $ctrl) {
@@ -606,7 +606,7 @@ function volumeSet(int $percent): void {
 /** true si le sink par défaut est muté. */
 function muteIs(): bool {
     if (wpctlAvailable()) {
-        $r = executeCommand(['sudo', '-u', 'pi', WPCTL_BIN, 'get-volume', '@DEFAULT_AUDIO_SINK@']);
+        $r = executeCommand(['sudo', '-u', 'pi', WPCTL_WRAPPER, 'get-volume', '@DEFAULT_AUDIO_SINK@']);
         $line = implode("\n", $r['output']);
         return (stripos($line, 'MUTED') !== false);
     }
@@ -622,7 +622,7 @@ function muteIs(): bool {
 /** Bascule mute. Retourne le nouvel état (true = muté). */
 function muteToggle(): bool {
     if (wpctlAvailable()) {
-        executeCommand(['sudo', '-u', 'pi', WPCTL_BIN, 'set-mute', '@DEFAULT_AUDIO_SINK@', 'toggle']);
+        executeCommand(['sudo', '-u', 'pi', WPCTL_WRAPPER, 'set-mute', '@DEFAULT_AUDIO_SINK@', 'toggle']);
         return muteIs();
     }
     foreach (['Master', 'PCM', 'Speaker', 'Headphone'] as $ctrl) {

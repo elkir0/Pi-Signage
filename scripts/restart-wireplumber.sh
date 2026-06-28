@@ -7,5 +7,11 @@
 #
 # Helper root:root 0755, appelé par www-data via sudo (sudoers grant fixe).
 # runuser est préféré à sudo -u (pas de credentials PAM, plus simple, plus sûr).
+# XDG_RUNTIME_DIR + DBUS_SESSION_BUS_ADDRESS OBLIGATOIRES pour atteindre le
+# bus user de 'pi' (sinon systemctl --user ne peut pas se connecter).
 set -eu
-exec runuser -u pi -- systemctl --user restart wireplumber
+PI_UID=$(id -u pi)
+exec runuser -u pi -- env \
+    XDG_RUNTIME_DIR="/run/user/${PI_UID}" \
+    DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/${PI_UID}/bus" \
+    systemctl --user restart wireplumber
