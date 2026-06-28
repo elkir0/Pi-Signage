@@ -465,7 +465,8 @@ clone_from_github() {
 
         # Déployer les scripts runtime du dépôt (kiosk-apply, screen-power.sh,
         # screen-schedule-tick.sh, grim-capture.sh, screenshot-wayland.sh, rotate-logs.sh…).
-        # Certains scripts (start-vlc.sh, autostart.sh) sont (re)générés inline plus loin.
+        # (Les anciens start-vlc.sh / autostart.sh ont été retirés en v0.12 — kiosk géré
+        # par labwc/kiosk-apply, plus de service pisignage.service no-op.)
         sudo cp -r "$TEMP_DIR/scripts"/* "$INSTALL_DIR/scripts/" 2>/dev/null || true
         sudo chmod +x "$INSTALL_DIR/scripts/"*.sh "$INSTALL_DIR/scripts/kiosk-apply" 2>/dev/null || true
 
@@ -822,50 +823,6 @@ LIGHTDM
     log_info "Kiosk configuration completed"
 }
 
-# Création du script d'autostart (lancé par pisignage.service au boot).
-# En mode Chromium (défaut), il ne fait rien de plus : le kiosk est lancé par labwc/kiosk-apply.
-create_autostart_script() {
-    log_step "Création des scripts de contrôle"
-
-    # Script d'autostart
-    sudo tee $INSTALL_DIR/scripts/autostart.sh > /dev/null << 'ENDOFFILE'
-#!/bin/bash
-
-# Attendre que le système soit prêt
-sleep 10
-
-# Démarrer le serveur web si nécessaire
-if ! systemctl is-active --quiet nginx && ! systemctl is-active --quiet apache2; then
-    cd /opt/pisignage/web
-    php -S 0.0.0.0:80 index.php > /opt/pisignage/logs/php-server.log 2>&1 &
-fi
-
-# Déterminer le lecteur actif (Chromium par défaut).
-# isChromiumPlayerEnabled() côté PHP: actif sauf si "USE_CHROMIUM_PLAYER=0" présent.
-FEATURE_FLAGS="/opt/pisignage/config/feature_flags"
-USE_CHROMIUM=1
-if [ -f "$FEATURE_FLAGS" ] && grep -q "USE_CHROMIUM_PLAYER=0" "$FEATURE_FLAGS"; then
-    USE_CHROMIUM=0
-fi
-
-if [ "$USE_CHROMIUM" = "1" ]; then
-    # Mode Chromium kiosk: NE PAS démarrer VLC (double-propriétaire d'affichage),
-    # NI watchdog VLC. Chromium est lancé par labwc/kiosk-apply.
-    echo "Mode Chromium: VLC non démarré (lecteur kiosk actif)"
-    exit 0
-fi
-
-# VLC retiré (v0.12) : il n'existe plus de lecteur de secours.
-# USE_CHROMIUM_PLAYER=0 n'est plus supporté — on sort proprement sans rien démarrer.
-echo "USE_CHROMIUM_PLAYER=0 obsolète : VLC a été retiré. Réactivez le mode Chromium."
-exit 0
-ENDOFFILE
-
-    sudo chmod +x $INSTALL_DIR/scripts/autostart.sh
-
-    log_info "Scripts créés"
-}
-
 # Configuration du serveur web
 configure_webserver() {
     log_step "Configuration du serveur web"
@@ -1145,45 +1102,6 @@ ENDOFFILE
     fi
 }
 
-# Configuration du démarrage automatique
-configure_autostart() {
-    log_step "Configuration du démarrage automatique"
-
-    # Créer le service systemd
-    sudo tee /etc/systemd/system/pisignage.service > /dev/null << ENDOFFILE
-[Unit]
-Description=PiSignage Digital Signage System
-After=network.target graphical.target
-
-[Service]
-Type=simple
-User=$USER
-WorkingDirectory=/opt/pisignage
-Environment="WAYLAND_DISPLAY=wayland-0"
-Environment="XDG_RUNTIME_DIR=/run/user/$(id -u)"
-ExecStart=/opt/pisignage/scripts/autostart.sh
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-ENDOFFILE
-
-    # Activer le service
-    sudo systemctl daemon-reload
-    sudo systemctl enable pisignage.service
-    sudo systemctl start pisignage.service || true
-
-    log_info "Service de démarrage automatique configuré"
-
-    # VLC retiré (v0.12) : Chromium HTML5 (player.php sur /player) est le moteur de
-    # lecture UNIQUE. Plus aucun service pisignage-vlc n'est créé / activé / démarré
-    # (libère ~135 Mo RAM, supprime le « lecteur fantôme »). Le kiosk est lancé par
-    # labwc/kiosk-apply ; pisignage.service ne fait qu'exécuter autostart.sh
-    # (no-op en mode Chromium). Voir docs unification de la diffusion.
-    log_info "Lecteur unique: Chromium kiosk (VLC retiré)"
-}
-
 # Configuration des permissions sudo (pour redémarrage)
 configure_sudo() {
     log_step "Configuration des permissions"
@@ -1208,11 +1126,8 @@ pi ALL=(root) NOPASSWD: /sbin/shutdown, /sbin/reboot, /bin/systemctl reboot, /bi
 # aucun hook PostUp/PreUp. Invariant : ces scripts DOIVENT rester root:root 0755 (sinon la
 # grant deviendrait une escalade vers root, comme audio-output.sh).
 pi ALL=(root) NOPASSWD: /opt/pisignage/scripts/zaforge-wg-up.sh, /opt/pisignage/scripts/zaforge-wg-down.sh
-# Cycle de vie du lecteur : autostart.sh (User=pi) démarre/redémarre l'unité VLC
-# au boot et via son watchdog. Invocations FIXES, limitées à CETTE unité (pas de
-# bare systemctl). Sans ça, retirer la grant blanket casserait l'autostart VLC.
-pi ALL=(root) NOPASSWD: /bin/systemctl start pisignage-vlc.service, /bin/systemctl stop pisignage-vlc.service, /bin/systemctl restart pisignage-vlc.service
-pi ALL=(root) NOPASSWD: /usr/bin/systemctl start pisignage-vlc.service, /usr/bin/systemctl stop pisignage-vlc.service, /usr/bin/systemctl restart pisignage-vlc.service
+# VLC retiré en v0.12 (lecteur unique Chromium) : les grants pisignage-vlc.service
+# ci-dessous ont été supprimés (ils référençaient un service qui n'existe plus).
 www-data ALL=(root) NOPASSWD: /usr/bin/amixer
 www-data ALL=(root) NOPASSWD: /opt/pisignage/scripts/audio-output.sh hdmi, /opt/pisignage/scripts/audio-output.sh jack
 # Capture d'écran Wayland: www-data (php-fpm) lance grim dans la session labwc de 'pi'
@@ -1581,13 +1496,11 @@ main() {
     create_config_php
     create_config
     configure_kiosk_trixie
-    create_autostart_script
     configure_webserver
     configure_sudo
     provision_agent_token
     install_zaforge_agent
     provision_relay_proxy_secret
-    configure_autostart
     test_installation
 
     local ip=$(hostname -I | awk '{print $1}')
