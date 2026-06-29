@@ -1213,6 +1213,12 @@ pi ALL=(root) NOPASSWD: /opt/pisignage/scripts/zaforge-wg-up.sh, /opt/pisignage/
 # ci-dessous ont été supprimés (ils référençaient un service qui n'existe plus).
 www-data ALL=(root) NOPASSWD: /usr/bin/amixer
 www-data ALL=(root) NOPASSWD: /opt/pisignage/scripts/audio-output.sh hdmi, /opt/pisignage/scripts/audio-output.sh jack
+# Re-détection EDID HDMI : root requis pour écrire /sys/class/drm/.../status. audio-output.sh
+# (qui tourne en 'pi' via runuser) et le worker boot/watchdog l'appellent via sudo pour relire
+# l'EDID d'une TV en veille au boot / rebranchée. Chemin FIXE, SANS argument.
+# INVARIANT : hdmi-detect.sh DOIT rester root:root 0755 (sinon escalade vers root).
+pi ALL=(root) NOPASSWD: /opt/pisignage/scripts/hdmi-detect.sh
+www-data ALL=(root) NOPASSWD: /opt/pisignage/scripts/hdmi-detect.sh
 # Capture d'écran Wayland: www-data (php-fpm) lance grim dans la session labwc de 'pi'
 www-data ALL=(pi) NOPASSWD: /opt/pisignage/scripts/grim-capture.sh
 # Extinction d'écran programmée (kiosk): on/off dans la session de 'pi'
@@ -1228,6 +1234,8 @@ www-data ALL=(root) NOPASSWD: /opt/pisignage/scripts/onboard-ap.sh up, /opt/pisi
 # Onboarding : liaison compte. Le CODE est lu sur stdin (jamais argv) + validé dans le helper.
 # INVARIANT : relay-link.sh DOIT rester root:root 0755.
 www-data ALL=(root) NOPASSWD: /opt/pisignage/scripts/relay-link.sh
+# INVARIANT : relay-status.sh DOIT rester root:root 0755 (lecture seule, JSON sanitisé).
+www-data ALL=(root) NOPASSWD: /opt/pisignage/scripts/relay-status.sh
 SUDOERS
     if sudo visudo -cf "$SUDO_TMP" >/dev/null 2>&1; then
         sudo install -o root -g root -m 0440 "$SUDO_TMP" /etc/sudoers.d/pisignage
@@ -1257,7 +1265,7 @@ SUDOERS
         sudo "$INSTALL_DIR/scripts/wifi-apply.sh" sync 2>/dev/null || true
     fi
     # Onboarding : invariant root:root 0755 sur les helpers AP + liaison compte + 1er-boot.
-    for h in onboard-ap.sh relay-link.sh firstboot.sh bake-strip.sh; do
+    for h in onboard-ap.sh relay-link.sh relay-status.sh firstboot.sh bake-strip.sh; do
         if [ -f "$INSTALL_DIR/scripts/$h" ]; then
             sudo chown root:root "$INSTALL_DIR/scripts/$h"
             sudo chmod 0755 "$INSTALL_DIR/scripts/$h"
@@ -1297,6 +1305,13 @@ GRIMCAP
         sudo chown root:root "$INSTALL_DIR/scripts/audio-output.sh"
         sudo chmod 0755 "$INSTALL_DIR/scripts/audio-output.sh"
     fi
+    # Helper de re-détection EDID HDMI (ROOT obligatoire pour écrire le sysfs DRM).
+    # INVARIANT SÉCURITÉ : root:root 0755, sans argument (grant sudoers à chemin fixe).
+    # Appelé par audio-output.sh (en 'pi') et le worker boot via sudo pour relire l'EDID.
+    if [ -f "$INSTALL_DIR/scripts/hdmi-detect.sh" ]; then
+        sudo chown root:root "$INSTALL_DIR/scripts/hdmi-detect.sh"
+        sudo chmod 0755 "$INSTALL_DIR/scripts/hdmi-detect.sh"
+    fi
     if [ -f "$INSTALL_DIR/scripts/audio-output-apply.sh" ]; then
         sudo chown pi:pi "$INSTALL_DIR/scripts/audio-output-apply.sh"
         sudo chmod 0755 "$INSTALL_DIR/scripts/audio-output-apply.sh"
@@ -1310,8 +1325,12 @@ GRIMCAP
     # en 'pi' (runuser) et écrit CE fichier — pas le dir parent (www-data:www-data).
     # Sans pré-création, le 1er switch échouerait à créer le fichier (perm denied
     # sur le dir). pi peut modifier un fichier existant sans write sur le dir.
+    # Défaut = HDMI : une box de signage est branchée à une TV. audio-output.sh force
+    # la détection EDID + le profil HDMI ; si aucune TV audio n'est présente, il échoue
+    # proprement et le watchdog réessaie (puis fallback WirePlumber). Mieux vaut viser la
+    # TV par défaut que la prise jack (souvent rien branché dessus).
     if [ ! -f "$INSTALL_DIR/config/audio-output" ]; then
-        echo 'jack' | sudo tee "$INSTALL_DIR/config/audio-output" >/dev/null
+        echo 'hdmi' | sudo tee "$INSTALL_DIR/config/audio-output" >/dev/null
         sudo chown pi:pi "$INSTALL_DIR/config/audio-output"
         sudo chmod 0644 "$INSTALL_DIR/config/audio-output"
     fi

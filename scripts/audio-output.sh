@@ -66,6 +66,23 @@ list_sinks() {
     fi
 }
 
+# Pour HDMI : rendre la sortie ROBUSTE et ADAPTATIVE (toute TV, tout port micro-HDMI).
+# 1) Re-détecter l'EDID via le helper root (echo detect sur les connecteurs DRM) — couvre
+#    « TV en veille au boot » et le hotplug. 'pi' ne peut PAS écrire le sysfs DRM lui-même.
+# 2) FORCER le profil output:hdmi-stereo sur chaque carte HDMI qui le propose. WirePlumber
+#    laisse souvent la carte HDMI sur 'off' même avec un EDID valide → sans ce forçage,
+#    aucun sink HDMI n'est créé (cause de « aucun sink hdmi trouvé » au boot).
+# Seul le port réellement branché (EDID lu) expose output:hdmi-stereo en 'available: yes',
+# donc set-card-profile ne réussit que là → adaptatif au port/câble/TV réellement utilisé.
+if [ "$choice" = "hdmi" ] && [ -n "$PACTL" ]; then
+    sudo -n /opt/pisignage/scripts/hdmi-detect.sh 2>/dev/null || true
+    sleep 2  # laisser le noyau relire l'EDID + l'ELD se propager au codec hdmi-audio
+    pactl list short cards 2>/dev/null | awk '$2 ~ /hdmi/ {print $2}' | while read -r card; do
+        pactl set-card-profile "$card" output:hdmi-stereo 2>/dev/null || true
+    done
+    sleep 1  # laisser WirePlumber instancier le sink du profil fraîchement activé
+fi
+
 # Trouver le sink correspondant au choix demandé.
 # HDMI  = premier sink dont le nom contient "hdmi"
 # Jack  = premier sink dont le nom NE contient PAS "hdmi" (analog/headphones/mailbox)

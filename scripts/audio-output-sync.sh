@@ -16,6 +16,12 @@ set -u
 PREF_FILE=/opt/pisignage/config/audio-output
 AUDIO_OUT=/opt/pisignage/scripts/audio-output.sh
 
+# XDG_RUNTIME_DIR fiable (cf. audio-output-apply.sh) : le service peut fournir /run/user/0
+# (expansion %U=0) au lieu de la session de pi → on force celui de l'utilisateur courant.
+_UID="$(id -u)"
+export XDG_RUNTIME_DIR="/run/user/${_UID}"
+export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/${_UID}/bus"
+
 pref=jack
 [ -r "$PREF_FILE" ] && pref=$(tr -d '[:space:]' < "$PREF_FILE" 2>/dev/null)
 case "$pref" in hdmi|jack) ;; *) pref=jack ;; esac

@@ -17,6 +17,14 @@ set -eu
 PREF_FILE="/opt/pisignage/config/audio-output"
 AUDIO_OUTPUT_SCRIPT="/opt/pisignage/scripts/audio-output.sh"
 
+# Le service systemd fournit parfois un XDG_RUNTIME_DIR ERRONÉ : le spécificateur %U
+# s'expanse en 0 (root) au lieu de l'UID de 'pi' sur certaines versions systemd, donc
+# pactl parlerait à /run/user/0 (vide) au lieu de la session graphique de pi → il ne
+# verrait jamais le sink HDMI. On force le runtime dir de l'utilisateur courant (pi).
+_UID="$(id -u)"
+export XDG_RUNTIME_DIR="/run/user/${_UID}"
+export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/${_UID}/bus"
+
 pref=""
 if [ -r "$PREF_FILE" ]; then
     pref=$(tr -d '[:space:]' < "$PREF_FILE")
@@ -36,13 +44,12 @@ while [ "$attempt" -lt "$max" ]; do
         echo "audio-output-apply : OK après $attempt tentative(s)"
         exit 0
     fi
-    # Tous les 5 retries : re-trigger DRM detect + restart wireplumber
-    # (force le kernel à relire l'EDID TV + WirePlumber à créer le sink).
+    # Tous les 5 retries : re-trigger DRM detect (helper ROOT — 'pi' ne peut pas écrire
+    # le sysfs DRM) + restart wireplumber. audio-output.sh force déjà détection+profil à
+    # chaque tentative ; ce restart borné est un filet supplémentaire pour les TV lentes.
     if [ "$pref" = "hdmi" ] && [ $((attempt % 5)) -eq 0 ]; then
-        echo "audio-output-apply : retry $attempt/$max — re-trigger DRM + restart wireplumber"
-        for c in /sys/class/drm/card*-HDMI-A-*; do
-            [ -w "$c/status" ] && echo detect > "$c/status" 2>/dev/null || true
-        done
+        echo "audio-output-apply : retry $attempt/$max — re-detect DRM (root) + restart wireplumber"
+        sudo -n /opt/pisignage/scripts/hdmi-detect.sh 2>/dev/null || true
         sleep 3
         systemctl --user restart wireplumber 2>/dev/null || true
         sleep 5
