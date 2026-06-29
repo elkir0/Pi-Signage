@@ -255,6 +255,7 @@ install_dependencies() {
         "golang-go"
         "wireguard-tools"
         "pulseaudio-utils"
+        "systemd-zram-generator"
     )
 
     # Trixie-specific packages for Wayland kiosk mode
@@ -795,7 +796,9 @@ configure_kiosk_trixie() {
     if [ ! -f "$INSTALL_DIR/config/kiosk_flags" ]; then
         # Flags par défaut: Wayland/Ozone, décode V4L2 (pas VAAPI), pas de prompt keyring
         # (--password-store=basic), pas de barre de traduction, pas de geste tactile.
-        echo "--ozone-platform=wayland --enable-features=UseOzonePlatform --disable-features=Translate,TranslateUI --password-store=basic --autoplay-policy=no-user-gesture-required --noerrdialogs --disable-infobars --no-first-run --disable-pinch --overscroll-history-navigation=0" | \
+        # Durcissement SD (Couche A) : cache + profil Chromium en tmpfs (/run, créé par
+        # tmpfiles-d possédé pi) -> ZÉRO écriture cache sur la carte. cap 32 Mo.
+        echo "--ozone-platform=wayland --enable-features=UseOzonePlatform --disable-features=Translate,TranslateUI --password-store=basic --autoplay-policy=no-user-gesture-required --noerrdialogs --disable-infobars --no-first-run --disable-pinch --overscroll-history-navigation=0 --disk-cache-dir=/run/chromium-cache --disk-cache-size=33554432 --user-data-dir=/run/chromium-profile" | \
             sudo tee "$INSTALL_DIR/config/kiosk_flags" >/dev/null
         log_info "Created default kiosk_flags"
     fi
@@ -1590,6 +1593,47 @@ provision_relay_proxy_secret() {
     fi
 }
 
+# Durcissement SD — Couche A : réduire au MAXIMUM les écritures sur la carte (usure + base
+# pour l'immunité corruption en Couche B/overlayfs). Vérifié live (reboot) sur Pi4 Trixie.
+#   - swap en zram (RAM compressée zstd) au lieu d'un swapfile sur la carte
+#   - journaux systemd en RAM (Storage=volatile) — diagnostics via journalctl en live
+#   - cache + profil Chromium en tmpfs /run (dossiers créés au boot par tmpfiles, possédés pi ;
+#     /run est root:755 donc Chromium-pi ne peut pas les créer lui-même -> tmpfiles obligatoire)
+# (/tmp, /var/tmp = déjà tmpfs sur Trixie ; root déjà monté noatime.)
+configure_write_hardening() {
+    log_step "Durcissement écritures SD (Couche A)"
+
+    # 1) swap zram (paquet systemd-zram-generator installé via install_dependencies)
+    sudo tee /etc/systemd/zram-generator.conf >/dev/null <<'ZRAMCONF'
+# Zaforge — swap en RAM compressée (zstd). Aucune écriture de swap sur la carte.
+[zram0]
+zram-size = min(ram / 2, 2048)
+compression-algorithm = zstd
+swap-priority = 100
+ZRAMCONF
+    sudo systemctl disable --now dphys-swapfile 2>/dev/null || true
+
+    # 2) journald en RAM (volatile)
+    sudo mkdir -p /etc/systemd/journald.conf.d
+    sudo tee /etc/systemd/journald.conf.d/00-zaforge-volatile.conf >/dev/null <<'JRNCONF'
+# Zaforge — journaux en RAM (/run/log/journal). Zéro écriture journal sur la carte.
+[Journal]
+Storage=volatile
+RuntimeMaxUse=32M
+JRNCONF
+
+    # 3) tmpfiles : cache + profil Chromium en tmpfs /run, possédés par pi (sinon Chromium,
+    #    tournant en pi, ne peut pas créer ses dossiers dans /run root:755 -> retombe sur ~/.cache).
+    sudo tee /etc/tmpfiles.d/zaforge-chromium.conf >/dev/null <<'TMPFCONF'
+# Zaforge — cache + profil Chromium en tmpfs, créés au boot, possédés par pi.
+d /run/chromium-cache 0700 pi pi -
+d /run/chromium-profile 0700 pi pi -
+TMPFCONF
+    sudo systemd-tmpfiles --create /etc/tmpfiles.d/zaforge-chromium.conf 2>/dev/null || true
+
+    log_info "Couche A appliquée (zram swap, journald RAM, cache Chromium tmpfs)"
+}
+
 main() {
     # Parse flags (acceptés dans n'importe quel ordre): --auto, --force
     local banner_arg=""
@@ -1613,6 +1657,7 @@ main() {
     create_config_php
     create_config
     configure_kiosk_trixie
+    configure_write_hardening
     configure_webserver
     configure_sudo
     provision_agent_token
