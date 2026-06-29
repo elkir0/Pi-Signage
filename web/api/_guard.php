@@ -32,6 +32,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && basename($_SERVER['SCRIPT_NAME']) ==
     return;
 }
 
+// Exception de lecture publique : le kiosk public lit sa configuration de musique d'ambiance.
+// L'écriture reste protégée par session + CSRF plus bas.
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && basename($_SERVER['SCRIPT_NAME']) === 'background-music.php') {
+    return;
+}
+
 // Exceptions publiques pour le player kiosk (Chromium, sans session HTTP) — display.php :
 //  - GET  ?action=command  : le player interroge le canal de commande (transport).
 //  - POST ?action=state    : le player rapporte son état courant.

@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', function () {
         'media':              () => P.media && P.media.init && P.media.init(),
         'playlists':          () => P.playlists && P.playlists.init && P.playlists.init(),
         'player-control-ui':  () => P.player && P.player.init && P.player.init(),
+        'music':              () => P.music && P.music.init && P.music.init(),
         'schedule':           () => P.schedule && P.schedule.init && P.schedule.init(),
         'settings':           () => P.settings && P.settings.init && P.settings.init()
     };

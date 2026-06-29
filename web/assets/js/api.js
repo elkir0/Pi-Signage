@@ -303,6 +303,33 @@ PiSignage.api = {
         }
     },
 
+    // Background music API calls
+    backgroundMusic: {
+        get: function() {
+            return PiSignage.api.request('/api/background-music.php');
+        },
+
+        save: function(config) {
+            return PiSignage.api.request('/api/background-music.php', {
+                method: 'POST',
+                body: JSON.stringify(config || {})
+            });
+        }
+    },
+
+    // Zaforge account / relay linking
+    account: {
+        status: function() {
+            return PiSignage.api.request('/api/account.php?action=status');
+        },
+        link: function(payload) {
+            return PiSignage.api.request('/api/account.php?action=link', {
+                method: 'POST',
+                body: JSON.stringify(payload || {})
+            });
+        }
+    },
+
     // Screenshot API calls
     screenshot: {
         capture: function() {

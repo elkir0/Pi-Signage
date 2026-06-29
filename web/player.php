@@ -391,6 +391,7 @@ if (function_exists('zfOnboardingActive') && zfOnboardingActive()) { header('Loc
 <div id="player-container">
     <video id="video" playsinline></video>
     <video id="video2" playsinline></video>
+    <audio id="background-audio" preload="none" playsinline></audio>
     <img id="image" alt="">
 
     <!-- ============================================================== -->
@@ -441,6 +442,7 @@ if (function_exists('zfOnboardingActive') && zfOnboardingActive()) { header('Loc
         <div>Current URL: <span id="debug-current-url">-</span></div>
         <div>Errors: <span id="debug-errors">0</span></div>
         <div>Wake Lock: <span id="debug-wakelock">-</span></div>
+        <div>Music: <span id="debug-bg-music">off</span></div>
     </div>
 </div>
 
@@ -458,6 +460,7 @@ class PiSignagePlayer {
         this.video = this.videoEls[this.activeIdx]; // référence TOUJOURS la vidéo active (visible)
         this.preloadIdx = -1;                       // index playlist préchargé dans la vidéo inactive
         this.image = document.getElementById('image');
+        this.backgroundAudio = document.getElementById('background-audio');
         this.loading = document.getElementById('loading');
         this.errorDiv = document.getElementById('error');
         this.debug = document.getElementById('debug');
@@ -472,6 +475,11 @@ class PiSignagePlayer {
         this.stateInterval = null;
         this.lastCmdSeq = -1;   // -1 = baseline non initialisée (cf. startCommandPolling)
         this.paused = false;
+        this.backgroundMusic = null;
+        this.backgroundPresets = [];
+        this.backgroundConfigKey = '';
+        this.backgroundTrackIndex = -1;
+        this.backgroundRetryTimer = null;
 
         // Debug mode (Ctrl+D pour afficher)
         this.debugMode = false;
@@ -489,6 +497,7 @@ class PiSignagePlayer {
         console.log('[PiSignage Player] Initializing...');
         this.setupEventListeners();
         this.setupKeyboardShortcuts();
+        await this.loadBackgroundMusicConfig();
         await this.loadPlaylist();
         await this.requestWakeLock();
         this.startPolling();
@@ -530,8 +539,14 @@ class PiSignagePlayer {
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
                 this.requestWakeLock();
+                if (this.isBackgroundMusicActive() && !this.paused) this.playBackgroundMusic();
             }
         });
+
+        if (this.backgroundAudio) {
+            this.backgroundAudio.addEventListener('ended', () => this.handleBackgroundEnded());
+            this.backgroundAudio.addEventListener('error', () => this.handleBackgroundError());
+        }
     }
 
     setupKeyboardShortcuts() {
@@ -626,6 +641,172 @@ class PiSignagePlayer {
         await this.loadPlaylist();
     }
 
+    // ----- Musique d'ambiance globale -----
+    async loadBackgroundMusicConfig() {
+        try {
+            const response = await fetch('/api/background-music.php', { cache: 'no-store' });
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+            const result = await response.json();
+            if (!result.success || !result.data) throw new Error(result.message || 'Invalid music config');
+
+            const cfg = result.data.config || null;
+            const presets = Array.isArray(result.data.presets) ? result.data.presets : [];
+            const key = JSON.stringify({ config: cfg, presets: presets });
+            if (key === this.backgroundConfigKey) return;
+
+            this.backgroundMusic = cfg;
+            this.backgroundPresets = presets;
+            this.backgroundConfigKey = key;
+            try { localStorage.setItem('pisignage:bg-music', key); } catch (e) {}
+            this.applyBackgroundMusicConfig();
+        } catch (error) {
+            console.warn('[Music] Config load failed:', error);
+            if (this.backgroundMusic) return;
+            try {
+                const cached = JSON.parse(localStorage.getItem('pisignage:bg-music') || 'null');
+                if (cached && cached.config) {
+                    this.backgroundMusic = cached.config;
+                    this.backgroundPresets = Array.isArray(cached.presets) ? cached.presets : [];
+                    this.backgroundConfigKey = JSON.stringify(cached);
+                    this.applyBackgroundMusicConfig();
+                }
+            } catch (e) {}
+        }
+    }
+
+    isBackgroundMusicActive() {
+        const cfg = this.backgroundMusic || {};
+        if (!cfg.enabled) return false;
+        if (cfg.source === 'webradio') return !!this.selectedBackgroundRadio();
+        if (cfg.source === 'local') return Array.isArray(cfg.tracks) && cfg.tracks.length > 0;
+        return false;
+    }
+
+    selectedBackgroundRadio() {
+        const cfg = this.backgroundMusic || {};
+        for (let i = 0; i < this.backgroundPresets.length; i++) {
+            if (this.backgroundPresets[i].id === cfg.radio) return this.backgroundPresets[i];
+        }
+        return this.backgroundPresets[0] || null;
+    }
+
+    applyBackgroundMusicConfig() {
+        if (this.backgroundRetryTimer) {
+            clearTimeout(this.backgroundRetryTimer);
+            this.backgroundRetryTimer = null;
+        }
+
+        if (this.isBackgroundMusicActive()) {
+            this.videoEls.forEach((vid) => { vid.muted = true; });
+            this.updateDebug('bg-music', (this.backgroundMusic.source === 'local') ? 'local' : 'webradio');
+            if (!this.paused) this.playBackgroundMusic();
+            return;
+        }
+
+        this.stopBackgroundMusic();
+        this.updateDebug('bg-music', 'off');
+        const item = this.playlist && this.playlist.items ? this.playlist.items[this.currentIndex] : null;
+        if (this.video) this.video.muted = item && item.mute !== undefined ? !!item.mute : false;
+    }
+
+    shouldMuteItemAudio(item) {
+        if (this.isBackgroundMusicActive()) return true;
+        return item && item.mute !== undefined ? !!item.mute : false;
+    }
+
+    playBackgroundMusic() {
+        if (!this.backgroundAudio || !this.isBackgroundMusicActive()) return;
+        const cfg = this.backgroundMusic || {};
+        if (cfg.source === 'webradio') {
+            const radio = this.selectedBackgroundRadio();
+            if (!radio || !radio.url) return;
+            this.playBackgroundUrl(radio.url, false);
+            return;
+        }
+
+        const tracks = Array.isArray(cfg.tracks) ? cfg.tracks : [];
+        if (!tracks.length) return;
+        if (this.backgroundTrackIndex < 0 || this.backgroundTrackIndex >= tracks.length) {
+            this.backgroundTrackIndex = cfg.playback === 'random' ? this.randomBackgroundIndex(-1) : 0;
+        }
+        this.playBackgroundUrl(tracks[this.backgroundTrackIndex], false);
+    }
+
+    playBackgroundUrl(url, forceReload) {
+        if (!this.backgroundAudio || !url) return;
+        if (this.backgroundAudio.dataset.url !== url || forceReload) {
+            this.backgroundAudio.dataset.url = url;
+            this.backgroundAudio.src = url;
+            try { this.backgroundAudio.load(); } catch (e) {}
+        }
+        this.backgroundAudio.play().then(() => {
+            this.updateDebug('bg-music', this.backgroundMusic.source + ' playing');
+        }).catch((err) => {
+            console.warn('[Music] Play failed:', err);
+            this.scheduleBackgroundRetry();
+        });
+    }
+
+    handleBackgroundEnded() {
+        if (!this.isBackgroundMusicActive() || this.paused) return;
+        const cfg = this.backgroundMusic || {};
+        if (cfg.source === 'local') {
+            this.advanceBackgroundTrack();
+            this.playBackgroundMusic();
+        } else {
+            this.scheduleBackgroundRetry(1500);
+        }
+    }
+
+    handleBackgroundError() {
+        console.warn('[Music] Background audio error');
+        if (!this.isBackgroundMusicActive() || this.paused) return;
+        if ((this.backgroundMusic || {}).source === 'local') this.advanceBackgroundTrack();
+        this.scheduleBackgroundRetry(4000);
+    }
+
+    advanceBackgroundTrack() {
+        const cfg = this.backgroundMusic || {};
+        const tracks = Array.isArray(cfg.tracks) ? cfg.tracks : [];
+        if (!tracks.length) { this.backgroundTrackIndex = -1; return; }
+        if (cfg.playback === 'random') {
+            this.backgroundTrackIndex = this.randomBackgroundIndex(this.backgroundTrackIndex);
+        } else {
+            this.backgroundTrackIndex = (this.backgroundTrackIndex + 1) % tracks.length;
+        }
+    }
+
+    randomBackgroundIndex(previous) {
+        const tracks = (this.backgroundMusic && Array.isArray(this.backgroundMusic.tracks)) ? this.backgroundMusic.tracks : [];
+        if (tracks.length <= 1) return 0;
+        let next = previous;
+        for (let i = 0; i < 6 && next === previous; i++) {
+            next = Math.floor(Math.random() * tracks.length);
+        }
+        return next === previous ? ((previous + 1) % tracks.length) : next;
+    }
+
+    scheduleBackgroundRetry(delay) {
+        if (this.backgroundRetryTimer) clearTimeout(this.backgroundRetryTimer);
+        this.backgroundRetryTimer = setTimeout(() => {
+            this.backgroundRetryTimer = null;
+            if (this.isBackgroundMusicActive() && !this.paused) this.playBackgroundMusic();
+        }, delay || 5000);
+    }
+
+    stopBackgroundMusic() {
+        if (this.backgroundRetryTimer) {
+            clearTimeout(this.backgroundRetryTimer);
+            this.backgroundRetryTimer = null;
+        }
+        if (!this.backgroundAudio) return;
+        try { this.backgroundAudio.pause(); } catch (e) {}
+        this.backgroundAudio.removeAttribute('src');
+        this.backgroundAudio.dataset.url = '';
+        try { this.backgroundAudio.load(); } catch (e) {}
+        this.backgroundTrackIndex = -1;
+    }
+
     playItem(index) {
         if (!this.playlist || !this.playlist.items) {
             console.error('[Player] No playlist loaded');
@@ -693,7 +874,7 @@ class PiSignagePlayer {
         const newIdx = 1 - this.activeIdx;
         const incoming = this.videoEls[newIdx];
 
-        incoming.muted = item.mute !== undefined ? item.mute : false;
+        incoming.muted = this.shouldMuteItemAudio(item);
         incoming.loop = item.loop !== undefined ? item.loop : false;
         incoming.style.objectFit = item.fit || 'contain';
 
@@ -880,6 +1061,7 @@ class PiSignagePlayer {
         // Poll /tmp/pisignage-playlist-refresh pour détecter rechargements
         this.pollInterval = setInterval(async () => {
             try {
+                await this.loadBackgroundMusicConfig();
                 const response = await fetch('/api/playlist');
                 if (response.ok) {
                     const result = await response.json();
@@ -929,6 +1111,7 @@ class PiSignagePlayer {
     pause() {
         this.paused = true;
         try { this.video.pause(); } catch (e) {}
+        try { if (this.backgroundAudio) this.backgroundAudio.pause(); } catch (e) {}
         this.updateDebug('status', 'paused');
         this.reportState();
     }
@@ -936,6 +1119,7 @@ class PiSignagePlayer {
     resume() {
         this.paused = false;
         try { this.video.play().catch(() => {}); } catch (e) {}
+        if (this.isBackgroundMusicActive()) this.playBackgroundMusic();
         this.updateDebug('status', 'playing');
         this.reportState();
     }

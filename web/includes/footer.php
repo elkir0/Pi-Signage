@@ -17,6 +17,7 @@ $v = ASSET_VERSION;
     <script src="assets/js/media.js?v=<?= $v ?>" defer></script>
     <script src="assets/js/playlists.js?v=<?= $v ?>" defer></script>
     <script src="assets/js/player.js?v=<?= $v ?>" defer></script>
+    <script src="assets/js/music.js?v=<?= $v ?>" defer></script>
     <script src="assets/js/schedule.js?v=<?= $v ?>" defer></script>
     <script src="assets/js/settings.js?v=<?= $v ?>" defer></script>
     <script src="assets/js/init.js?v=<?= $v ?>" defer></script>
