@@ -137,8 +137,10 @@ HASH="$(openssl passwd -6 "$PI_PASS")"
 echo "pi:${HASH}" > "$MNT/boot/firmware/userconf.txt"
 touch "$MNT/boot/firmware/ssh"
 
-# 5g) Désactiver le resize auto RPi OS (sinon il remplit le disque et écrase notre /data)
-sed -i 's# init=/usr/lib/raspberrypi-sys-mods/firstboot##; s# init=/usr/lib/raspi-config/init_resize\.sh##' "$MNT/boot/firmware/cmdline.txt" || true
+# 5g) Désactiver le resize auto RPi OS. Sur Trixie c'est le token 'resize' du cmdline qui
+#     déclenche l'expand de root (initramfs) -> il mangerait /data. On le RETIRE. (userconf-service
+#     applique userconf.txt indépendamment, le user pi existe déjà -> pas besoin du resize/firstboot.)
+sed -i 's/ resize\b//g; s# init=/usr/lib/raspberrypi-sys-mods/firstboot##; s# init=/usr/lib/raspi-config/init_resize\.sh##' "$MNT/boot/firmware/cmdline.txt" || true
 rm -f "$MNT/etc/systemd/system/multi-user.target.wants/rpi-resizerootfs.service" 2>/dev/null || true
 rm -f "$MNT/etc/init.d/resize2fs_once" 2>/dev/null || true
 
@@ -151,8 +153,13 @@ umount "$MNT/boot/firmware"; umount "$MNT"; umount "$MNTD"
 losetup -d "$LOOP"; LOOP=""
 trap - EXIT
 
-# --- 6) Finaliser ---
+# --- 6) Finaliser (compression RAPIDE : pigz multi-thread -> .img.gz compatible RPi Imager) ---
 mv "$IMG" "$OUT"
-echo "compression -> ${OUT}.xz"; xz -T0 -f "$OUT"
-echo "================ IMAGE PRÊTE : ${OUT}.xz ================"
-ls -lh "${OUT}.xz"
+if command -v pigz >/dev/null 2>&1; then
+    echo "compression pigz ($(nproc) threads) -> ${OUT}.gz"
+    pigz -p "$(nproc)" -f "$OUT"
+else
+    echo "compression gzip -> ${OUT}.gz"; gzip -f "$OUT"
+fi
+echo "================ IMAGE PRÊTE : ${OUT}.gz ================"
+ls -lh "${OUT}.gz"
