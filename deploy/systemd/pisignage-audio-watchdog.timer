@@ -1,0 +1,12 @@
+[Unit]
+Description=Zaforge: verifie periodiquement la sortie audio (filet de securite hotplug TV)
+
+[Timer]
+# Premier passage 90s apres le boot (laisse pisignage-audio-apply tenter d'abord),
+# puis toutes les 2 min. Idempotent : ne fait rien si la sortie est deja correcte.
+OnBootSec=90s
+OnUnitActiveSec=2min
+AccuracySec=15s
+
+[Install]
+WantedBy=timers.target

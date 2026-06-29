@@ -373,6 +373,54 @@ AUDIOSVC
         fi
         sudo systemctl daemon-reload 2>/dev/null || true
         sudo systemctl enable pisignage-audio-apply.service 2>/dev/null || true
+
+        # v0.12.6 : WATCHDOG audio (max résilience « TV rallumée après le boot »).
+        # Deux déclencheurs (« les 2 ») partagent audio-output-sync.sh (idempotent) :
+        #   - pisignage-audio-watchdog.timer : vérif périodique (~2 min) — filet de sécurité ;
+        #   - règle udev DRM « change » : réaction immédiate au hotplug/allumage de la TV.
+        local WD_SVC="$INSTALL_DIR/agent-src/deploy/systemd/pisignage-audio-watchdog.service"
+        [ -f "$WD_SVC" ] || WD_SVC="$INSTALL_DIR/deploy/systemd/pisignage-audio-watchdog.service"
+        local WD_TMR="$INSTALL_DIR/agent-src/deploy/systemd/pisignage-audio-watchdog.timer"
+        [ -f "$WD_TMR" ] || WD_TMR="$INSTALL_DIR/deploy/systemd/pisignage-audio-watchdog.timer"
+        if [ -f "$WD_SVC" ] && [ -f "$WD_TMR" ]; then
+            sudo install -o root -g root -m 0644 "$WD_SVC" /etc/systemd/system/pisignage-audio-watchdog.service
+            sudo install -o root -g root -m 0644 "$WD_TMR" /etc/systemd/system/pisignage-audio-watchdog.timer
+        else
+            sudo tee /etc/systemd/system/pisignage-audio-watchdog.service >/dev/null <<'AUDIOWDSVC'
+[Unit]
+Description=Zaforge: watchdog sortie audio (TV rallumee apres le boot -> applique la preference)
+After=graphical.target
+
+[Service]
+Type=oneshot
+User=pi
+Environment=XDG_RUNTIME_DIR=/run/user/%U
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/%U/bus
+ExecStart=/opt/pisignage/scripts/audio-output-sync.sh
+AUDIOWDSVC
+            sudo tee /etc/systemd/system/pisignage-audio-watchdog.timer >/dev/null <<'AUDIOWDTMR'
+[Unit]
+Description=Zaforge: verifie periodiquement la sortie audio (filet de securite hotplug TV)
+
+[Timer]
+OnBootSec=90s
+OnUnitActiveSec=2min
+AccuracySec=15s
+
+[Install]
+WantedBy=timers.target
+AUDIOWDTMR
+        fi
+
+        # Règle udev : tout event DRM « change » (TV branchée/allumée/éteinte) réveille
+        # le watchdog via systemd (TAG+="systemd" + SYSTEMD_WANTS). Réaction immédiate.
+        sudo tee /etc/udev/rules.d/99-pisignage-hdmi-audio.rules >/dev/null <<'AUDIOUDEV'
+ACTION=="change", SUBSYSTEM=="drm", TAG+="systemd", ENV{SYSTEMD_WANTS}+="pisignage-audio-watchdog.service"
+AUDIOUDEV
+        sudo udevadm control --reload-rules 2>/dev/null || true
+
+        sudo systemctl daemon-reload 2>/dev/null || true
+        sudo systemctl enable pisignage-audio-watchdog.timer 2>/dev/null || true
     fi
 
     # Installation de raspi2png si disponible
@@ -1252,6 +1300,11 @@ GRIMCAP
     if [ -f "$INSTALL_DIR/scripts/audio-output-apply.sh" ]; then
         sudo chown pi:pi "$INSTALL_DIR/scripts/audio-output-apply.sh"
         sudo chmod 0755 "$INSTALL_DIR/scripts/audio-output-apply.sh"
+    fi
+    # Watchdog (timer + udev) : sync léger idempotent, exécuté en 'pi' par le service.
+    if [ -f "$INSTALL_DIR/scripts/audio-output-sync.sh" ]; then
+        sudo chown pi:pi "$INSTALL_DIR/scripts/audio-output-sync.sh"
+        sudo chmod 0755 "$INSTALL_DIR/scripts/audio-output-sync.sh"
     fi
     # Pré-créer le fichier de préférence audio (pi:pi 0644). audio-output.sh tourne
     # en 'pi' (runuser) et écrit CE fichier — pas le dir parent (www-data:www-data).

@@ -1,0 +1,10 @@
+[Unit]
+Description=Zaforge: watchdog sortie audio (TV rallumee apres le boot -> applique la preference)
+After=graphical.target
+
+[Service]
+Type=oneshot
+User=pi
+Environment=XDG_RUNTIME_DIR=/run/user/%U
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/%U/bus
+ExecStart=/opt/pisignage/scripts/audio-output-sync.sh
