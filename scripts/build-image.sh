@@ -38,27 +38,26 @@ BASEXZ="$WORK/$(basename "$BASE_URL")"
 [ -f "$BASEXZ" ] || { echo "DL base..."; wget -q -O "$BASEXZ" "$BASE_URL"; }
 echo "décompression base -> $IMG"; xz -dc "$BASEXZ" > "$IMG"
 
-# --- 2) Shrink root fs (hors-ligne, permis) ---
+# --- 2) La base RPi OS est PETITE (root ~5.5G, déjà ~88% plein) -> on AGRANDIT root (install.sh
+#        installe php/nginx/golang/etc.) puis on ajoute /data. AUCUN shrink (grow only = sûr). ---
 LOOP="$(losetup -fP --show "$IMG")"; sleep 1
 echo "loop=$LOOP"; lsblk "$LOOP"
-e2fsck -fy "${LOOP}p2" || true
-resize2fs "${LOOP}p2" "${ROOT_MB}M"
+P2_START_MIB="$(parted -ms "$IMG" unit MiB print | awk -F: '/^2:/{gsub(/MiB/,"",$2); print int($2)}')"
 losetup -d "$LOOP"; LOOP=""
+P2_END=$((P2_START_MIB + ROOT_MB))     # nouvelle fin de root (grow)
+P3_END=$((P2_END + DATA_MB))           # /data juste après
+echo "p2(root): ${P2_START_MIB}..${P2_END} MiB ; p3(data): ${P2_END}..${P3_END} MiB"
 
-# --- 3) Repartition : resize p2 + créer p3 (/data) + tronquer le fichier ---
-P2_START_MIB="$(parted -ms "$IMG" unit MiB print | awk -F: '/^2:/{gsub("MiB","",$2); print int($2)}')"
-# +16 MiB de marge : la partition root doit être >= au fs shrinké (le start réel peut avoir une
-# fraction de MiB tronquée par int()). Le fs reste à ROOT_MB ; ~16 MiB de slack dans la partition.
-P2_END=$((P2_START_MIB + ROOT_MB + 16))
-P3_END=$((P2_END + DATA_MB))
-echo "p2: ${P2_START_MIB}..${P2_END} MiB ; p3(data): ${P2_END}..${P3_END} MiB"
+# --- 3) Agrandir le FICHIER image, puis la partition root, puis créer /data ---
+truncate -s "$((P3_END + 16))M" "$IMG"
 parted -s "$IMG" unit MiB resizepart 2 "${P2_END}"
 parted -s "$IMG" unit MiB mkpart primary ext4 "${P2_END}" "${P3_END}"
-truncate -s "$((P3_END + 8))M" "$IMG"
 parted -ms "$IMG" unit MiB print free || true
 
-# --- 4) mkfs /data ---
+# --- 4) Grandir le fs root (remplit la partition agrandie) + mkfs /data ---
 LOOP="$(losetup -fP --show "$IMG")"; sleep 1
+e2fsck -fy "${LOOP}p2" || true
+resize2fs "${LOOP}p2"                  # sans taille = remplit la partition root agrandie
 mkfs.ext4 -F -L ZFDATA "${LOOP}p3"
 DATA_UUID="$(blkid -s UUID -o value "${LOOP}p3")"
 echo "data uuid=$DATA_UUID"
