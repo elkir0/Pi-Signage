@@ -121,6 +121,68 @@ $mustChange = !empty($_SESSION['must_change_password']);
 
         </div>
 
+        <!-- COMPTE ZAFORGE (liaison au relais cloud) -->
+        <div class="card" style="margin-top:18px">
+            <div class="card-head">
+                <h2 class="card-title"><?= icon('link') ?>Compte Zaforge</h2>
+                <span class="badge" id="account-badge">…</span>
+            </div>
+
+            <!-- État courant (rempli par JS) -->
+            <div id="account-status" style="margin-bottom:16px">
+                <div class="row" style="gap:10px;color:var(--text-faint);font-size:13px">
+                    <span class="spinner"></span><span>Lecture de l'état de liaison…</span>
+                </div>
+            </div>
+
+            <!-- Formulaire lier / re-lier -->
+            <div class="form-group">
+                <label for="account-mode">Méthode</label>
+                <select class="form-control" id="account-mode">
+                    <option value="login">Connexion zaforge.com (e-mail + mot de passe)</option>
+                    <option value="code">Code d'enrôlement (ZF-XXXX-XXXX-XXXX)</option>
+                </select>
+            </div>
+
+            <div id="account-login-fields">
+                <div class="form-group">
+                    <label for="account-email">E-mail Zaforge</label>
+                    <input type="email" class="form-control" id="account-email"
+                           placeholder="vous@exemple.com" autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label for="account-password">Mot de passe Zaforge</label>
+                    <input type="password" class="form-control" id="account-password"
+                           placeholder="Mot de passe du compte" autocomplete="current-password">
+                </div>
+                <p style="font-size:12px;color:var(--warn-text);margin:0 0 6px">
+                    <?= icon('alert') ?> L'admin est en HTTP : ton mot de passe transite en clair sur le réseau local
+                    jusqu'à la box (puis en TLS vers le relais). Préfère le <strong>code d'enrôlement</strong> sur un réseau non sûr.
+                </p>
+            </div>
+
+            <div id="account-code-fields" style="display:none">
+                <div class="form-group">
+                    <label for="account-code">Code d'enrôlement</label>
+                    <input type="text" class="form-control" id="account-code"
+                           placeholder="ZF-XXXX-XXXX-XXXX" autocomplete="off"
+                           spellcheck="false" maxlength="17" style="text-transform:uppercase">
+                    <p style="font-size:12px;color:var(--text-faint);margin:6px 0 0">
+                        Obtenu depuis la console zaforge.com (Flotte → Ajouter un écran).
+                    </p>
+                </div>
+            </div>
+
+            <button class="btn btn-primary" type="button" id="account-link-btn"
+                    onclick="PiSignage.settings.linkAccount()">
+                <?= icon('link') ?>Lier / re-lier la box
+            </button>
+            <p style="font-size:12px;color:var(--text-faint);margin:10px 0 0">
+                Re-lier déplace la box vers le compte choisi. La lecture locale n'est jamais interrompue ;
+                la connexion au relais réapparaît sous quelques secondes.
+            </p>
+        </div>
+
         <!-- SYSTEME -->
         <div class="card" style="margin-top:18px">
             <div class="card-head">

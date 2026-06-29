@@ -3,8 +3,15 @@
 # ENABLE_RELAY=1 puis redémarre l'agent (qui échange ensuite le code via /enroll, contrat inchangé).
 # INVARIANT SÉCURITÉ : root:root 0755. Appelé par www-data via sudo (sudoers, args fixes) ;
 # le CODE est lu sur STDIN (jamais en argv -> pas de fuite ps) et VALIDÉ ici (le helper ne fait
-# jamais confiance à PHP).  Usage :  printf '%s' "<code>" | sudo /opt/pisignage/scripts/relay-link.sh
+# jamais confiance à PHP).
+#   Usage onboarding (1er lien)   : printf '%s' "<code>" | sudo relay-link.sh
+#   Usage admin (re-lier un compte): printf '%s' "<code>" | sudo relay-link.sh rebind
+# `rebind` pose "rebind": true dans relay.json -> le relais accepte de DÉPLACER un device
+# déjà enrôlé vers le nouveau tenant (sinon il refuse). Tout autre argument est ignoré.
 set -eu
+
+REBIND="false"
+if [ "${1:-}" = "rebind" ]; then REBIND="true"; fi
 
 CONF=/opt/pisignage/config
 RELAY_JSON="$CONF/relay.json"
@@ -27,7 +34,7 @@ case "$url" in https://relay.zaforge.com|https://*.zaforge.com) : ;; *) echo "re
 
 # Écrire relay.json (0640 pi:pi — possédé par l'agent).
 tmp="$(mktemp)"
-printf '{\n  "relay_url": "%s",\n  "enrollment_code": "%s",\n  "rebind": false\n}\n' "$url" "$code" > "$tmp"
+printf '{\n  "relay_url": "%s",\n  "enrollment_code": "%s",\n  "rebind": %s\n}\n' "$url" "$code" "$REBIND" > "$tmp"
 chmod 0640 "$tmp"; chown pi:pi "$tmp"; mv -f "$tmp" "$RELAY_JSON"
 
 # Activer le relais.
