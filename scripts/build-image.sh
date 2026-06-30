@@ -108,7 +108,11 @@ chmod 0644 /tmp/install.sh
 runuser -u pi -- bash /tmp/install.sh --auto
 touch /data/.zaforge-installed
 echo "install OK -> déclenche durcissement"
-systemctl start zaforge-firstboot-harden.service || true
+# --no-block OBLIGATOIRE : on est DANS l'ExecStart de zaforge-install, et harden a
+# After=zaforge-install -> un start BLOQUANT attendrait la fin de l'install pendant que harden attend
+# la fin de l'install = DEADLOCK (bug 3e test B2). --no-block laisse l'ExecStart se terminer
+# (install -> exited), ce qui satisfait le After= et libère harden.
+systemctl start --no-block zaforge-firstboot-harden.service || true
 INSTALL
 chmod 0755 "$MNT/usr/local/sbin/zaforge-firstboot-install"
 
