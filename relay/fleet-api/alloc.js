@@ -94,9 +94,13 @@ function allocateDeviceIp(db, tenantId, now) {
   const blocks = db.prepare('SELECT cidr FROM tenant_subnets WHERE tenant_id=? ORDER BY id')
     .all(tenantId).map((r) => r.cidr);
 
-  // IPs already taken by non-retired devices in this tenant.
+  // IPs déjà prises dans ce tenant : TOUS les devices, y compris 'retired'. Une ligne de
+  // device retiré EXISTE TOUJOURS et occupe la contrainte UNIQUE(tenant_id, wg_ip) ; réutiliser
+  // son IP ferait donc échouer l'INSERT de l'enroll ("UNIQUE constraint failed: devices.tenant_id,
+  // devices.wg_ip"). On ne réutilise PAS l'IP d'un device retiré tant que sa ligne existe — le
+  // pool /16 (×/28 par tenant, extensible) est largement suffisant.
   const taken = new Set(
-    db.prepare("SELECT wg_ip FROM devices WHERE tenant_id=? AND state != 'retired'")
+    db.prepare('SELECT wg_ip FROM devices WHERE tenant_id=?')
       .all(tenantId).map((r) => r.wg_ip)
   );
 
@@ -186,6 +190,27 @@ function selftest() {
 
   // 3) Explicit relay-collision probe: 10.70.0.1 must be unreachable by allocation.
   if (allIps.has(cfg.wg.relayIp)) throw new Error('FAIL: relay ip was allocated');
+
+  // 4) RÉGRESSION (bug prod) : l'IP d'un device 'retired' ne doit PAS être réattribuée tant que
+  //    sa ligne existe (sinon l'INSERT de l'enroll viole UNIQUE(tenant_id, wg_ip)). Reproduit
+  //    l'état observé : tenant avec un device retired @ .17 et un actif @ .18.
+  {
+    const d2 = new Database(':memory:');
+    d2.exec(`
+      CREATE TABLE tenant_subnets(id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tenant_id TEXT NOT NULL, cidr TEXT NOT NULL UNIQUE, created_at INTEGER NOT NULL);
+      CREATE TABLE devices(device_id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL,
+        state TEXT NOT NULL DEFAULT 'active', wg_ip TEXT NOT NULL, UNIQUE(tenant_id, wg_ip));
+    `);
+    d2.prepare('INSERT INTO tenant_subnets(tenant_id,cidr,created_at) VALUES (?,?,?)').run('t_x', '10.70.0.16/28', 1);
+    d2.prepare("INSERT INTO devices(device_id,tenant_id,state,wg_ip) VALUES ('d_old','t_x','retired','10.70.0.17')").run();
+    d2.prepare("INSERT INTO devices(device_id,tenant_id,state,wg_ip) VALUES ('d_cur','t_x','active','10.70.0.18')").run();
+    const r = allocateDeviceIp(d2, 't_x', 1);
+    if (r.ip === '10.70.0.17') throw new Error('FAIL: réutilise l\'IP du device retired (10.70.0.17) -> collision UNIQUE');
+    // L'INSERT de l'enroll doit passer sans violer la contrainte.
+    d2.prepare('INSERT INTO devices(device_id,tenant_id,state,wg_ip) VALUES (?,?,?,?)').run('d_new', 't_x', 'active', r.ip);
+    console.log(`[alloc selftest] OK retired-reuse: nouvelle IP=${r.ip} (≠ .17 du device retiré), INSERT sans collision.`);
+  }
 
   console.log(`[alloc selftest] OK — ${allIps.size} unique /32s, ${blockOwner.size} /28 blocks, ` +
     `relay ${cfg.wg.relayIp} reserved, no cross-tenant /28 sharing.`);
