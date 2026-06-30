@@ -13,6 +13,11 @@ rm -f "$C/agent.json" "$C/credentials.json" "$C/relay-proxy-secret" \
       "$C/wifi-networks.json" "$C/scheduler-state.json" 2>/dev/null || true
 rm -rf "$C/relay" 2>/dev/null || true
 
+# Marker de durcissement (sur /data) : le RETIRER pour que le durcissement (grow /data + overlay
+# root-ro) RE-tourne au 1er boot d'une carte fraîchement flashée. Sans ça, root resterait RW et
+# /data ne serait pas agrandi à la taille réelle de la SD cliente.
+rm -f "$ROOT/data/.zaforge-hardened" 2>/dev/null || true
+
 # relay.json -> gabarit NON enrôlé.
 printf '{\n  "relay_url": "https://relay.zaforge.com",\n  "enrollment_code": "",\n  "rebind": false\n}\n' > "$C/relay.json" 2>/dev/null || true
 [ -f "$C/feature_flags" ] && sed -i 's/^ENABLE_RELAY=.*/ENABLE_RELAY=0/' "$C/feature_flags" 2>/dev/null || true

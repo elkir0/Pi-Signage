@@ -90,6 +90,26 @@ else
     echo 'ENABLE_RELAY=0' >> "$FF" 2>/dev/null || true
 fi
 
+# 5b) host keys SSH — bake-strip les retire de l'image ; RPi OS ne les régénère pas toujours sur
+#     une image CAPTURÉE (service de régénération déjà "done"/masqué). On les (re)crée nous-mêmes.
+#     ssh-keygen -A ne (re)crée QUE les clés manquantes -> idempotent et sûr.
+if [ "$DRY" != 1 ]; then
+    [ -f /etc/ssh/ssh_host_ed25519_key ] || { ssh-keygen -A >/dev/null 2>&1 && log "host keys SSH régénérées" || true; }
+fi
+
+# 5c) pays réglementaire WiFi (BE) — sans lui wlan0 ne voit pas les canaux locaux (onboarding AP
+#     + scan). À poser AU PROVISIONING : root devient read-only après durcissement (/boot ro aussi).
+if [ "$DRY" != 1 ]; then
+    command -v raspi-config >/dev/null 2>&1 && raspi-config nonint do_wifi_country BE >/dev/null 2>&1 && log "pays WiFi=BE" || true
+    iw reg set BE >/dev/null 2>&1 || true
+fi
+
+# 5d) répertoire d'état de l'agent relais (clé/peer WireGuard générés à l'enrôlement) — pi:pi 0700.
+#     L'agent tourne en 'pi' ; sans ce dir l'enrôlement ne peut pas persister son identité WG.
+mkdir -p "$CONF/relay" 2>/dev/null || true
+chmod 0700 "$CONF/relay" 2>/dev/null || true
+[ "$DRY" = 1 ] || chown pi:pi "$CONF/relay" 2>/dev/null || true
+
 # 6) sentinel ATOMIQUE (uniquement après les étapes d'identité).
 printf 'provisioned %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)" > "$SENTINEL.tmp" 2>/dev/null \
     && mv -f "$SENTINEL.tmp" "$SENTINEL" 2>/dev/null || true
