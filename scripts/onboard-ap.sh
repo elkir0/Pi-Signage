@@ -22,16 +22,16 @@ ap_ssid() { id="$(cut -c1-4 /etc/machine-id 2>/dev/null || true)"; [ -n "$id" ] 
 
 ensure_profile() {
     ssid="$(ap_ssid)"
-    if "$NMCLI" -g connection.id con show "$AP_CON" >/dev/null 2>&1; then
-        "$NMCLI" con modify "$AP_CON" 802-11-wireless.ssid "$ssid" \
-            ipv4.method shared ipv4.addresses "$AP_IP/24" connection.autoconnect no >/dev/null
-    else
-        "$NMCLI" con add type wifi ifname "$IFACE" con-name "$AP_CON" ssid "$ssid" \
-            802-11-wireless.mode ap 802-11-wireless.band bg 802-11-wireless.channel 6 \
-            802-11-wireless-security.key-mgmt none \
-            ipv4.method shared ipv4.addresses "$AP_IP/24" ipv6.method ignore \
-            connection.autoconnect no >/dev/null
-    fi
+    # On RECRÉE le profil à neuf : un profil existant peut porter une mauvaise sécurité
+    # (cf. bug ci-dessous), et un AP d'onboarding est jetable -> recréation = idempotent + sûr.
+    # AP OUVERT = AUCUN réglage 802-11-wireless-security. PIÈGE NETWORKMANAGER : 'key-mgmt none'
+    # ne signifie PAS "ouvert" mais **WEP** -> NM réclame alors un secret (WEP key), échoue en
+    # non-interactif ("no secrets: No agents were available") et l'AP ne monte jamais.
+    "$NMCLI" con delete "$AP_CON" >/dev/null 2>&1 || true
+    "$NMCLI" con add type wifi ifname "$IFACE" con-name "$AP_CON" ssid "$ssid" \
+        802-11-wireless.mode ap 802-11-wireless.band bg 802-11-wireless.channel 6 \
+        ipv4.method shared ipv4.addresses "$AP_IP/24" ipv6.method ignore \
+        connection.autoconnect no >/dev/null
 }
 
 install_dropin() {
