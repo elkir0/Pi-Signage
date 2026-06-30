@@ -94,6 +94,15 @@ function setupApply() {
         jsonResponse(false, null, 'Étape compte requise (connexion ou code)');
     }
 
+    // Mot de passe admin (FACULTATIF) : si le client en fournit un, il définit SON mot de passe ->
+    // on (re)génère credentials.json (bcrypt) et on retire le mot de passe aléatoire affiché à
+    // l'écran. Opération LOCALE -> faite AVANT toute action réseau (pas de teardown si elle échoue).
+    $adminPw = isset($input['admin_password']) ? (string)$input['admin_password'] : '';
+    if ($adminPw !== '') {
+        if (strlen($adminPw) < 8) jsonResponse(false, null, 'Mot de passe admin : 8 caractères minimum.');
+        if (!setupSetAdminPassword($adminPw)) jsonResponse(false, null, "Impossible d'enregistrer le mot de passe admin.");
+    }
+
     // 1) Radio unique : couper l'AP, puis connecter le WiFi du lieu (wifi-apply, PSK via stdin).
     executeCommand(['sudo', ONBOARD_AP, 'down']);
     $rc = relayRunStdin(['sudo', '-n', WIFI_APPLY_B, 'apply'], implode("\n", $built['lines']) . "\n")['rc'];
@@ -125,4 +134,21 @@ function setupApply() {
     executeCommand(['sudo', ONBOARD_AP, 'finalize']);
     logMessage('Onboarding terminé : WiFi + compte liés (' . $ssid . ')');
     jsonResponse(true, ['done' => true, 'connected_ssid' => connectedSsid()], 'Configuration terminée');
+}
+
+// Écrit credentials.json (bcrypt) au MÊME format que firstboot.sh {username:"admin",password:hash},
+// de façon ATOMIQUE (tmp + rename), puis retire le mot de passe aléatoire .setup-admin-password
+// (il ne s'applique plus). PHP tourne en www-data, propriétaire du dossier config -> écriture OK.
+function setupSetAdminPassword(string $pw): bool {
+    $dir  = '/opt/pisignage/config';
+    $hash = password_hash($pw, PASSWORD_BCRYPT, ['cost' => 12]);
+    if (!is_string($hash) || $hash === '') return false;
+    $json = json_encode(['username' => 'admin', 'password' => $hash], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
+    $tmp  = $dir . '/credentials.json.tmp';
+    if (@file_put_contents($tmp, $json) === false) return false;
+    @chmod($tmp, 0640);
+    if (!@rename($tmp, $dir . '/credentials.json')) { @unlink($tmp); return false; }
+    @unlink($dir . '/.setup-admin-password');
+    logMessage('Onboarding : mot de passe admin défini par le client');
+    return true;
 }

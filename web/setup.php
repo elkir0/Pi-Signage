@@ -126,7 +126,12 @@ $e = fn($s) => htmlspecialchars((string)$s, ENT_QUOTES);
     </div>
     <!-- Étape 2 : compte Zaforge -->
     <div id="step2" style="display:none">
-      <p class="hint" style="text-align:left;margin:0 0 8px">Étape 2 — Liez l'écran à votre compte Zaforge.</p>
+      <p class="hint" style="text-align:left;margin:0 0 8px">Étape 2 — Mot de passe administrateur (facultatif), puis compte Zaforge.</p>
+      <label for="apw">Mot de passe administrateur <span style="font-weight:400;color:#64748b">(facultatif)</span></label>
+      <input type="password" id="apw" autocomplete="new-password" placeholder="Vide = garder celui affiché à l'écran">
+      <label for="apw2">Confirmer le mot de passe</label>
+      <input type="password" id="apw2" autocomplete="new-password" placeholder="Répétez le mot de passe">
+      <div style="height:1px;background:var(--bd);margin:16px 0"></div>
       <div id="login-pane">
         <label for="email">E-mail Zaforge</label>
         <input type="email" id="email" autocapitalize="none" autocomplete="off" placeholder="vous@exemple.com">
@@ -159,6 +164,9 @@ $e = fn($s) => htmlspecialchars((string)$s, ENT_QUOTES);
     async function finish(){
       const ssid=document.getElementById('ssid').value.trim(), psk=document.getElementById('psk').value;
       const msg=document.getElementById('msg'), btn=document.getElementById('go');
+      const apw=document.getElementById('apw').value, apw2=document.getElementById('apw2').value;
+      if(apw!==apw2){ msgErr('Les mots de passe administrateur ne correspondent pas.'); return; }
+      if(apw && apw.length<8){ msgErr('Mot de passe admin : 8 caractères minimum.'); return; }
       let account;
       if(useCode){
         const code=document.getElementById('ecode').value.trim().toUpperCase();
@@ -171,7 +179,7 @@ $e = fn($s) => htmlspecialchars((string)$s, ENT_QUOTES);
       }
       btn.disabled=true; msg.className='msg'; msg.textContent='Configuration… connexion au WiFi puis liaison du compte (l\'écran peut clignoter, ~30s).';
       try{
-        const r=await fetch('/api/setup.php?action=apply',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ssid,psk,account})});
+        const r=await fetch('/api/setup.php?action=apply',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ssid,psk,account,admin_password:apw})});
         const d=await r.json();
         if(d.success){ msg.className='msg ok'; msg.textContent='Terminé ✓ — l\'écran va démarrer.'; }
         else{ msgErr(d.message||'Échec — réessayez.'); btn.disabled=false; }
