@@ -92,7 +92,10 @@ set -e
 exec >>/data/firstboot-install.log 2>&1
 echo "=== zaforge-install \$(date -u) ==="
 curl -fsSL ${GHRAW}/install.sh -o /tmp/install.sh
-bash /tmp/install.sh --auto
+chmod 0644 /tmp/install.sh
+# install.sh REFUSE d'être lancé en root (check_root) et escalade via sudo en interne -> on le lance
+# en 'pi' (NOPASSWD posé au build). Le lancer en root = échec immédiat (bug observé au 1er test B2).
+runuser -l pi -c 'bash /tmp/install.sh --auto'
 touch /data/.zaforge-installed
 echo "install OK -> déclenche durcissement"
 systemctl start zaforge-firstboot-harden.service || true
@@ -122,6 +125,10 @@ Description=Zaforge first-boot hardening (grow /data + overlay root-ro)
 # empêche firstboot de re-tourner). En pratique l'install (long) précède déjà harden, mais on l'ancre.
 After=zaforge-install.service zaforge-firstboot.service
 ConditionPathExists=!/data/.zaforge-hardened
+# GATING CRITIQUE : ne durcir (overlay root-ro) QU'APRÈS une install RÉUSSIE (.zaforge-installed posé
+# en fin d'install). Sinon l'overlay s'active sur un système non installé et l'install re-tente sur un
+# root tmpfs éphémère = boucle cassée (bug observé au 1er test B2).
+ConditionPathExists=/data/.zaforge-installed
 [Service]
 Type=oneshot
 ExecStart=/usr/local/sbin/zaforge-firstboot-harden
@@ -139,6 +146,12 @@ ln -sf ../zaforge-firstboot-harden.service "$MNT/etc/systemd/system/multi-user.t
 HASH="$(openssl passwd -6 "$PI_PASS")"
 echo "pi:${HASH}" > "$MNT/boot/firmware/userconf.txt"
 touch "$MNT/boot/firmware/ssh"
+
+# pi en NOPASSWD : install.sh tourne en 'pi' (refuse root) et escalade via sudo en NON-interactif
+# (--auto au 1er boot). Sans ça, chaque 'sudo' de l'install bloquerait/échouerait sur un prompt.
+install -d -m 0755 "$MNT/etc/sudoers.d"
+echo 'pi ALL=(ALL) NOPASSWD: ALL' > "$MNT/etc/sudoers.d/010-pi-nopasswd"
+chmod 0440 "$MNT/etc/sudoers.d/010-pi-nopasswd"
 
 # 5g) Désactiver le resize auto RPi OS. Sur Trixie c'est le token 'resize' du cmdline qui
 #     déclenche l'expand de root (initramfs) -> il mangerait /data. On le RETIRE. (userconf-service
