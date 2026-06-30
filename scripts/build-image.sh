@@ -91,11 +91,21 @@ cat > "$MNT/usr/local/sbin/zaforge-firstboot-install" <<INSTALL
 set -e
 exec >>/data/firstboot-install.log 2>&1
 echo "=== zaforge-install \$(date -u) ==="
+# Attendre que le user 'pi' soit CRÉÉ par userconf (asynchrone au 1er boot, peut arriver APRÈS
+# network-online.target). install.sh tourne en 'pi' -> sans attente, runuser échoue
+# ("This account is currently not available"). Bug observé au 2e test B2. Max ~180s.
+i=0
+while ! id -u pi >/dev/null 2>&1; do
+    i=\$((i+1)); [ "\$i" -ge 90 ] && { echo "FATAL: user pi absent apres 180s"; exit 1; }
+    sleep 2
+done
+echo "user pi pret apres \$((i*2))s"
 curl -fsSL ${GHRAW}/install.sh -o /tmp/install.sh
 chmod 0644 /tmp/install.sh
-# install.sh REFUSE d'être lancé en root (check_root) et escalade via sudo en interne -> on le lance
-# en 'pi' (NOPASSWD posé au build). Le lancer en root = échec immédiat (bug observé au 1er test B2).
-runuser -l pi -c 'bash /tmp/install.sh --auto'
+# install.sh REFUSE root (check_root) et escalade via sudo en interne -> on le lance en 'pi' (NOPASSWD
+# posé au build). runuser -u (PAS -l) : bash directement en pi (HOME=/home/pi) sans shell de login
+# (évite le nologin transitoire + le bruit profile.d). Root = échec immédiat (1er test B2).
+runuser -u pi -- bash /tmp/install.sh --auto
 touch /data/.zaforge-installed
 echo "install OK -> déclenche durcissement"
 systemctl start zaforge-firstboot-harden.service || true
