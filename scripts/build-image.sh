@@ -107,11 +107,15 @@ chmod 0644 /tmp/install.sh
 # (évite le nologin transitoire + le bruit profile.d). Root = échec immédiat (1er test B2).
 runuser -u pi -- bash /tmp/install.sh --auto
 touch /data/.zaforge-installed
-echo "install OK -> déclenche durcissement"
-# --no-block OBLIGATOIRE : on est DANS l'ExecStart de zaforge-install, et harden a
-# After=zaforge-install -> un start BLOQUANT attendrait la fin de l'install pendant que harden attend
-# la fin de l'install = DEADLOCK (bug 3e test B2). --no-block laisse l'ExecStart se terminer
-# (install -> exited), ce qui satisfait le After= et libère harden.
+echo "install OK -> provisioning identité (firstboot) puis durcissement (harden)"
+# firstboot.service est DÉPLOYÉ par install.sh -> absent au début du 1er boot, il ne peut pas
+# participer à la transaction multi-user.target initiale. On le déclenche EXPLICITEMENT ici, APRÈS
+# l'install (php présent, système prêt), AVANT harden.
+# --no-block OBLIGATOIRE sur les deux : on est DANS l'ExecStart de zaforge-install et firstboot/harden
+# ont After=zaforge-install -> un start BLOQUANT = DEADLOCK (install attend la fin de leur job, eux
+# attendent la fin de l'install). harden a After=zaforge-firstboot -> il attend la fin du provisioning
+# avant de basculer l'overlay (identité posée sur root RW, pas sous tmpfs éphémère).
+systemctl start --no-block zaforge-firstboot.service || true
 systemctl start --no-block zaforge-firstboot-harden.service || true
 INSTALL
 chmod 0755 "$MNT/usr/local/sbin/zaforge-firstboot-install"

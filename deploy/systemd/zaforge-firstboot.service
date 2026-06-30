@@ -2,9 +2,13 @@
 Description=Zaforge first-boot per-device provisioning (identity, onboarding gate)
 # Après la régénération RPi OS de machine-id ; après NM (pour lever l'AP). Avant le kiosk + nginx
 # pour que l'écran montre /setup dès le 1er boot. BEST-EFFORT : un échec ne bloque pas le boot.
-After=systemd-machine-id-commit.service NetworkManager.service
+After=systemd-machine-id-commit.service NetworkManager.service zaforge-install.service
 Wants=NetworkManager.service
 Before=lightdm.service nginx.service
+# Ne PROVISIONNER qu'APRÈS une install réussie : firstboot.sh a besoin de php (hash bcrypt du mot de
+# passe admin) et d'un système prêt. Sans ce gate il tourne PENDANT l'install -> identité ratée
+# (hostname/pw) mais .provisioned posé quand même = fast-path définitif (bug 4e test B2).
+ConditionPathExists=/data/.zaforge-installed
 
 [Service]
 Type=oneshot
