@@ -117,7 +117,10 @@ UNIT
 cat > "$MNT/etc/systemd/system/zaforge-firstboot-harden.service" <<UNIT
 [Unit]
 Description=Zaforge first-boot hardening (grow /data + overlay root-ro)
-After=zaforge-install.service
+# After firstboot AUSSI : l'identité par-device (hostname /etc/hostname) doit être posée pendant un
+# boot RW ; après la bascule overlay tmpfs, /etc/hostname serait éphémère (et .provisioned sur /data
+# empêche firstboot de re-tourner). En pratique l'install (long) précède déjà harden, mais on l'ancre.
+After=zaforge-install.service zaforge-firstboot.service
 ConditionPathExists=!/data/.zaforge-hardened
 [Service]
 Type=oneshot
