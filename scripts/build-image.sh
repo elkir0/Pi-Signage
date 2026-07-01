@@ -39,16 +39,22 @@ echo "================ build-image $TS ================"
 cleanup() {
     set +e
     if [ -n "${MNT:-}" ]; then
-        umount -R "$MNT/run" "$MNT/dev" "$MNT/sys" "$MNT/proc" 2>/dev/null
-        umount "$MNT/opt/pisignage" 2>/dev/null
-        umount "$MNT/boot/firmware" 2>/dev/null
-        umount "$MNT" 2>/dev/null
+        umount -R -l "$MNT/run" "$MNT/dev" "$MNT/sys" "$MNT/proc" "$MNT/opt/pisignage" 2>/dev/null
+        umount -l "$MNT/boot/firmware" 2>/dev/null
+        umount -R -l "$MNT" 2>/dev/null
     fi
-    [ -n "${MNTD:-}" ] && umount "$MNTD" 2>/dev/null
+    [ -n "${MNTD:-}" ] && umount -l "$MNTD" 2>/dev/null
     [ -n "${LOOP:-}" ] && losetup -d "$LOOP" 2>/dev/null
 }
 trap cleanup EXIT
 MNT="$WORK/mnt"; MNTD="$WORK/mnt-data"; mkdir -p "$MNT" "$MNTD"
+
+# HYGIÈNE pré-build : purger les résidus d'un build précédent avorté (montages EMPILÉS sur mnt + loops
+# orphelins). Sans ça le nouveau mount s'empile et le umount final échoue "target is busy" (bug vécu :
+# l'image était bonne mais la compression ne se lançait pas).
+for _ in 1 2 3; do umount -R -l "$MNT" 2>/dev/null; done
+umount -l "$MNTD" 2>/dev/null || true
+losetup -j "$WORK"/work-*.img 2>/dev/null | cut -d: -f1 | xargs -r losetup -d 2>/dev/null || true
 
 # --- 1) Base image (cache) ---
 BASEXZ="$WORK/$(basename "$BASE_URL")"
@@ -180,17 +186,26 @@ echo "--- overlayroot présent ? ---"; ls "$MNT/usr/sbin/overlayroot-chroot" 2>/
 echo "--- app sur /data ? ---"; ls "$MNTD/pisignage" 2>/dev/null | head
 
 sync
-umount "$MNT/boot/firmware"; umount "$MNT"; umount "$MNTD"
-losetup -d "$LOOP"; LOOP=""; MNT=""; MNTD=""
+# Teardown TOLÉRANT : l'image est déjà écrite -> ne JAMAIS avorter sur un umount busy (lazy en secours).
+umount "$MNT/opt/pisignage" 2>/dev/null || true
+umount "$MNT/boot/firmware" 2>/dev/null || umount -l "$MNT/boot/firmware" 2>/dev/null || true
+umount "$MNTD" 2>/dev/null || umount -l "$MNTD" 2>/dev/null || true
+umount "$MNT" 2>/dev/null || umount -R -l "$MNT" 2>/dev/null || true
+sync; sleep 1
+losetup -d "$LOOP" 2>/dev/null || true
+LOOP=""; MNT=""; MNTD=""
 trap - EXIT
 
 # --- 6) Finaliser (compression pigz -> .img.gz compatible RPi Imager) ---
 mv "$IMG" "$OUT"
+# nice/ionice + 1 cœur laissé LIBRE : une image bakée fait ~13G ; sur une petite VM, pigz à fond sur
+# tous les cœurs affame sshd (VM injoignable ~15 min, vécu). On garde la VM réactive.
+NCPU="$(nproc)"; PZ=$(( NCPU > 1 ? NCPU - 1 : 1 ))
 if command -v pigz >/dev/null 2>&1; then
-    echo "compression pigz ($(nproc) threads) -> ${OUT}.gz"
-    pigz -p "$(nproc)" -f "$OUT"
+    echo "compression pigz ($PZ/$NCPU threads, nice+ionice) -> ${OUT}.gz"
+    nice -n 19 ionice -c3 pigz -p "$PZ" -f "$OUT"
 else
-    echo "compression gzip -> ${OUT}.gz"; gzip -f "$OUT"
+    echo "compression gzip -> ${OUT}.gz"; nice -n 19 gzip -f "$OUT"
 fi
 echo "================ IMAGE PRÊTE : ${OUT}.gz ================"
 ls -lh "${OUT}.gz"
