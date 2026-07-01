@@ -614,9 +614,12 @@ class PiSignagePlayer {
             // Cache hors-ligne (R5) : mémorise la dernière playlist valide.
             try { localStorage.setItem('pisignage:last-playlist', JSON.stringify(this.playlist)); } catch (e) {}
 
-            // Démarrer lecture si autoplay
-            if (this.playlist.autoplay) {
-                this.playItem(0);
+            // Démarrer lecture : autoplay par DÉFAUT (seul autoplay:false l'empêche). Sur une playlist
+            // shuffle, on démarre sur un item ALÉATOIRE (pas toujours le 1er).
+            if (this.playlist.autoplay !== false) {
+                const start = (this.playlist.shuffle && this.playlist.items.length > 1)
+                    ? Math.floor(Math.random() * this.playlist.items.length) : 0;
+                this.playItem(start);
             } else {
                 this.hideLoading();
             }
