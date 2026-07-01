@@ -179,6 +179,7 @@ function playlistPushLive($pl) {
                 'fit'      => $it['fit'],
                 'mute'     => $it['mute'],
                 'loop'     => $it['loop'],
+                'subtitles'=> array_key_exists('subtitles', $it) ? (bool)$it['subtitles'] : true,
             ];
         }, $pl['items']),
     ];
