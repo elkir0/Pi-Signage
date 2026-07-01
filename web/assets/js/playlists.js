@@ -6,7 +6,7 @@
  *   - composition (éditeur) + enregistrement
  *   - "Diffuser à l'écran" (activate)
  *
- * Un item de playlist = { url:<media.path>, type, name, duration, fit, mute, loop }.
+ * Un item de playlist = { url:<media.path>, type, name, duration, fit, mute, loop, subtitles }.
  * Réorganisation par boutons monter/descendre (robuste) + glisser depuis la bibliothèque.
  */
 
@@ -27,7 +27,7 @@ PiSignage.playlists = {
         name: '',
         autoplay: true,
         autoLoop: true,
-        items: []          // [{url, type, name, duration, fit, mute, loop}]
+        items: []          // [{url, type, name, duration, fit, mute, loop, subtitles}]
     },
     selectedIndex: null,
 

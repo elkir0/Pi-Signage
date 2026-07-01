@@ -45,7 +45,7 @@ function playlistGuessType($pathOrUrl) {
 }
 
 /**
- * Normalise un item de playlist vers le schéma UNIQUE {url,type,name,duration,fit,mute,loop,transition}.
+ * Normalise un item de playlist vers le schéma UNIQUE {url,type,name,duration,fit,mute,loop,subtitles,transition}.
  * Accepte l'ancien format {file,...} (migration) et le format {url,...}.
  */
 function playlistNormalizeItem($item) {

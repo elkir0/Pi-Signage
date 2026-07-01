@@ -14,6 +14,12 @@ Abandon du modèle « install au 1er boot » (exigeait Ethernet + ~45 min chez l
 - **Durcissement baké hors-ligne** : `overlayroot` (overlay root read-only, `tmpfs:recurse=0`) + `cloud-guest-utils` (growpart) installés au build → le durcissement du 1er boot ne fait que conf + `update-initramfs`, sans réseau.
 - **Onboarding — mot de passe admin** : l'assistant téléphone (`web/setup.php`) permet au client de définir son propre mot de passe admin (facultatif ; sinon celui aléatoire affiché à l'écran). API `setupSetAdminPassword()` (bcrypt, écriture atomique).
 
+### 🎬 Player, contenu & marque
+
+- **Sous-titres activables/désactivables par média** : chaque élément de playlist a un flag `subtitles` (toggle « Afficher les sous-titres » dans l'éditeur, vidéos uniquement). **Opt-out** : les sous-titres ne s'affichent que si un `.vtt` existe dans le manifeste (`media/subtitles.json`) **et** que le flag n'est pas désactivé (absent/`true` = comportement historique). Le flag traverse tout le pipeline : normaliseur (`playlists-core.php`), sauvegarde (`<slug>.json`), diffusion (`playlistPushLive` → `media/playlist.json`) et player (`applySubtitle` respecte `item.subtitles === false`).
+- **Splash de démarrage Plymouth** : thème `zaforge` (logo écran + Z sur fond sombre) **baké dans l'image golden** (`build-image.sh` : apt plymouth + thème + `set-default` + `update-initramfs` dans le chroot, `disable_splash=0`).
+- **Marque Zaforge dans l'UI** : logo écran + Z (icône `zaforge` dans `icons.php`) en login, sidebar, onboarding et splash player ; assets SVG (`web/assets/zaforge-logo.svg`, `zaforge-favicon.svg`).
+
 ### 🐛 Correctifs — séquence de 1er boot (ordonnancement systemd)
 - **install.sh lancé en `pi`** (il refuse root) ; attente de la création du user `pi` par userconf (asynchrone) ; déclenchement de harden en **`--no-block`** (anti-deadlock `install ↔ harden`) ; `zaforge-firstboot.service` **`After=zaforge-install` + gate `.zaforge-installed`** (sinon provisionne avant que php existe → mot de passe admin vide + hostname raté).
 - **Grow `/data`** : `parted` refusant une partition montée, remplacé par `growpart` (resize en ligne).
