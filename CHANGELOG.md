@@ -5,6 +5,28 @@ All notable changes to PiSignage will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.7] - 2026-07 - Image golden « Flash & Go » (install bakée en chroot)
+
+### 🚀 **MAJEUR : image SD pré-installée, durcie, neutre — le client flashe et boote**
+
+Abandon du modèle « install au 1er boot » (exigeait Ethernet + ~45 min chez le client). `scripts/build-image.sh` **bake l'installation dans l'image au build** en lançant `install.sh` dans un **chroot qemu-ARM**. L'image sort déjà installée. Le **1er boot client est 100 % hors-ligne** (~2 min) : `firstboot` (identité) → `harden` (grow `/data` + overlay root-ro) → reboot → assistant d'onboarding (WiFi + compte). **Plus de RJ45 ni d'install de 45 min.** Doc complète : [`docs/GOLDEN-IMAGE.md`](docs/GOLDEN-IMAGE.md).
+
+- **Durcissement baké hors-ligne** : `overlayroot` (overlay root read-only, `tmpfs:recurse=0`) + `cloud-guest-utils` (growpart) installés au build → le durcissement du 1er boot ne fait que conf + `update-initramfs`, sans réseau.
+- **Onboarding — mot de passe admin** : l'assistant téléphone (`web/setup.php`) permet au client de définir son propre mot de passe admin (facultatif ; sinon celui aléatoire affiché à l'écran). API `setupSetAdminPassword()` (bcrypt, écriture atomique).
+
+### 🐛 Correctifs — séquence de 1er boot (ordonnancement systemd)
+- **install.sh lancé en `pi`** (il refuse root) ; attente de la création du user `pi` par userconf (asynchrone) ; déclenchement de harden en **`--no-block`** (anti-deadlock `install ↔ harden`) ; `zaforge-firstboot.service` **`After=zaforge-install` + gate `.zaforge-installed`** (sinon provisionne avant que php existe → mot de passe admin vide + hostname raté).
+- **Grow `/data`** : `parted` refusant une partition montée, remplacé par `growpart` (resize en ligne).
+- **Overlay** : `raspi-config do_overlayfs` (posait le paramètre cmdline sans reconstruire l'initramfs → inactif) remplacé par le paquet `overlayroot` + marqueur **vérifié après reboot**.
+
+### 🐛 Correctifs — build en chroot qemu (`build-image.sh`)
+- **`ZF_ALLOW_ROOT=1`** : le setuid ne fonctionnant pas sous qemu-user, `install.sh` tourne **en root** (sudo-en-root sans setuid) via un nouvel override de `check_root`.
+- **Kiosk** : `HOME=/home/pi` (sinon la conf kiosk partait dans `/root/.config`) + `kiosk_url=http://127.0.0.1/player` (défaut générique = `time.is`) + regénération de l'autostart labwc.
+- **Hygiène** : purge des montages/loops orphelins avant build (anti-stacking `umount busy`) ; teardown lazy ; compression `pigz` en `nice/ionice` (une petite VM saturée figeait).
+
+### 🐛 Correctif relais (`relay/fleet-api/alloc.js`)
+- L'allocation d'IP WireGuard réutilisait l'IP d'un device `retired` (ligne encore en base) → `UNIQUE constraint failed` à l'enrôlement. Corrigé : compter **tous** les devices comme « pris ».
+
 ## [0.12.0] - 2026-06 - Moteur unique Chromium HTML5 + Playlists unifiées + Dayparting réel
 
 ### 🎬 **MAJEUR : VLC retiré — moteur de lecture unique Chromium HTML5**

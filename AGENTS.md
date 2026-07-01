@@ -1079,6 +1079,18 @@ un seul modèle de playlist, un seul scheduler.
 - **player.php envoie `Cache-Control: no-store`** (sinon Chromium garde l'ancienne page en cache disque).
 - Le report d'état périodique n'utilise **pas** `keepalive` (quota navigateur → battement figé sur Pi lent).
 
+### Déploiement — image golden « Flash & Go » (réf. : `docs/GOLDEN-IMAGE.md`)
+Le déploiement client se fait par une **image SD pré-installée** (PAS `install.sh` au 1er boot). `scripts/build-image.sh`
+**bake l'install dans l'image au build** en lançant `install.sh` dans un **chroot qemu-ARM**. Le client flashe → boote →
+**1er boot 100 % hors-ligne** (~2 min) : `zaforge-firstboot` (identité) → `zaforge-firstboot-harden` (grow `/data` +
+overlay root-ro via `overlayroot`) → reboot → AP d'onboarding. **Aucun service `zaforge-install` dans l'image**, aucun
+RJ45 requis.
+- **Pièges chroot qemu** (tous gérés dans build-image.sh) : setuid KO → install.sh lancé **en root** (`ZF_ALLOW_ROOT=1`) ;
+  `HOME=/home/pi` (sinon conf kiosk dans `/root`) ; `kiosk_url=/player` (défaut install.sh = time.is) ; `systemctl enable`
+  OK / `start` ignoré ; app écrite sur `/data` via bind ; `overlayroot`+`cloud-guest-utils` **bakés** (durcissement offline).
+- **Ne PAS** relancer `install.sh` au 1er boot ni exiger le réseau : tout est baké. Rebuild = pousser la branche + relancer
+  `build-image.sh` sur la VM. Détails, ordonnancement systemd et dépannage : **`docs/GOLDEN-IMAGE.md`**.
+
 ---
 
 ## Summary

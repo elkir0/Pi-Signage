@@ -96,7 +96,23 @@ Zaforge targets **Raspberry Pi OS Trixie (Debian 13)** with a modern Wayland-bas
 
 ## Installation
 
-### Quick Install (Recommended)
+### 🚀 Flash & Go Golden Image (recommended for deployment)
+
+For fleet/client deployment, use the **pre-built golden image**: flash the SD card, plug the Pi in, and
+it's ready. The **first boot is 100 % offline** (no Ethernet, no 45-minute install) and reaches the
+onboarding wizard in ~2 minutes, where the client picks their WiFi and links their account.
+
+1. Flash `zaforge-trixie-<ts>.img.gz` (Raspberry Pi Imager / `dd` / balenaEtcher).
+2. Insert the card, connect HDMI + power. **No network cable needed.**
+3. First boot provisions a unique identity, hardens the SD (read-only overlay root), then shows a QR
+   code + admin password + a `Zaforge-Setup-XXXX` WiFi access point.
+4. Join the AP from a phone → the captive portal walks through WiFi + admin password + account link.
+
+The image is **built reproducibly** by `scripts/build-image.sh` (install baked into the image via a
+qemu chroot). Full reference — build, first-boot sequence, hardening, troubleshooting, rebuild:
+**[`docs/GOLDEN-IMAGE.md`](docs/GOLDEN-IMAGE.md)**.
+
+### Quick Install (Recommended for a single Pi / dev)
 ```bash
 wget https://raw.githubusercontent.com/elkir0/Pi-Signage/main/install.sh
 bash install.sh
