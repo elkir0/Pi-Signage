@@ -99,7 +99,10 @@ detect_os_version() {
 
 # Vérifier si root
 check_root() {
-    if [[ $EUID -eq 0 ]]; then
+    # Refus root PAR DÉFAUT (install.sh escalade via sudo). EXCEPTION : build d'image en chroot qemu,
+    # où le setuid ne fonctionne pas sous émulation user-mode -> sudo ne peut PAS escalader depuis un
+    # non-root. On lance alors install.sh EN root (sudo-en-root ne requiert pas setuid) via ZF_ALLOW_ROOT=1.
+    if [[ $EUID -eq 0 ]] && [ "${ZF_ALLOW_ROOT:-0}" != "1" ]; then
         log_error "Ce script ne doit pas être exécuté en root"
         log_info "Utilisation: bash install.sh"
         exit 1

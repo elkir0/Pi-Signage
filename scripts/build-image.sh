@@ -138,9 +138,12 @@ mount --rbind /run "$MNT/run"
 mv "$MNT/etc/resolv.conf" "$MNT/etc/resolv.conf.zfsave" 2>/dev/null || true
 printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n' > "$MNT/etc/resolv.conf"
 install -m 0644 "$REPO_DIR/install.sh" "$MNT/tmp/install.sh"
-# install.sh REFUSE root (check_root) + escalade via sudo (NOPASSWD). En chroot : systemctl enable
-# crée les symlinks (OK), start/restart/daemon-reload y sont ignorés (services démarrent au vrai boot).
-chroot "$MNT" runuser -u pi -- bash /tmp/install.sh --auto
+# En chroot qemu, le SETUID ne fonctionne pas (émulation user-mode) -> 'sudo' lancé par un non-root
+# NE PEUT PAS escalader ("effective uid is not 0"). On lance donc install.sh EN ROOT (sudo-en-root ne
+# requiert pas setuid) via ZF_ALLOW_ROOT=1. En chroot : systemctl enable crée les symlinks (OK),
+# start/restart/daemon-reload y sont ignorés (services démarrent au vrai boot). L'ownership de
+# /opt/pisignage est normalisée par les chown explicites d'install.sh.
+chroot "$MNT" env ZF_ALLOW_ROOT=1 GITHUB_BRANCH="$BRANCH" bash /tmp/install.sh --auto
 rm -f "$MNT/tmp/install.sh"
 
 # 5g) Baker le durcissement HORS-LIGNE : overlayroot (overlay root-ro) + cloud-guest-utils (growpart).
