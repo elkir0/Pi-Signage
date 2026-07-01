@@ -1,7 +1,0 @@
-# Pre-launch: keep crawlers out until the site goes public (mirrors the
-# noindex meta gate in BaseLayout). At launch, replace with:
-#   User-agent: *
-#   Allow: /
-#   Sitemap: https://zaforge.com/sitemap.xml
-User-agent: *
-Disallow: /
