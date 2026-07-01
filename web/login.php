@@ -58,7 +58,7 @@ require_once 'includes/icons.php';
 
     <div class="auth-wrap">
         <div class="auth-card">
-            <div class="auth-logo"><?= icon('kiosk') ?></div>
+            <div class="auth-logo"><?= icon('zaforge') ?></div>
             <h1>Zaforge</h1>
             <p class="auth-sub">Gestion d'affichage dynamique</p>
 

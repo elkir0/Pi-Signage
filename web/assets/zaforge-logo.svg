@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Calque_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" viewBox="0 0 1600 600">
+  <defs>
+    <style>
+      .st0 { fill: url(#Degrade_sans_nom_4); }
+      .st1 { fill: url(#Degrade_sans_nom_5); }
+      .st2 { filter: url(#softGlow); }
+      .st3 { fill: #f3f7f7; font-family: AvenirNext-Bold, 'Avenir Next'; font-size: 104px; font-weight: 700; letter-spacing: .1em; }
+      .st3, .st4, .st5 { isolation: isolate; }
+      .st6 { filter: url(#zGlow); }
+      .st7 { fill: url(#Degrade_sans_nom); }
+      .st8 { fill: none; stroke: url(#Degrade_sans_nom_2); stroke-width: 22px; }
+      .st4 { fill: #18d9a1; font-family: AvenirNext-Medium, 'Avenir Next'; font-size: 58px; font-weight: 500; letter-spacing: .02em; }
+      .st5 { fill: url(#Degrade_sans_nom_3); opacity: .82; }
+    </style>
+    <linearGradient id="Degrade_sans_nom" x1="0" y1="259.82" x2="1600" y2="-340.18" gradientTransform="translate(0 259.82) scale(1 -1)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#071114"/><stop offset="1" stop-color="#02080b"/>
+    </linearGradient>
+    <filter id="softGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur result="blur" stdDeviation="10"/>
+      <feColorMatrix in="blur" values="0 0 0 0 0.05 0 0 0 0 0.90 0 0 0 0 0.65 0 0 0 0.45 0"/>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <linearGradient id="Degrade_sans_nom_2" x1="197.8" y1="120.13" x2="567.8" y2="-159.87" gradientTransform="translate(0 259.82) scale(1 -1)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#18d9a1"/><stop offset="1" stop-color="#064b48"/>
+    </linearGradient>
+    <linearGradient id="Degrade_sans_nom_3" x1="121.29" y1="19.03" x2="491.29" y2="-260.97" gradientTransform="translate(0 259.82) scale(1 -1)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#18d9a1"/><stop offset="1" stop-color="#064b48"/>
+    </linearGradient>
+    <linearGradient id="Degrade_sans_nom_4" x1="105.41" y1="-1.95" x2="475.41" y2="-281.95" gradientTransform="translate(0 259.82) scale(1 -1)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#18d9a1"/><stop offset="1" stop-color="#064b48"/>
+    </linearGradient>
+    <filter id="zGlow" x="-25%" y="-25%" width="150%" height="150%">
+      <feGaussianBlur result="blur" stdDeviation="6"/>
+      <feColorMatrix in="blur" values="0 0 0 0 0.55 0 0 0 0 0.35 0 0 0 0 1 0 0 0 0.4 0"/>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <linearGradient id="Degrade_sans_nom_5" x1="294.94" y1="65.38" x2="432.3" y2="-67.94" gradientTransform="translate(0 259.82) scale(1 -1)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#b89cff"/><stop offset=".55" stop-color="#8d66ff"/><stop offset="1" stop-color="#6e45d8"/>
+    </linearGradient>
+  </defs>
+  <rect class="st7" width="1600" height="600"/>
+  <g class="st2">
+    <rect class="st8" x="180" y="145" width="380" height="250" rx="34" ry="34"/>
+    <rect class="st5" x="352" y="407" width="36" height="44" rx="4" ry="4"/>
+    <path class="st0" d="M296,448h148c7.73,0,14,6.27,14,14h0c0,7.73-6.27,14-14,14h-148c-7.73,0-14-6.27-14-14h0c0-7.73,6.27-14,14-14Z"/>
+  </g>
+  <g class="st6">
+    <path class="st1" d="M303.43,179h136.56c11.31,0,20.2,8.89,20.2,20.2,0,4.85-1.62,9.7-4.85,13.74l-105.85,100.2h89.69c12.12,0,21.82,9.7,21.82,21.82s-9.7,21.82-21.82,21.82h-137.37c-12.12,0-21.82-9.7-21.82-21.82,0-5.66,2.42-11.31,6.46-15.35l105.85-98.58h-88.88c-12.12,0-21.82-9.7-21.82-21.01s9.7-21.01,21.82-21.01Z"/>
+  </g>
+  <text class="st3" transform="translate(650 285)"><tspan x="0" y="0">ZAFORGE</tspan></text>
+  <text class="st4" transform="translate(655 372)"><tspan x="0" y="0">Simple by Design.</tspan></text>
+</svg>

@@ -435,7 +435,7 @@ if (function_exists('zfOnboardingActive') && zfOnboardingActive()) { header('Loc
     </div>
 
     <div id="loading">
-        <div class="splash-logo"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div>
+        <div class="splash-logo"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M8.5 7.5h7l-7 6h7" stroke-linejoin="round"/></svg></div>
         <div class="splash-title">Zaforge</div>
         <div class="splash-msg" id="loading-msg">Démarrage…</div>
     </div>

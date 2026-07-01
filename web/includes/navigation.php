@@ -28,7 +28,7 @@ $nav = [
 ?>
 <aside class="sidebar" id="sidebar">
     <div class="brand">
-        <div class="brand-logo"><?= icon('kiosk') ?></div>
+        <div class="brand-logo"><?= icon('zaforge') ?></div>
         <div>
             <span class="brand-name">Zaforge</span>
             <span class="brand-ver">v<?= htmlspecialchars($config['version'] ?? '0.12.0') ?></span>

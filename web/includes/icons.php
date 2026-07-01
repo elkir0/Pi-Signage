@@ -22,6 +22,7 @@ if (!function_exists('icon')) {
             'prev'      => '<polygon points="19 20 9 12 19 4 19 20" fill="currentColor" stroke="none"/><rect x="5" y="4" width="2.5" height="16" rx="1" fill="currentColor" stroke="none"/>',
             'next'      => '<polygon points="5 4 15 12 5 20 5 4" fill="currentColor" stroke="none"/><rect x="16.5" y="4" width="2.5" height="16" rx="1" fill="currentColor" stroke="none"/>',
             'kiosk'     => '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>',
+            'zaforge'   => '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M8.5 7.5h7l-7 6h7" stroke-linejoin="round"/>',
             'monitor'   => '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>',
             'calendar'  => '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
             'camera'    => '<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>',
