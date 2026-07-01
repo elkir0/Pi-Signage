@@ -52,7 +52,7 @@ MNT="$WORK/mnt"; MNTD="$WORK/mnt-data"; mkdir -p "$MNT" "$MNTD"
 # HYGIÈNE pré-build : purger les résidus d'un build précédent avorté (montages EMPILÉS sur mnt + loops
 # orphelins). Sans ça le nouveau mount s'empile et le umount final échoue "target is busy" (bug vécu :
 # l'image était bonne mais la compression ne se lançait pas).
-for _ in 1 2 3; do umount -R -l "$MNT" 2>/dev/null; done
+for _ in 1 2 3; do umount -R -l "$MNT" 2>/dev/null || true; done
 umount -l "$MNTD" 2>/dev/null || true
 losetup -j "$WORK"/work-*.img 2>/dev/null | cut -d: -f1 | xargs -r losetup -d 2>/dev/null || true
 
