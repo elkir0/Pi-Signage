@@ -149,8 +149,18 @@ install -m 0644 "$REPO_DIR/install.sh" "$MNT/tmp/install.sh"
 # requiert pas setuid) via ZF_ALLOW_ROOT=1. En chroot : systemctl enable crée les symlinks (OK),
 # start/restart/daemon-reload y sont ignorés (services démarrent au vrai boot). L'ownership de
 # /opt/pisignage est normalisée par les chown explicites d'install.sh.
-chroot "$MNT" env ZF_ALLOW_ROOT=1 GITHUB_BRANCH="$BRANCH" bash /tmp/install.sh --auto
+chroot "$MNT" env HOME=/home/pi ZF_ALLOW_ROOT=1 GITHUB_BRANCH="$BRANCH" bash /tmp/install.sh --auto
 rm -f "$MNT/tmp/install.sh"
+
+# KIOSK : install.sh écrit la conf kiosk via $HOME (kanshi/labwc/autostart généré par kiosk-apply).
+# Lancé en root, $HOME irait dans /root -> on a forcé HOME=/home/pi ci-dessus. De plus install.sh met
+# kiosk_url=time.is (défaut générique) -> pour une box signage on pointe sur le PLAYER et on REGÉNÈRE
+# l'autostart (kiosk-apply l'avait généré avec time.is), puis on rend .config à pi (droits d'écriture).
+echo 'http://127.0.0.1/player' > "$MNT/opt/pisignage/config/kiosk_url"
+chroot "$MNT" env HOME=/home/pi bash /opt/pisignage/scripts/kiosk-apply || true
+chroot "$MNT" chown -R pi:pi /home/pi/.config 2>/dev/null || true
+chroot "$MNT" chown www-data:www-data /opt/pisignage/config/kiosk_url 2>/dev/null || true
+chroot "$MNT" rm -rf /home/pi/.cache /home/pi/go 2>/dev/null || true
 
 # 5g) Baker le durcissement HORS-LIGNE : overlayroot (overlay root-ro) + cloud-guest-utils (growpart).
 #     Ainsi harden au 1er boot ne fait que conf + update-initramfs (offline), sans apt -> pas de réseau
