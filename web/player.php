@@ -72,6 +72,13 @@ if (function_exists('zfOnboardingActive') && zfOnboardingActive()) { header('Loc
             transition: opacity .45s ease;
         }
         #video.is-active, #video2.is-active { opacity: 1; }
+        /* Sous-titres VTT (lecture muette sur TV) : gros, lisibles, contrastés. */
+        #video::cue, #video2::cue {
+            font-size: 3.2vh; line-height: 1.3;
+            background: rgba(0,0,0,.6); color: #fff;
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            text-shadow: 0 2px 3px rgba(0,0,0,.9);
+        }
 
         #image {
             position: absolute;
@@ -459,6 +466,9 @@ class PiSignagePlayer {
         this.activeIdx = 0;
         this.video = this.videoEls[this.activeIdx]; // référence TOUJOURS la vidéo active (visible)
         this.preloadIdx = -1;                       // index playlist préchargé dans la vidéo inactive
+        this.subtitles = {};                        // manifeste basename média -> fichier .vtt (sous-titres)
+        fetch('/media/subtitles.json', { cache: 'no-store' })
+            .then((r) => (r.ok ? r.json() : {})).then((m) => { this.subtitles = m || {}; }).catch(() => {});
         this.image = document.getElementById('image');
         this.backgroundAudio = document.getElementById('background-audio');
         this.loading = document.getElementById('loading');
@@ -819,6 +829,7 @@ class PiSignagePlayer {
         }
 
         this.currentIndex = index;
+        this.nextIndex = this.computeNextIndex();   // décidé UNE fois -> préchargement ET lecture concordent (shuffle)
         const item = this.playlist.items[index];
 
         // Overlay par-video : si un overlay specifique existe pour cet item, il REMPLACE
@@ -868,6 +879,21 @@ class PiSignagePlayer {
         this.preloadNext(); // précharger l'éventuelle vidéo suivante
     }
 
+    // Sous-titres : (ré)attache un <track> VTT à la vidéo si l'item en a un (manifeste this.subtitles,
+    // basename média -> fichier .vtt). Les vidéos passent souvent en MUET (signage) -> on FORCE l'affichage.
+    applySubtitle(el, item) {
+        try { el.querySelectorAll('track').forEach((t) => t.remove()); } catch (e) {}
+        const name = (item && item.url) ? item.url.split('/').pop().split('?')[0] : '';
+        const vtt = (this.subtitles && name) ? this.subtitles[name] : null;
+        if (!vtt) return;
+        const tr = document.createElement('track');
+        tr.kind = 'subtitles'; tr.srclang = 'fr'; tr.label = 'Sous-titres'; tr.default = true;
+        tr.src = '/media/' + vtt;
+        el.appendChild(tr);
+        const show = () => { try { const tt = el.textTracks; if (tt && tt.length) tt[tt.length - 1].mode = 'showing'; } catch (e) {} };
+        tr.addEventListener('load', show); setTimeout(show, 300);
+    }
+
     // ----- Chemin VIDEO (préchargement + crossfade, C1) -----
     playVideoItem(item, index) {
         // La vidéo "incoming" est la vidéo INACTIVE (elle contient peut-être déjà l'item préchargé).
@@ -884,6 +910,7 @@ class PiSignagePlayer {
             incoming.dataset.url = item.url;
             try { incoming.load(); } catch (e) {}
         }
+        this.applySubtitle(incoming, item);
 
         const onReady = () => {
             this.swapTo(newIdx);   // crossfade : incoming devient active
@@ -940,10 +967,8 @@ class PiSignagePlayer {
         this.preloadIdx = -1;
         if (!this.playlist || !this.playlist.items || this.playlist.items.length < 2) return;
 
-        let nextIndex = this.currentIndex + 1;
-        if (nextIndex >= this.playlist.items.length) {
-            if (this.playlist.autoLoop) nextIndex = 0; else return;
-        }
+        const nextIndex = this.nextIndex;
+        if (nextIndex < 0 || nextIndex >= this.playlist.items.length) return;
         const nextItem = this.playlist.items[nextIndex];
         if (!nextItem || this.isImageItem(nextItem)) return; // images : pas de préchargement
 
@@ -955,6 +980,7 @@ class PiSignagePlayer {
             inactive.dataset.url = nextItem.url;
             try { inactive.load(); } catch (e) {}
         }
+        this.applySubtitle(inactive, nextItem);
         this.preloadIdx = nextIndex;
     }
 
@@ -994,20 +1020,27 @@ class PiSignagePlayer {
         this.playNext();
     }
 
+    // Index de l'item suivant : ALÉATOIRE (≠ courant) si playlist.shuffle, sinon séquentiel (+autoLoop).
+    // -1 = fin (playlist finie sans boucle).
+    computeNextIndex() {
+        const items = (this.playlist && this.playlist.items) ? this.playlist.items : [];
+        if (items.length === 0) return -1;
+        if (items.length === 1) return this.playlist.autoLoop ? 0 : -1;
+        if (this.playlist.shuffle) {
+            let n; do { n = Math.floor(Math.random() * items.length); } while (n === this.currentIndex);
+            return n;
+        }
+        const seq = this.currentIndex + 1;
+        if (seq < items.length) return seq;
+        return this.playlist.autoLoop ? 0 : -1;
+    }
+
     playNext() {
         if (!this.playlist) return;
-
-        const nextIndex = this.currentIndex + 1;
-
-        if (nextIndex < this.playlist.items.length) {
-            // Élément suivant dans la liste
-            this.playItem(nextIndex);
-        } else if (this.playlist.autoLoop) {
-            // Recommencer au début si autoLoop
-            console.log('[Player] End of playlist, looping back to start');
-            this.playItem(0);
+        const n = (typeof this.nextIndex === 'number') ? this.nextIndex : (this.currentIndex + 1);
+        if (n >= 0 && n < this.playlist.items.length) {
+            this.playItem(n);
         } else {
-            // Fin de playlist sans loop
             console.log('[Player] End of playlist, stopping');
             this.showLoading('Playlist finished');
         }
