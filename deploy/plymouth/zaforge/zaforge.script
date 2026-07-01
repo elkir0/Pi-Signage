@@ -1,0 +1,25 @@
+# Zaforge — splash de boot (fond sombre + logo centré + pulse doux)
+Window.SetBackgroundTopColor(0.008, 0.031, 0.043);      // #02080b
+Window.SetBackgroundBottomColor(0.027, 0.067, 0.078);   // #071114
+
+logo.image  = Image("logo.png");
+logo.sprite = Sprite(logo.image);
+logo.sprite.SetX(Window.GetWidth()  / 2 - logo.image.GetWidth()  / 2);
+logo.sprite.SetY(Window.GetHeight() / 2 - logo.image.GetHeight() / 2);
+
+progress = 0;
+fun refresh_cb() {
+    progress++;
+    opacity = 0.72 + 0.28 * Math.Sin(progress / 22);
+    logo.sprite.SetOpacity(opacity);
+}
+Plymouth.SetRefreshFunction(refresh_cb);
+
+// Message (mise à jour / mot de passe) affiché sobrement sous le logo si besoin.
+fun message_cb(text) {
+    msg.image  = Image.Text(text, 0.62, 0.85, 0.62);
+    msg.sprite = Sprite(msg.image);
+    msg.sprite.SetX(Window.GetWidth()/2 - msg.image.GetWidth()/2);
+    msg.sprite.SetY(logo.sprite.GetY() + logo.image.GetHeight() + 30);
+}
+Plymouth.SetMessageFunction(message_cb);

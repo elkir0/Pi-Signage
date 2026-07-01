@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=Zaforge
+Description=Zaforge boot splash (logo écran + Z)
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/zaforge
+ScriptFile=/usr/share/plymouth/themes/zaforge/zaforge.script

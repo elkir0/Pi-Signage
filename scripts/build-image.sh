@@ -168,6 +168,17 @@ chroot "$MNT" rm -rf /home/pi/.cache /home/pi/go 2>/dev/null || true
 echo "=== bake overlayroot + cloud-guest-utils (durcissement hors-ligne) ==="
 chroot "$MNT" env DEBIAN_FRONTEND=noninteractive apt-get install -y overlayroot cloud-guest-utils
 
+# 5g-bis) Splash de boot Zaforge (Plymouth) : thème baké + initramfs. Boot 100% marque (pas d'arc-en-ciel
+#         RPi ni logo framboise). Le thème est dans /usr/share (root RO au runtime = OK, présent) et
+#         l'initramfs (regénéré aussi par harden au 1er boot -> le thème par défaut y est conservé).
+echo "=== bake splash Plymouth (logo Zaforge) ==="
+chroot "$MNT" env DEBIAN_FRONTEND=noninteractive apt-get install -y plymouth plymouth-themes
+cp -r "$REPO_DIR/deploy/plymouth/zaforge" "$MNT/usr/share/plymouth/themes/"
+chroot "$MNT" plymouth-set-default-theme zaforge
+grep -q '^disable_splash=1' "$MNT/boot/firmware/config.txt" 2>/dev/null || echo 'disable_splash=1' >> "$MNT/boot/firmware/config.txt"
+grep -q 'logo.nologo' "$MNT/boot/firmware/cmdline.txt" 2>/dev/null || sed -i 's/$/ logo.nologo/' "$MNT/boot/firmware/cmdline.txt"
+chroot "$MNT" update-initramfs -u 2>&1 | tail -2 || true
+
 # 5h) Neutraliser l'identité par-device (regénérée au 1er boot). bake-strip TANT QUE le bind
 #     /opt/pisignage -> /data est ACTIF (nettoie la config applicative sur /data).
 bash "$SCRIPTS_DIR/bake-strip.sh" "$MNT" || true
