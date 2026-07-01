@@ -886,6 +886,9 @@ class PiSignagePlayer {
     // basename média -> fichier .vtt). Les vidéos passent souvent en MUET (signage) -> on FORCE l'affichage.
     applySubtitle(el, item) {
         try { el.querySelectorAll('track').forEach((t) => t.remove()); } catch (e) {}
+        // Opt-out par média : item.subtitles === false désactive les sous-titres pour cet item,
+        // même si un .vtt existe dans le manifeste. Absent/true = comportement historique (affiché).
+        if (item && item.subtitles === false) return;
         const name = (item && item.url) ? item.url.split('/').pop().split('?')[0] : '';
         const vtt = (this.subtitles && name) ? this.subtitles[name] : null;
         if (!vtt) return;

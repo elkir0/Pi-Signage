@@ -288,7 +288,8 @@ PiSignage.playlists = {
                         duration: typeof it.duration === 'number' ? it.duration : (parseFloat(it.duration) || 0),
                         fit: (it.fit === 'cover') ? 'cover' : 'contain',
                         mute: !!it.mute,
-                        loop: !!it.loop
+                        loop: !!it.loop,
+                        subtitles: it.subtitles !== false
                     };
                 })
             };
@@ -445,7 +446,8 @@ PiSignage.playlists = {
             duration: this.defaultDuration(type),
             fit: 'contain',
             mute: false,
-            loop: false
+            loop: false,
+            subtitles: true
         });
         this.renderItems();
         PiSignage.ui.toast('« ' + name + ' » ajouté', 'success');
@@ -581,6 +583,14 @@ PiSignage.playlists = {
             + '<span class="toggle-switch"><input type="checkbox" id="pl-opt-loop"' + (it.loop ? ' checked' : '') + '><span class="toggle-slider"></span></span>'
             + '</label></div>';
 
+        // Sous-titres (vidéo uniquement) — affichés si un .vtt existe pour ce média, sauf désactivation ici.
+        if (!isImage && !isAudio) {
+            html += '<div class="form-group"><label class="row" style="justify-content:space-between;gap:12px;margin:0;cursor:pointer">'
+                + '<span>Afficher les sous-titres</span>'
+                + '<span class="toggle-switch"><input type="checkbox" id="pl-opt-subtitles"' + (it.subtitles !== false ? ' checked' : '') + '><span class="toggle-slider"></span></span>'
+                + '</label><p style="font-size:11.5px;color:var(--text-faint);margin-top:6px">Si un fichier de sous-titres (.vtt) existe pour ce média.</p></div>';
+        }
+
         html += '<button class="btn btn-danger btn-block btn-sm" type="button" id="pl-opt-remove">'
             + this._svg(this._icons.trash) + 'Retirer de la playlist</button>';
 
@@ -601,6 +611,8 @@ PiSignage.playlists = {
         if (mute) mute.addEventListener('change', function () { it.mute = this.checked; });
         var loop = document.getElementById('pl-opt-loop');
         if (loop) loop.addEventListener('change', function () { it.loop = this.checked; });
+        var subs = document.getElementById('pl-opt-subtitles');
+        if (subs) subs.addEventListener('change', function () { it.subtitles = this.checked; });
         var rem = document.getElementById('pl-opt-remove');
         if (rem) rem.addEventListener('click', function () { self.removeItem(idx); });
     },
@@ -630,7 +642,8 @@ PiSignage.playlists = {
                     duration: it.duration || 0,
                     fit: (it.fit === 'cover') ? 'cover' : 'contain',
                     mute: !!it.mute,
-                    loop: !!it.loop
+                    loop: !!it.loop,
+                    subtitles: it.subtitles !== false
                 };
             })
         };

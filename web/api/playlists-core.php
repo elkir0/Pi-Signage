@@ -76,6 +76,8 @@ function playlistNormalizeItem($item) {
         'fit'        => $fit,
         'mute'       => !empty($item['mute']),
         'loop'       => !empty($item['loop']),
+        // Sous-titres affichés si un .vtt existe (manifeste), sauf opt-out explicite par média.
+        'subtitles'  => array_key_exists('subtitles', $item) ? (bool)$item['subtitles'] : true,
         'transition' => isset($item['transition']) ? (string)$item['transition'] : 'none',
     ];
 }
